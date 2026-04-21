@@ -4,27 +4,26 @@ import SwiftData
 @MainActor
 enum MemoryStore {
     static func recall(query: String, context: ModelContext, limit: Int = 5) async -> [MemoryItem] {
-        let queryVec = await LlamaService.shared.embed(text: query)
-        let descriptor = FetchDescriptor<MemoryItem>()
-        guard let all = try? context.fetch(descriptor), !all.isEmpty else { return [] }
-        // Score all items; apply a pin bonus so pinned items blend into the ranking
-        // rather than always crowding out more relevant unpinned items.
-        let pinBonus = 0.15
-        let scored: [(MemoryItem, Double)] = all.map { item in
-            let base = cosine(queryVec, item.embedding)
-            let boosted = item.isPinned ? base + pinBonus : base
-            return (item, boosted)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, limit > 0 else { return [] }
+        let queryVec = await LlamaService.shared.embed(text: trimmed)
+        guard !queryVec.isEmpty else { return [] }
+
+        MemoryVectorIndex.shared.ensureLoaded(context: context)
+        let hits = MemoryVectorIndex.shared.search(query: queryVec, topK: limit, pinBonus: 0.15)
+        var results: [MemoryItem] = []
+        results.reserveCapacity(hits.count)
+        for h in hits {
+            if let item = context.model(for: h.id) as? MemoryItem {
+                results.append(item)
+            }
         }
-        return scored
-            .sorted { $0.1 > $1.1 }
-            .prefix(limit)
-            .map(\.0)
+        return results
     }
 
     static func remember(_ content: String, kind: MemoryKind = .fact, source: String = "manual", topic: String? = nil, context: ModelContext) async {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Dedup near-identical memories
         if let existing = try? context.fetch(FetchDescriptor<MemoryItem>()) {
             if existing.contains(where: { $0.content.caseInsensitiveCompare(trimmed) == .orderedSame }) {
                 return
@@ -34,6 +33,8 @@ enum MemoryStore {
         let item = MemoryItem(content: trimmed, kind: kind, source: source, embedding: embedding, topic: topic)
         context.insert(item)
         try? context.save()
+        MemoryVectorIndex.shared.ensureLoaded(context: context)
+        MemoryVectorIndex.shared.append(id: item.persistentModelID, isPinned: item.isPinned, vector: embedding)
     }
 
     static func extractAndStore(userText: String, assistantText: String, context: ModelContext) async {
@@ -49,12 +50,14 @@ enum MemoryStore {
             context.delete(item)
         }
         try? context.save()
+        MemoryVectorIndex.shared.invalidate()
     }
 
     static func wipeEverything(context: ModelContext) {
         guard let all = try? context.fetch(FetchDescriptor<MemoryItem>()) else { return }
         for item in all { context.delete(item) }
         try? context.save()
+        MemoryVectorIndex.shared.invalidate()
     }
 
     static func exportJSON(context: ModelContext) -> String {
@@ -65,13 +68,6 @@ enum MemoryStore {
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         enc.dateEncodingStrategy = .iso8601
         return (try? String(data: enc.encode(items), encoding: .utf8)) ?? "[]"
-    }
-
-    private static func cosine(_ a: [Double], _ b: [Double]) -> Double {
-        guard a.count == b.count, !a.isEmpty else { return 0 }
-        var dot = 0.0
-        for i in 0..<a.count { dot += a[i] * b[i] }
-        return dot
     }
 
     // MARK: - Fact extraction (lightweight, rule-based)

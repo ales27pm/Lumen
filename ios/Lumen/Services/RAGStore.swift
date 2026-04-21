@@ -7,26 +7,82 @@ import Photos
 enum RAGStore {
     static let chunkSize = 600
     static let chunkOverlap = 80
+    static let candidatePoolMultiplier = 8
+    static let maxCandidatePool = 256
+    static let minScore: Float = 0.12
 
-    static func search(query: String, context: ModelContext, limit: Int = 5, sourceTypes: Set<RAGSourceType>? = nil) async -> [(chunk: RAGChunk, score: Double)] {
-        let queryVec = await LlamaService.shared.embed(text: query)
+    static func search(
+        query: String,
+        context: ModelContext,
+        limit: Int = 5,
+        sourceTypes: Set<RAGSourceType>? = nil
+    ) async -> [(chunk: RAGChunk, score: Double)] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, limit > 0 else { return [] }
+        let queryVec = await LlamaService.shared.embed(text: trimmed)
         guard !queryVec.isEmpty else { return [] }
+
+        RAGVectorIndex.shared.ensureLoaded(context: context)
+
+        let allowed: Set<String>? = sourceTypes.map { Set($0.map(\.rawValue)) }
+        let k = min(max(limit * candidatePoolMultiplier, limit + 4), maxCandidatePool)
+
+        let vectorHits = RAGVectorIndex.shared.search(
+            query: queryVec,
+            topK: k,
+            allowedBuckets: allowed,
+            minScore: minScore
+        )
+
+        var candidates: [(RAGChunk, Double)] = []
+        candidates.reserveCapacity(vectorHits.count)
+        for hit in vectorHits {
+            if let chunk = context.model(for: hit.id) as? RAGChunk {
+                candidates.append((chunk, Double(hit.score)))
+            }
+        }
+
+        if candidates.count < limit {
+            // Lexical backfill: keyword overlap as a rescue path when embeddings
+            // missed obviously relevant chunks (short queries, OOV vocab, etc.).
+            let seenIDs: Set<PersistentIdentifier> = Set(candidates.map { $0.0.persistentModelID })
+            let lexical = lexicalScore(query: trimmed, context: context, allowed: allowed, exclude: seenIDs, limit: limit - candidates.count)
+            candidates.append(contentsOf: lexical)
+        }
+
+        return candidates
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+            .map { ($0.0, $0.1) }
+    }
+
+    private static func lexicalScore(
+        query: String,
+        context: ModelContext,
+        allowed: Set<String>?,
+        exclude: Set<PersistentIdentifier>,
+        limit: Int
+    ) -> [(RAGChunk, Double)] {
+        guard limit > 0 else { return [] }
+        let terms = query.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 3 }
+        guard !terms.isEmpty else { return [] }
         var descriptor = FetchDescriptor<RAGChunk>()
-        descriptor.fetchLimit = 5000
-        guard let all = try? context.fetch(descriptor), !all.isEmpty else { return [] }
-
-        let filtered: [RAGChunk]
-        if let types = sourceTypes {
-            filtered = all.filter { types.contains($0.kind) }
-        } else {
-            filtered = all
+        descriptor.fetchLimit = 400
+        guard let all = try? context.fetch(descriptor) else { return [] }
+        var scored: [(RAGChunk, Double)] = []
+        for c in all where !exclude.contains(c.persistentModelID) {
+            if let allowed, !allowed.contains(c.sourceType) { continue }
+            let haystack = c.content.lowercased()
+            var hits = 0
+            for t in terms where haystack.contains(t) { hits += 1 }
+            if hits > 0 {
+                let score = Double(hits) / Double(terms.count) * 0.2
+                scored.append((c, score))
+            }
         }
-
-        let scored: [(RAGChunk, Double)] = filtered.compactMap { c in
-            guard !c.embedding.isEmpty else { return nil }
-            return (c, cosine(queryVec, c.embedding))
-        }
-        return scored.sorted { $0.1 > $1.1 }.prefix(limit).map { ($0.0, $0.1) }
+        return scored.sorted { $0.1 > $1.1 }.prefix(limit).map { $0 }
     }
 
     static func counts(context: ModelContext) -> [RAGSourceType: Int] {
@@ -42,6 +98,11 @@ enum RAGStore {
             if type == nil || c.kind == type { context.delete(c) }
         }
         try? context.save()
+        if let type {
+            RAGVectorIndex.shared.removeBucket(type.rawValue)
+        } else {
+            RAGVectorIndex.shared.removeAll()
+        }
     }
 
     static func chunks(for type: RAGSourceType, context: ModelContext) -> [RAGChunk] {
@@ -98,14 +159,16 @@ enum RAGStore {
             type = .file
         }
 
+        RAGVectorIndex.shared.ensureLoaded(context: context)
         let pieces = chunkText(text)
         var count = 0
         for (i, piece) in pieces.enumerated() {
             let emb = await LlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
-            count += 1
             if i % 8 == 7 { try? context.save() }
+            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: type.rawValue, vector: emb)
+            count += 1
         }
         try? context.save()
         return count
@@ -119,6 +182,7 @@ enum RAGStore {
         }
         guard status == .authorized || status == .limited else { return 0 }
         wipe(.photo, context: context)
+        RAGVectorIndex.shared.ensureLoaded(context: context)
 
         let start = Calendar.current.date(byAdding: .month, value: -monthsBack, to: Date()) ?? Date()
         let options = PHFetchOptions()
@@ -167,6 +231,7 @@ enum RAGStore {
             let emb = await LlamaService.shared.embed(text: summary)
             let chunk = RAGChunk(content: summary, sourceType: .photo, sourceName: "Photos \(month)", sourceRef: month, chunkIndex: 0, embedding: emb)
             context.insert(chunk)
+            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
             count += 1
         }
         try? context.save()
@@ -176,12 +241,14 @@ enum RAGStore {
     // MARK: - Notes (plain text import via share)
 
     static func indexNote(title: String, body: String, context: ModelContext) async -> Int {
+        RAGVectorIndex.shared.ensureLoaded(context: context)
         let pieces = chunkText(body)
         var count = 0
         for (i, piece) in pieces.enumerated() {
             let emb = await LlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: .note, sourceName: title, sourceRef: nil, chunkIndex: i, embedding: emb)
             context.insert(chunk)
+            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)
             count += 1
         }
         try? context.save()
@@ -218,12 +285,4 @@ enum RAGStore {
         if !current.isEmpty { chunks.append(current) }
         return chunks
     }
-
-    private static func cosine(_ a: [Double], _ b: [Double]) -> Double {
-        guard a.count == b.count, !a.isEmpty else { return 0 }
-        var dot = 0.0
-        for i in 0..<a.count { dot += a[i] * b[i] }
-        return dot
-    }
 }
-

@@ -50,6 +50,9 @@ struct RootView: View {
             }
         }
         .tint(Theme.accent)
+        .task {
+            await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
+        }
         .task(id: appState.activeChatModelID) {
             await ModelLoader.syncChat(appState: appState, stored: storedModels)
         }
@@ -58,8 +61,7 @@ struct RootView: View {
         }
         .onChange(of: storedModels.count) { _, _ in
             Task {
-                await ModelLoader.syncChat(appState: appState, stored: storedModels)
-                await ModelLoader.syncEmbed(appState: appState, stored: storedModels)
+                await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
             }
         }
     }
@@ -78,32 +80,4 @@ struct RootView: View {
     }
 }
 
-enum ModelLoader {
-    static func syncChat(appState: AppState, stored: [StoredModel]) async {
-        guard let id = appState.activeChatModelID,
-              let m = stored.first(where: { $0.id.uuidString == id }),
-              m.modelRole == .chat else { return }
-        guard FileManager.default.fileExists(atPath: m.localPath) else { return }
-        let loaded = await LlamaService.shared.loadedChatPath
-        if loaded == m.localPath { return }
-        do {
-            try await LlamaService.shared.loadChatModel(path: m.localPath, contextSize: appState.contextSize)
-        } catch {
-            print("Chat model load failed: \(error)")
-        }
-    }
 
-    static func syncEmbed(appState: AppState, stored: [StoredModel]) async {
-        guard let id = appState.activeEmbeddingModelID,
-              let m = stored.first(where: { $0.id.uuidString == id }),
-              m.modelRole == .embedding else { return }
-        guard FileManager.default.fileExists(atPath: m.localPath) else { return }
-        let loaded = await LlamaService.shared.loadedEmbedPath
-        if loaded == m.localPath { return }
-        do {
-            try await LlamaService.shared.loadEmbeddingModel(path: m.localPath)
-        } catch {
-            print("Embed model load failed: \(error)")
-        }
-    }
-}

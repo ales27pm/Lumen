@@ -392,11 +392,21 @@ actor LlamaService {
         }
         var args: [String: String] = [:]
         if let rawArgs = obj["args"] as? [String: Any] {
-            for (k, v) in rawArgs { args[k] = String(describing: v) }
+            for (k, v) in rawArgs { args[k] = stringifyArg(v) }
         } else if let rawArgs = obj["arguments"] as? [String: Any] {
-            for (k, v) in rawArgs { args[k] = String(describing: v) }
+            for (k, v) in rawArgs { args[k] = stringifyArg(v) }
         }
         return (name, args)
+    }
+
+    private func stringifyArg(_ v: Any) -> String {
+        if let s = v as? String { return s }
+        if let b = v as? Bool { return b ? "true" : "false" }
+        if let n = v as? NSNumber { return n.stringValue }
+        if v is NSNull { return "" }
+        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
+           let s = String(data: data, encoding: .utf8) { return s }
+        return String(describing: v)
     }
 
     // MARK: - Embeddings

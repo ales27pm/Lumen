@@ -11,15 +11,17 @@ final class ChatMessage {
     var toolStatus: String?
     var toolResult: String?
     var agentStepsJSON: String?
+    var wasStopped: Bool = false
     var conversation: Conversation?
 
-    init(role: MessageRole, content: String, toolName: String? = nil, toolStatus: ToolStatus? = nil, toolResult: String? = nil, agentSteps: [AgentStep] = []) {
+    init(role: MessageRole, content: String, toolName: String? = nil, toolStatus: ToolStatus? = nil, toolResult: String? = nil, agentSteps: [AgentStep] = [], wasStopped: Bool = false) {
         self.role = role.rawValue
         self.content = content
         self.toolName = toolName
         self.toolStatus = toolStatus?.rawValue
         self.toolResult = toolResult
         self.agentStepsJSON = AgentStepCodec.encode(agentSteps)
+        self.wasStopped = wasStopped
     }
 
     var agentSteps: [AgentStep] {

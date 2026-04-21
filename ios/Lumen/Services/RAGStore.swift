@@ -79,10 +79,22 @@ enum RAGStore {
             }
             text = combined
             type = .pdf
-        } else {
+        } else if ext == "rtf" || ext == "rtfd" {
             guard let data = try? Data(contentsOf: url),
-                  let s = String(data: data, encoding: .utf8) else { return 0 }
-            text = s
+                  let attr = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil) else { return 0 }
+            text = attr.string
+            type = .file
+        } else {
+            guard let data = try? Data(contentsOf: url) else { return 0 }
+            if let utf8 = String(data: data, encoding: .utf8) {
+                text = utf8
+            } else if let ascii = String(data: data, encoding: .isoLatin1) {
+                text = ascii
+            } else if let attr = try? NSAttributedString(data: data, options: [:], documentAttributes: nil) {
+                text = attr.string
+            } else {
+                return 0
+            }
             type = .file
         }
 
@@ -118,6 +130,13 @@ enum RAGStore {
         var assets: [PHAsset] = []
         fetch.enumerateObjects { a, _, _ in assets.append(a) }
 
+        var selfieIDs: Set<String> = []
+        let selfieAlbums = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumSelfPortraits, options: nil)
+        selfieAlbums.enumerateObjects { coll, _, _ in
+            let a = PHAsset.fetchAssets(in: coll, options: nil)
+            a.enumerateObjects { asset, _, _ in selfieIDs.insert(asset.localIdentifier) }
+        }
+
         var buckets: [String: [PHAsset]] = [:]
         let df = DateFormatter(); df.dateFormat = "yyyy-MM"
         for a in assets {
@@ -130,7 +149,9 @@ enum RAGStore {
             let favorites = items.filter(\.isFavorite).count
             let videos = items.filter { $0.mediaType == .video }.count
             let screenshots = items.filter { $0.mediaSubtypes.contains(.photoScreenshot) }.count
-            let selfies = items.filter { $0.mediaSubtypes.contains(.photoLive) == false && $0.mediaSubtypes.rawValue != 0 }.count
+            let selfies = items.filter { selfieIDs.contains($0.localIdentifier) }.count
+            let livePhotos = items.filter { $0.mediaSubtypes.contains(.photoLive) }.count
+            let portraits = items.filter { $0.mediaSubtypes.contains(.photoDepthEffect) }.count
             var geo = 0
             for a in items where a.location != nil { geo += 1 }
 
@@ -140,7 +161,7 @@ enum RAGStore {
 
             let summary = """
             Photos (\(month)): \(items.count) items between \(first) and \(last).
-            \(favorites) favorites, \(videos) videos, \(screenshots) screenshots, \(geo) with location.
+            \(favorites) favorites, \(videos) videos, \(screenshots) screenshots, \(selfies) selfies, \(livePhotos) live photos, \(portraits) portraits, \(geo) with location.
             """
 
             let emb = await LlamaService.shared.embed(text: summary)

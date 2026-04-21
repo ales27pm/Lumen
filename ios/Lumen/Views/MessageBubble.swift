@@ -49,7 +49,20 @@ struct MessageBubble: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if streamingOverride == nil {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 10) {
+                        if message.wasStopped {
+                            HStack(spacing: 4) {
+                                Image(systemName: "stop.circle")
+                                    .font(.caption2)
+                                Text("Stopped")
+                                    .font(.caption2.weight(.medium))
+                            }
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border, lineWidth: 1)
+                            }
+                        }
                         MessageActionButton(icon: "doc.on.doc") {
                             UIPasteboard.general.string = message.content
                         }

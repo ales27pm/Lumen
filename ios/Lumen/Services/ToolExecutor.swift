@@ -35,9 +35,9 @@ final class ToolExecutor {
         case "maps.directions":
             return openMaps(destination: arguments["destination"] ?? "")
         case "messages.draft":
-            return "Drafted iMessage: \"\(arguments["body"] ?? "")\" (opens Messages.app on a real device)."
+            return await composeMessage(arguments: arguments)
         case "mail.draft":
-            return "Drafted email: \"\(arguments["body"] ?? "")\" (opens Mail.app on a real device)."
+            return await composeMail(arguments: arguments)
         case "phone.call":
             if let number = arguments["number"], let url = URL(string: "tel://\(number)") {
                 await UIApplication.shared.open(url)
@@ -217,15 +217,28 @@ final class ToolExecutor {
         let wantSelfies = trimmed.contains("selfie")
         let wantVideos = trimmed.contains("video")
         let wantScreenshots = trimmed.contains("screenshot")
+        let wantLivePhotos = trimmed.contains("live photo") || trimmed.contains("live")
+        let wantPortraits = trimmed.contains("portrait")
+
+        var selfieIDs: Set<String> = []
+        if wantSelfies {
+            let collections = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumSelfPortraits, options: nil)
+            collections.enumerateObjects { coll, _, _ in
+                let assetsInAlbum = PHAsset.fetchAssets(in: coll, options: nil)
+                assetsInAlbum.enumerateObjects { a, _, _ in selfieIDs.insert(a.localIdentifier) }
+            }
+        }
 
         assets.enumerateObjects { asset, _, _ in
             if let range = dateRange, let created = asset.creationDate {
                 if created < range.0 || created > range.1 { return }
             }
             if wantFavorites && !asset.isFavorite { return }
-            if wantSelfies && asset.mediaSubtypes.contains(.photoScreenshot) { return }
             if wantScreenshots && !asset.mediaSubtypes.contains(.photoScreenshot) { return }
+            if wantLivePhotos && !asset.mediaSubtypes.contains(.photoLive) { return }
+            if wantPortraits && !asset.mediaSubtypes.contains(.photoDepthEffect) { return }
             if wantVideos && asset.mediaType != .video { return }
+            if wantSelfies && !selfieIDs.contains(asset.localIdentifier) { return }
             matches.append(asset)
         }
 
@@ -659,6 +672,21 @@ final class ToolExecutor {
         ctx.delete(m)
         try? ctx.save()
         return "Cancelled \"\(m.title)\"."
+    }
+
+    private func composeMessage(arguments: [String: String]) async -> String {
+        let body = arguments["body"] ?? arguments["message"] ?? arguments["text"] ?? ""
+        let toRaw = arguments["to"] ?? arguments["recipient"] ?? arguments["number"] ?? ""
+        let recipients = toRaw.split(whereSeparator: { ",;".contains($0) }).map { $0.trimmingCharacters(in: .whitespaces) }
+        return await ComposeController.shared.composeMessage(to: recipients, body: body)
+    }
+
+    private func composeMail(arguments: [String: String]) async -> String {
+        let body = arguments["body"] ?? arguments["message"] ?? arguments["text"] ?? ""
+        let subject = arguments["subject"] ?? arguments["title"] ?? ""
+        let toRaw = arguments["to"] ?? arguments["recipient"] ?? arguments["email"] ?? ""
+        let recipients = toRaw.split(whereSeparator: { ",;".contains($0) }).map { $0.trimmingCharacters(in: .whitespaces) }
+        return await ComposeController.shared.composeMail(to: recipients, subject: subject, body: body)
     }
 
     private func openMaps(destination: String) -> String {

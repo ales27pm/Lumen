@@ -1,26 +1,57 @@
-# Fix agent step limit & keyboard dismissal in chat
+# Fill in all stubs and simplified features across Lumen
 
-**Problems**
+I audited the project and found ~20 incomplete or simplified spots. Here's everything I'll finish.
 
-1. When the agent uses tools (like "nearest subway"), it often loops through many searches and hits the step limit, leaving the user with a raw "I reached the maximum number of reasoning steps" error instead of a helpful answer.
-2. The chat keyboard sometimes can't be dismissed — the swipe-to-dismiss gesture conflicts with the scrolling reasoning panel, and the "Done" button is hidden behind iOS text suggestions.
+**Messaging & Mail (real composers, not fake strings)**
 
-**Fixes**
+- Tapping "send a message" / "draft email" will now open the real iOS Messages or Mail composer pre-filled with recipient, subject, and body. If the device can't send (e.g. no mail accounts), it falls back to opening the system app via sms:/mailto:.
 
-Agent behavior
+**Photos**
 
-- When the agent runs out of steps, synthesize a clean, user-friendly final answer from the observations it already gathered (e.g. "The nearest subway stations are Peel and Guy-Concordia in Montréal") instead of dumping the raw last observation with an error message.
-- Improve the agent's instructions so it calls `location.current` first when a query depends on "nearest / near me", and prefers giving a Final Answer once it has enough information rather than re-searching.
-- Raise the default reasoning budget slightly so multi-step location questions can complete.
+- "Selfies" search now uses the real Selfies album instead of a broken filter.
+- The photo-indexing selfie count is replaced with an accurate one.
+- Photos search also supports "live photos" and "portrait" as filters.
 
-Keyboard dismissal
+**File attachments (Chat)**
 
-- Add a tap-anywhere-to-dismiss gesture on the chat message area so tapping the conversation always closes the keyboard.
-- Add a visible "chevron down" dismiss button next to the text field when the keyboard is open, as a reliable fallback that isn't hidden by iOS suggestions.
-- Keep the existing swipe-to-dismiss and the toolbar "Done" button.
+- File picker now accepts Markdown, RTF, CSV, JSON, and rich text alongside plain text and PDF.
+- The RAG indexer can decode all of these.
+- Attaching a file no longer forces a "summarize it" prompt — it adds a subtle chip to the composer and injects the file as context for whatever the user actually types.
 
-**Result**
+**Chat "Stop" button**
 
-- Asking "Where is the nearest subway?" returns a real answer listing the closest stations.
-- The keyboard can always be closed by tapping the chat, swiping down, or tapping the new dismiss button.
+- Messages stopped mid-generation get a small "Stopped" badge instead of a literal "…[stopped]" string appended to the text. Streaming task is properly awaited before state resets so no trailing tokens leak in.
+
+**Hands-free voice mode (the big one)**
+
+- After the assistant finishes speaking, the mic automatically re-opens for the next turn — a true continuous conversation loop.
+- Auto-restart only happens when Hands-free is on; a single tap still ends the session.
+- Voice catalog locale filter bug fixed so non-English system voices appear correctly in Settings.
+- Dead speak-queue property removed.
+
+**Model downloads**
+
+- Pause and Resume actions added (with resume data preserved across app launches).
+- Double-tapping Download shows a clear "already downloading" state instead of silently ignoring.
+- Fixed a potential deadlock in the download-finished handler.
+
+**Triggers / background scheduling**
+
+- When the app comes to the foreground, any overdue triggers fire immediately instead of waiting for the next background refresh.
+- The processing-task lane now actually submits a background processing request (or it's cleanly removed).
+- Notification permission result is surfaced to the UI so the user knows if it was denied.
+
+**Memory**
+
+- Pinned memories are blended into recall results by score instead of always crowding out more relevant items.
+- Per-turn fact extraction cap lifted from 3 to a more reasonable limit with deduping.
+
+**Agent loop**
+
+- Incremental Thought/Reflection fragments now flush a final "step" event on completion so the Agent Steps panel shows the tail end of every step (currently it gets dropped).
+- Tool-call argument stringification uses the same robust helper as the rest of the agent (no more "Optional(5)"-style values).
+
+After all changes I'll build the project and fix any compile errors before handing back.
+
+automatic model loading when the application opens. Add error handling with multiple fallbacks to make sure both models ( main and embedding) are loaded and ready at launch 
 

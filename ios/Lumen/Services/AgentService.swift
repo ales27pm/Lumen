@@ -257,6 +257,12 @@ final class AgentService {
         currentStepBuffer: inout String,
         continuation: AsyncStream<AgentEvent>.Continuation
     ) {
+        if let id = currentStepID, let kind = currentStepKind, kind != .action {
+            let trimmed = currentStepBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                continuation.yield(.step(AgentStep(id: id, kind: kind, content: trimmed)))
+            }
+        }
         currentStepID = nil
         currentStepKind = nil
         currentStepBuffer = ""

@@ -7,17 +7,18 @@ enum MemoryStore {
         let queryVec = await LlamaService.shared.embed(text: query)
         let descriptor = FetchDescriptor<MemoryItem>()
         guard let all = try? context.fetch(descriptor), !all.isEmpty else { return [] }
-        let pinned = all.filter { $0.isPinned }
-        let scored = all.map { item -> (MemoryItem, Double) in
-            (item, cosine(queryVec, item.embedding))
+        // Score all items; apply a pin bonus so pinned items blend into the ranking
+        // rather than always crowding out more relevant unpinned items.
+        let pinBonus = 0.15
+        let scored: [(MemoryItem, Double)] = all.map { item in
+            let base = cosine(queryVec, item.embedding)
+            let boosted = item.isPinned ? base + pinBonus : base
+            return (item, boosted)
         }
-        let top = scored.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
-        var combined = pinned
-        for item in top where !combined.contains(where: { $0.id == item.id }) {
-            combined.append(item)
-            if combined.count >= limit + pinned.count { break }
-        }
-        return combined
+        return scored
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+            .map(\.0)
     }
 
     static func remember(_ content: String, kind: MemoryKind = .fact, source: String = "manual", topic: String? = nil, context: ModelContext) async {
@@ -97,22 +98,29 @@ enum MemoryStore {
             (#"my (wife|husband|partner|boyfriend|girlfriend|mom|mother|dad|father|brother|sister|son|daughter|friend|boss|manager|teammate|colleague|neighbor|dog|cat) (?:is |named |'s name is |'s )?([A-Z][a-z]+)"#, "relation")
         ]
 
+        var seen: Set<String> = []
+        func push(_ e: Extracted) {
+            let key = e.content.lowercased()
+            if seen.contains(key) { return }
+            seen.insert(key)
+            results.append(e)
+        }
         for s in sentences {
             let lower = s.lowercased()
             if prefLove.contains(where: { lower.contains($0) }) {
-                results.append(Extracted(content: "User preference: \(cleaned(s))", kind: .preference, topic: nil))
+                push(Extracted(content: "User preference: \(cleaned(s))", kind: .preference, topic: nil))
                 continue
             }
             if prefHate.contains(where: { lower.contains($0) }) {
-                results.append(Extracted(content: "User dislike: \(cleaned(s))", kind: .preference, topic: nil))
+                push(Extracted(content: "User dislike: \(cleaned(s))", kind: .preference, topic: nil))
                 continue
             }
             if projectMarkers.contains(where: { lower.contains($0) }) {
-                results.append(Extracted(content: "Project: \(cleaned(s))", kind: .project, topic: "projects"))
+                push(Extracted(content: "Project: \(cleaned(s))", kind: .project, topic: "projects"))
                 continue
             }
             if factSelf.contains(where: { lower.hasPrefix($0) || lower.contains(" \($0) ") }) {
-                results.append(Extracted(content: cleaned(s), kind: .fact, topic: nil))
+                push(Extracted(content: cleaned(s), kind: .fact, topic: nil))
                 continue
             }
             for (pattern, _) in personMarkers {
@@ -123,12 +131,12 @@ enum MemoryStore {
                    let rName = Range(match.range(at: 2), in: s) {
                     let rel = String(s[rRel])
                     let name = String(s[rName])
-                    results.append(Extracted(content: "\(rel.capitalized): \(name)", kind: .person, topic: "people"))
+                    push(Extracted(content: "\(rel.capitalized): \(name)", kind: .person, topic: "people"))
                     break
                 }
             }
         }
-        return Array(results.prefix(3))
+        return Array(results.prefix(8))
     }
 
     nonisolated private static func cleaned(_ s: String) -> String {

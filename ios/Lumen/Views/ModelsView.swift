@@ -28,6 +28,8 @@ struct ModelsView: View {
                                         stored: storedModel(for: model),
                                         progress: downloader.progresses[model.id],
                                         onDownload: { download(model) },
+                                        onPause: { downloader.pause(model) },
+                                        onResume: { download(model) },
                                         onCancel: { downloader.cancel(model) },
                                         onDelete: { deleteStored(for: model) },
                                         onActivate: { activate(model) }
@@ -243,6 +245,8 @@ struct ModelCard: View {
     let stored: StoredModel?
     let progress: DownloadProgress?
     var onDownload: () -> Void
+    var onPause: () -> Void = {}
+    var onResume: () -> Void = {}
     var onCancel: () -> Void
     var onDelete: () -> Void
     var onActivate: () -> Void
@@ -284,13 +288,30 @@ struct ModelCard: View {
                 }
             }
 
-            if let progress, case .downloading = progress.state {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: progress.fractionCompleted)
-                        .tint(Theme.accent)
-                    Text("\(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(Theme.textSecondary)
+            if let progress {
+                switch progress.state {
+                case .downloading:
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: progress.fractionCompleted)
+                            .tint(Theme.accent)
+                        Text("\(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                case .paused:
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: progress.fractionCompleted)
+                            .tint(Theme.textTertiary)
+                        Text("Paused — \(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                case .failed(let msg):
+                    Text("Failed: \(msg)")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                case .queued, .completed:
+                    EmptyView()
                 }
             }
         }
@@ -307,10 +328,28 @@ struct ModelCard: View {
     @ViewBuilder
     private var actionButton: some View {
         if let progress, case .downloading = progress.state {
-            Button("Cancel") { onCancel() }
-                .font(.caption.weight(.medium))
+            HStack(spacing: 6) {
+                Button { onPause() } label: {
+                    Image(systemName: "pause.fill").font(.caption)
+                }
                 .buttonStyle(.bordered)
-                .tint(.red)
+                Button("Cancel") { onCancel() }
+                    .font(.caption.weight(.medium))
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+            }
+        } else if let progress, case .paused = progress.state {
+            HStack(spacing: 6) {
+                Button { onResume() } label: {
+                    Image(systemName: "play.fill").font(.caption)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                Button("Cancel") { onCancel() }
+                    .font(.caption.weight(.medium))
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+            }
         } else if stored != nil {
             Menu {
                 Button("Set as Active", systemImage: "checkmark") { onActivate() }

@@ -15,6 +15,7 @@ final class TriggerScheduler {
 
     private var registered = false
     private var isRunning = false
+    var lastPermissionGranted: Bool?
 
     func registerTasks() {
         guard !registered else { return }
@@ -32,15 +33,23 @@ final class TriggerScheduler {
         center.setNotificationCategories([category])
     }
 
-    func requestPermission() async {
+    @discardableResult
+    func requestPermission() async -> Bool {
         let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        _ = granted
+        lastPermissionGranted = granted
+        return granted
     }
 
     func scheduleBackgroundRefresh() {
         let req = BGAppRefreshTaskRequest(identifier: Self.refreshIdentifier)
         req.earliestBeginDate = Date().addingTimeInterval(15 * 60)
         try? BGTaskScheduler.shared.submit(req)
+
+        let proc = BGProcessingTaskRequest(identifier: Self.processIdentifier)
+        proc.earliestBeginDate = Date().addingTimeInterval(30 * 60)
+        proc.requiresNetworkConnectivity = true
+        proc.requiresExternalPower = false
+        try? BGTaskScheduler.shared.submit(proc)
     }
 
     private func handleRefresh(task: BGTask) async {

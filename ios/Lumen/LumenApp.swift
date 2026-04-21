@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct LumenApp: App {
     @State private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -34,6 +35,14 @@ struct LumenApp: App {
                     TriggerScheduler.shared.registerTasks()
                     TriggerScheduler.shared.scheduleBackgroundRefresh()
                     await TriggerScheduler.shared.requestPermission()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        Task { @MainActor in
+                            let ctx = ModelContext(sharedModelContainer)
+                            await TriggerScheduler.shared.fireDueTriggers(context: ctx, appState: appState)
+                        }
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)

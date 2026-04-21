@@ -21,7 +21,6 @@ final class VoiceService: NSObject {
     @ObservationIgnored private var recognizer: SFSpeechRecognizer?
     @ObservationIgnored private var onFinal: ((String) -> Void)?
     @ObservationIgnored private var onSpeechEnd: (() -> Void)?
-    @ObservationIgnored private var speakQueue: [String] = []
 
     override init() {
         super.init()
@@ -219,7 +218,10 @@ nonisolated enum VoiceCatalog {
     @MainActor
     static func available() -> [Entry] {
         AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("en") || $0.language == Locale.current.language.languageCode?.identifier ?? "" }
+            .filter {
+                let currentCode = Locale.current.language.languageCode?.identifier ?? ""
+                return $0.language.hasPrefix("en") || (!currentCode.isEmpty && $0.language.hasPrefix(currentCode))
+            }
             .sorted { $0.name < $1.name }
             .map { v in
                 let q: String

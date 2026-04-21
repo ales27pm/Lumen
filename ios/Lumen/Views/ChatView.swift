@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var streamingTask: Task<Void, Never>?
     @State private var showVoiceMode = false
     @State private var showFilePicker = false
+    @State private var attachedFileName: String?
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -54,6 +55,28 @@ struct ChatView: View {
 
             Divider().background(Theme.border)
 
+            if let name = attachedFileName {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperclip")
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                    Text(name)
+                        .font(.caption).foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button {
+                        attachedFileName = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption).foregroundStyle(Theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Theme.surface)
+                .clipShape(.rect(cornerRadius: 8))
+                .padding(.horizontal, 12).padding(.top, 6)
+            }
+
             ChatInputBar(
                 draft: $draft,
                 isFocused: _isFocused,
@@ -81,20 +104,28 @@ struct ChatView: View {
             })
         }
         .fileImporter(isPresented: $showFilePicker,
-                      allowedContentTypes: [.plainText, .pdf, .text, .utf8PlainText],
+                      allowedContentTypes: [.plainText, .pdf, .text, .utf8PlainText, .rtf, .commaSeparatedText, .json, .xml, .html, .sourceCode, UTType(filenameExtension: "md") ?? .plainText],
                       allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
-                _ = FileStore.importFile(from: url)
-                draft += (draft.isEmpty ? "" : "\n") + "Read the imported file \"\(url.lastPathComponent)\" and summarize it."
+                if FileStore.importFile(from: url) != nil {
+                    attachedFileName = url.lastPathComponent
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                }
             }
         }
     }
 
     private func send(text overrideText: String?) {
         let source = overrideText ?? draft
-        let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let attached = attachedFileName {
+            let note = text.isEmpty
+                ? "I've attached the file \"\(attached)\". Use the files.read tool to read it, then answer my follow-up questions."
+                : "\(text)\n\n(Attached file: \"\(attached)\" — use files.read to access it.)"
+            text = note
+        }
         guard !text.isEmpty, !appState.isGenerating else { return }
-        if overrideText == nil { draft = "" }
+        if overrideText == nil { draft = ""; attachedFileName = nil }
 
         let userMsg = ChatMessage(role: .user, content: text)
         conversation.messages.append(userMsg)
@@ -260,14 +291,24 @@ struct ChatView: View {
     }
 
     private func stop() {
-        streamingTask?.cancel()
-        appState.isGenerating = false
-        if !streamingText.isEmpty {
-            let msg = ChatMessage(role: .assistant, content: streamingText + " …[stopped]", agentSteps: streamingSteps)
-            conversation.messages.append(msg)
-            streamingText = ""
-            streamingSteps = []
-            try? modelContext.save()
+        let task = streamingTask
+        streamingTask = nil
+        task?.cancel()
+        let captured = streamingText
+        let capturedSteps = streamingSteps
+        streamingText = ""
+        streamingSteps = []
+        Task {
+            _ = await task?.value
+            await MainActor.run {
+                appState.isGenerating = false
+                if !captured.isEmpty {
+                    let msg = ChatMessage(role: .assistant, content: captured, agentSteps: capturedSteps, wasStopped: true)
+                    conversation.messages.append(msg)
+                    conversation.updatedAt = Date()
+                    try? modelContext.save()
+                }
+            }
         }
     }
 }

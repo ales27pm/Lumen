@@ -12,6 +12,33 @@ nonisolated struct GenerateRequest: Sendable {
     let modelName: String
     let availableTools: [ToolDefinition]
     let relevantMemories: [String]
+    let attachments: [ChatAttachment]
+
+    init(
+        systemPrompt: String,
+        history: [(role: MessageRole, content: String)],
+        userMessage: String,
+        temperature: Double,
+        topP: Double,
+        repetitionPenalty: Double,
+        maxTokens: Int,
+        modelName: String,
+        availableTools: [ToolDefinition],
+        relevantMemories: [String],
+        attachments: [ChatAttachment] = []
+    ) {
+        self.systemPrompt = systemPrompt
+        self.history = history
+        self.userMessage = userMessage
+        self.temperature = temperature
+        self.topP = topP
+        self.repetitionPenalty = repetitionPenalty
+        self.maxTokens = maxTokens
+        self.modelName = modelName
+        self.availableTools = availableTools
+        self.relevantMemories = relevantMemories
+        self.attachments = attachments
+    }
 }
 
 nonisolated enum GenerationToken: Sendable {
@@ -307,6 +334,9 @@ actor LlamaService {
         if !req.relevantMemories.isEmpty {
             let mem = req.relevantMemories.prefix(5).map { "• \($0)" }.joined(separator: "\n")
             systemContent += "\n\nRelevant memory from previous conversations:\n\(mem)"
+        }
+        if !req.attachments.isEmpty {
+            systemContent += "\n" + AttachmentResolver.contextBlock(for: req.attachments)
         }
 
         var messages: [(String, String)] = [("system", systemContent)]

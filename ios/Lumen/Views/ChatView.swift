@@ -14,7 +14,7 @@ struct ChatView: View {
     @State private var streamingTask: Task<Void, Never>?
     @State private var showVoiceMode = false
     @State private var showFilePicker = false
-    @State private var attachedFileName: String?
+    @State private var attachments: [ChatAttachment] = []
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -55,26 +55,18 @@ struct ChatView: View {
 
             Divider().background(Theme.border)
 
-            if let name = attachedFileName {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperclip")
-                        .font(.caption).foregroundStyle(Theme.textSecondary)
-                    Text(name)
-                        .font(.caption).foregroundStyle(Theme.textPrimary)
-                        .lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    Button {
-                        attachedFileName = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.caption).foregroundStyle(Theme.textTertiary)
+            if !attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(attachments) { a in
+                            AttachmentChip(attachment: a) {
+                                attachments.removeAll { $0.id == a.id }
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(Theme.surface)
-                .clipShape(.rect(cornerRadius: 8))
-                .padding(.horizontal, 12).padding(.top, 6)
+                .padding(.top, 6)
             }
 
             ChatInputBar(
@@ -105,10 +97,17 @@ struct ChatView: View {
         }
         .fileImporter(isPresented: $showFilePicker,
                       allowedContentTypes: [.plainText, .pdf, .text, .utf8PlainText, .rtf, .commaSeparatedText, .json, .xml, .html, .sourceCode, UTType(filenameExtension: "md") ?? .plainText],
-                      allowsMultipleSelection: false) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                if FileStore.importFile(from: url) != nil {
-                    attachedFileName = url.lastPathComponent
+                      allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                for url in urls {
+                    if let dest = FileStore.importFile(from: url),
+                       let attachment = AttachmentResolver.make(from: dest) {
+                        if !attachments.contains(where: { $0.path == attachment.path }) {
+                            attachments.append(attachment)
+                        }
+                    }
+                }
+                if !urls.isEmpty {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                 }
             }
@@ -118,20 +117,27 @@ struct ChatView: View {
     private func send(text overrideText: String?) {
         let source = overrideText ?? draft
         var text = source.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let attached = attachedFileName {
-            let note = text.isEmpty
-                ? "I've attached the file \"\(attached)\". Use the files.read tool to read it, then answer my follow-up questions."
-                : "\(text)\n\n(Attached file: \"\(attached)\" — use files.read to access it.)"
-            text = note
+        let turnAttachments = attachments
+        if text.isEmpty && !turnAttachments.isEmpty {
+            text = turnAttachments.count == 1
+                ? "Please review the attached file."
+                : "Please review the attached files."
         }
         guard !text.isEmpty, !appState.isGenerating else { return }
-        if overrideText == nil { draft = ""; attachedFileName = nil }
+        if overrideText == nil { draft = ""; attachments = [] }
 
-        let userMsg = ChatMessage(role: .user, content: text)
+        let displayContent: String
+        if turnAttachments.isEmpty {
+            displayContent = text
+        } else {
+            let list = turnAttachments.map { "• \($0.name)" }.joined(separator: "\n")
+            displayContent = "\(text)\n\nAttached:\n\(list)"
+        }
+        let userMsg = ChatMessage(role: .user, content: displayContent)
         conversation.messages.append(userMsg)
         conversation.updatedAt = Date()
         if conversation.title == "New Chat" {
-            conversation.title = String(text.prefix(36))
+            conversation.title = String(displayContent.prefix(36))
         }
         try? modelContext.save()
 
@@ -152,14 +158,14 @@ struct ChatView: View {
             let memories = await MemoryStore.recall(query: text, context: modelContext).map(\.content)
 
             if appState.agentModeEnabled {
-                await runAgent(text: text, memories: memories)
+                await runAgent(text: text, memories: memories, attachments: turnAttachments)
             } else {
-                await runPlain(text: text, memories: memories)
+                await runPlain(text: text, memories: memories, attachments: turnAttachments)
             }
         }
     }
 
-    private func runAgent(text: String, memories: [String]) async {
+    private func runAgent(text: String, memories: [String], attachments: [ChatAttachment]) async {
         let history = conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) }
         let tools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
         let req = AgentRequest(
@@ -172,7 +178,8 @@ struct ChatView: View {
             maxTokens: appState.maxTokens,
             maxSteps: appState.maxAgentSteps,
             availableTools: tools,
-            relevantMemories: memories
+            relevantMemories: memories,
+            attachments: attachments
         )
 
         var steps: [AgentStep] = []
@@ -223,7 +230,7 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func runPlain(text: String, memories: [String]) async {
+    private func runPlain(text: String, memories: [String], attachments: [ChatAttachment]) async {
         let request = GenerateRequest(
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
             history: conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) },
@@ -234,7 +241,8 @@ struct ChatView: View {
             maxTokens: appState.maxTokens,
             modelName: conversation.modelName ?? "default",
             availableTools: ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) },
-            relevantMemories: memories
+            relevantMemories: memories,
+            attachments: attachments
         )
 
         var accumulated = ""
@@ -310,6 +318,39 @@ struct ChatView: View {
                 }
             }
         }
+    }
+}
+
+struct AttachmentChip: View {
+    let attachment: ChatAttachment
+    var onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: attachment.kind.icon)
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Text(attachment.name)
+                .font(.caption)
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.surface)
+        .clipShape(.rect(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.border, lineWidth: 1)
+        }
+        .frame(maxWidth: 220)
     }
 }
 

@@ -12,6 +12,33 @@ nonisolated struct AgentRequest: Sendable {
     let maxSteps: Int
     let availableTools: [ToolDefinition]
     let relevantMemories: [String]
+    let attachments: [ChatAttachment]
+
+    init(
+        systemPrompt: String,
+        history: [(role: MessageRole, content: String)],
+        userMessage: String,
+        temperature: Double,
+        topP: Double,
+        repetitionPenalty: Double,
+        maxTokens: Int,
+        maxSteps: Int,
+        availableTools: [ToolDefinition],
+        relevantMemories: [String],
+        attachments: [ChatAttachment] = []
+    ) {
+        self.systemPrompt = systemPrompt
+        self.history = history
+        self.userMessage = userMessage
+        self.temperature = temperature
+        self.topP = topP
+        self.repetitionPenalty = repetitionPenalty
+        self.maxTokens = maxTokens
+        self.maxSteps = maxSteps
+        self.availableTools = availableTools
+        self.relevantMemories = relevantMemories
+        self.attachments = attachments
+    }
 }
 
 nonisolated enum AgentEvent: Sendable {
@@ -308,7 +335,8 @@ final class AgentService {
                 maxTokens: req.maxTokens,
                 modelName: "agent",
                 availableTools: [],
-                relevantMemories: []
+                relevantMemories: [],
+                attachments: stepIndex == 0 ? req.attachments : []
             )
 
             let scanner = StreamingJSONScanner()
@@ -484,6 +512,9 @@ final class AgentService {
             sys += "\n"
         } else {
             sys += "No tools available. You must emit a `final` turn.\n\n"
+        }
+        if !req.attachments.isEmpty {
+            sys += "The user has attached \(req.attachments.count) file(s) to this message. Their contents are appended below as authoritative context. Do NOT call files.read for them — they are already visible. Answer directly from the attached content when possible.\n\n"
         }
         if !req.relevantMemories.isEmpty {
             sys += "Relevant memories about this user:\n"

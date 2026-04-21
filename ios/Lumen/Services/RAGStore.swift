@@ -1,0 +1,208 @@
+import Foundation
+import SwiftData
+import PDFKit
+import Photos
+
+@MainActor
+enum RAGStore {
+    static let chunkSize = 600
+    static let chunkOverlap = 80
+
+    static func search(query: String, context: ModelContext, limit: Int = 5, sourceTypes: Set<RAGSourceType>? = nil) async -> [(chunk: RAGChunk, score: Double)] {
+        let queryVec = await LlamaService.shared.embed(text: query)
+        guard !queryVec.isEmpty else { return [] }
+        var descriptor = FetchDescriptor<RAGChunk>()
+        descriptor.fetchLimit = 5000
+        guard let all = try? context.fetch(descriptor), !all.isEmpty else { return [] }
+
+        let filtered: [RAGChunk]
+        if let types = sourceTypes {
+            filtered = all.filter { types.contains($0.kind) }
+        } else {
+            filtered = all
+        }
+
+        let scored: [(RAGChunk, Double)] = filtered.compactMap { c in
+            guard !c.embedding.isEmpty else { return nil }
+            return (c, cosine(queryVec, c.embedding))
+        }
+        return scored.sorted { $0.1 > $1.1 }.prefix(limit).map { ($0.0, $0.1) }
+    }
+
+    static func counts(context: ModelContext) -> [RAGSourceType: Int] {
+        guard let all = try? context.fetch(FetchDescriptor<RAGChunk>()) else { return [:] }
+        var out: [RAGSourceType: Int] = [:]
+        for c in all { out[c.kind, default: 0] += 1 }
+        return out
+    }
+
+    static func wipe(_ type: RAGSourceType?, context: ModelContext) {
+        guard let all = try? context.fetch(FetchDescriptor<RAGChunk>()) else { return }
+        for c in all {
+            if type == nil || c.kind == type { context.delete(c) }
+        }
+        try? context.save()
+    }
+
+    static func chunks(for type: RAGSourceType, context: ModelContext) -> [RAGChunk] {
+        let raw = (try? context.fetch(FetchDescriptor<RAGChunk>())) ?? []
+        return raw.filter { $0.kind == type }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    // MARK: - File / PDF indexing
+
+    static func indexImportedFiles(context: ModelContext, progress: ((Double) -> Void)? = nil) async -> Int {
+        wipe(.file, context: context)
+        wipe(.pdf, context: context)
+        let files = FileStore.importedFiles()
+        var total = 0
+        for (idx, url) in files.enumerated() {
+            let added = await indexFile(url: url, context: context)
+            total += added
+            progress?(Double(idx + 1) / Double(max(1, files.count)))
+        }
+        return total
+    }
+
+    static func indexFile(url: URL, context: ModelContext) async -> Int {
+        let name = url.lastPathComponent
+        let ext = url.pathExtension.lowercased()
+        let text: String
+        let type: RAGSourceType
+
+        if ext == "pdf" {
+            guard let pdf = PDFDocument(url: url) else { return 0 }
+            var combined = ""
+            for i in 0..<pdf.pageCount {
+                combined += pdf.page(at: i)?.string ?? ""
+                combined += "\n\n"
+            }
+            text = combined
+            type = .pdf
+        } else {
+            guard let data = try? Data(contentsOf: url),
+                  let s = String(data: data, encoding: .utf8) else { return 0 }
+            text = s
+            type = .file
+        }
+
+        let pieces = chunkText(text)
+        var count = 0
+        for (i, piece) in pieces.enumerated() {
+            let emb = await LlamaService.shared.embed(text: piece)
+            let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
+            context.insert(chunk)
+            count += 1
+            if i % 8 == 7 { try? context.save() }
+        }
+        try? context.save()
+        return count
+    }
+
+    // MARK: - Photos metadata
+
+    static func indexPhotos(monthsBack: Int = 6, context: ModelContext) async -> Int {
+        let status = await withCheckedContinuation { (cont: CheckedContinuation<PHAuthorizationStatus, Never>) in
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
+        }
+        guard status == .authorized || status == .limited else { return 0 }
+        wipe(.photo, context: context)
+
+        let start = Calendar.current.date(byAdding: .month, value: -monthsBack, to: Date()) ?? Date()
+        let options = PHFetchOptions()
+        options.predicate = NSPredicate(format: "creationDate >= %@", start as NSDate)
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 2000
+        let fetch = PHAsset.fetchAssets(with: options)
+
+        var assets: [PHAsset] = []
+        fetch.enumerateObjects { a, _, _ in assets.append(a) }
+
+        var buckets: [String: [PHAsset]] = [:]
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM"
+        for a in assets {
+            let key = df.string(from: a.creationDate ?? Date())
+            buckets[key, default: []].append(a)
+        }
+
+        var count = 0
+        for (month, items) in buckets {
+            let favorites = items.filter(\.isFavorite).count
+            let videos = items.filter { $0.mediaType == .video }.count
+            let screenshots = items.filter { $0.mediaSubtypes.contains(.photoScreenshot) }.count
+            let selfies = items.filter { $0.mediaSubtypes.contains(.photoLive) == false && $0.mediaSubtypes.rawValue != 0 }.count
+            var geo = 0
+            for a in items where a.location != nil { geo += 1 }
+
+            let df2 = DateFormatter(); df2.dateStyle = .medium
+            let first = items.last?.creationDate.map { df2.string(from: $0) } ?? "?"
+            let last = items.first?.creationDate.map { df2.string(from: $0) } ?? "?"
+
+            let summary = """
+            Photos (\(month)): \(items.count) items between \(first) and \(last).
+            \(favorites) favorites, \(videos) videos, \(screenshots) screenshots, \(geo) with location.
+            """
+
+            let emb = await LlamaService.shared.embed(text: summary)
+            let chunk = RAGChunk(content: summary, sourceType: .photo, sourceName: "Photos \(month)", sourceRef: month, chunkIndex: 0, embedding: emb)
+            context.insert(chunk)
+            count += 1
+        }
+        try? context.save()
+        return count
+    }
+
+    // MARK: - Notes (plain text import via share)
+
+    static func indexNote(title: String, body: String, context: ModelContext) async -> Int {
+        let pieces = chunkText(body)
+        var count = 0
+        for (i, piece) in pieces.enumerated() {
+            let emb = await LlamaService.shared.embed(text: piece)
+            let chunk = RAGChunk(content: piece, sourceType: .note, sourceName: title, sourceRef: nil, chunkIndex: i, embedding: emb)
+            context.insert(chunk)
+            count += 1
+        }
+        try? context.save()
+        return count
+    }
+
+    // MARK: - Helpers
+
+    static func chunkText(_ text: String) -> [String] {
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let paragraphs = normalized.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        var chunks: [String] = []
+        var current = ""
+        for p in paragraphs {
+            if current.count + p.count + 2 <= chunkSize {
+                current += (current.isEmpty ? "" : "\n\n") + p
+            } else {
+                if !current.isEmpty { chunks.append(current) }
+                if p.count > chunkSize {
+                    var start = p.startIndex
+                    while start < p.endIndex {
+                        let end = p.index(start, offsetBy: chunkSize, limitedBy: p.endIndex) ?? p.endIndex
+                        chunks.append(String(p[start..<end]))
+                        if end == p.endIndex { break }
+                        let step = chunkSize - chunkOverlap
+                        start = p.index(start, offsetBy: step, limitedBy: p.endIndex) ?? p.endIndex
+                    }
+                    current = ""
+                } else {
+                    current = p
+                }
+            }
+        }
+        if !current.isEmpty { chunks.append(current) }
+        return chunks
+    }
+
+    private static func cosine(_ a: [Double], _ b: [Double]) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return 0 }
+        var dot = 0.0
+        for i in 0..<a.count { dot += a[i] * b[i] }
+        return dot
+    }
+}
+

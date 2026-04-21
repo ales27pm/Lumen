@@ -17,6 +17,10 @@ final class TriggerScheduler {
     private var isRunning = false
     var lastPermissionGranted: Bool?
 
+    /// Optional hook so UI can observe permission changes when `requestPermission`
+    /// is called from background entry points.
+    var onPermissionResult: (@MainActor (Bool) -> Void)?
+
     func registerTasks() {
         guard !registered else { return }
         registered = true
@@ -37,6 +41,7 @@ final class TriggerScheduler {
     func requestPermission() async -> Bool {
         let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         lastPermissionGranted = granted
+        onPermissionResult?(granted)
         return granted
     }
 
@@ -57,14 +62,20 @@ final class TriggerScheduler {
         task.expirationHandler = { task.setTaskCompleted(success: false) }
         guard let container = SharedContainer.shared else { task.setTaskCompleted(success: true); return }
         let context = ModelContext(container)
-        let appState = AppState()
-        await fireDueTriggers(context: context, appState: appState)
+        // Load settings fresh from disk so the background task never runs against
+        // stale in-memory state from a previous foreground session.
+        let snapshot = SettingsSnapshot.loadFromDisk()
+        await fireDueTriggers(context: context, settings: snapshot)
         task.setTaskCompleted(success: true)
     }
 
     // MARK: - Firing
 
     func fireDueTriggers(context: ModelContext, appState: AppState) async {
+        await fireDueTriggers(context: context, settings: appState.snapshot)
+    }
+
+    func fireDueTriggers(context: ModelContext, settings: SettingsSnapshot) async {
         guard !isRunning else { return }
         isRunning = true
         defer { isRunning = false }
@@ -73,7 +84,7 @@ final class TriggerScheduler {
         guard let all = try? context.fetch(FetchDescriptor<Trigger>()) else { return }
         for t in all where !t.isPaused {
             if let next = t.nextFireAt ?? t.computeNextFire(from: now), next <= now.addingTimeInterval(30) {
-                await runTrigger(t, context: context, appState: appState, notify: true)
+                await runTrigger(t, context: context, settings: settings, notify: true)
             } else if t.nextFireAt == nil {
                 t.nextFireAt = t.computeNextFire(from: now)
             }
@@ -83,7 +94,12 @@ final class TriggerScheduler {
 
     @discardableResult
     func runTrigger(_ trigger: Trigger, context: ModelContext, appState: AppState, notify: Bool) async -> String {
-        let result = await AgentRunner.runHeadless(prompt: trigger.prompt, appState: appState, context: context, maxSteps: min(appState.maxAgentSteps, 3))
+        await runTrigger(trigger, context: context, settings: appState.snapshot, notify: notify)
+    }
+
+    @discardableResult
+    func runTrigger(_ trigger: Trigger, context: ModelContext, settings: SettingsSnapshot, notify: Bool) async -> String {
+        let result = await AgentRunner.runHeadless(prompt: trigger.prompt, settings: settings, context: context, maxSteps: min(settings.maxAgentSteps, 3))
         trigger.lastRunAt = Date()
         trigger.lastResult = result.text
         switch trigger.kind {

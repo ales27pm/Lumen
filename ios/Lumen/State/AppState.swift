@@ -1,91 +1,113 @@
 import SwiftUI
 import Observation
 
+/// Top-level observable app state. This is a thin facade that owns a
+/// `UserSettings` (persistent) and a `RuntimeState` (ephemeral). Views can
+/// observe either sub-object directly or go through `AppState` for convenience
+/// during the transition from the old monolithic state.
 @Observable
 final class AppState {
-    var activeChatModelID: String?
-    var activeEmbeddingModelID: String?
-    var enabledToolIDs: Set<String> = Set(ToolRegistry.all.map(\.id))
+    let settings: UserSettings
+    let runtime: RuntimeState
 
-    var systemPrompt: String = Presets.general.prompt
-    var temperature: Double = 0.7
-    var topP: Double = 0.95
-    var repetitionPenalty: Double = 1.1
-    var contextSize: Int = 4096
-    var maxTokens: Int = 512
-    var autoMemory: Bool = true
-    var selectedPresetID: String = Presets.general.id
-
-    // Voice
-    var voiceID: String?
-    var speakingRate: Double = 0.5
-    var handsFree: Bool = false
-
-    // Agent
-    var maxAgentSteps: Int = 6
-    var showThinkingByDefault: Bool = false
-    var agentModeEnabled: Bool = true
-
-    var downloads: [String: DownloadProgress] = [:]
-    var isGenerating: Bool = false
-
-    @ObservationIgnored
-    private let defaults = UserDefaults.standard
-
-    init() {
-        activeChatModelID = defaults.string(forKey: "activeChatModelID")
-        activeEmbeddingModelID = defaults.string(forKey: "activeEmbeddingModelID")
-        if let saved = defaults.array(forKey: "enabledToolIDs") as? [String] {
-            enabledToolIDs = Set(saved)
-        }
-        systemPrompt = defaults.string(forKey: "systemPrompt") ?? Presets.general.prompt
-        temperature = defaults.object(forKey: "temperature") as? Double ?? 0.7
-        topP = defaults.object(forKey: "topP") as? Double ?? 0.95
-        repetitionPenalty = defaults.object(forKey: "repetitionPenalty") as? Double ?? 1.1
-        contextSize = defaults.object(forKey: "contextSize") as? Int ?? 4096
-        maxTokens = defaults.object(forKey: "maxTokens") as? Int ?? 512
-        autoMemory = defaults.object(forKey: "autoMemory") as? Bool ?? true
-        selectedPresetID = defaults.string(forKey: "selectedPresetID") ?? Presets.general.id
-        voiceID = defaults.string(forKey: "voiceID")
-        speakingRate = defaults.object(forKey: "speakingRate") as? Double ?? 0.5
-        handsFree = defaults.object(forKey: "handsFree") as? Bool ?? false
-        maxAgentSteps = defaults.object(forKey: "maxAgentSteps") as? Int ?? 6
-        showThinkingByDefault = defaults.object(forKey: "showThinkingByDefault") as? Bool ?? false
-        agentModeEnabled = defaults.object(forKey: "agentModeEnabled") as? Bool ?? true
+    init(settings: UserSettings = UserSettings(), runtime: RuntimeState = RuntimeState()) {
+        self.settings = settings
+        self.runtime = runtime
     }
 
-    func persist() {
-        defaults.set(activeChatModelID, forKey: "activeChatModelID")
-        defaults.set(activeEmbeddingModelID, forKey: "activeEmbeddingModelID")
-        defaults.set(Array(enabledToolIDs), forKey: "enabledToolIDs")
-        defaults.set(systemPrompt, forKey: "systemPrompt")
-        defaults.set(temperature, forKey: "temperature")
-        defaults.set(topP, forKey: "topP")
-        defaults.set(repetitionPenalty, forKey: "repetitionPenalty")
-        defaults.set(contextSize, forKey: "contextSize")
-        defaults.set(maxTokens, forKey: "maxTokens")
-        defaults.set(autoMemory, forKey: "autoMemory")
-        defaults.set(selectedPresetID, forKey: "selectedPresetID")
-        defaults.set(voiceID, forKey: "voiceID")
-        defaults.set(speakingRate, forKey: "speakingRate")
-        defaults.set(handsFree, forKey: "handsFree")
-        defaults.set(maxAgentSteps, forKey: "maxAgentSteps")
-        defaults.set(showThinkingByDefault, forKey: "showThinkingByDefault")
-        defaults.set(agentModeEnabled, forKey: "agentModeEnabled")
+    // MARK: - Forwarded persistent settings (for existing call sites)
+
+    var activeChatModelID: String? {
+        get { settings.activeChatModelID }
+        set { settings.activeChatModelID = newValue }
     }
+    var activeEmbeddingModelID: String? {
+        get { settings.activeEmbeddingModelID }
+        set { settings.activeEmbeddingModelID = newValue }
+    }
+    var enabledToolIDs: Set<String> {
+        get { settings.enabledToolIDs }
+        set { settings.enabledToolIDs = newValue }
+    }
+    var systemPrompt: String {
+        get { settings.systemPrompt }
+        set { settings.systemPrompt = newValue }
+    }
+    var temperature: Double {
+        get { settings.temperature }
+        set { settings.temperature = newValue }
+    }
+    var topP: Double {
+        get { settings.topP }
+        set { settings.topP = newValue }
+    }
+    var repetitionPenalty: Double {
+        get { settings.repetitionPenalty }
+        set { settings.repetitionPenalty = newValue }
+    }
+    var contextSize: Int {
+        get { settings.contextSize }
+        set { settings.contextSize = newValue }
+    }
+    var maxTokens: Int {
+        get { settings.maxTokens }
+        set { settings.maxTokens = newValue }
+    }
+    var autoMemory: Bool {
+        get { settings.autoMemory }
+        set { settings.autoMemory = newValue }
+    }
+    var selectedPresetID: String {
+        get { settings.selectedPresetID }
+        set { settings.selectedPresetID = newValue }
+    }
+    var voiceID: String? {
+        get { settings.voiceID }
+        set { settings.voiceID = newValue }
+    }
+    var speakingRate: Double {
+        get { settings.speakingRate }
+        set { settings.speakingRate = newValue }
+    }
+    var handsFree: Bool {
+        get { settings.handsFree }
+        set { settings.handsFree = newValue }
+    }
+    var maxAgentSteps: Int {
+        get { settings.maxAgentSteps }
+        set { settings.maxAgentSteps = newValue }
+    }
+    var showThinkingByDefault: Bool {
+        get { settings.showThinkingByDefault }
+        set { settings.showThinkingByDefault = newValue }
+    }
+    var agentModeEnabled: Bool {
+        get { settings.agentModeEnabled }
+        set { settings.agentModeEnabled = newValue }
+    }
+
+    // MARK: - Forwarded runtime state
+
+    var isGenerating: Bool {
+        get { runtime.isGenerating }
+        set { runtime.isGenerating = newValue }
+    }
+
+    // MARK: - Actions
 
     func toggleTool(_ id: String) {
-        if enabledToolIDs.contains(id) { enabledToolIDs.remove(id) }
-        else { enabledToolIDs.insert(id) }
-        persist()
+        settings.toggleTool(id)
     }
 
     func applyPreset(_ preset: Preset) {
-        systemPrompt = preset.prompt
-        selectedPresetID = preset.id
-        temperature = preset.temperature
-        persist()
+        settings.applyPreset(preset)
     }
+
+    /// Legacy API — persistence is now automatic via `UserSettings` didSet.
+    /// Kept as a no-op so existing call sites compile.
+    func persist() {}
+
+    var snapshot: SettingsSnapshot { settings.snapshot }
 }
 
 nonisolated struct DownloadProgress: Sendable {

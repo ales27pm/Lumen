@@ -3,18 +3,25 @@ import SwiftData
 
 @MainActor
 enum AgentRunner {
+    /// Foreground entry point. Uses the live `AppState` (reads its current snapshot).
     static func runHeadless(prompt: String, appState: AppState, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
+        await runHeadless(prompt: prompt, settings: appState.snapshot, context: context, maxSteps: maxSteps)
+    }
+
+    /// Background-safe entry point. Takes a Sendable settings snapshot so background
+    /// tasks never depend on live in-memory mutable state.
+    static func runHeadless(prompt: String, settings: SettingsSnapshot, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
         let memories = await MemoryStore.recall(query: prompt, context: context).map(\.content)
-        let tools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
+        let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
         let req = AgentRequest(
-            systemPrompt: appState.systemPrompt,
+            systemPrompt: settings.systemPrompt,
             history: [],
             userMessage: prompt,
-            temperature: appState.temperature,
-            topP: appState.topP,
-            repetitionPenalty: appState.repetitionPenalty,
-            maxTokens: appState.maxTokens,
-            maxSteps: maxSteps ?? appState.maxAgentSteps,
+            temperature: settings.temperature,
+            topP: settings.topP,
+            repetitionPenalty: settings.repetitionPenalty,
+            maxTokens: settings.maxTokens,
+            maxSteps: maxSteps ?? settings.maxAgentSteps,
             availableTools: tools,
             relevantMemories: memories
         )

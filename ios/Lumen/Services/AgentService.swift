@@ -22,6 +22,248 @@ nonisolated enum AgentEvent: Sendable {
     case error(String)
 }
 
+// MARK: - Structured turn model
+
+nonisolated struct AgentAction: Sendable, Hashable {
+    let tool: String
+    let args: [String: String]
+
+    var dedupeKey: String {
+        let argsStr = args.keys.sorted()
+            .map { "\($0)=\(args[$0] ?? "")" }
+            .joined(separator: "&")
+        return tool + "|" + argsStr
+    }
+
+    var displayContent: String {
+        if args.isEmpty { return "\(tool)()" }
+        let argsStr = args.keys.sorted()
+            .map { "\($0)=\(args[$0] ?? "")" }
+            .joined(separator: ", ")
+        return "\(tool)(\(argsStr))"
+    }
+}
+
+nonisolated struct AgentTurn: Sendable {
+    let thought: String?
+    let action: AgentAction?
+    let final: String?
+    /// When structured parsing fails, the best-effort plaintext that should be shown as the final answer.
+    let rawFallback: String?
+
+    var isStructured: Bool { action != nil || (final?.isEmpty == false) }
+}
+
+nonisolated enum AgentTurnParser {
+    static func parse(_ raw: String) -> AgentTurn {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return AgentTurn(thought: nil, action: nil, final: nil, rawFallback: nil)
+        }
+        if let obj = extractJSONObject(from: trimmed) {
+            return buildTurn(from: obj, raw: trimmed)
+        }
+        return AgentTurn(thought: nil, action: nil, final: nil, rawFallback: trimmed)
+    }
+
+    private static func buildTurn(from obj: [String: Any], raw: String) -> AgentTurn {
+        let thoughtRaw = (obj["thought"] as? String) ?? (obj["reasoning"] as? String)
+        let thought = thoughtRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var action: AgentAction?
+        if let act = obj["action"] as? [String: Any] {
+            let name = (act["tool"] as? String) ?? (act["name"] as? String) ?? (act["id"] as? String) ?? ""
+            var args: [String: String] = [:]
+            let rawArgs = (act["args"] as? [String: Any]) ?? (act["arguments"] as? [String: Any]) ?? (act["input"] as? [String: Any]) ?? [:]
+            for (k, v) in rawArgs { args[k] = stringify(v) }
+            if !name.isEmpty {
+                action = AgentAction(tool: name.trimmingCharacters(in: .whitespaces), args: args)
+            }
+        } else if let toolName = obj["tool"] as? String {
+            // Tolerate flat shape: {"tool": "...", "args": {...}}
+            var args: [String: String] = [:]
+            let rawArgs = (obj["args"] as? [String: Any]) ?? (obj["arguments"] as? [String: Any]) ?? [:]
+            for (k, v) in rawArgs { args[k] = stringify(v) }
+            if !toolName.isEmpty {
+                action = AgentAction(tool: toolName.trimmingCharacters(in: .whitespaces), args: args)
+            }
+        }
+
+        let finalRaw = (obj["final"] as? String)
+            ?? (obj["final_answer"] as? String)
+            ?? (obj["answer"] as? String)
+        let finalTrimmed = finalRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let hasFinal = !(finalTrimmed?.isEmpty ?? true)
+        let hasAction = action != nil
+        let cleanThought = (thought?.isEmpty ?? true) ? nil : thought
+
+        if !hasAction && !hasFinal {
+            // Degenerate — treat thought (or raw) as final.
+            let fallback = cleanThought ?? raw
+            return AgentTurn(thought: cleanThought, action: nil, final: nil, rawFallback: fallback)
+        }
+
+        return AgentTurn(
+            thought: cleanThought,
+            action: action,
+            final: hasFinal ? finalTrimmed : nil,
+            rawFallback: nil
+        )
+    }
+
+    private static func extractJSONObject(from text: String) -> [String: Any]? {
+        if let data = text.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return obj
+        }
+        // Locate the first balanced top-level JSON object in the text.
+        let chars = Array(text)
+        var i = 0
+        while i < chars.count {
+            if chars[i] == "{" {
+                if let end = findMatchingBrace(chars: chars, start: i) {
+                    let jsonStr = String(chars[i...end])
+                    if let data = jsonStr.data(using: .utf8),
+                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        return obj
+                    }
+                }
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    private static func findMatchingBrace(chars: [Character], start: Int) -> Int? {
+        var depth = 0
+        var inString = false
+        var escape = false
+        var i = start
+        while i < chars.count {
+            let ch = chars[i]
+            if escape { escape = false; i += 1; continue }
+            if inString {
+                if ch == "\\" { escape = true }
+                else if ch == "\"" { inString = false }
+            } else {
+                if ch == "\"" { inString = true }
+                else if ch == "{" { depth += 1 }
+                else if ch == "}" {
+                    depth -= 1
+                    if depth == 0 { return i }
+                }
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    static func stringify(_ v: Any) -> String {
+        if let s = v as? String { return s }
+        if let b = v as? Bool { return b ? "true" : "false" }
+        if let n = v as? NSNumber { return n.stringValue }
+        if v is NSNull { return "" }
+        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
+           let s = String(data: data, encoding: .utf8) { return s }
+        return String(describing: v)
+    }
+}
+
+// MARK: - Streaming JSON string extractor
+
+/// Extracts the (possibly partial) string value of specific JSON keys from a growing buffer.
+/// Safe on truncated input — returns what has been decoded so far and whether the string is closed.
+final class StreamingJSONScanner {
+    private var buffer = ""
+    private(set) var thought: String = ""
+    private(set) var final: String = ""
+    private var thoughtDone = false
+    private var finalDone = false
+
+    enum Event {
+        case thoughtDelta(String)
+        case finalDelta(String)
+    }
+
+    func feed(_ chunk: String) -> [Event] {
+        buffer += chunk
+        var events: [Event] = []
+
+        if !thoughtDone, let (value, done) = extractString(key: "thought") {
+            if value.count > thought.count {
+                let delta = String(value.suffix(value.count - thought.count))
+                events.append(.thoughtDelta(delta))
+                thought = value
+            }
+            thoughtDone = done
+        }
+        if !finalDone, let (value, done) = extractString(key: "final") {
+            if value.count > final.count {
+                let delta = String(value.suffix(value.count - final.count))
+                events.append(.finalDelta(delta))
+                final = value
+            }
+            finalDone = done
+        }
+        return events
+    }
+
+    private func extractString(key: String) -> (String, Bool)? {
+        let pattern = "\"\(key)\""
+        guard let keyRange = buffer.range(of: pattern) else { return nil }
+        var i = keyRange.upperBound
+        while i < buffer.endIndex, buffer[i].isWhitespace { i = buffer.index(after: i) }
+        guard i < buffer.endIndex, buffer[i] == ":" else { return nil }
+        i = buffer.index(after: i)
+        while i < buffer.endIndex, buffer[i].isWhitespace { i = buffer.index(after: i) }
+        guard i < buffer.endIndex, buffer[i] == "\"" else { return nil }
+        i = buffer.index(after: i)
+
+        var result = ""
+        var done = false
+        while i < buffer.endIndex {
+            let ch = buffer[i]
+            if ch == "\\" {
+                let next = buffer.index(after: i)
+                guard next < buffer.endIndex else { break }
+                let escCh = buffer[next]
+                switch escCh {
+                case "n": result.append("\n")
+                case "t": result.append("\t")
+                case "r": result.append("\r")
+                case "\"": result.append("\"")
+                case "\\": result.append("\\")
+                case "/": result.append("/")
+                case "b": result.append("\u{08}")
+                case "f": result.append("\u{0C}")
+                case "u":
+                    let h1 = buffer.index(after: next)
+                    guard let h4 = buffer.index(h1, offsetBy: 4, limitedBy: buffer.endIndex) else { return (result, false) }
+                    let hex = String(buffer[h1..<h4])
+                    if let scalar = UInt32(hex, radix: 16), let u = Unicode.Scalar(scalar) {
+                        result.append(Character(u))
+                    }
+                    i = h4
+                    continue
+                default:
+                    result.append(escCh)
+                }
+                i = buffer.index(after: next)
+            } else if ch == "\"" {
+                done = true
+                break
+            } else {
+                result.append(ch)
+                i = buffer.index(after: i)
+            }
+        }
+        return (result, done)
+    }
+}
+
+// MARK: - AgentService
+
 @MainActor
 final class AgentService {
     static let shared = AgentService()
@@ -35,21 +277,25 @@ final class AgentService {
 
     private func runLoop(_ req: AgentRequest, continuation: AsyncStream<AgentEvent>.Continuation) async {
         var steps: [AgentStep] = []
+        var observations: [(tool: String, result: String)] = []
+        var executedActionKeys: Set<String> = []
         var scratchpad = ""
         var finalAnswer = ""
-        var observations: [(tool: String, result: String)] = []
 
         let sys = buildSystemPrompt(req: req)
-        var history = req.history
+        let history = req.history
+        let maxSteps = max(1, req.maxSteps)
 
-        for stepIndex in 0..<max(1, req.maxSteps) {
+        stepsLoop: for stepIndex in 0..<maxSteps {
             if Task.isCancelled { break }
 
             let userTurn: String
             if stepIndex == 0 {
                 userTurn = req.userMessage
             } else {
-                userTurn = req.userMessage + "\n\n" + scratchpad + "\n\nContinue. Either think/act further or give Final Answer."
+                userTurn = req.userMessage
+                    + "\n\nPrior turns:\n" + scratchpad
+                    + "\n\nEmit the next JSON turn now. Either an action or a final."
             }
 
             let genReq = GenerateRequest(
@@ -65,392 +311,220 @@ final class AgentService {
                 relevantMemories: []
             )
 
+            let scanner = StreamingJSONScanner()
             var raw = ""
-            var stopEmitted = false
-            var currentStepID: UUID?
-            var currentStepKind: AgentStep.Kind?
-            var currentStepBuffer = ""
-            var inFinal = false
-            var finalBuffer = ""
+            let thoughtStepID = UUID()
+            var thoughtStepYielded = false
+            var streamedFinalLen = 0
 
             for await token in await LlamaService.shared.stream(genReq) {
                 if Task.isCancelled { break }
                 switch token {
                 case .text(let s):
                     raw += s
-                    // Incremental parse: look for line-oriented markers
-                    let handled = processIncremental(
-                        raw: &raw,
-                        currentStepID: &currentStepID,
-                        currentStepKind: &currentStepKind,
-                        currentStepBuffer: &currentStepBuffer,
-                        inFinal: &inFinal,
-                        finalBuffer: &finalBuffer,
-                        continuation: continuation,
-                        stopEmitted: &stopEmitted
-                    )
-                    if handled == .shouldStop { break }
+                    for event in scanner.feed(s) {
+                        switch event {
+                        case .thoughtDelta:
+                            let current = scanner.thought
+                            if !thoughtStepYielded {
+                                continuation.yield(.step(AgentStep(id: thoughtStepID, kind: .thought, content: current)))
+                                thoughtStepYielded = true
+                            } else {
+                                continuation.yield(.stepDelta(id: thoughtStepID, text: current))
+                            }
+                        case .finalDelta(let delta):
+                            streamedFinalLen += delta.count
+                            continuation.yield(.finalDelta(delta))
+                        }
+                    }
                 case .toolCall:
                     continue
                 case .done:
                     break
                 }
-                if stopEmitted { break }
             }
 
-            // Flush any open step from buffer
-            if let id = currentStepID, let kind = currentStepKind, !currentStepBuffer.isEmpty, kind != .action {
-                let step = AgentStep(id: id, kind: kind, content: currentStepBuffer.trimmingCharacters(in: .whitespacesAndNewlines))
-                if !steps.contains(where: { $0.id == step.id }) { steps.append(step) }
+            if Task.isCancelled { break }
+
+            let turn = AgentTurnParser.parse(raw)
+
+            // Commit thought step with the fully-parsed value (in case streaming extracted less).
+            if let thought = turn.thought, !thought.isEmpty {
+                let step = AgentStep(id: thoughtStepID, kind: .thought, content: thought)
+                if let idx = steps.firstIndex(where: { $0.id == thoughtStepID }) {
+                    steps[idx] = step
+                } else {
+                    steps.append(step)
+                }
+                if thoughtStepYielded {
+                    continuation.yield(.stepDelta(id: thoughtStepID, text: thought))
+                } else {
+                    continuation.yield(.step(step))
+                }
+                scratchpad += "\nThought: \(thought)"
+            } else if thoughtStepYielded, !scanner.thought.isEmpty {
+                // Parser lost the thought but we streamed one — keep what we streamed.
+                let partial = scanner.thought
+                let step = AgentStep(id: thoughtStepID, kind: .thought, content: partial)
+                steps.append(step)
+                scratchpad += "\nThought: \(partial)"
             }
 
-            // Parse full output to determine next action
-            let parsed = parseReActOutput(raw)
-            for s in parsed.steps where !steps.contains(where: { $0.id == s.id || ($0.kind == s.kind && $0.content == s.content) }) {
-                steps.append(s)
-                continuation.yield(.step(s))
-            }
-            scratchpad += "\n" + raw
+            // Action path
+            if let action = turn.action {
+                guard let _ = ToolRegistry.find(id: action.tool) else {
+                    let obs = AgentStep(kind: .observation, content: "Unknown tool: \(action.tool). Emit a final turn instead.", toolID: action.tool)
+                    steps.append(obs)
+                    continuation.yield(.step(obs))
+                    observations.append((action.tool, obs.content))
+                    scratchpad += "\nAction: \(action.displayContent)\nObservation: \(obs.content)"
+                    continue
+                }
+                if executedActionKeys.contains(action.dedupeKey) {
+                    let reflection = AgentStep(kind: .reflection, content: "Duplicate tool call blocked: \(action.displayContent). Synthesizing answer from observations.")
+                    steps.append(reflection)
+                    continuation.yield(.step(reflection))
+                    finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .duplicate)
+                    continuation.yield(.finalDelta(finalAnswer))
+                    break stepsLoop
+                }
+                executedActionKeys.insert(action.dedupeKey)
 
-            if let action = parsed.action {
-                // Emit the action step if not already
-                let actionStep = AgentStep(kind: .action, content: "\(action.tool)(\(formatArgs(action.args)))", toolID: action.tool, toolArgs: action.args)
+                let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: action.tool, toolArgs: action.args)
                 steps.append(actionStep)
                 continuation.yield(.step(actionStep))
 
-                // Execute tool
-                let tool = ToolRegistry.find(id: action.tool)
                 let isEnabled = req.availableTools.contains { $0.id == action.tool }
                 let result: String
-                if tool == nil {
-                    result = "Unknown tool: \(action.tool)"
-                } else if !isEnabled {
+                if !isEnabled {
                     result = "Tool \(action.tool) is disabled. Enable it in Tools."
                 } else {
                     result = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
                 }
+
                 let obs = AgentStep(kind: .observation, content: result, toolID: action.tool)
                 steps.append(obs)
                 continuation.yield(.step(obs))
-
-                scratchpad += "\nObservation: \(result)\n"
                 observations.append((action.tool, result))
-                if stepIndex == req.maxSteps - 1 {
-                    finalAnswer = await synthesizeFallback(req: req, userMessage: req.userMessage, observations: observations)
+                scratchpad += "\nAction: \(action.displayContent)\nObservation: \(result)"
+
+                if stepIndex == maxSteps - 1 {
+                    finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .maxSteps)
                     continuation.yield(.finalDelta(finalAnswer))
+                    break stepsLoop
                 }
                 continue
             }
 
-            if let final = parsed.finalAnswer {
+            // Final path
+            if let final = turn.final, !final.isEmpty {
                 finalAnswer = final
-                if !inFinal { continuation.yield(.finalDelta(final)) }
-                break
+                if streamedFinalLen == 0 {
+                    continuation.yield(.finalDelta(final))
+                } else if streamedFinalLen < final.count {
+                    // Catch up any characters the streaming scanner missed (e.g. after escape).
+                    let tail = String(final.suffix(final.count - streamedFinalLen))
+                    if !tail.isEmpty { continuation.yield(.finalDelta(tail)) }
+                }
+                break stepsLoop
             }
 
-            // Neither action nor final answer — treat raw output as final
-            finalAnswer = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if finalAnswer.isEmpty { finalAnswer = "(no response)" }
-            if !inFinal { continuation.yield(.finalDelta(finalAnswer)) }
+            // Malformed / empty output — safe degrade.
+            if let fallback = turn.rawFallback, !fallback.isEmpty {
+                let reflection = AgentStep(kind: .reflection, content: "Model produced unstructured output; using it as the answer.")
+                steps.append(reflection)
+                continuation.yield(.step(reflection))
+
+                if !observations.isEmpty {
+                    finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .malformed)
+                } else {
+                    finalAnswer = fallback
+                }
+                if streamedFinalLen == 0 {
+                    continuation.yield(.finalDelta(finalAnswer))
+                }
+                break stepsLoop
+            }
+
+            // Nothing at all.
+            finalAnswer = observations.isEmpty
+                ? "I couldn't produce a response. Try rephrasing."
+                : await synthesizeFallback(req: req, observations: observations, reason: .empty)
+            continuation.yield(.finalDelta(finalAnswer))
             break
+        }
+
+        if Task.isCancelled {
+            continuation.finish()
+            return
         }
 
         continuation.yield(.done(finalText: finalAnswer, steps: steps))
         continuation.finish()
     }
 
-    // MARK: - Incremental streaming parser
-
-    private enum IncResult { case ok, shouldStop }
-
-    private func processIncremental(
-        raw: inout String,
-        currentStepID: inout UUID?,
-        currentStepKind: inout AgentStep.Kind?,
-        currentStepBuffer: inout String,
-        inFinal: inout Bool,
-        finalBuffer: inout String,
-        continuation: AsyncStream<AgentEvent>.Continuation,
-        stopEmitted: inout Bool
-    ) -> IncResult {
-        // Walk new lines
-        while let newlineIdx = raw.firstIndex(of: "\n") {
-            let line = String(raw[..<newlineIdx])
-            raw.removeSubrange(...newlineIdx)
-            handleLine(line,
-                       currentStepID: &currentStepID,
-                       currentStepKind: &currentStepKind,
-                       currentStepBuffer: &currentStepBuffer,
-                       inFinal: &inFinal,
-                       finalBuffer: &finalBuffer,
-                       continuation: continuation,
-                       stopEmitted: &stopEmitted)
-            if stopEmitted { return .shouldStop }
-        }
-        return .ok
-    }
-
-    private func handleLine(
-        _ line: String,
-        currentStepID: inout UUID?,
-        currentStepKind: inout AgentStep.Kind?,
-        currentStepBuffer: inout String,
-        inFinal: inout Bool,
-        finalBuffer: inout String,
-        continuation: AsyncStream<AgentEvent>.Continuation,
-        stopEmitted: inout Bool
-    ) {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if inFinal {
-            finalBuffer += line + "\n"
-            continuation.yield(.finalDelta(line + "\n"))
-            return
-        }
-        if let range = trimmed.range(of: "Final Answer:", options: .caseInsensitive), range.lowerBound == trimmed.startIndex {
-            inFinal = true
-            let after = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespaces)
-            if !after.isEmpty {
-                finalBuffer = after + "\n"
-                continuation.yield(.finalDelta(after + "\n"))
-            }
-            return
-        }
-        if matchesPrefix(trimmed, "Thought:") {
-            flushStep(currentStepID: &currentStepID, currentStepKind: &currentStepKind, currentStepBuffer: &currentStepBuffer, continuation: continuation)
-            let content = afterPrefix(trimmed, "Thought:")
-            let step = AgentStep(kind: .thought, content: content)
-            currentStepID = step.id
-            currentStepKind = .thought
-            currentStepBuffer = content
-            continuation.yield(.step(step))
-            return
-        }
-        if matchesPrefix(trimmed, "Action:") {
-            flushStep(currentStepID: &currentStepID, currentStepKind: &currentStepKind, currentStepBuffer: &currentStepBuffer, continuation: continuation)
-            // Don't stream action detail — it'll be emitted as a single step after full parse
-            currentStepID = nil
-            currentStepKind = .action
-            currentStepBuffer = afterPrefix(trimmed, "Action:")
-            stopEmitted = true
-            return
-        }
-        if matchesPrefix(trimmed, "Reflection:") {
-            flushStep(currentStepID: &currentStepID, currentStepKind: &currentStepKind, currentStepBuffer: &currentStepBuffer, continuation: continuation)
-            let content = afterPrefix(trimmed, "Reflection:")
-            let step = AgentStep(kind: .reflection, content: content)
-            currentStepID = step.id
-            currentStepKind = .reflection
-            currentStepBuffer = content
-            continuation.yield(.step(step))
-            return
-        }
-        // Continuation of current step
-        if let id = currentStepID, currentStepKind != nil, currentStepKind != .action {
-            currentStepBuffer += " " + trimmed
-            continuation.yield(.stepDelta(id: id, text: currentStepBuffer))
-        }
-    }
-
-    private func flushStep(
-        currentStepID: inout UUID?,
-        currentStepKind: inout AgentStep.Kind?,
-        currentStepBuffer: inout String,
-        continuation: AsyncStream<AgentEvent>.Continuation
-    ) {
-        if let id = currentStepID, let kind = currentStepKind, kind != .action {
-            let trimmed = currentStepBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                continuation.yield(.step(AgentStep(id: id, kind: kind, content: trimmed)))
-            }
-        }
-        currentStepID = nil
-        currentStepKind = nil
-        currentStepBuffer = ""
-    }
-
-    private func matchesPrefix(_ s: String, _ p: String) -> Bool {
-        s.range(of: p, options: [.caseInsensitive, .anchored]) != nil
-    }
-
-    private func afterPrefix(_ s: String, _ p: String) -> String {
-        guard let r = s.range(of: p, options: [.caseInsensitive, .anchored]) else { return s }
-        return String(s[r.upperBound...]).trimmingCharacters(in: .whitespaces)
-    }
-
-    // MARK: - Full parse
-
-    private struct ParsedOutput {
-        var steps: [AgentStep]
-        var action: (tool: String, args: [String: String])?
-        var finalAnswer: String?
-    }
-
-    private func parseReActOutput(_ text: String) -> ParsedOutput {
-        var out = ParsedOutput(steps: [], action: nil, finalAnswer: nil)
-        let lines = text.components(separatedBy: .newlines)
-        var currentKind: AgentStep.Kind?
-        var buffer: [String] = []
-        var finalBuffer: [String] = []
-        var collectingFinal = false
-        var actionLine: String?
-
-        func flush() {
-            guard let kind = currentKind, !buffer.isEmpty else { return }
-            let content = buffer.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !content.isEmpty && kind != .action {
-                out.steps.append(AgentStep(kind: kind, content: content))
-            }
-            buffer = []
-        }
-
-        for raw in lines {
-            let t = raw.trimmingCharacters(in: .whitespaces)
-            if collectingFinal { finalBuffer.append(t); continue }
-            if let r = t.range(of: "Final Answer:", options: .caseInsensitive), r.lowerBound == t.startIndex {
-                flush()
-                collectingFinal = true
-                let rest = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
-                if !rest.isEmpty { finalBuffer.append(rest) }
-                continue
-            }
-            if matchesPrefix(t, "Thought:") { flush(); currentKind = .thought; buffer = [afterPrefix(t, "Thought:")]; continue }
-            if matchesPrefix(t, "Reflection:") { flush(); currentKind = .reflection; buffer = [afterPrefix(t, "Reflection:")]; continue }
-            if matchesPrefix(t, "Action:") {
-                flush()
-                currentKind = .action
-                actionLine = afterPrefix(t, "Action:")
-                continue
-            }
-            if matchesPrefix(t, "Observation:") { flush(); currentKind = nil; continue }
-            if currentKind != nil { buffer.append(t) }
-        }
-        flush()
-
-        if let a = actionLine { out.action = parseAction(a) }
-        if !finalBuffer.isEmpty {
-            out.finalAnswer = finalBuffer.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return out
-    }
-
-    private func parseAction(_ line: String) -> (tool: String, args: [String: String])? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        // JSON form: {"tool":"...","args":{...}}
-        if let start = trimmed.firstIndex(of: "{"), let end = trimmed.lastIndex(of: "}"), start < end {
-            let json = String(trimmed[start...end])
-            if let data = json.data(using: .utf8),
-               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                let name = (obj["tool"] as? String) ?? (obj["name"] as? String) ?? ""
-                var args: [String: String] = [:]
-                if let a = obj["args"] as? [String: Any] {
-                    for (k, v) in a { args[k] = stringify(v) }
-                } else if let a = obj["arguments"] as? [String: Any] {
-                    for (k, v) in a { args[k] = stringify(v) }
-                }
-                if !name.isEmpty { return (name, args) }
-            }
-        }
-        // Function-call form: tool.id(key="value", key2="value2")
-        if let paren = trimmed.firstIndex(of: "("), let close = trimmed.lastIndex(of: ")"), paren < close {
-            let name = String(trimmed[..<paren]).trimmingCharacters(in: .whitespaces)
-            let argsStr = String(trimmed[trimmed.index(after: paren)..<close])
-            let args = parseSimpleArgs(argsStr)
-            if !name.isEmpty { return (name, args) }
-        }
-        // Bare tool id
-        if !trimmed.isEmpty && trimmed.contains(".") && !trimmed.contains(" ") {
-            return (trimmed, [:])
-        }
-        return nil
-    }
-
-    private func parseSimpleArgs(_ s: String) -> [String: String] {
-        var out: [String: String] = [:]
-        // naive split on commas not inside quotes
-        var parts: [String] = []
-        var buf = ""
-        var inQuote = false
-        for ch in s {
-            if ch == "\"" { inQuote.toggle(); buf.append(ch); continue }
-            if ch == "," && !inQuote { parts.append(buf); buf = ""; continue }
-            buf.append(ch)
-        }
-        if !buf.isEmpty { parts.append(buf) }
-        for p in parts {
-            let kv = p.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            if kv.count == 2 {
-                var v = kv[1]
-                if v.hasPrefix("\""), v.hasSuffix("\""), v.count >= 2 {
-                    v = String(v.dropFirst().dropLast())
-                }
-                out[kv[0]] = v
-            }
-        }
-        return out
-    }
-
-    private func stringify(_ v: Any) -> String {
-        if let s = v as? String { return s }
-        if let b = v as? Bool { return b ? "true" : "false" }
-        if let n = v as? NSNumber { return n.stringValue }
-        if v is NSNull { return "" }
-        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
-           let s = String(data: data, encoding: .utf8) { return s }
-        return String(describing: v)
-    }
-
-    private func formatArgs(_ args: [String: String]) -> String {
-        args.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
-    }
-
     // MARK: - System prompt
 
     private func buildSystemPrompt(req: AgentRequest) -> String {
         var sys = req.systemPrompt
-        sys += "\n\nYou are an autonomous agent. Answer using the ReAct pattern. Emit EXACTLY one of:\n"
-        sys += "- A block starting with `Thought:` followed by your reasoning, then on a new line `Action:` with a tool call.\n"
-        sys += "- Or `Final Answer:` followed by your reply to the user.\n\n"
-        sys += "Action format (JSON on one line):\nAction: {\"tool\":\"tool.id\",\"args\":{\"key\":\"value\"}}\n\n"
-        sys += "After each Action, you'll receive an `Observation:` — then think again or produce Final Answer. Never invent observations.\n\n"
-
+        sys += "\n\nYou are a structured-output agent. Each turn you MUST emit exactly one JSON object and nothing else — no prose, no markdown, no code fences, no commentary before or after.\n\n"
+        sys += "Schema (choose exactly one of `action` or `final` per turn):\n"
+        sys += "  {\"thought\":\"short reasoning\",\"action\":{\"tool\":\"tool.id\",\"args\":{\"key\":\"value\"}}}\n"
+        sys += "  {\"thought\":\"short reasoning\",\"final\":\"your answer to the user\"}\n\n"
+        sys += "Hard rules:\n"
+        sys += "- Emit one valid JSON object per turn. No text outside the JSON.\n"
+        sys += "- `args` values must be strings. Use {} if the tool takes no arguments.\n"
+        sys += "- Never repeat an action with the same arguments. Never invent observations.\n"
+        sys += "- After each `action`, you receive an Observation. Then emit the next JSON turn.\n"
+        sys += "- As soon as you can answer, emit `final` and stop.\n"
+        sys += "- If the user's message needs no tool, emit `final` immediately.\n\n"
         if !req.availableTools.isEmpty {
             sys += "Available tools:\n"
-            for t in req.availableTools {
-                sys += "- \(t.id): \(t.description)\n"
-            }
+            for t in req.availableTools { sys += "- \(t.id): \(t.description)\n" }
             sys += "\n"
         } else {
-            sys += "No tools available. Answer directly with Final Answer.\n\n"
+            sys += "No tools available. You must emit a `final` turn.\n\n"
         }
-
         if !req.relevantMemories.isEmpty {
             sys += "Relevant memories about this user:\n"
             for m in req.relevantMemories.prefix(6) { sys += "- \(m)\n" }
             sys += "\n"
         }
-
         sys += "Guidelines:\n"
-        sys += "- If the user asks about something \"nearest\", \"near me\", or \"closest\", call `location.current` FIRST, then `maps.search` ONCE with the user's location, then give Final Answer.\n"
-        sys += "- Do NOT repeat the same tool call with the same arguments. Don't loop.\n"
-        sys += "- As soon as you have enough information to answer, stop and produce Final Answer. Do not call extra tools for confirmation.\n"
-        sys += "- If a tool returns results that partially answer the question, summarize them in Final Answer rather than searching again.\n"
-        sys += "- If the user's message doesn't need a tool, skip straight to Final Answer.\n"
-        sys += "Be concise."
+        sys += "- For \"nearest\"/\"near me\"/\"closest\" questions, call `location.current` first, then `maps.search` once, then emit `final`.\n"
+        sys += "- If a tool result partially answers the question, summarize it in `final` rather than calling more tools.\n"
+        sys += "- Keep `thought` and `final` concise and in plain language."
         return sys
     }
 
-    private func synthesizeFallback(req: AgentRequest, userMessage: String, observations: [(tool: String, result: String)]) async -> String {
-        guard !observations.isEmpty else {
-            return "I couldn't find a confident answer to that. Try rephrasing the question."
+    // MARK: - Fallback synthesis
+
+    private enum FallbackReason {
+        case duplicate, maxSteps, malformed, empty
+
+        var hint: String {
+            switch self {
+            case .duplicate: return "You already called that tool with these arguments — summarize the existing observations."
+            case .maxSteps: return "You've reached the maximum number of reasoning steps — give the best answer now."
+            case .malformed: return "Prior output was not valid structured JSON — summarize the observations cleanly."
+            case .empty: return "Summarize the observations into a direct answer."
+            }
         }
-        var prompt = "The user asked: \"\(userMessage)\"\n\nYou gathered these tool observations:\n"
+    }
+
+    private func synthesizeFallback(req: AgentRequest, observations: [(tool: String, result: String)], reason: FallbackReason) async -> String {
+        guard !observations.isEmpty else {
+            return "I couldn't find a confident answer. Try rephrasing the question."
+        }
+        var prompt = "The user asked: \"\(req.userMessage)\"\n\nYou gathered these tool observations:\n"
         for (i, obs) in observations.enumerated() {
             prompt += "\n[\(i + 1)] \(obs.tool):\n\(obs.result)\n"
         }
-        prompt += "\nWrite ONE short, direct, helpful answer to the user in plain language based only on these observations. No preamble, no 'Final Answer:' prefix, no apology about limits. If observations conflict, prefer the most recent one."
+        prompt += "\n\(reason.hint)\n"
+        prompt += "Write ONE short, direct, helpful answer in plain language based only on these observations. No preamble, no JSON, no prefixes, no apology. If observations conflict, prefer the most recent."
 
         let genReq = GenerateRequest(
-            systemPrompt: "You summarize tool results into a concise user-facing answer.",
+            systemPrompt: "You summarize tool results into a concise user-facing answer. Output plain text only.",
             history: [],
             userMessage: prompt,
             temperature: 0.3,
@@ -463,13 +537,13 @@ final class AgentService {
         )
         var out = ""
         for await token in await LlamaService.shared.stream(genReq) {
+            if Task.isCancelled { break }
             if case .text(let s) = token { out += s }
             if case .done = token { break }
         }
         let trimmed = out.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            let last = observations.last!.result
-            return last
+            return observations.last?.result ?? "I couldn't produce a confident answer."
         }
         return trimmed
     }

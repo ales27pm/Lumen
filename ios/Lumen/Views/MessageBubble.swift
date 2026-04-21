@@ -5,6 +5,9 @@ struct MessageBubble: View {
     let message: ChatMessage
     var streamingOverride: String? = nil
 
+    @Environment(\.modelContext) private var modelContext
+    @State private var didBookmark: Bool = false
+
     static func streaming(text: String) -> some View {
         let fake = ChatMessage(role: .assistant, content: text)
         return MessageBubble(message: fake, streamingOverride: text)
@@ -66,12 +69,27 @@ struct MessageBubble: View {
                         MessageActionButton(icon: "doc.on.doc") {
                             UIPasteboard.general.string = message.content
                         }
-                        MessageActionButton(icon: "bookmark") { /* remember */ }
+                        MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") {
+                            bookmark()
+                        }
                     }
                     .padding(.top, 2)
                 }
             }
             Spacer(minLength: 32)
+        }
+    }
+
+    private func bookmark() {
+        guard !didBookmark else { return }
+        let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        didBookmark = true
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        let snippet = String(content.prefix(400))
+        let ctx = modelContext
+        Task { @MainActor in
+            await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)
         }
     }
 }

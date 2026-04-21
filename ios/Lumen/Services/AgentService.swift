@@ -391,7 +391,11 @@ final class AgentService {
 
     private func stringify(_ v: Any) -> String {
         if let s = v as? String { return s }
+        if let b = v as? Bool { return b ? "true" : "false" }
         if let n = v as? NSNumber { return n.stringValue }
+        if v is NSNull { return "" }
+        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
+           let s = String(data: data, encoding: .utf8) { return s }
         return String(describing: v)
     }
 

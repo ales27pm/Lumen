@@ -76,6 +76,18 @@ nonisolated enum ModelCatalog {
             tags: ["balanced", "tools"]
         ),
         CatalogModel(
+            id: "dolphin-3.0-llama-3.2-3b-q4",
+            name: "Dolphin 3.0 Llama 3.2",
+            repoId: "itlwas/Dolphin3.0-Llama3.2-3B-Q4_K_M-GGUF",
+            fileName: "dolphin3.0-llama3.2-3b-q4_k_m.gguf",
+            parameters: "3B",
+            quantization: "Q4_K_M",
+            sizeBytes: 2_019_382_112,
+            role: .chat,
+            description: "Dolphin-tuned Llama 3.2 for assistant chat.",
+            tags: ["chat", "tools"]
+        ),
+        CatalogModel(
             id: "gemma-2-2b-q4",
             name: "Gemma 2 Instruct",
             repoId: "bartowski/gemma-2-2b-it-GGUF",

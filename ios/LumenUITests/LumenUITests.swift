@@ -38,7 +38,7 @@ final class LumenUITests: XCTestCase {
         ]
         var previousMinY: CGFloat = 0
         for (index, identifier) in order.enumerated() {
-            let row = app.staticTexts[identifier]
+            let row = developerRow(identifier)
             XCTAssertTrue(row.waitForExistence(timeout: 3), "Missing row: \(identifier)")
             let currentMinY = row.frame.minY
             if index > 0 {
@@ -91,10 +91,115 @@ final class LumenUITests: XCTestCase {
             "settings.developer.diagnostic"
         ]
         for identifier in identifiers {
-            let row = app.staticTexts[identifier]
+            let row = developerRow(identifier)
             XCTAssertTrue(row.waitForExistence(timeout: 3), "Missing row: \(identifier)")
             XCTAssertTrue(row.isHittable, "Row is not hittable: \(identifier)")
         }
+    }
+
+    @MainActor
+    func testRunTestsButtonPresentsResultsAlert() throws {
+        openSettings()
+
+        let runTests = developerRow("settings.developer.runTests")
+        XCTAssertTrue(runTests.waitForExistence(timeout: 3))
+        runTests.tap()
+
+        let alert = app.alerts["Run tests"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 4))
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "checks passed")).firstMatch.exists)
+        alert.buttons["OK"].tap()
+        XCTAssertFalse(alert.exists)
+    }
+
+    @MainActor
+    func testLogsNavigationOpensLogsScreen() throws {
+        openSettings()
+
+        let logs = developerRow("settings.developer.logs")
+        XCTAssertTrue(logs.waitForExistence(timeout: 3))
+        logs.tap()
+
+        XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 4))
+    }
+
+    @MainActor
+    func testDebugNavigationOpensDebugScreen() throws {
+        openSettings()
+
+        let debug = developerRow("settings.developer.debug")
+        XCTAssertTrue(debug.waitForExistence(timeout: 3))
+        debug.tap()
+
+        XCTAssertTrue(app.navigationBars["Debug"].waitForExistence(timeout: 4))
+    }
+
+    @MainActor
+    func testDiagnosticNavigationOpensDiagnosticScreen() throws {
+        openSettings()
+
+        let diagnostic = developerRow("settings.developer.diagnostic")
+        XCTAssertTrue(diagnostic.waitForExistence(timeout: 3))
+        diagnostic.tap()
+
+        XCTAssertTrue(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4))
+    }
+
+    @MainActor
+    func testDeveloperFeaturesEndToEndFlow() throws {
+        openSettings()
+
+        let runTests = developerRow("settings.developer.runTests")
+        XCTAssertTrue(runTests.waitForExistence(timeout: 3))
+        runTests.tap()
+
+        let runTestsAlert = app.alerts["Run tests"]
+        XCTAssertTrue(runTestsAlert.waitForExistence(timeout: 4))
+        XCTAssertTrue(runTestsAlert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "checks passed")).firstMatch.exists)
+        runTestsAlert.buttons["OK"].tap()
+
+        let logs = developerRow("settings.developer.logs")
+        XCTAssertTrue(logs.waitForExistence(timeout: 3))
+        logs.tap()
+        XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 4))
+        goBackIfNeeded()
+
+        let debug = developerRow("settings.developer.debug")
+        XCTAssertTrue(debug.waitForExistence(timeout: 3))
+        debug.tap()
+        XCTAssertTrue(app.navigationBars["Debug"].waitForExistence(timeout: 4))
+        goBackIfNeeded()
+
+        let diagnostic = developerRow("settings.developer.diagnostic")
+        XCTAssertTrue(diagnostic.waitForExistence(timeout: 3))
+        diagnostic.tap()
+        XCTAssertTrue(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4))
+        goBackIfNeeded()
+
+        assertDeveloperRowsExist()
+    }
+
+    @MainActor
+    func testDeveloperFeaturesEndToEndAfterRelaunch() throws {
+        openSettings()
+        assertDeveloperRowsExist()
+
+        app.terminate()
+        app.launch()
+        dismissOnboardingIfNeeded()
+        openSettings()
+
+        let runTests = developerRow("settings.developer.runTests")
+        XCTAssertTrue(runTests.waitForExistence(timeout: 3))
+        runTests.tap()
+        let runTestsAlert = app.alerts["Run tests"]
+        XCTAssertTrue(runTestsAlert.waitForExistence(timeout: 4))
+        runTestsAlert.buttons["OK"].tap()
+
+        let logs = developerRow("settings.developer.logs")
+        XCTAssertTrue(logs.waitForExistence(timeout: 3))
+        logs.tap()
+        XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 4))
     }
 
     @MainActor
@@ -126,10 +231,33 @@ final class LumenUITests: XCTestCase {
 
     @MainActor
     private func assertDeveloperRowsExist() {
-        XCTAssertTrue(app.staticTexts["settings.developer.runTests"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["settings.developer.logs"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["settings.developer.debug"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["settings.developer.diagnostic"].waitForExistence(timeout: 3))
+        XCTAssertTrue(developerRow("settings.developer.runTests").waitForExistence(timeout: 3))
+        XCTAssertTrue(developerRow("settings.developer.logs").waitForExistence(timeout: 3))
+        XCTAssertTrue(developerRow("settings.developer.debug").waitForExistence(timeout: 3))
+        XCTAssertTrue(developerRow("settings.developer.diagnostic").waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func developerRow(_ identifier: String) -> XCUIElement {
+        let element = app.descendants(matching: .any)[identifier]
+        if element.exists {
+            return element
+        }
+
+        let button = app.buttons[identifier]
+        if button.exists {
+            return button
+        }
+
+        return app.staticTexts[identifier]
+    }
+
+    @MainActor
+    private func goBackIfNeeded() {
+        let back = app.navigationBars.buttons.firstMatch
+        if back.waitForExistence(timeout: 2) {
+            back.tap()
+        }
     }
 
     @MainActor

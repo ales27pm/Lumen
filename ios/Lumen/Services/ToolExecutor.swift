@@ -89,6 +89,14 @@ final class ToolExecutor {
         case "trigger.cancel":
             return await TriggerTools.cancel(title: arguments["title"] ?? arguments["id"] ?? "")
 
+        // AlarmKit
+        case "alarm.schedule":
+            return await AlarmTools.schedule(args: arguments)
+        case "alarm.countdown":
+            return await AlarmTools.countdown(args: arguments)
+        case "alarm.cancel":
+            return await AlarmTools.cancel(id: arguments["id"] ?? arguments["title"] ?? "")
+
         default:
             return "Unknown tool: \(toolID)"
         }

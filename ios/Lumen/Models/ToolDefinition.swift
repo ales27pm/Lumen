@@ -65,6 +65,9 @@ nonisolated enum ToolRegistry {
         ToolDefinition(id: "trigger.create", name: "Schedule Agent Run", category: .productivity, description: "Schedule a background agent run at a time or interval.", icon: "alarm", tint: "orange", requiresApproval: true, permissionKey: nil),
         ToolDefinition(id: "trigger.list", name: "List Triggers", category: .productivity, description: "Show your active scheduled agent runs.", icon: "list.bullet.clipboard", tint: "orange", requiresApproval: false, permissionKey: nil),
         ToolDefinition(id: "trigger.cancel", name: "Cancel Trigger", category: .productivity, description: "Cancel a scheduled agent run by name.", icon: "xmark.circle", tint: "red", requiresApproval: true, permissionKey: nil),
+        ToolDefinition(id: "alarm.schedule", name: "Schedule Alarm", category: .productivity, description: "Schedule a prominent alarm at a specific time.", icon: "alarm.waves.left.and.right.fill", tint: "orange", requiresApproval: true, permissionKey: nil),
+        ToolDefinition(id: "alarm.countdown", name: "Start Countdown", category: .productivity, description: "Create a countdown alarm by duration.", icon: "timer", tint: "orange", requiresApproval: true, permissionKey: nil),
+        ToolDefinition(id: "alarm.cancel", name: "Cancel Alarm", category: .productivity, description: "Cancel a previously scheduled alarm.", icon: "alarm", tint: "red", requiresApproval: true, permissionKey: nil),
     ]
 
     static func find(id: String) -> ToolDefinition? { all.first { $0.id == id } }

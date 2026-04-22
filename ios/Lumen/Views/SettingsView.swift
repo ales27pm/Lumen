@@ -92,6 +92,18 @@ struct SettingsView: View {
                     Toggle("Auto-remember", isOn: Binding(get: { state.autoMemory }, set: { state.autoMemory = $0 }))
                 }
 
+                Section {
+                    NavigationLink {
+                        PermissionsView()
+                    } label: {
+                        Label("Permissions", systemImage: "hand.raised")
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("Review which system features Lumen can access.")
+                }
+
                 Section("About") {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Lumen").font(.subheadline.weight(.semibold))

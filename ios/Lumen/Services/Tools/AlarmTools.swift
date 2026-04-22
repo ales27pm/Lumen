@@ -6,6 +6,29 @@ import AlarmKit
 
 @MainActor
 enum AlarmTools {
+    static func authorizationStatus() async -> String {
+#if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            return "Alarm authorization: \(String(describing: AlarmManager.shared.authorizationState))."
+        }
+#endif
+        return "AlarmKit requires iOS 26.0+ and an AlarmKit-capable runtime."
+    }
+
+    static func requestAuthorization() async -> String {
+#if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            do {
+                let state = try await AlarmManager.shared.requestAuthorization()
+                return "Alarm authorization result: \(String(describing: state))."
+            } catch {
+                return "Alarm authorization failed: \(error.localizedDescription)"
+            }
+        }
+#endif
+        return "AlarmKit requires iOS 26.0+ and an AlarmKit-capable runtime."
+    }
+
     static func schedule(args: [String: String]) async -> String {
         let title = args["title"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? args["title"]!
@@ -48,13 +71,85 @@ enum AlarmTools {
         return await scheduleAlarm(title: title, fireDate: fireDate, repeats: false, snoozeMinutes: 1)
     }
 
-    static func cancel(id: String) async -> String {
+    static func list() async -> String {
 #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
-            return "Alarm cancellation requires a concrete AlarmKit alarm identifier integration."
+            do {
+                let alarms = try AlarmManager.shared.alarms
+                if alarms.isEmpty { return "No active alarms." }
+                return alarms.map { "• \(String(describing: $0))" }.joined(separator: "\n")
+            } catch {
+                return "Unable to read alarms: \(error.localizedDescription)"
+            }
         }
 #endif
-        _ = id
+        return "AlarmKit requires iOS 26.0+ and an AlarmKit-capable runtime."
+    }
+
+    static func cancel(id: String) async -> String {
+        await mutateAlarm(id: id, actionName: "cancel") {
+#if canImport(AlarmKit)
+            if #available(iOS 26.0, *) {
+                try AlarmManager.shared.cancel(id: $0)
+            }
+#endif
+        }
+    }
+
+    static func pause(id: String) async -> String {
+        await mutateAlarm(id: id, actionName: "pause") {
+#if canImport(AlarmKit)
+            if #available(iOS 26.0, *) {
+                try AlarmManager.shared.pause(id: $0)
+            }
+#endif
+        }
+    }
+
+    static func resume(id: String) async -> String {
+        await mutateAlarm(id: id, actionName: "resume") {
+#if canImport(AlarmKit)
+            if #available(iOS 26.0, *) {
+                try AlarmManager.shared.resume(id: $0)
+            }
+#endif
+        }
+    }
+
+    static func stop(id: String) async -> String {
+        await mutateAlarm(id: id, actionName: "stop") {
+#if canImport(AlarmKit)
+            if #available(iOS 26.0, *) {
+                try AlarmManager.shared.stop(id: $0)
+            }
+#endif
+        }
+    }
+
+    static func snooze(id: String) async -> String {
+        await mutateAlarm(id: id, actionName: "countdown") {
+#if canImport(AlarmKit)
+            if #available(iOS 26.0, *) {
+                try AlarmManager.shared.countdown(id: $0)
+            }
+#endif
+        }
+    }
+
+    private static func mutateAlarm(id: String, actionName: String, _ operation: (UUID) throws -> Void) async -> String {
+        guard let uuid = UUID(uuidString: id) else {
+            return "Invalid alarm id. Provide a UUID string in `id`."
+        }
+#if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            do {
+                try operation(uuid)
+                return "Alarm \(actionName) completed for \(uuid.uuidString)."
+            } catch {
+                return "Alarm \(actionName) failed: \(error.localizedDescription)"
+            }
+        }
+#endif
         return "AlarmKit requires iOS 26.0+ and an AlarmKit-capable runtime."
     }
 

@@ -90,10 +90,24 @@ final class ToolExecutor {
             return await TriggerTools.cancel(title: arguments["title"] ?? arguments["id"] ?? "")
 
         // AlarmKit
+        case "alarm.authorization_status":
+            return await AlarmTools.authorizationStatus()
+        case "alarm.request_authorization":
+            return await AlarmTools.requestAuthorization()
         case "alarm.schedule":
             return await AlarmTools.schedule(args: arguments)
         case "alarm.countdown":
             return await AlarmTools.countdown(args: arguments)
+        case "alarm.list":
+            return await AlarmTools.list()
+        case "alarm.pause":
+            return await AlarmTools.pause(id: arguments["id"] ?? "")
+        case "alarm.resume":
+            return await AlarmTools.resume(id: arguments["id"] ?? "")
+        case "alarm.stop":
+            return await AlarmTools.stop(id: arguments["id"] ?? "")
+        case "alarm.snooze":
+            return await AlarmTools.snooze(id: arguments["id"] ?? "")
         case "alarm.cancel":
             return await AlarmTools.cancel(id: arguments["id"] ?? arguments["title"] ?? "")
 

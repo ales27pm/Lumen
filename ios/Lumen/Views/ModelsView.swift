@@ -60,7 +60,7 @@ struct ModelsView: View {
                                         DownloadedRow(model: sm,
                                                       isActiveChat: sm.id.uuidString == appState.activeChatModelID,
                                                       isActiveEmbed: sm.id.uuidString == appState.activeEmbeddingModelID,
-                                                      isLoaded: loadedPaths.contains(sm.localPath),
+                                                      isLoaded: loadedPaths.contains(ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path),
                                                       onActivate: { activate(stored: sm) },
                                                       onLoad: { load(sm) },
                                                       onUnload: { unload(sm) },
@@ -148,8 +148,14 @@ struct ModelsView: View {
 
     private func refreshLoaded() async {
         var set: Set<String> = []
-        if let p = await LlamaService.shared.loadedChatPath { set.insert(p) }
-        if let p = await LlamaService.shared.loadedEmbedPath { set.insert(p) }
+        if let p = await LlamaService.shared.loadedChatPath {
+            let fileName = URL(fileURLWithPath: p).lastPathComponent
+            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+        }
+        if let p = await LlamaService.shared.loadedEmbedPath {
+            let fileName = URL(fileURLWithPath: p).lastPathComponent
+            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+        }
         loadedPaths = set
     }
 
@@ -157,9 +163,11 @@ struct ModelsView: View {
         Task {
             do {
                 if sm.modelRole == .chat {
-                    try await LlamaService.shared.loadChatModel(path: sm.localPath, contextSize: appState.contextSize)
+                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
+                    try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                 } else {
-                    try await LlamaService.shared.loadEmbeddingModel(path: sm.localPath)
+                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
+                    try await LlamaService.shared.loadEmbeddingModel(path: resolvedPath)
                 }
                 await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -198,7 +206,12 @@ struct ModelsView: View {
     }
 
     private func deleteStoredModel(_ sm: StoredModel) {
-        try? FileManager.default.removeItem(atPath: sm.localPath)
+        let fm = FileManager.default
+        let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName, fileManager: fm).path
+        try? fm.removeItem(atPath: sm.localPath)
+        if resolvedPath != sm.localPath {
+            try? fm.removeItem(atPath: resolvedPath)
+        }
         if sm.id.uuidString == appState.activeChatModelID { appState.activeChatModelID = nil }
         if sm.id.uuidString == appState.activeEmbeddingModelID { appState.activeEmbeddingModelID = nil }
         modelContext.delete(sm)

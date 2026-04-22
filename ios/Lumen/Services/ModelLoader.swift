@@ -28,9 +28,10 @@ enum ModelLoader {
             stored: stored
         )
         for candidate in candidates {
-            guard FileManager.default.fileExists(atPath: candidate.localPath) else { continue }
+            let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
+            guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
             do {
-                try await LlamaService.shared.loadChatModel(path: candidate.localPath, contextSize: appState.contextSize)
+                try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                 if appState.activeChatModelID != candidate.id.uuidString {
                     appState.activeChatModelID = candidate.id.uuidString
                 }
@@ -39,7 +40,7 @@ enum ModelLoader {
                 // Fallback: retry once with a smaller context if init failed
                 if case LlamaError.contextInitFailed = error {
                     do {
-                        try await LlamaService.shared.loadChatModel(path: candidate.localPath, contextSize: 2048)
+                        try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
                         appState.activeChatModelID = candidate.id.uuidString
                         return true
                     } catch {
@@ -62,9 +63,10 @@ enum ModelLoader {
             stored: stored
         )
         for candidate in candidates {
-            guard FileManager.default.fileExists(atPath: candidate.localPath) else { continue }
+            let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
+            guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
             do {
-                try await LlamaService.shared.loadEmbeddingModel(path: candidate.localPath)
+                try await LlamaService.shared.loadEmbeddingModel(path: resolvedPath)
                 if appState.activeEmbeddingModelID != candidate.id.uuidString {
                     appState.activeEmbeddingModelID = candidate.id.uuidString
                 }

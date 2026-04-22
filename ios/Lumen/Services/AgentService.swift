@@ -75,44 +75,76 @@ nonisolated struct AgentTurn: Sendable {
     let thought: String?
     let action: AgentAction?
     let final: String?
-    /// When structured parsing fails, the best-effort plaintext that should be shown as the final answer.
-    let rawFallback: String?
+    let parseError: AgentTurnParseError?
 
     var isStructured: Bool { action != nil || (final?.isEmpty == false) }
+}
+
+nonisolated enum AgentTurnParseError: String, Sendable {
+    case empty
+    case noJSONObject
+    case multipleJSONObjects
+    case noisyOutput
+    case malformedEscapeSequence
+    case incompleteJSON
+    case invalidJSONObject
+    case invalidThoughtType
+    case invalidFinalType
+    case mixedTurn
+    case mixedActionShapes
+    case missingActionOrFinal
+    case missingActionTool
+    case invalidActionType
+    case invalidActionArgsType
 }
 
 nonisolated enum AgentTurnParser {
     static func parse(_ raw: String) -> AgentTurn {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return AgentTurn(thought: nil, action: nil, final: nil, rawFallback: nil)
+            return AgentTurn(thought: nil, action: nil, final: nil, parseError: .empty)
         }
-        if let obj = extractJSONObject(from: trimmed) {
-            return buildTurn(from: obj, raw: trimmed)
+
+        switch extractSingleJSONObject(from: trimmed) {
+        case .success(let obj):
+            return buildTurn(from: obj)
+        case .failure(let error):
+            return AgentTurn(thought: nil, action: nil, final: nil, parseError: error)
         }
-        return AgentTurn(thought: nil, action: nil, final: nil, rawFallback: trimmed)
     }
 
-    private static func buildTurn(from obj: [String: Any], raw: String) -> AgentTurn {
+    private static func buildTurn(from obj: [String: Any]) -> AgentTurn {
+        if let value = obj["thought"], !(value is String) { return invalid(.invalidThoughtType) }
+        if let value = obj["reasoning"], !(value is String) { return invalid(.invalidThoughtType) }
+        if let value = obj["final"], !(value is String) { return invalid(.invalidFinalType) }
+        if let value = obj["final_answer"], !(value is String) { return invalid(.invalidFinalType) }
+        if let value = obj["answer"], !(value is String) { return invalid(.invalidFinalType) }
+
         let thoughtRaw = (obj["thought"] as? String) ?? (obj["reasoning"] as? String)
         let thought = thoughtRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanThought = (thought?.isEmpty ?? true) ? nil : thought
 
         var action: AgentAction?
-        if let act = obj["action"] as? [String: Any] {
-            let name = (act["tool"] as? String) ?? (act["name"] as? String) ?? (act["id"] as? String) ?? ""
-            var args: [String: String] = [:]
-            let rawArgs = (act["args"] as? [String: Any]) ?? (act["arguments"] as? [String: Any]) ?? (act["input"] as? [String: Any]) ?? [:]
-            for (k, v) in rawArgs { args[k] = stringify(v) }
-            if !name.isEmpty {
-                action = AgentAction(tool: name.trimmingCharacters(in: .whitespaces), args: args)
+        let hasNestedAction = obj["action"] != nil
+        let hasFlatAction = obj["tool"] != nil || obj["args"] != nil || obj["arguments"] != nil || obj["input"] != nil
+        if hasNestedAction && hasFlatAction {
+            return invalid(.mixedActionShapes)
+        }
+
+        if hasNestedAction {
+            guard let act = obj["action"] as? [String: Any] else { return invalid(.invalidActionType) }
+            switch parseAction(from: act) {
+            case .success(let parsedAction):
+                action = parsedAction
+            case .failure(let error):
+                return invalid(error)
             }
-        } else if let toolName = obj["tool"] as? String {
-            // Tolerate flat shape: {"tool": "...", "args": {...}}
-            var args: [String: String] = [:]
-            let rawArgs = (obj["args"] as? [String: Any]) ?? (obj["arguments"] as? [String: Any]) ?? [:]
-            for (k, v) in rawArgs { args[k] = stringify(v) }
-            if !toolName.isEmpty {
-                action = AgentAction(tool: toolName.trimmingCharacters(in: .whitespaces), args: args)
+        } else if hasFlatAction {
+            switch parseFlatAction(from: obj) {
+            case .success(let parsedAction):
+                action = parsedAction
+            case .failure(let error):
+                return invalid(error)
             }
         }
 
@@ -123,77 +155,123 @@ nonisolated enum AgentTurnParser {
 
         let hasFinal = !(finalTrimmed?.isEmpty ?? true)
         let hasAction = action != nil
-        let cleanThought = (thought?.isEmpty ?? true) ? nil : thought
-
-        if !hasAction && !hasFinal {
-            // Degenerate — treat thought (or raw) as final.
-            let fallback = cleanThought ?? raw
-            return AgentTurn(thought: cleanThought, action: nil, final: nil, rawFallback: fallback)
-        }
+        if hasAction && hasFinal { return invalid(.mixedTurn) }
+        if !hasAction && !hasFinal { return invalid(.missingActionOrFinal) }
 
         return AgentTurn(
             thought: cleanThought,
             action: action,
             final: hasFinal ? finalTrimmed : nil,
-            rawFallback: nil
+            parseError: nil
         )
     }
 
-    private static func extractJSONObject(from text: String) -> [String: Any]? {
-        if let data = text.data(using: .utf8),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return obj
-        }
-        // Locate the first balanced top-level JSON object in the text.
-        let chars = Array(text)
-        var i = 0
-        while i < chars.count {
-            if chars[i] == "{" {
-                if let end = findMatchingBrace(chars: chars, start: i) {
-                    let jsonStr = String(chars[i...end])
-                    if let data = jsonStr.data(using: .utf8),
-                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        return obj
-                    }
-                }
-            }
-            i += 1
-        }
-        return nil
+    private static func parseAction(from act: [String: Any]) -> Result<AgentAction, AgentTurnParseError> {
+        let name = (act["tool"] as? String) ?? (act["name"] as? String) ?? (act["id"] as? String) ?? ""
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .failure(.missingActionTool) }
+        guard let args = parseArgs(from: act) else { return .failure(.invalidActionArgsType) }
+        return .success(AgentAction(tool: trimmed, args: args))
     }
 
-    private static func findMatchingBrace(chars: [Character], start: Int) -> Int? {
+    private static func parseFlatAction(from obj: [String: Any]) -> Result<AgentAction, AgentTurnParseError> {
+        guard let toolName = obj["tool"] as? String else { return .failure(.missingActionTool) }
+        let trimmed = toolName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .failure(.missingActionTool) }
+        guard let args = parseArgs(from: obj) else { return .failure(.invalidActionArgsType) }
+        return .success(AgentAction(tool: trimmed, args: args))
+    }
+
+    private static func parseArgs(from obj: [String: Any]) -> [String: String]? {
+        let argsValue = obj["args"] ?? obj["arguments"] ?? obj["input"]
+        guard let argsValue else { return [:] }
+        guard let rawArgs = argsValue as? [String: Any] else { return nil }
+        var args: [String: String] = [:]
+        for (k, v) in rawArgs {
+            guard let s = v as? String else { return nil }
+            args[k] = s
+        }
+        return args
+    }
+
+    private static func extractSingleJSONObject(from text: String) -> Result<[String: Any], AgentTurnParseError> {
+        let chars = Array(text)
+        var ranges: [(Int, Int)] = []
         var depth = 0
+        var start: Int?
         var inString = false
         var escape = false
-        var i = start
+        var i = 0
+
         while i < chars.count {
             let ch = chars[i]
-            if escape { escape = false; i += 1; continue }
             if inString {
-                if ch == "\\" { escape = true }
-                else if ch == "\"" { inString = false }
-            } else {
-                if ch == "\"" { inString = true }
-                else if ch == "{" { depth += 1 }
-                else if ch == "}" {
-                    depth -= 1
-                    if depth == 0 { return i }
+                if escape {
+                    if !isValidEscape(at: i, in: chars) {
+                        return .failure(.malformedEscapeSequence)
+                    }
+                    if ch == "u" { i += 4 }
+                    escape = false
+                } else if ch == "\\" {
+                    escape = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                i += 1
+                continue
+            }
+
+            if ch == "\"" {
+                inString = true
+            } else if ch == "{" {
+                if depth == 0 { start = i }
+                depth += 1
+            } else if ch == "}" {
+                guard depth > 0 else { return .failure(.invalidJSONObject) }
+                depth -= 1
+                if depth == 0, let s = start {
+                    ranges.append((s, i))
+                    start = nil
                 }
             }
             i += 1
         }
-        return nil
+
+        if inString || depth != 0 { return .failure(.incompleteJSON) }
+        guard !ranges.isEmpty else { return .failure(.noJSONObject) }
+        guard ranges.count == 1 else { return .failure(.multipleJSONObjects) }
+
+        let onlyRange = ranges[0]
+        let leading = String(chars[0..<onlyRange.0]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let trailing = String(chars[(onlyRange.1 + 1)..<chars.count]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !leading.isEmpty || !trailing.isEmpty { return .failure(.noisyOutput) }
+
+        let jsonStr = String(chars[onlyRange.0...onlyRange.1])
+        guard let data = jsonStr.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .failure(.invalidJSONObject)
+        }
+        return .success(obj)
     }
 
-    static func stringify(_ v: Any) -> String {
-        if let s = v as? String { return s }
-        if let b = v as? Bool { return b ? "true" : "false" }
-        if let n = v as? NSNumber { return n.stringValue }
-        if v is NSNull { return "" }
-        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
-           let s = String(data: data, encoding: .utf8) { return s }
-        return String(describing: v)
+    private static func isValidEscape(at index: Int, in chars: [Character]) -> Bool {
+        let esc = chars[index]
+        switch esc {
+        case "\"", "\\", "/", "b", "f", "n", "r", "t":
+            return true
+        case "u":
+            guard index + 4 < chars.count else { return false }
+            for j in (index + 1)...(index + 4) {
+                if chars[j].hexDigitValue == nil { return false }
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func invalid(_ error: AgentTurnParseError) -> AgentTurn {
+        AgentTurn(thought: nil, action: nil, final: nil, parseError: error)
     }
 }
 
@@ -455,15 +533,15 @@ final class AgentService {
             }
 
             // Malformed / empty output — safe degrade.
-            if let fallback = turn.rawFallback, !fallback.isEmpty {
-                let reflection = AgentStep(kind: .reflection, content: "Model produced unstructured output; using it as the answer.")
+            if let parseError = turn.parseError {
+                let reflection = AgentStep(kind: .reflection, content: "Model produced invalid structured output (\(parseError.rawValue)); synthesizing a safe final answer.")
                 steps.append(reflection)
                 continuation.yield(.step(reflection))
 
                 if !observations.isEmpty {
                     finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .malformed)
                 } else {
-                    finalAnswer = fallback
+                    finalAnswer = "I couldn't parse a valid structured turn. Please try again."
                 }
                 if streamedFinalLen == 0 {
                     continuation.yield(.finalDelta(finalAnswer))

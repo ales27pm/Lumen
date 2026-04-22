@@ -312,18 +312,26 @@ actor LlamaService {
     // MARK: - Prompt building
 
     private func buildPrompt(req: GenerateRequest, model: OpaquePointer) -> String {
-        var systemContent = req.systemPrompt
+        let contextSize = Int(llama_n_ctx(chatContext!))
+        let budget = PromptBudget.make(
+            contextSize: contextSize > 0 ? contextSize : 4096,
+            maxTokens: req.maxTokens,
+            systemPromptChars: req.systemPrompt.count,
+            userMessageChars: req.userMessage.count,
+            hasAttachments: !req.attachments.isEmpty,
+            hasMemories: !req.relevantMemories.isEmpty
+        )
+        let assembly = PromptAssembler.assemble(
+            systemPrompt: req.systemPrompt,
+            history: req.history,
+            userMessage: req.userMessage,
+            memories: req.relevantMemories,
+            attachments: req.attachments,
+            budget: budget
+        )
 
-        if !req.relevantMemories.isEmpty {
-            let mem = req.relevantMemories.prefix(5).map { "• \($0)" }.joined(separator: "\n")
-            systemContent += "\n\nRelevant memory from previous conversations:\n\(mem)"
-        }
-        if !req.attachments.isEmpty {
-            systemContent += "\n" + AttachmentResolver.contextBlock(for: req.attachments)
-        }
-
-        var messages: [(String, String)] = [("system", systemContent)]
-        for h in req.history {
+        var messages: [(String, String)] = [("system", assembly.systemPrompt)]
+        for h in assembly.history {
             let role: String
             switch h.role {
             case .user: role = "user"
@@ -333,7 +341,7 @@ actor LlamaService {
             }
             messages.append((role, h.content))
         }
-        messages.append(("user", req.userMessage))
+        messages.append(("user", assembly.userMessage))
 
         // Try the model's built-in chat template
         if let templated = applyChatTemplate(model: model, messages: messages) {

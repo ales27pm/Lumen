@@ -32,8 +32,10 @@ nonisolated struct ChatAttachment: Sendable, Hashable, Identifiable {
 }
 
 nonisolated enum AttachmentResolver {
-    /// Maximum characters of content injected per attachment. Keeps prompts bounded.
-    static let maxCharsPerAttachment = 6000
+    /// Hard ceiling on extraction regardless of prompt budget. Guards against
+    /// pathological files (100MB dumps) from exploding memory during load.
+    /// `PromptAssembler` applies the real, per-request budget on top of this.
+    static let hardExtractionCeiling = PromptBudgetConstants.hardAttachmentCeiling
 
     static func make(from url: URL) -> ChatAttachment? {
         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
@@ -43,49 +45,34 @@ nonisolated enum AttachmentResolver {
         return ChatAttachment(name: url.lastPathComponent, kind: kind, path: url.path, byteSize: size)
     }
 
-    /// Extracts readable text for prompt injection. Always bounded.
-    static func extractText(_ a: ChatAttachment) -> String {
+    /// Extracts readable text bounded only by the hard ceiling. The prompt
+    /// assembler applies the actual per-request share afterward.
+    static func rawExtractText(_ a: ChatAttachment) -> String {
         let url = URL(fileURLWithPath: a.path)
+        let limit = hardExtractionCeiling
         switch a.kind {
         case .pdf:
             guard let pdf = PDFDocument(url: url) else { return "" }
             var out = ""
+            out.reserveCapacity(min(limit, 32_000))
             for i in 0..<pdf.pageCount {
                 out += pdf.page(at: i)?.string ?? ""
                 out += "\n"
-                if out.count >= maxCharsPerAttachment { break }
+                if out.count >= limit { break }
             }
-            return String(out.prefix(maxCharsPerAttachment))
+            return String(out.prefix(limit))
         case .text:
             guard let data = try? Data(contentsOf: url) else { return "" }
             if let utf8 = String(data: data, encoding: .utf8) {
-                return String(utf8.prefix(maxCharsPerAttachment))
+                return String(utf8.prefix(limit))
             }
             if let latin = String(data: data, encoding: .isoLatin1) {
-                return String(latin.prefix(maxCharsPerAttachment))
+                return String(latin.prefix(limit))
             }
             if let attr = try? NSAttributedString(data: data, options: [:], documentAttributes: nil) {
-                return String(attr.string.prefix(maxCharsPerAttachment))
+                return String(attr.string.prefix(limit))
             }
             return ""
         }
-    }
-
-    /// Formatted block appended to the system prompt describing all attachments.
-    static func contextBlock(for attachments: [ChatAttachment]) -> String {
-        guard !attachments.isEmpty else { return "" }
-        var out = "\nThe user attached the following file(s) to this message. Their contents are provided below as authoritative context — prefer them over memory or guesses. Do not call files.read for these; they are already visible.\n"
-        for (i, a) in attachments.enumerated() {
-            let body = extractText(a).trimmingCharacters(in: .whitespacesAndNewlines)
-            out += "\n--- Attachment \(i + 1): \(a.name) (\(a.kind.rawValue)) ---\n"
-            if body.isEmpty {
-                out += "[Could not extract text from this file.]\n"
-            } else {
-                out += body
-                out += "\n"
-            }
-        }
-        out += "--- End attachments ---\n"
-        return out
     }
 }

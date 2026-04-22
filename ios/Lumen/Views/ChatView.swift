@@ -15,6 +15,7 @@ struct ChatView: View {
     @State private var showVoiceMode = false
     @State private var showFilePicker = false
     @State private var attachments: [ChatAttachment] = []
+    @State private var attachmentPreview: [UUID: AttachmentRenderState] = [:]
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -59,8 +60,12 @@ struct ChatView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(attachments) { a in
-                            AttachmentChip(attachment: a) {
+                            AttachmentChip(
+                                attachment: a,
+                                state: attachmentPreview[a.id]
+                            ) {
                                 attachments.removeAll { $0.id == a.id }
+                                recomputeAttachmentPreview()
                             }
                         }
                     }
@@ -110,8 +115,28 @@ struct ChatView: View {
                 if !urls.isEmpty {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                 }
+                recomputeAttachmentPreview()
             }
         }
+        .onChange(of: draft) { _, _ in recomputeAttachmentPreview() }
+    }
+
+    private func recomputeAttachmentPreview() {
+        guard !attachments.isEmpty else {
+            attachmentPreview = [:]
+            return
+        }
+        let states = PromptAssembler.previewAttachmentStates(
+            attachments: attachments,
+            contextSize: appState.contextSize,
+            maxTokens: appState.maxTokens,
+            systemPromptChars: (conversation.systemPrompt ?? appState.systemPrompt).count,
+            userMessageChars: draft.count,
+            hasMemories: appState.autoMemory
+        )
+        var map: [UUID: AttachmentRenderState] = [:]
+        for s in states { map[s.id] = s }
+        attachmentPreview = map
     }
 
     private func send(text overrideText: String?) {
@@ -124,7 +149,7 @@ struct ChatView: View {
                 : "Please review the attached files."
         }
         guard !text.isEmpty, !appState.isGenerating else { return }
-        if overrideText == nil { draft = ""; attachments = [] }
+        if overrideText == nil { draft = ""; attachments = []; attachmentPreview = [:] }
 
         let displayContent: String
         if turnAttachments.isEmpty {
@@ -321,6 +346,7 @@ struct ChatView: View {
 
 struct AttachmentChip: View {
     let attachment: ChatAttachment
+    var state: AttachmentRenderState?
     var onRemove: () -> Void
 
     var body: some View {
@@ -328,11 +354,18 @@ struct AttachmentChip: View {
             Image(systemName: attachment.kind.icon)
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
-            Text(attachment.name)
-                .font(.caption)
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(attachment.name)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let state, state.truncated {
+                    Text(truncationLabel(state))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
@@ -346,9 +379,15 @@ struct AttachmentChip: View {
         .clipShape(.rect(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
+                .strokeBorder((state?.truncated ?? false) ? Color.orange.opacity(0.6) : Theme.border, lineWidth: 1)
         }
-        .frame(maxWidth: 220)
+        .frame(maxWidth: 240)
+    }
+
+    private func truncationLabel(_ s: AttachmentRenderState) -> String {
+        guard s.totalChars > 0 else { return "Truncated" }
+        let pct = Int((Double(s.includedChars) / Double(s.totalChars)) * 100)
+        return "Truncated — \(max(1, pct))% included"
     }
 }
 

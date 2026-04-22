@@ -116,11 +116,9 @@ struct ModelsView: View {
                 try? modelContext.save()
                 if model.role == .chat && appState.activeChatModelID == nil {
                     appState.activeChatModelID = stored.id.uuidString
-                    appState.persist()
                 }
                 if model.role == .embedding && appState.activeEmbeddingModelID == nil {
                     appState.activeEmbeddingModelID = stored.id.uuidString
-                    appState.persist()
                 }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
@@ -138,7 +136,6 @@ struct ModelsView: View {
         } else {
             appState.activeEmbeddingModelID = stored.id.uuidString
         }
-        appState.persist()
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
     }
 
@@ -204,7 +201,6 @@ struct ModelsView: View {
         try? FileManager.default.removeItem(atPath: sm.localPath)
         if sm.id.uuidString == appState.activeChatModelID { appState.activeChatModelID = nil }
         if sm.id.uuidString == appState.activeEmbeddingModelID { appState.activeEmbeddingModelID = nil }
-        appState.persist()
         modelContext.delete(sm)
         try? modelContext.save()
     }
@@ -445,7 +441,6 @@ struct ModelPickerSheet: View {
                     ForEach(stored.filter { $0.modelRole == .chat }) { m in
                         pickerRow(m, isActive: appState.activeChatModelID == m.id.uuidString) {
                             appState.activeChatModelID = m.id.uuidString
-                            appState.persist()
                             dismiss()
                         }
                     }
@@ -458,7 +453,6 @@ struct ModelPickerSheet: View {
                     ForEach(stored.filter { $0.modelRole == .embedding }) { m in
                         pickerRow(m, isActive: appState.activeEmbeddingModelID == m.id.uuidString) {
                             appState.activeEmbeddingModelID = m.id.uuidString
-                            appState.persist()
                             dismiss()
                         }
                     }

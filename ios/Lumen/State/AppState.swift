@@ -103,10 +103,6 @@ final class AppState {
         settings.applyPreset(preset)
     }
 
-    /// Legacy API — persistence is now automatic via `UserSettings` didSet.
-    /// Kept as a no-op so existing call sites compile.
-    func persist() {}
-
     var snapshot: SettingsSnapshot { settings.snapshot }
 }
 

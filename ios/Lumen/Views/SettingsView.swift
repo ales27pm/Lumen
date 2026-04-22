@@ -103,19 +103,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .onChange(of: appState.temperature) { _, _ in appState.persist() }
-            .onChange(of: appState.topP) { _, _ in appState.persist() }
-            .onChange(of: appState.repetitionPenalty) { _, _ in appState.persist() }
-            .onChange(of: appState.contextSize) { _, _ in appState.persist() }
-            .onChange(of: appState.maxTokens) { _, _ in appState.persist() }
-            .onChange(of: appState.autoMemory) { _, _ in appState.persist() }
-            .onChange(of: appState.systemPrompt) { _, _ in appState.persist() }
-            .onChange(of: appState.speakingRate) { _, _ in appState.persist() }
-            .onChange(of: appState.handsFree) { _, _ in appState.persist() }
-            .onChange(of: appState.voiceID) { _, _ in appState.persist() }
-            .onChange(of: appState.maxAgentSteps) { _, _ in appState.persist() }
-            .onChange(of: appState.agentModeEnabled) { _, _ in appState.persist() }
-            .onChange(of: appState.showThinkingByDefault) { _, _ in appState.persist() }
         }
     }
 

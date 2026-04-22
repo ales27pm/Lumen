@@ -43,7 +43,6 @@ nonisolated struct GenerateRequest: Sendable {
 
 nonisolated enum GenerationToken: Sendable {
     case text(String)
-    case toolCall(name: String, arguments: [String: String])
     case done
 }
 
@@ -282,8 +281,6 @@ actor LlamaService {
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 1...UInt32.max)))
 
         // Generate
-        var generated = ""
-        var outputTokens: [llama_token] = []
         var pieceBuf = [CChar](repeating: 0, count: 256)
 
         for _ in 0..<max(1, req.maxTokens) {
@@ -296,11 +293,9 @@ actor LlamaService {
             if pieceLen > 0 {
                 let data = Data(bytes: pieceBuf, count: Int(pieceLen))
                 if let piece = String(data: data, encoding: .utf8), !piece.isEmpty {
-                    generated += piece
                     continuation.yield(.text(piece))
                 }
             }
-            outputTokens.append(newToken)
 
             // Feed the new token back
             batch.n_tokens = 1
@@ -315,11 +310,6 @@ actor LlamaService {
 
             await Task.yield()
         }
-
-        // Detect tool calls in the generated output
-        if let call = parseToolCall(from: generated) {
-            continuation.yield(.toolCall(name: call.name, arguments: call.args))
-        }
     }
 
     // MARK: - Prompt building
@@ -327,10 +317,6 @@ actor LlamaService {
     private func buildPrompt(req: GenerateRequest, model: OpaquePointer) -> String {
         var systemContent = req.systemPrompt
 
-        if !req.availableTools.isEmpty {
-            let toolLines = req.availableTools.map { "- \($0.id): \($0.description)" }.joined(separator: "\n")
-            systemContent += "\n\nYou can call tools by emitting a line in this exact format on its own line:\n<tool_call>{\"name\":\"tool.id\",\"args\":{\"key\":\"value\"}}</tool_call>\n\nAvailable tools:\n\(toolLines)"
-        }
         if !req.relevantMemories.isEmpty {
             let mem = req.relevantMemories.prefix(5).map { "• \($0)" }.joined(separator: "\n")
             systemContent += "\n\nRelevant memory from previous conversations:\n\(mem)"
@@ -404,39 +390,6 @@ actor LlamaService {
             }
         }
         return result
-    }
-
-    // MARK: - Tool call parsing
-
-    private func parseToolCall(from text: String) -> (name: String, args: [String: String])? {
-        guard let startRange = text.range(of: "<tool_call>"),
-              let endRange = text.range(of: "</tool_call>", range: startRange.upperBound..<text.endIndex) else {
-            return nil
-        }
-        let jsonString = String(text[startRange.upperBound..<endRange.lowerBound])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let data = jsonString.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let name = obj["name"] as? String else {
-            return nil
-        }
-        var args: [String: String] = [:]
-        if let rawArgs = obj["args"] as? [String: Any] {
-            for (k, v) in rawArgs { args[k] = stringifyArg(v) }
-        } else if let rawArgs = obj["arguments"] as? [String: Any] {
-            for (k, v) in rawArgs { args[k] = stringifyArg(v) }
-        }
-        return (name, args)
-    }
-
-    private func stringifyArg(_ v: Any) -> String {
-        if let s = v as? String { return s }
-        if let b = v as? Bool { return b ? "true" : "false" }
-        if let n = v as? NSNumber { return n.stringValue }
-        if v is NSNull { return "" }
-        if let data = try? JSONSerialization.data(withJSONObject: v, options: []),
-           let s = String(data: data, encoding: .utf8) { return s }
-        return String(describing: v)
     }
 
     // MARK: - Embeddings

@@ -77,7 +77,6 @@ struct OnboardingSheet: View {
                 modelContext.insert(stored)
                 try? modelContext.save()
                 appState.activeChatModelID = stored.id.uuidString
-                appState.persist()
             }
         }
         dismiss()

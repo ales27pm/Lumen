@@ -10,7 +10,6 @@ struct VoicePickerList: View {
             Section {
                 Button {
                     appState.voiceID = nil
-                    appState.persist()
                 } label: {
                     HStack {
                         Text("System default")
@@ -25,7 +24,6 @@ struct VoicePickerList: View {
                 ForEach(voices) { entry in
                     Button {
                         appState.voiceID = entry.id
-                        appState.persist()
                         voice.speak("Hi, I'm \(entry.name). I'll speak for you.", voiceID: entry.id, rate: appState.speakingRate)
                     } label: {
                         HStack {

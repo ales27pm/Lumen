@@ -185,7 +185,7 @@ struct ChatView: View {
         var steps: [AgentStep] = []
         var finalText = ""
 
-        for await event in await AgentService.shared.run(req) {
+        for await event in AgentService.shared.run(req) {
             if Task.isCancelled { break }
             switch event {
             case .step(let step):
@@ -251,7 +251,7 @@ struct ChatView: View {
             case .text(let s):
                 accumulated += s
                 streamingText = accumulated
-            case .toolCall, .done:
+            case .done:
                 break
             }
         }
@@ -280,7 +280,6 @@ struct ChatView: View {
               FileManager.default.fileExists(atPath: m.localPath) else {
             if let fallback = storedModels.first(where: { $0.modelRole == .chat && FileManager.default.fileExists(atPath: $0.localPath) }) {
                 appState.activeChatModelID = fallback.id.uuidString
-                appState.persist()
                 do {
                     try await LlamaService.shared.loadChatModel(path: fallback.localPath, contextSize: appState.contextSize)
                     return true

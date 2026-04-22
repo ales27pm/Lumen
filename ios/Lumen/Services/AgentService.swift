@@ -365,8 +365,6 @@ final class AgentService {
                             continuation.yield(.finalDelta(delta))
                         }
                     }
-                case .toolCall:
-                    continue
                 case .done:
                     break
                 }

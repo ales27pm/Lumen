@@ -327,7 +327,6 @@ struct VoiceModeView: View {
 
     private func toggleHandsFree() {
         appState.handsFree.toggle()
-        appState.persist()
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
     }
 

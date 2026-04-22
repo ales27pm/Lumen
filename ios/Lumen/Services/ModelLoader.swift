@@ -33,7 +33,6 @@ enum ModelLoader {
                 try await LlamaService.shared.loadChatModel(path: candidate.localPath, contextSize: appState.contextSize)
                 if appState.activeChatModelID != candidate.id.uuidString {
                     appState.activeChatModelID = candidate.id.uuidString
-                    appState.persist()
                 }
                 return true
             } catch {
@@ -42,7 +41,6 @@ enum ModelLoader {
                     do {
                         try await LlamaService.shared.loadChatModel(path: candidate.localPath, contextSize: 2048)
                         appState.activeChatModelID = candidate.id.uuidString
-                        appState.persist()
                         return true
                     } catch {
                         continue
@@ -69,7 +67,6 @@ enum ModelLoader {
                 try await LlamaService.shared.loadEmbeddingModel(path: candidate.localPath)
                 if appState.activeEmbeddingModelID != candidate.id.uuidString {
                     appState.activeEmbeddingModelID = candidate.id.uuidString
-                    appState.persist()
                 }
                 return true
             } catch {

@@ -240,7 +240,6 @@ struct ChatView: View {
             repetitionPenalty: appState.repetitionPenalty,
             maxTokens: appState.maxTokens,
             modelName: conversation.modelName ?? "default",
-            availableTools: ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) },
             relevantMemories: memories,
             attachments: attachments
         )

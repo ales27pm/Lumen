@@ -10,7 +10,6 @@ nonisolated struct GenerateRequest: Sendable {
     let repetitionPenalty: Double
     let maxTokens: Int
     let modelName: String
-    let availableTools: [ToolDefinition]
     let relevantMemories: [String]
     let attachments: [ChatAttachment]
 
@@ -23,7 +22,6 @@ nonisolated struct GenerateRequest: Sendable {
         repetitionPenalty: Double,
         maxTokens: Int,
         modelName: String,
-        availableTools: [ToolDefinition],
         relevantMemories: [String],
         attachments: [ChatAttachment] = []
     ) {
@@ -35,7 +33,6 @@ nonisolated struct GenerateRequest: Sendable {
         self.repetitionPenalty = repetitionPenalty
         self.maxTokens = maxTokens
         self.modelName = modelName
-        self.availableTools = availableTools
         self.relevantMemories = relevantMemories
         self.attachments = attachments
     }

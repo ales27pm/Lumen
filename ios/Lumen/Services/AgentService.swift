@@ -334,7 +334,6 @@ final class AgentService {
                 repetitionPenalty: req.repetitionPenalty,
                 maxTokens: req.maxTokens,
                 modelName: "agent",
-                availableTools: [],
                 relevantMemories: [],
                 attachments: stepIndex == 0 ? req.attachments : []
             )
@@ -561,7 +560,6 @@ final class AgentService {
             repetitionPenalty: req.repetitionPenalty,
             maxTokens: 256,
             modelName: "agent",
-            availableTools: [],
             relevantMemories: []
         )
         var out = ""

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @State private var showDeveloperAlert = false
+    @State private var developerAlertMessage = ""
 
     var body: some View {
         @Bindable var state = appState
@@ -93,14 +95,33 @@ struct SettingsView: View {
                 }
 
                 Section("Developer") {
-                    Label("Run tests", systemImage: "checkmark.circle")
-                        .accessibilityIdentifier("settings.developer.runTests")
-                    Label("Logs", systemImage: "doc.text.magnifyingglass")
-                        .accessibilityIdentifier("settings.developer.logs")
-                    Label("Debug", systemImage: "ladybug")
-                        .accessibilityIdentifier("settings.developer.debug")
-                    Label("Diagnostic", systemImage: "stethoscope")
-                        .accessibilityIdentifier("settings.developer.diagnostic")
+                    Button {
+                        runDeveloperChecks()
+                    } label: {
+                        Label("Run tests", systemImage: "checkmark.circle")
+                    }
+                    .accessibilityIdentifier("settings.developer.runTests")
+
+                    NavigationLink {
+                        DeveloperTextView(title: "Logs", bodyText: logsText)
+                    } label: {
+                        Label("Logs", systemImage: "doc.text.magnifyingglass")
+                    }
+                    .accessibilityIdentifier("settings.developer.logs")
+
+                    NavigationLink {
+                        DeveloperTextView(title: "Debug", bodyText: debugText)
+                    } label: {
+                        Label("Debug", systemImage: "ladybug")
+                    }
+                    .accessibilityIdentifier("settings.developer.debug")
+
+                    NavigationLink {
+                        DeveloperTextView(title: "Diagnostic", bodyText: diagnosticText)
+                    } label: {
+                        Label("Diagnostic", systemImage: "stethoscope")
+                    }
+                    .accessibilityIdentifier("settings.developer.diagnostic")
                 }
 
                 Section {
@@ -126,6 +147,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .alert("Run tests", isPresented: $showDeveloperAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(developerAlertMessage)
+            }
         }
     }
 
@@ -148,5 +174,84 @@ struct SettingsView: View {
             }
             Slider(value: value, in: range)
         }
+    }
+
+    private var logsText: String {
+        let modelsDirectory = ModelStorage.modelsDirectoryURL()
+        let imported = FileStore.importedFiles()
+        let modelFiles = (try? FileManager.default.contentsOfDirectory(at: modelsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return """
+        Last launch diagnostics:
+        • Imported files: \(imported.count)
+        • Model files: \(modelFiles.count)
+        • Models path: \(modelsDirectory.path)
+        """
+    }
+
+    private var debugText: String {
+        """
+        Runtime:
+        • isGenerating: \(appState.isGenerating ? "true" : "false")
+        • agentModeEnabled: \(appState.agentModeEnabled ? "true" : "false")
+        • showThinkingByDefault: \(appState.showThinkingByDefault ? "true" : "false")
+        • maxAgentSteps: \(appState.maxAgentSteps)
+
+        Generation:
+        • temperature: \(String(format: "%.2f", appState.temperature))
+        • topP: \(String(format: "%.2f", appState.topP))
+        • repetitionPenalty: \(String(format: "%.2f", appState.repetitionPenalty))
+        • contextSize: \(appState.contextSize)
+        • maxTokens: \(appState.maxTokens)
+        """
+    }
+
+    private var diagnosticText: String {
+        let permissions = PermissionKind.allCases
+            .map { "\($0.title): \(PermissionsCenter.shared.state($0).label)" }
+            .joined(separator: "\n")
+        return """
+        Permissions:
+        \(permissions)
+        """
+    }
+
+    private func runDeveloperChecks() {
+        let fm = FileManager.default
+        let modelsDirectory = ModelStorage.modelsDirectoryURL(fileManager: fm)
+        let canReadModels = fm.isReadableFile(atPath: modelsDirectory.path)
+        let canWriteModels = fm.isWritableFile(atPath: modelsDirectory.path)
+        let importsDirectory = FileStore.importsDirectory
+        let canReadImports = fm.isReadableFile(atPath: importsDirectory.path)
+        let canWriteImports = fm.isWritableFile(atPath: importsDirectory.path)
+
+        let checks: [(String, Bool)] = [
+            ("Models folder readable", canReadModels),
+            ("Models folder writable", canWriteModels),
+            ("Imports folder readable", canReadImports),
+            ("Imports folder writable", canWriteImports),
+        ]
+
+        let passed = checks.filter(\.1).count
+        let summary = checks
+            .map { check in "• \(check.0): \(check.1 ? "PASS" : "FAIL")" }
+            .joined(separator: "\n")
+        developerAlertMessage = "\(passed)/\(checks.count) checks passed\n\n\(summary)"
+        showDeveloperAlert = true
+    }
+}
+
+private struct DeveloperTextView: View {
+    let title: String
+    let bodyText: String
+
+    var body: some View {
+        ScrollView {
+            Text(bodyText)
+                .font(.footnote.monospaced())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

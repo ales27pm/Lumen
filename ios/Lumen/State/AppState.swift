@@ -85,7 +85,6 @@ final class AppState {
         get { settings.agentModeEnabled }
         set { settings.agentModeEnabled = newValue }
     }
-
     // MARK: - Forwarded runtime state
 
     var isGenerating: Bool {

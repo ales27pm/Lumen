@@ -80,7 +80,7 @@ nonisolated struct AgentTurn: Sendable {
     var isStructured: Bool { action != nil || (final?.isEmpty == false) }
 }
 
-nonisolated enum AgentTurnParseError: String, Sendable {
+nonisolated enum AgentTurnParseError: String, Error, Sendable {
     case empty
     case noJSONObject
     case multipleJSONObjects

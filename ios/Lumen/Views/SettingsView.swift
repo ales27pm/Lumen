@@ -92,6 +92,17 @@ struct SettingsView: View {
                     Toggle("Auto-remember", isOn: Binding(get: { state.autoMemory }, set: { state.autoMemory = $0 }))
                 }
 
+                Section("Developer") {
+                    Label("Run tests", systemImage: "checkmark.circle")
+                        .accessibilityIdentifier("settings.developer.runTests")
+                    Label("Logs", systemImage: "doc.text.magnifyingglass")
+                        .accessibilityIdentifier("settings.developer.logs")
+                    Label("Debug", systemImage: "ladybug")
+                        .accessibilityIdentifier("settings.developer.debug")
+                    Label("Diagnostic", systemImage: "stethoscope")
+                        .accessibilityIdentifier("settings.developer.diagnostic")
+                }
+
                 Section {
                     NavigationLink {
                         PermissionsView()

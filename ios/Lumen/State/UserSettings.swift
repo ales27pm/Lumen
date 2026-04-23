@@ -1,6 +1,26 @@
 import Foundation
 import Observation
 
+fileprivate enum UserSettingsKeys {
+    static let activeChatModelID = "activeChatModelID"
+    static let activeEmbeddingModelID = "activeEmbeddingModelID"
+    static let enabledToolIDs = "enabledToolIDs"
+    static let systemPrompt = "systemPrompt"
+    static let temperature = "temperature"
+    static let topP = "topP"
+    static let repetitionPenalty = "repetitionPenalty"
+    static let contextSize = "contextSize"
+    static let maxTokens = "maxTokens"
+    static let autoMemory = "autoMemory"
+    static let selectedPresetID = "selectedPresetID"
+    static let voiceID = "voiceID"
+    static let speakingRate = "speakingRate"
+    static let handsFree = "handsFree"
+    static let maxAgentSteps = "maxAgentSteps"
+    static let showThinkingByDefault = "showThinkingByDefault"
+    static let agentModeEnabled = "agentModeEnabled"
+}
+
 /// Persistent user settings. Values are auto-persisted to UserDefaults whenever
 /// they change. Initialization reads from UserDefaults; no didSet runs during init.
 @Observable
@@ -38,51 +58,51 @@ final class UserSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        activeChatModelID = defaults.string(forKey: Keys.activeChatModelID)
-        activeEmbeddingModelID = defaults.string(forKey: Keys.activeEmbeddingModelID)
+        activeChatModelID = defaults.string(forKey: UserSettingsKeys.activeChatModelID)
+        activeEmbeddingModelID = defaults.string(forKey: UserSettingsKeys.activeEmbeddingModelID)
 
-        if let saved = defaults.array(forKey: Keys.enabledToolIDs) as? [String] {
+        if let saved = defaults.array(forKey: UserSettingsKeys.enabledToolIDs) as? [String] {
             enabledToolIDs = Set(saved)
         } else {
             enabledToolIDs = Set(ToolRegistry.all.map(\.id))
         }
 
-        systemPrompt = defaults.string(forKey: Keys.systemPrompt) ?? Presets.general.prompt
-        temperature = defaults.object(forKey: Keys.temperature) as? Double ?? 0.7
-        topP = defaults.object(forKey: Keys.topP) as? Double ?? 0.95
-        repetitionPenalty = defaults.object(forKey: Keys.repetitionPenalty) as? Double ?? 1.1
-        contextSize = defaults.object(forKey: Keys.contextSize) as? Int ?? 4096
-        maxTokens = defaults.object(forKey: Keys.maxTokens) as? Int ?? 512
-        autoMemory = defaults.object(forKey: Keys.autoMemory) as? Bool ?? true
-        selectedPresetID = defaults.string(forKey: Keys.selectedPresetID) ?? Presets.general.id
+        systemPrompt = defaults.string(forKey: UserSettingsKeys.systemPrompt) ?? Presets.general.prompt
+        temperature = defaults.object(forKey: UserSettingsKeys.temperature) as? Double ?? 0.7
+        topP = defaults.object(forKey: UserSettingsKeys.topP) as? Double ?? 0.95
+        repetitionPenalty = defaults.object(forKey: UserSettingsKeys.repetitionPenalty) as? Double ?? 1.1
+        contextSize = defaults.object(forKey: UserSettingsKeys.contextSize) as? Int ?? 4096
+        maxTokens = defaults.object(forKey: UserSettingsKeys.maxTokens) as? Int ?? 512
+        autoMemory = defaults.object(forKey: UserSettingsKeys.autoMemory) as? Bool ?? true
+        selectedPresetID = defaults.string(forKey: UserSettingsKeys.selectedPresetID) ?? Presets.general.id
 
-        voiceID = defaults.string(forKey: Keys.voiceID)
-        speakingRate = defaults.object(forKey: Keys.speakingRate) as? Double ?? 0.5
-        handsFree = defaults.object(forKey: Keys.handsFree) as? Bool ?? false
+        voiceID = defaults.string(forKey: UserSettingsKeys.voiceID)
+        speakingRate = defaults.object(forKey: UserSettingsKeys.speakingRate) as? Double ?? 0.5
+        handsFree = defaults.object(forKey: UserSettingsKeys.handsFree) as? Bool ?? false
 
-        maxAgentSteps = defaults.object(forKey: Keys.maxAgentSteps) as? Int ?? 6
-        showThinkingByDefault = defaults.object(forKey: Keys.showThinkingByDefault) as? Bool ?? false
-        agentModeEnabled = defaults.object(forKey: Keys.agentModeEnabled) as? Bool ?? true
+        maxAgentSteps = defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6
+        showThinkingByDefault = defaults.object(forKey: UserSettingsKeys.showThinkingByDefault) as? Bool ?? false
+        agentModeEnabled = defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true
     }
 
     private func save() {
-        defaults.set(activeChatModelID, forKey: Keys.activeChatModelID)
-        defaults.set(activeEmbeddingModelID, forKey: Keys.activeEmbeddingModelID)
-        defaults.set(Array(enabledToolIDs), forKey: Keys.enabledToolIDs)
-        defaults.set(systemPrompt, forKey: Keys.systemPrompt)
-        defaults.set(temperature, forKey: Keys.temperature)
-        defaults.set(topP, forKey: Keys.topP)
-        defaults.set(repetitionPenalty, forKey: Keys.repetitionPenalty)
-        defaults.set(contextSize, forKey: Keys.contextSize)
-        defaults.set(maxTokens, forKey: Keys.maxTokens)
-        defaults.set(autoMemory, forKey: Keys.autoMemory)
-        defaults.set(selectedPresetID, forKey: Keys.selectedPresetID)
-        defaults.set(voiceID, forKey: Keys.voiceID)
-        defaults.set(speakingRate, forKey: Keys.speakingRate)
-        defaults.set(handsFree, forKey: Keys.handsFree)
-        defaults.set(maxAgentSteps, forKey: Keys.maxAgentSteps)
-        defaults.set(showThinkingByDefault, forKey: Keys.showThinkingByDefault)
-        defaults.set(agentModeEnabled, forKey: Keys.agentModeEnabled)
+        defaults.set(activeChatModelID, forKey: UserSettingsKeys.activeChatModelID)
+        defaults.set(activeEmbeddingModelID, forKey: UserSettingsKeys.activeEmbeddingModelID)
+        defaults.set(Array(enabledToolIDs), forKey: UserSettingsKeys.enabledToolIDs)
+        defaults.set(systemPrompt, forKey: UserSettingsKeys.systemPrompt)
+        defaults.set(temperature, forKey: UserSettingsKeys.temperature)
+        defaults.set(topP, forKey: UserSettingsKeys.topP)
+        defaults.set(repetitionPenalty, forKey: UserSettingsKeys.repetitionPenalty)
+        defaults.set(contextSize, forKey: UserSettingsKeys.contextSize)
+        defaults.set(maxTokens, forKey: UserSettingsKeys.maxTokens)
+        defaults.set(autoMemory, forKey: UserSettingsKeys.autoMemory)
+        defaults.set(selectedPresetID, forKey: UserSettingsKeys.selectedPresetID)
+        defaults.set(voiceID, forKey: UserSettingsKeys.voiceID)
+        defaults.set(speakingRate, forKey: UserSettingsKeys.speakingRate)
+        defaults.set(handsFree, forKey: UserSettingsKeys.handsFree)
+        defaults.set(maxAgentSteps, forKey: UserSettingsKeys.maxAgentSteps)
+        defaults.set(showThinkingByDefault, forKey: UserSettingsKeys.showThinkingByDefault)
+        defaults.set(agentModeEnabled, forKey: UserSettingsKeys.agentModeEnabled)
     }
 
     func toggleTool(_ id: String) {
@@ -119,26 +139,6 @@ final class UserSettings {
             agentModeEnabled: agentModeEnabled
         )
     }
-
-    fileprivate enum Keys {
-        static let activeChatModelID = "activeChatModelID"
-        static let activeEmbeddingModelID = "activeEmbeddingModelID"
-        static let enabledToolIDs = "enabledToolIDs"
-        static let systemPrompt = "systemPrompt"
-        static let temperature = "temperature"
-        static let topP = "topP"
-        static let repetitionPenalty = "repetitionPenalty"
-        static let contextSize = "contextSize"
-        static let maxTokens = "maxTokens"
-        static let autoMemory = "autoMemory"
-        static let selectedPresetID = "selectedPresetID"
-        static let voiceID = "voiceID"
-        static let speakingRate = "speakingRate"
-        static let handsFree = "handsFree"
-        static let maxAgentSteps = "maxAgentSteps"
-        static let showThinkingByDefault = "showThinkingByDefault"
-        static let agentModeEnabled = "agentModeEnabled"
-    }
 }
 
 /// Sendable, thread-safe snapshot of user settings. Safe to pass into background
@@ -165,27 +165,27 @@ nonisolated struct SettingsSnapshot: Sendable {
     /// run before or without the main app scene.
     static func loadFromDisk(defaults: UserDefaults = .standard) -> SettingsSnapshot {
         let enabled: Set<String>
-        if let saved = defaults.array(forKey: UserSettings.Keys.enabledToolIDs) as? [String] {
+        if let saved = defaults.array(forKey: UserSettingsKeys.enabledToolIDs) as? [String] {
             enabled = Set(saved)
         } else {
             enabled = Set(ToolRegistry.all.map(\.id))
         }
         return SettingsSnapshot(
-            activeChatModelID: defaults.string(forKey: UserSettings.Keys.activeChatModelID),
-            activeEmbeddingModelID: defaults.string(forKey: UserSettings.Keys.activeEmbeddingModelID),
+            activeChatModelID: defaults.string(forKey: UserSettingsKeys.activeChatModelID),
+            activeEmbeddingModelID: defaults.string(forKey: UserSettingsKeys.activeEmbeddingModelID),
             enabledToolIDs: enabled,
-            systemPrompt: defaults.string(forKey: UserSettings.Keys.systemPrompt) ?? Presets.general.prompt,
-            temperature: defaults.object(forKey: UserSettings.Keys.temperature) as? Double ?? 0.7,
-            topP: defaults.object(forKey: UserSettings.Keys.topP) as? Double ?? 0.95,
-            repetitionPenalty: defaults.object(forKey: UserSettings.Keys.repetitionPenalty) as? Double ?? 1.1,
-            contextSize: defaults.object(forKey: UserSettings.Keys.contextSize) as? Int ?? 4096,
-            maxTokens: defaults.object(forKey: UserSettings.Keys.maxTokens) as? Int ?? 512,
-            autoMemory: defaults.object(forKey: UserSettings.Keys.autoMemory) as? Bool ?? true,
-            voiceID: defaults.string(forKey: UserSettings.Keys.voiceID),
-            speakingRate: defaults.object(forKey: UserSettings.Keys.speakingRate) as? Double ?? 0.5,
-            handsFree: defaults.object(forKey: UserSettings.Keys.handsFree) as? Bool ?? false,
-            maxAgentSteps: defaults.object(forKey: UserSettings.Keys.maxAgentSteps) as? Int ?? 6,
-            agentModeEnabled: defaults.object(forKey: UserSettings.Keys.agentModeEnabled) as? Bool ?? true
+            systemPrompt: defaults.string(forKey: UserSettingsKeys.systemPrompt) ?? Presets.general.prompt,
+            temperature: defaults.object(forKey: UserSettingsKeys.temperature) as? Double ?? 0.7,
+            topP: defaults.object(forKey: UserSettingsKeys.topP) as? Double ?? 0.95,
+            repetitionPenalty: defaults.object(forKey: UserSettingsKeys.repetitionPenalty) as? Double ?? 1.1,
+            contextSize: defaults.object(forKey: UserSettingsKeys.contextSize) as? Int ?? 4096,
+            maxTokens: defaults.object(forKey: UserSettingsKeys.maxTokens) as? Int ?? 512,
+            autoMemory: defaults.object(forKey: UserSettingsKeys.autoMemory) as? Bool ?? true,
+            voiceID: defaults.string(forKey: UserSettingsKeys.voiceID),
+            speakingRate: defaults.object(forKey: UserSettingsKeys.speakingRate) as? Double ?? 0.5,
+            handsFree: defaults.object(forKey: UserSettingsKeys.handsFree) as? Bool ?? false,
+            maxAgentSteps: defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6,
+            agentModeEnabled: defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true
         )
     }
 }

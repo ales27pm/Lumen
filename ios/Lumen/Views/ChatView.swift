@@ -382,7 +382,7 @@ struct ChatView: View {
             .lowercased()
             .replacingOccurrences(of: "\\n", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

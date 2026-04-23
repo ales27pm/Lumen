@@ -55,13 +55,13 @@ enum LocationTools {
         let nsError = error as NSError
         if nsError.domain == MKErrorDomain {
             switch nsError.code {
-            case MKError.Code.placemarkNotFound.rawValue:
+            case Int(MKError.Code.placemarkNotFound.rawValue):
                 return "No nearby places found for \"\(query)\". This tool only searches local map places; use web.search for general web research."
-            case MKError.Code.directionsNotFound.rawValue:
+            case Int(MKError.Code.directionsNotFound.rawValue):
                 return "Maps could not find directions for \"\(query)\". Try a more specific address or place name."
-            case MKError.Code.serverFailure.rawValue:
+            case Int(MKError.Code.serverFailure.rawValue):
                 return "Apple Maps search is temporarily unavailable. Try again later or use web.search for non-local information."
-            case MKError.Code.loadingThrottled.rawValue:
+            case Int(MKError.Code.loadingThrottled.rawValue):
                 return "Apple Maps search is rate-limited right now. Wait briefly and retry."
             default:
                 return "Apple Maps could not complete the nearby search for \"\(query)\". Use this tool only for local places such as coffee shops, pharmacies, stores, or addresses."

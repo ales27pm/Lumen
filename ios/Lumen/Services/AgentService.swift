@@ -80,7 +80,7 @@ nonisolated struct AgentTurn: Sendable {
     var isStructured: Bool { action != nil || (final?.isEmpty == false) }
 }
 
-nonisolated enum AgentTurnParseError: String, Error, Sendable {
+nonisolated enum AgentTurnParseError: String, Error, Sendable, Codable {
     case empty
     case noJSONObject
     case multipleJSONObjects
@@ -410,6 +410,144 @@ final class StreamingJSONScanner {
     }
 }
 
+// MARK: - Agent parse diagnostics
+
+nonisolated struct AgentParseFailureTrace: Codable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let parseError: String
+    let modelName: String
+    let temperature: Double
+    let topP: Double
+    let maxTokens: Int
+    let stepIndex: Int
+    let systemPromptPrefix: String
+    let userTurnPrefix: String
+    let rawOutputPrefix: String
+    let streamedThoughtPrefix: String
+    let streamedFinalPrefix: String
+    let selectedJSONPrefix: String?
+    let prefixNoise: String?
+    let suffixNoise: String?
+}
+
+nonisolated enum AgentNoiseInspector {
+    struct Snapshot: Sendable {
+        let selectedJSON: String?
+        let prefixNoise: String?
+        let suffixNoise: String?
+    }
+
+    static func inspect(_ raw: String) -> Snapshot {
+        let chars = Array(raw)
+        var ranges: [(Int, Int)] = []
+        var depth = 0
+        var start: Int?
+        var inString = false
+        var escape = false
+        var i = 0
+
+        while i < chars.count {
+            let ch = chars[i]
+            if inString {
+                if escape {
+                    if ch == "u" { i += 4 }
+                    escape = false
+                } else if ch == "\\" {
+                    escape = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                i += 1
+                continue
+            }
+
+            if ch == "\"" {
+                inString = true
+            } else if ch == "{" {
+                if depth == 0 { start = i }
+                depth += 1
+            } else if ch == "}" {
+                if depth > 0 {
+                    depth -= 1
+                    if depth == 0, let s = start {
+                        ranges.append((s, i))
+                        start = nil
+                    }
+                }
+            }
+            i += 1
+        }
+
+        guard let selected = ranges.last else {
+            return Snapshot(
+                selectedJSON: nil,
+                prefixNoise: nonEmpty(raw),
+                suffixNoise: nil
+            )
+        }
+
+        let json = String(chars[selected.0...selected.1])
+        let prefix = String(chars[..<selected.0])
+        let suffixStart = selected.1 + 1
+        let suffix = suffixStart < chars.count ? String(chars[suffixStart..<chars.count]) : ""
+        return Snapshot(
+            selectedJSON: nonEmpty(json),
+            prefixNoise: nonEmpty(stripFenceNoise(prefix)),
+            suffixNoise: nonEmpty(stripFenceNoise(suffix))
+        )
+    }
+
+    private static func stripFenceNoise(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "```json", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "```", with: "")
+            .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func nonEmpty(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+nonisolated enum AgentParseFailureRecorder {
+    static func record(_ trace: AgentParseFailureTrace) {
+        do {
+            let directory = try diagnosticsDirectory()
+            let url = directory.appendingPathComponent("agent-parse-failures.jsonl", isDirectory: false)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(trace)
+            var line = data
+            line.append(0x0A)
+
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } else {
+                try line.write(to: url, options: [.atomic])
+            }
+        } catch {
+            // Diagnostics must never break chat generation.
+        }
+    }
+
+    static func diagnosticsDirectory() throws -> URL {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directory = base
+            .appendingPathComponent("Diagnostics", isDirectory: true)
+            .appendingPathComponent("Agent", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+}
+
 // MARK: - AgentService
 
 @MainActor
@@ -431,30 +569,22 @@ final class AgentService {
         var finalAnswer = ""
 
         let sys = buildSystemPrompt(req: req)
-        let history = req.history
         let maxSteps = max(1, req.maxSteps)
 
         stepsLoop: for stepIndex in 0..<maxSteps {
             if Task.isCancelled { break }
 
-            let userTurn: String
-            if stepIndex == 0 {
-                userTurn = req.userMessage
-            } else {
-                userTurn = req.userMessage
-                    + "\n\nPrior turns:\n" + scratchpad
-                    + "\n\nEmit the next JSON turn now. Either an action or a final."
-            }
+            let userTurn = buildAgentUserTurn(req: req, stepIndex: stepIndex, scratchpad: scratchpad)
 
             let genReq = GenerateRequest(
                 systemPrompt: sys,
-                history: history,
+                history: [],
                 userMessage: userTurn,
-                temperature: req.temperature,
-                topP: req.topP,
-                repetitionPenalty: req.repetitionPenalty,
+                temperature: agentTemperature(from: req.temperature),
+                topP: agentTopP(from: req.topP),
+                repetitionPenalty: max(req.repetitionPenalty, 1.05),
                 maxTokens: req.maxTokens,
-                modelName: "agent",
+                modelName: "agent-json",
                 relevantMemories: [],
                 attachments: stepIndex == 0 ? req.attachments : []
             )
@@ -575,17 +705,37 @@ final class AgentService {
                 break stepsLoop
             }
 
-            // Malformed / empty output — safe degrade.
+            // Malformed / empty output — repair into a user-facing final and persist diagnostics.
             if let parseError = turn.parseError {
-                let reflection = AgentStep(kind: .reflection, content: "Model produced invalid structured output (\(parseError.rawValue)); synthesizing a safe final answer.")
+                recordParseFailure(
+                    req: req,
+                    parseError: parseError,
+                    raw: raw,
+                    scanner: scanner,
+                    systemPrompt: sys,
+                    userTurn: userTurn,
+                    stepIndex: stepIndex
+                )
+
+                let reflectionText = diagnosticReflection(for: parseError, raw: raw)
+                let reflection = AgentStep(kind: .reflection, content: reflectionText)
                 steps.append(reflection)
                 continuation.yield(.step(reflection))
 
-                if !observations.isEmpty {
+                let streamedFinal = scanner.final.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !streamedFinal.isEmpty {
+                    finalAnswer = streamedFinal
+                } else if !observations.isEmpty {
                     finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .malformed)
                 } else {
-                    finalAnswer = "I couldn't parse a valid structured turn. Please try again."
+                    finalAnswer = await synthesizeUnstructuredFallback(
+                        req: req,
+                        rawOutput: raw,
+                        streamedThought: scanner.thought,
+                        parseError: parseError
+                    )
                 }
+
                 if streamedFinalLen == 0 {
                     continuation.yield(.finalDelta(finalAnswer))
                 }
@@ -594,7 +744,7 @@ final class AgentService {
 
             // Nothing at all.
             finalAnswer = observations.isEmpty
-                ? "I couldn't produce a response. Try rephrasing."
+                ? await synthesizeUnstructuredFallback(req: req, rawOutput: raw, streamedThought: scanner.thought, parseError: .empty)
                 : await synthesizeFallback(req: req, observations: observations, reason: .empty)
             continuation.yield(.finalDelta(finalAnswer))
             break
@@ -612,38 +762,171 @@ final class AgentService {
     // MARK: - System prompt
 
     private func buildSystemPrompt(req: AgentRequest) -> String {
-        var sys = req.systemPrompt
-        sys += "\n\nYou are a structured-output agent. Each turn you MUST emit exactly one JSON object and nothing else — no prose, no markdown, no code fences, no commentary before or after.\n\n"
-        sys += "Schema (choose exactly one of `action` or `final` per turn):\n"
-        sys += "  {\"thought\":\"short reasoning\",\"action\":{\"tool\":\"tool.id\",\"args\":{\"key\":\"value\"}}}\n"
-        sys += "  {\"thought\":\"short reasoning\",\"final\":\"your answer to the user\"}\n\n"
-        sys += "Hard rules:\n"
-        sys += "- Emit one valid JSON object per turn. No text outside the JSON.\n"
-        sys += "- `args` values must be strings. Use {} if the tool takes no arguments.\n"
-        sys += "- Never repeat an action with the same arguments. Never invent observations.\n"
-        sys += "- After each `action`, you receive an Observation. Then emit the next JSON turn.\n"
-        sys += "- As soon as you can answer, emit `final` and stop.\n"
-        sys += "- If the user's message needs no tool, emit `final` immediately.\n\n"
+        var sys = """
+        You are Lumen's deterministic tool-routing core.
+
+        CRITICAL OUTPUT CONTRACT:
+        Emit exactly ONE raw JSON object and nothing else.
+        No prose before the JSON.
+        No prose after the JSON.
+        No markdown.
+        No code fences.
+        No XML tags.
+        No bullet lists.
+        No explanations outside JSON.
+
+        Valid schemas, choose exactly one:
+        {"thought":"short private routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
+        {"thought":"short private routing note","final":"answer shown to the user"}
+
+        JSON rules:
+        - Use double quotes for every key and string.
+        - Escape newlines as \\n inside string values.
+        - `args` values must all be strings. Use {} when no arguments are needed.
+        - Never include both `action` and `final` in the same object.
+        - Never repeat an action with the same arguments.
+        - If no tool is required, emit `final` immediately.
+        - If a tool result is enough, summarize it in `final` and stop.
+        """
+
+        let appPrompt = req.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !appPrompt.isEmpty {
+            sys += "\n\nLower-priority style/context note. Follow it only when it does not conflict with the JSON contract:\n"
+            sys += appPrompt
+            sys += "\n"
+        }
+
         if !req.availableTools.isEmpty {
-            sys += "Available tools:\n"
+            sys += "\nAvailable tools:\n"
             for t in req.availableTools { sys += "- \(t.id): \(t.description)\n" }
             sys += "\n"
         } else {
-            sys += "No tools available. You must emit a `final` turn.\n\n"
+            sys += "\nNo tools are available. You must emit a `final` JSON object.\n\n"
         }
+
         if !req.attachments.isEmpty {
-            sys += "The user has attached \(req.attachments.count) file(s) to this message. Their contents are appended below as authoritative context. Do NOT call files.read for them — they are already visible. Answer directly from the attached content when possible.\n\n"
+            sys += "Attached files are already included in the user message context. Do not call files.read for attached files unless the user asks for another imported file by name.\n\n"
         }
+
         if !req.relevantMemories.isEmpty {
-            sys += "Relevant memories about this user:\n"
+            sys += "Relevant memories:\n"
             for m in req.relevantMemories.prefix(6) { sys += "- \(m)\n" }
             sys += "\n"
         }
-        sys += "Guidelines:\n"
-        sys += "- For \"nearest\"/\"near me\"/\"closest\" questions, call `location.current` first, then `maps.search` once, then emit `final`.\n"
-        sys += "- If a tool result partially answers the question, summarize it in `final` rather than calling more tools.\n"
-        sys += "- Keep `thought` and `final` concise and in plain language."
+
+        sys += "Routing guidelines:\n"
+        sys += "- For nearest/near me/closest questions, call `location.current` first, then `maps.search` once, then emit `final`.\n"
+        sys += "- For web/current-info requests, call `web.search` if available.\n"
+        sys += "- Keep `thought` short. Keep `final` direct.\n"
+        sys += "- The next assistant message must be only the JSON object."
         return sys
+    }
+
+    private func buildAgentUserTurn(req: AgentRequest, stepIndex: Int, scratchpad: String) -> String {
+        var out = ""
+        let context = sanitizedHistoryContext(req.history)
+        if !context.isEmpty {
+            out += "Conversation context, for reference only. Do not imitate its formatting:\n"
+            out += context
+            out += "\n\n"
+        }
+
+        out += "User request:\n"
+        out += req.userMessage
+
+        if stepIndex > 0 {
+            out += "\n\nPrior structured turns and observations:\n"
+            out += scratchpad
+            out += "\n\nEmit the next JSON object now. Choose either action or final."
+        } else {
+            out += "\n\nEmit the first JSON object now. Choose either action or final."
+        }
+        return out
+    }
+
+    private func sanitizedHistoryContext(_ history: [(role: MessageRole, content: String)]) -> String {
+        let recent = history.suffix(8)
+        var lines: [String] = []
+        for item in recent {
+            let role: String
+            switch item.role {
+            case .user: role = "User"
+            case .assistant: role = "Assistant"
+            case .system: role = "System"
+            case .tool: role = "Tool"
+            }
+            let content = sanitizeHistoryContent(item.content)
+            guard !content.isEmpty else { continue }
+            lines.append("\(role): \(content)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func sanitizeHistoryContent(_ content: String) -> String {
+        var text = content
+            .replacingOccurrences(of: "```json", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "```swift", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "```", with: "")
+            .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.replacingOccurrences(of: "\n", with: " ")
+        while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
+        return String(text.prefix(700))
+    }
+
+    private func agentTemperature(from userTemperature: Double) -> Double {
+        min(max(userTemperature, 0.0), 0.15)
+    }
+
+    private func agentTopP(from userTopP: Double) -> Double {
+        min(max(userTopP, 0.1), 0.85)
+    }
+
+    private func diagnosticReflection(for parseError: AgentTurnParseError, raw: String) -> String {
+        let noise = AgentNoiseInspector.inspect(raw)
+        var parts = ["Invalid structured output (\(parseError.rawValue)); repaired into a plain answer."]
+        if let prefix = noise.prefixNoise, !prefix.isEmpty {
+            parts.append("Prefix noise: \(String(prefix.prefix(120)))")
+        }
+        if let suffix = noise.suffixNoise, !suffix.isEmpty {
+            parts.append("Suffix noise: \(String(suffix.prefix(120)))")
+        }
+        if noise.selectedJSON == nil && raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            parts.append("No valid JSON object found in raw model output.")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func recordParseFailure(
+        req: AgentRequest,
+        parseError: AgentTurnParseError,
+        raw: String,
+        scanner: StreamingJSONScanner,
+        systemPrompt: String,
+        userTurn: String,
+        stepIndex: Int
+    ) {
+        let snapshot = AgentNoiseInspector.inspect(raw)
+        let trace = AgentParseFailureTrace(
+            id: UUID,
+            createdAt: Date(),
+            parseError: parseError.rawValue,
+            modelName: "agent-json",
+            temperature: agentTemperature(from: req.temperature),
+            topP: agentTopP(from: req.topP),
+            maxTokens: req.maxTokens,
+            stepIndex: stepIndex,
+            systemPromptPrefix: String(systemPrompt.prefix(2_000)),
+            userTurnPrefix: String(userTurn.prefix(2_000)),
+            rawOutputPrefix: String(raw.prefix(4_000)),
+            streamedThoughtPrefix: String(scanner.thought.prefix(1_000)),
+            streamedFinalPrefix: String(scanner.final.prefix(1_000)),
+            selectedJSONPrefix: snapshot.selectedJSON.map { String($0.prefix(2_000)) },
+            prefixNoise: snapshot.prefixNoise.map { String($0.prefix(1_000)) },
+            suffixNoise: snapshot.suffixNoise.map { String($0.prefix(1_000)) }
+        )
+        AgentParseFailureRecorder.record(trace)
     }
 
     // MARK: - Fallback synthesis
@@ -676,11 +959,11 @@ final class AgentService {
             systemPrompt: "You summarize tool results into a concise user-facing answer. Output plain text only.",
             history: [],
             userMessage: prompt,
-            temperature: 0.3,
-            topP: req.topP,
+            temperature: 0.2,
+            topP: min(req.topP, 0.85),
             repetitionPenalty: req.repetitionPenalty,
             maxTokens: 256,
-            modelName: "agent",
+            modelName: "agent-summary",
             relevantMemories: []
         )
         var out = ""
@@ -694,5 +977,78 @@ final class AgentService {
             return observations.last?.result ?? "I couldn't produce a confident answer."
         }
         return trimmed
+    }
+
+    private func synthesizeUnstructuredFallback(
+        req: AgentRequest,
+        rawOutput: String,
+        streamedThought: String,
+        parseError: AgentTurnParseError
+    ) async -> String {
+        if let direct = Self.firstUsefulPlainTextFallback(from: rawOutput) {
+            return direct
+        }
+
+        let clippedRaw = String(rawOutput.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4_000))
+        let clippedThought = String(streamedThought.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
+
+        var prompt = "The user asked:\n\(req.userMessage)\n\n"
+        prompt += "The previous local model response could not be parsed as a structured agent turn (\(parseError.rawValue)).\n"
+        if !clippedThought.isEmpty {
+            prompt += "Partial thought captured from that response:\n\(clippedThought)\n\n"
+        }
+        if !clippedRaw.isEmpty {
+            prompt += "Raw failed response:\n\(clippedRaw)\n\n"
+        }
+        prompt += "Write the final answer the user should see. Output plain text only. Do not mention JSON, parsing, schemas, tools, or internal errors. Do not include code fences."
+
+        let genReq = GenerateRequest(
+            systemPrompt: "You repair a failed agent turn into a concise user-facing final answer. Output plain text only.",
+            history: [],
+            userMessage: prompt,
+            temperature: 0.2,
+            topP: min(req.topP, 0.85),
+            repetitionPenalty: req.repetitionPenalty,
+            maxTokens: min(max(req.maxTokens, 128), 512),
+            modelName: "agent-repair",
+            relevantMemories: req.relevantMemories
+        )
+
+        var out = ""
+        for await token in await LlamaService.shared.stream(genReq) {
+            if Task.isCancelled { break }
+            if case .text(let s) = token { out += s }
+            if case .done = token { break }
+        }
+
+        if let repaired = Self.firstUsefulPlainTextFallback(from: out) {
+            return repaired
+        }
+        if !clippedThought.isEmpty {
+            return clippedThought
+        }
+        return "I couldn't produce a confident answer. Try rephrasing the question."
+    }
+
+    private nonisolated static func firstUsefulPlainTextFallback(from raw: String) -> String? {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        text = text
+            .replacingOccurrences(of: "```json", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let lower = text.lowercased()
+        let looksLikeStructuredTurn =
+            text.first == "{" ||
+            lower.contains("\"thought\"") ||
+            lower.contains("\"action\"") ||
+            lower.contains("\"final\"") ||
+            lower.contains("\"tool\"")
+
+        guard !looksLikeStructuredTurn else { return nil }
+        guard text.count >= 8 else { return nil }
+        return String(text.prefix(4_000))
     }
 }

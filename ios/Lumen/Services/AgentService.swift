@@ -240,62 +240,61 @@ nonisolated enum AgentTurnParser {
         if inString || depth != 0 { return .failure(.incompleteJSON) }
         guard !ranges.isEmpty else { return .failure(.noJSONObject) }
 
-        let selected: ((Int, Int), [String: Any])?
-        if ranges.count == 1 {
-            let onlyRange = ranges[0]
-            let jsonStr = String(chars[onlyRange.0...onlyRange.1])
-            guard let data = jsonStr.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return .failure(.invalidJSONObject)
-            }
-            selected = (onlyRange, obj)
-        } else {
-            var found: ((Int, Int), [String: Any])?
-            for range in ranges.reversed() {
-                let jsonStr = String(chars[range.0...range.1])
-                guard let data = jsonStr.data(using: .utf8) else { continue }
-                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    found = (range, obj)
-                    break
-                }
-            }
-            guard let found else { return .failure(.multipleJSONObjects) }
-            selected = found
+        var candidates: [(range: (Int, Int), object: [String: Any], score: Int)] = []
+        for range in ranges {
+            guard let obj = parseJSONObject(chars: chars, range: range) else { continue }
+            let score = scoreCandidate(object: obj)
+            candidates.append((range: range, object: obj, score: score))
+        }
+        guard !candidates.isEmpty else {
+            return ranges.count > 1 ? .failure(.multipleJSONObjects) : .failure(.invalidJSONObject)
         }
 
-        guard let (selectedRange, selectedObject) = selected else { return .failure(.invalidJSONObject) }
-        if hasNonWhitespaceOutsideJSONRanges(in: chars, ranges: ranges, selectedRange: selectedRange) {
+        candidates.sort { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.range.0 > rhs.range.0
+        }
+
+        let selected = candidates[0]
+        if hasUnsupportedNoise(in: chars, selectedRange: selected.range) {
             return .failure(.noisyOutput)
         }
-        return .success(selectedObject)
+        return .success(selected.object)
     }
 
-    private static func hasNonWhitespaceOutsideJSONRanges(
+    private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> [String: Any]? {
+        let jsonStr = String(chars[range.0...range.1])
+        guard let data = jsonStr.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func scoreCandidate(object: [String: Any]) -> Int {
+        var score = 0
+        if object["action"] != nil || object["tool"] != nil { score += 4 }
+        if object["final"] != nil || object["final_answer"] != nil || object["answer"] != nil { score += 4 }
+        if object["thought"] != nil || object["reasoning"] != nil { score += 2 }
+        if object["args"] != nil || object["arguments"] != nil || object["input"] != nil { score += 1 }
+        return score
+    }
+
+    private static func hasUnsupportedNoise(
         in chars: [Character],
-        ranges: [(Int, Int)],
-        selectedRange _: (Int, Int)
+        selectedRange: (Int, Int)
     ) -> Bool {
-        let sorted = ranges.sorted { lhs, rhs in lhs.0 < rhs.0 }
-        var cursor = 0
+        let prefix = String(chars[..<selectedRange.0])
+        let suffixStart = selectedRange.1 + 1
+        let suffix = suffixStart < chars.count ? String(chars[suffixStart..<chars.count]) : ""
+        return containsUnsupportedNoise(prefix) || containsUnsupportedNoise(suffix)
+    }
 
-        for range in sorted {
-            if range.0 > cursor {
-                let segment = String(chars[cursor..<range.0])
-                if !segment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return true
-                }
-            }
-            cursor = max(cursor, range.1 + 1)
-        }
-
-        if cursor < chars.count {
-            let trailing = String(chars[cursor..<chars.count])
-            if !trailing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return true
-            }
-        }
-
-        return false
+    private static func containsUnsupportedNoise(_ text: String) -> Bool {
+        let normalized = text
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```JSON", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
+        return !normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private static func isValidEscape(at index: Int, in chars: [Character]) -> Bool {

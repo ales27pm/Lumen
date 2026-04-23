@@ -35,8 +35,29 @@ struct LumenTests {
         #expect(turn.final == nil)
     }
 
-    @Test func parserRejectsMultipleObjects() async throws {
+    @Test func parserAcceptsMultipleObjectsSelectingLastValidTurn() async throws {
         let raw = #"{"final":"first"}{"final":"second"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "second")
+        #expect(turn.action == nil)
+    }
+
+    @Test func parserAcceptsMultipleObjectsWithFirstMalformedSecondValid() async throws {
+        let raw = #"{"final":bad}{"final":"second"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "second")
+    }
+
+    @Test func parserRejectsMultipleObjectsWithNoiseOutsideJSONRanges() async throws {
+        let raw = #"note {"final":"first"} {"final":"second"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == .noisyOutput)
+    }
+
+    @Test func parserRejectsMultipleObjectsWhenAllAreInvalid() async throws {
+        let raw = #"{"final":bad}{"action":42}"#
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == .multipleJSONObjects)
     }

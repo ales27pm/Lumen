@@ -239,19 +239,63 @@ nonisolated enum AgentTurnParser {
 
         if inString || depth != 0 { return .failure(.incompleteJSON) }
         guard !ranges.isEmpty else { return .failure(.noJSONObject) }
-        guard ranges.count == 1 else { return .failure(.multipleJSONObjects) }
 
-        let onlyRange = ranges[0]
-        let leading = String(chars[0..<onlyRange.0]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let trailing = String(chars[(onlyRange.1 + 1)..<chars.count]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !leading.isEmpty || !trailing.isEmpty { return .failure(.noisyOutput) }
-
-        let jsonStr = String(chars[onlyRange.0...onlyRange.1])
-        guard let data = jsonStr.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return .failure(.invalidJSONObject)
+        let selected: ((Int, Int), [String: Any])?
+        if ranges.count == 1 {
+            let onlyRange = ranges[0]
+            let jsonStr = String(chars[onlyRange.0...onlyRange.1])
+            guard let data = jsonStr.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return .failure(.invalidJSONObject)
+            }
+            selected = (onlyRange, obj)
+        } else {
+            var found: ((Int, Int), [String: Any])?
+            for range in ranges.reversed() {
+                let jsonStr = String(chars[range.0...range.1])
+                guard let data = jsonStr.data(using: .utf8) else { continue }
+                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    found = (range, obj)
+                    break
+                }
+            }
+            guard let found else { return .failure(.multipleJSONObjects) }
+            selected = found
         }
-        return .success(obj)
+
+        guard let (selectedRange, selectedObject) = selected else { return .failure(.invalidJSONObject) }
+        if hasNonWhitespaceOutsideJSONRanges(in: chars, ranges: ranges, selectedRange: selectedRange) {
+            return .failure(.noisyOutput)
+        }
+        return .success(selectedObject)
+    }
+
+    private static func hasNonWhitespaceOutsideJSONRanges(
+        in chars: [Character],
+        ranges: [(Int, Int)],
+        selectedRange _: (Int, Int)
+    ) -> Bool {
+        let sorted = ranges.sorted { lhs, rhs in lhs.0 < rhs.0 }
+        var cursor = 0
+
+        for range in sorted {
+            if range.0 > cursor {
+                let segment = String(chars[cursor..<range.0])
+                if !segment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return true
+                }
+            }
+            cursor = max(cursor, range.1 + 1)
+        }
+
+        if cursor < chars.count {
+            let trailing = String(chars[cursor..<chars.count])
+            if !trailing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+        }
+
+        return false
     }
 
     private static func isValidEscape(at index: Int, in chars: [Character]) -> Bool {

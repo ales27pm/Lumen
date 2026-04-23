@@ -909,7 +909,7 @@ final class AgentService {
     ) {
         let snapshot = AgentNoiseInspector.inspect(raw)
         let trace = AgentParseFailureTrace(
-            id: UUID,
+            id: UUID(),
             createdAt: Date(),
             parseError: parseError.rawValue,
             modelName: "agent-json",

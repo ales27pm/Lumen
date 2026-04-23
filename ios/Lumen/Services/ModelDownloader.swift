@@ -159,7 +159,9 @@ extension ModelDownloader: URLSessionDownloadDelegate {
         let taskId = downloadTask.taskIdentifier
         // Must synchronously move file before this delegate returns (temp file is deleted after)
         let fm = FileManager.default
-        let modelsDir = ModelStorage.modelsDirectoryURL(fileManager: fm)
+        let base = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let modelsDir = base.appendingPathComponent("Models", isDirectory: true)
+        try? fm.createDirectory(at: modelsDir, withIntermediateDirectories: true)
         let staging = modelsDir.appendingPathComponent(".staging-\(UUID().uuidString)")
         try? fm.removeItem(at: staging)
         let movedURL: URL?

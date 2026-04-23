@@ -265,7 +265,7 @@ actor LlamaService {
         }
 
         // Build sampler chain
-        var sparams = llama_sampler_chain_default_params()
+        let sparams = llama_sampler_chain_default_params()
         guard let sampler = llama_sampler_chain_init(sparams) else { throw LlamaError.decodeFailed }
         defer { llama_sampler_free(sampler) }
 

@@ -228,7 +228,11 @@ struct ChatView: View {
                 }
             case .finalDelta(let chunk):
                 finalText += chunk
-                streamingText = finalText
+                if isSchemaPlaceholderPrefix(finalText) {
+                    streamingText = ""
+                } else {
+                    streamingText = finalText
+                }
             case .done(let final, let allSteps):
                 finalText = final.isEmpty ? finalText : final
                 steps = allSteps
@@ -236,6 +240,13 @@ struct ChatView: View {
                 finalText = msg
             }
         }
+
+        finalText = await repairSchemaPlaceholderFinalIfNeeded(
+            finalText,
+            userText: text,
+            memories: memories,
+            attachments: attachments
+        )
 
         let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: steps)
         conversation.messages.append(assistantMsg)
@@ -294,6 +305,124 @@ struct ChatView: View {
         conversation.updatedAt = Date()
         try? modelContext.save()
         appState.isGenerating = false
+    }
+
+    private func repairSchemaPlaceholderFinalIfNeeded(
+        _ finalText: String,
+        userText: String,
+        memories: [String],
+        attachments: [ChatAttachment]
+    ) async -> String {
+        let trimmed = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isSchemaPlaceholderFinal(trimmed) else { return finalText }
+
+        if appState.enabledToolIDs.contains("web.search"), shouldUseWebRepair(for: userText) {
+            let query = cleanedSearchQuery(userText)
+            let result = await WebTools.webSearch(query: query)
+            if !isWeakSearchResult(result) {
+                return result
+            }
+        }
+
+        let request = GenerateRequest(
+            systemPrompt: "Answer the user's request directly in plain language. Do not output JSON. Do not copy schema examples. Do not say 'answer shown to the user'.",
+            history: conversation.sortedMessages.dropLast().suffix(4).map { ($0.messageRole, $0.content) },
+            userMessage: userText,
+            temperature: min(appState.temperature, 0.35),
+            topP: min(appState.topP, 0.85),
+            repetitionPenalty: appState.repetitionPenalty,
+            maxTokens: min(max(appState.maxTokens, 128), 512),
+            modelName: conversation.modelName ?? "agent-placeholder-repair",
+            relevantMemories: memories,
+            attachments: attachments
+        )
+
+        var repaired = ""
+        for await token in await LlamaService.shared.stream(request) {
+            if Task.isCancelled { break }
+            switch token {
+            case .text(let s):
+                repaired += s
+            case .done:
+                break
+            }
+        }
+
+        let clean = repaired.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty || isSchemaPlaceholderFinal(clean) {
+            return "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
+        }
+        return clean
+    }
+
+    private func isSchemaPlaceholderPrefix(_ text: String) -> Bool {
+        let normalized = normalizePlaceholderText(text)
+        let placeholder = "answer shown to the user"
+        return !normalized.isEmpty && placeholder.hasPrefix(normalized)
+    }
+
+    private func isSchemaPlaceholderFinal(_ text: String) -> Bool {
+        let normalized = normalizePlaceholderText(text)
+        let badValues: Set<String> = [
+            "answer shown to the user",
+            "your answer to the user",
+            "short private routing note",
+            "short reasoning",
+            "tool.id",
+            "key",
+            "value"
+        ]
+        return badValues.contains(normalized)
+    }
+
+    private func normalizePlaceholderText(_ text: String) -> String {
+        text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`{}[]"))
+            .lowercased()
+            .replacingOccurrences(of: "\\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func shouldUseWebRepair(for userText: String) -> Bool {
+        let normalized = userText.lowercased()
+        let webMarkers = [
+            "search for",
+            "look up",
+            "research",
+            "web",
+            "internet",
+            "diy",
+            "tutorial",
+            "guide",
+            "how to",
+            "plans",
+            "blueprint",
+            "documentation"
+        ]
+        return webMarkers.contains { normalized.contains($0) }
+    }
+
+    private func cleanedSearchQuery(_ userText: String) -> String {
+        var query = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = ["search for ", "search ", "look up ", "research "]
+        let lower = query.lowercased()
+        for prefix in prefixes where lower.hasPrefix(prefix) {
+            query = String(query.dropFirst(prefix.count))
+            break
+        }
+        return query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isWeakSearchResult(_ result: String) -> Bool {
+        let normalized = result.lowercased()
+        if result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        return normalized.contains("no direct answer")
+            || normalized.contains("no results")
+            || normalized.contains("search failed")
+            || normalized.contains("need a query")
     }
 
     private func ensureChatModelLoaded() async -> Bool {

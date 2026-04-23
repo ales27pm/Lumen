@@ -164,28 +164,46 @@ nonisolated struct SettingsSnapshot: Sendable {
     /// in-memory `UserSettings` instance. Used by background tasks that may
     /// run before or without the main app scene.
     static func loadFromDisk(defaults: UserDefaults = .standard) -> SettingsSnapshot {
+        enum DiskKeys {
+            static let activeChatModelID = "activeChatModelID"
+            static let activeEmbeddingModelID = "activeEmbeddingModelID"
+            static let enabledToolIDs = "enabledToolIDs"
+            static let systemPrompt = "systemPrompt"
+            static let temperature = "temperature"
+            static let topP = "topP"
+            static let repetitionPenalty = "repetitionPenalty"
+            static let contextSize = "contextSize"
+            static let maxTokens = "maxTokens"
+            static let autoMemory = "autoMemory"
+            static let voiceID = "voiceID"
+            static let speakingRate = "speakingRate"
+            static let handsFree = "handsFree"
+            static let maxAgentSteps = "maxAgentSteps"
+            static let agentModeEnabled = "agentModeEnabled"
+        }
+
         let enabled: Set<String>
-        if let saved = defaults.array(forKey: UserSettings.Keys.enabledToolIDs) as? [String] {
+        if let saved = defaults.array(forKey: DiskKeys.enabledToolIDs) as? [String] {
             enabled = Set(saved)
         } else {
             enabled = Set(ToolRegistry.all.map(\.id))
         }
         return SettingsSnapshot(
-            activeChatModelID: defaults.string(forKey: UserSettings.Keys.activeChatModelID),
-            activeEmbeddingModelID: defaults.string(forKey: UserSettings.Keys.activeEmbeddingModelID),
+            activeChatModelID: defaults.string(forKey: DiskKeys.activeChatModelID),
+            activeEmbeddingModelID: defaults.string(forKey: DiskKeys.activeEmbeddingModelID),
             enabledToolIDs: enabled,
-            systemPrompt: defaults.string(forKey: UserSettings.Keys.systemPrompt) ?? Presets.general.prompt,
-            temperature: defaults.object(forKey: UserSettings.Keys.temperature) as? Double ?? 0.7,
-            topP: defaults.object(forKey: UserSettings.Keys.topP) as? Double ?? 0.95,
-            repetitionPenalty: defaults.object(forKey: UserSettings.Keys.repetitionPenalty) as? Double ?? 1.1,
-            contextSize: defaults.object(forKey: UserSettings.Keys.contextSize) as? Int ?? 4096,
-            maxTokens: defaults.object(forKey: UserSettings.Keys.maxTokens) as? Int ?? 512,
-            autoMemory: defaults.object(forKey: UserSettings.Keys.autoMemory) as? Bool ?? true,
-            voiceID: defaults.string(forKey: UserSettings.Keys.voiceID),
-            speakingRate: defaults.object(forKey: UserSettings.Keys.speakingRate) as? Double ?? 0.5,
-            handsFree: defaults.object(forKey: UserSettings.Keys.handsFree) as? Bool ?? false,
-            maxAgentSteps: defaults.object(forKey: UserSettings.Keys.maxAgentSteps) as? Int ?? 6,
-            agentModeEnabled: defaults.object(forKey: UserSettings.Keys.agentModeEnabled) as? Bool ?? true
+            systemPrompt: defaults.string(forKey: DiskKeys.systemPrompt) ?? Presets.general.prompt,
+            temperature: defaults.object(forKey: DiskKeys.temperature) as? Double ?? 0.7,
+            topP: defaults.object(forKey: DiskKeys.topP) as? Double ?? 0.95,
+            repetitionPenalty: defaults.object(forKey: DiskKeys.repetitionPenalty) as? Double ?? 1.1,
+            contextSize: defaults.object(forKey: DiskKeys.contextSize) as? Int ?? 4096,
+            maxTokens: defaults.object(forKey: DiskKeys.maxTokens) as? Int ?? 512,
+            autoMemory: defaults.object(forKey: DiskKeys.autoMemory) as? Bool ?? true,
+            voiceID: defaults.string(forKey: DiskKeys.voiceID),
+            speakingRate: defaults.object(forKey: DiskKeys.speakingRate) as? Double ?? 0.5,
+            handsFree: defaults.object(forKey: DiskKeys.handsFree) as? Bool ?? false,
+            maxAgentSteps: defaults.object(forKey: DiskKeys.maxAgentSteps) as? Int ?? 6,
+            agentModeEnabled: defaults.object(forKey: DiskKeys.agentModeEnabled) as? Bool ?? true
         )
     }
 }

@@ -231,7 +231,7 @@ struct VoiceModeView: View {
             )
 
             var finalText = ""
-            for await event in await AgentService.shared.run(req) {
+            for await event in AgentService.shared.run(req) {
                 if Task.isCancelled { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)

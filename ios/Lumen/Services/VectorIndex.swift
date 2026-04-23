@@ -7,7 +7,7 @@ import Accelerate
 /// Design:
 /// - Embeddings are stored on disk as `[Double]` on the SwiftData models (unchanged for
 ///   backwards compatibility). At first search we load them into a contiguous Float32
-///   matrix laid out row-major so a single `cblas_sgemv` computes every cosine score
+///   matrix laid out row-major so a single `vDSP_mmul` computes every cosine score
 ///   in one BLAS call.
 /// - Embeddings from `LlamaService` are already L2-normalized, so `dot == cosine`.
 ///   We defensively re-normalize on load so stale data can't poison the index.
@@ -97,14 +97,13 @@ final class RAGVectorIndex {
         matrix.withUnsafeBufferPointer { m in
             q.withUnsafeBufferPointer { qp in
                 scores.withUnsafeMutableBufferPointer { sp in
-                    cblas_sgemv(
-                        CblasRowMajor, CblasNoTrans,
-                        Int32(rows), Int32(dim),
-                        1.0,
-                        m.baseAddress, Int32(dim),
-                        qp.baseAddress, 1,
-                        0.0,
-                        sp.baseAddress, 1
+                    vDSP_mmul(
+                        m.baseAddress!, 1,
+                        qp.baseAddress!, 1,
+                        sp.baseAddress!, 1,
+                        vDSP_Length(rows),
+                        1,
+                        vDSP_Length(dim)
                     )
                 }
             }
@@ -228,14 +227,13 @@ final class MemoryVectorIndex {
         matrix.withUnsafeBufferPointer { m in
             q.withUnsafeBufferPointer { qp in
                 scores.withUnsafeMutableBufferPointer { sp in
-                    cblas_sgemv(
-                        CblasRowMajor, CblasNoTrans,
-                        Int32(rows), Int32(dim),
-                        1.0,
-                        m.baseAddress, Int32(dim),
-                        qp.baseAddress, 1,
-                        0.0,
-                        sp.baseAddress, 1
+                    vDSP_mmul(
+                        m.baseAddress!, 1,
+                        qp.baseAddress!, 1,
+                        sp.baseAddress!, 1,
+                        vDSP_Length(rows),
+                        1,
+                        vDSP_Length(dim)
                     )
                 }
             }

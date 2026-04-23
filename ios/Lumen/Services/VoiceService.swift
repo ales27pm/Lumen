@@ -54,7 +54,7 @@ final class VoiceService: NSObject {
 
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
+            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             lastError = "Audio session error: \(error.localizedDescription)"
@@ -190,7 +190,7 @@ final class VoiceService: NSObject {
 extension VoiceService: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            if !synthesizer.isSpeaking {
+            if !self.synthesizer.isSpeaking {
                 self.isSpeaking = false
                 let cb = self.onSpeechEnd
                 self.onSpeechEnd = nil

@@ -41,7 +41,11 @@ final class ToolExecutor {
         case "maps.directions":
             return LocationTools.openDirections(destination: arguments["destination"] ?? "")
         case "maps.search":
-            return await LocationTools.searchNearby(query: arguments["query"] ?? "")
+            let query = arguments["query"] ?? ""
+            if ToolRouteGuard.shouldUseWebSearchInsteadOfNearbySearch(query: query) {
+                return await WebTools.webSearch(query: query)
+            }
+            return await LocationTools.searchNearby(query: query)
 
         // Photos / Camera
         case "photos.search":
@@ -114,5 +118,64 @@ final class ToolExecutor {
         default:
             return "Unknown tool: \(toolID)"
         }
+    }
+}
+
+nonisolated enum ToolRouteGuard {
+    static func shouldUseWebSearchInsteadOfNearbySearch(query: String) -> Bool {
+        let normalized = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return false }
+
+        let localIntentMarkers = [
+            "near me",
+            "nearby",
+            "closest",
+            "around me",
+            "around here",
+            "in my area",
+            "directions",
+            "route to",
+            "open maps",
+            "address of",
+            "store near",
+            "restaurant near",
+            "coffee near",
+            "gas station",
+            "pharmacy near"
+        ]
+        if localIntentMarkers.contains(where: { normalized.contains($0) }) {
+            return false
+        }
+
+        let webIntentMarkers = [
+            "diy",
+            "how to",
+            "tutorial",
+            "guide",
+            "research",
+            "internet",
+            "web",
+            "article",
+            "manual",
+            "documentation",
+            "plans",
+            "blueprint",
+            "build",
+            "underground shelter",
+            "shelter diy"
+        ]
+        if webIntentMarkers.contains(where: { normalized.contains($0) }) {
+            return true
+        }
+
+        // Generic "search for ..." requests are knowledge/web searches unless
+        // the wording explicitly asks for local places.
+        if normalized.hasPrefix("search ") || normalized.hasPrefix("search for ") || normalized.hasPrefix("look up ") {
+            return true
+        }
+
+        return false
     }
 }

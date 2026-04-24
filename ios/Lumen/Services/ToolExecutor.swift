@@ -11,7 +11,9 @@ final class ToolExecutor {
     private init() {}
 
     func execute(_ toolID: String, arguments: [String: String]) async -> String {
-        switch toolID {
+        let id = ToolRouteGuard.canonicalToolID(toolID)
+
+        switch id {
         // Calendar / Reminders
         case "calendar.create":
             return await CalendarTools.createEvent(
@@ -35,9 +37,11 @@ final class ToolExecutor {
         case "phone.call":
             return await ContactsTools.call(number: arguments["number"] ?? "")
 
-        // Location / Maps
+        // Location / Maps / Weather
         case "location.current":
             return await LocationTools.currentLocation()
+        case "weather":
+            return await WeatherTools.currentWeather(location: arguments["location"] ?? arguments["city"] ?? arguments["query"])
         case "maps.directions":
             return LocationTools.openDirections(destination: arguments["destination"] ?? "")
         case "maps.search":
@@ -116,12 +120,28 @@ final class ToolExecutor {
             return await AlarmTools.cancel(id: arguments["id"] ?? arguments["title"] ?? "")
 
         default:
-            return "Unknown tool: \(toolID)"
+            return "Unknown tool: \(toolID). Available weather/search tools are: weather, web.search, maps.search, location.current."
         }
     }
 }
 
 nonisolated enum ToolRouteGuard {
+    static func canonicalToolID(_ raw: String) -> String {
+        let id = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch id {
+        case "weather", "weather.current", "current.weather", "forecast.current", "weather.get", "get_weather":
+            return "weather"
+        case "search", "internet.search", "web", "web_search", "browser.search":
+            return "web.search"
+        case "maps", "map.search", "nearby.search", "local.search", "places.search":
+            return "maps.search"
+        case "location", "gps", "current.location", "location.get":
+            return "location.current"
+        default:
+            return id
+        }
+    }
+
     static func shouldUseWebSearchInsteadOfNearbySearch(query: String) -> Bool {
         let normalized = query
             .trimmingCharacters(in: .whitespacesAndNewlines)

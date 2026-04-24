@@ -123,6 +123,13 @@ enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             self = .contacts
         case "NSLocationWhenInUseUsageDescription":
             self = .location
+        case "NSLocationAlwaysAndWhenInUseUsageDescription",
+            "NSLocationAlwaysUsageDescription":
+            self = .location
+        case "NSMicrophoneUsageDescription":
+            self = .microphone
+        case "NSSpeechRecognitionUsageDescription":
+            self = .speech
         case "NSCameraUsageDescription":
             self = .camera
         case "NSPhotoLibraryUsageDescription":

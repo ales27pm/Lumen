@@ -7,6 +7,10 @@ struct MessageBubble: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var didBookmark: Bool = false
+    @State private var webPreview: WebPreviewItem?
+    @State private var mapPreview: MapPreviewItem?
+    @State private var imagePreview: ImagePreviewItem?
+    @State private var videoPreview: VideoPreviewItem?
 
     static func streaming(text: String) -> some View {
         let fake = ChatMessage(role: .assistant, content: text)
@@ -51,7 +55,45 @@ struct MessageBubble: View {
                     .foregroundStyle(Theme.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
                 if streamingOverride == nil {
+                    if let webURL = firstWebURL(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "globe",
+                            title: "Open Web Page",
+                            subtitle: webURL.host() ?? webURL.absoluteString
+                        ) {
+                            webPreview = WebPreviewItem(url: webURL)
+                        }
+                    }
+                    if let mapQuery = firstMapQuery(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "map",
+                            title: "Open Map",
+                            subtitle: mapQuery
+                        ) {
+                            mapPreview = MapPreviewItem(query: mapQuery)
+                        }
+                    }
+                    if let imageURL = firstImageURL(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "photo",
+                            title: "Open Image",
+                            subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent
+                        ) {
+                            imagePreview = ImagePreviewItem(url: imageURL)
+                        }
+                    }
+                    if let videoURL = firstVideoURL(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "play.rectangle",
+                            title: "Open Video",
+                            subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent
+                        ) {
+                            videoPreview = VideoPreviewItem(url: videoURL)
+                        }
+                    }
+
                     HStack(spacing: 10) {
                         if message.wasStopped {
                             HStack(spacing: 4) {
@@ -78,6 +120,88 @@ struct MessageBubble: View {
             }
             Spacer(minLength: 32)
         }
+        .sheet(item: $webPreview) { item in
+            EmbeddedWebBrowserSheet(url: item.url)
+        }
+        .sheet(item: $mapPreview) { item in
+            EmbeddedMapSheet(query: item.query)
+        }
+        .sheet(item: $imagePreview) { item in
+            EmbeddedImageSheet(url: item.url)
+        }
+        .sheet(item: $videoPreview) { item in
+            EmbeddedVideoSheet(url: item.url)
+        }
+    }
+
+    private func firstWebURL(from text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let ns = text as NSString
+        let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        for match in matches {
+            guard let url = match.url else { continue }
+            let host = url.host()?.lowercased() ?? ""
+            if host.contains("maps.apple.com") { continue }
+            return url
+        }
+        return nil
+    }
+
+    private func firstMapQuery(from text: String) -> String? {
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let ns = text as NSString
+            let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+            for match in matches {
+                guard let url = match.url, (url.host()?.lowercased().contains("maps.apple.com") == true) else { continue }
+                if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                    if let daddr = comps.queryItems?.first(where: { $0.name == "daddr" })?.value, !daddr.isEmpty {
+                        return daddr
+                    }
+                    if let q = comps.queryItems?.first(where: { $0.name == "q" })?.value, !q.isEmpty {
+                        return q
+                    }
+                }
+            }
+        }
+
+        let prefix = "Opening Maps with directions to "
+        if text.hasPrefix(prefix) {
+            let value = text.dropFirst(prefix.count).trimmingCharacters(in: CharacterSet(charactersIn: ". \n"))
+            if !value.isEmpty { return value }
+        }
+        return nil
+    }
+
+    private func firstImageURL(from text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let ns = text as NSString
+        let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let imageExt: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp"]
+        for match in matches {
+            guard let url = match.url else { continue }
+            let ext = url.pathExtension.lowercased()
+            if imageExt.contains(ext) { return url }
+        }
+        return nil
+    }
+
+    private func firstVideoURL(from text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let ns = text as NSString
+        let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let videoExt: Set<String> = ["mp4", "mov", "m4v", "webm"]
+        for match in matches {
+            guard let url = match.url else { continue }
+            let ext = url.pathExtension.lowercased()
+            if videoExt.contains(ext) { return url }
+        }
+        return nil
     }
 
     private func bookmark() {
@@ -91,6 +215,60 @@ struct MessageBubble: View {
         Task { @MainActor in
             await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)
         }
+    }
+}
+
+private struct WebPreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct MapPreviewItem: Identifiable {
+    let id = UUID()
+    let query: String
+}
+
+private struct ImagePreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct VideoPreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct EmbeddedContentButton: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(8)
+            .background(Theme.surfaceHigh)
+            .clipShape(.rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
     }
 }
 

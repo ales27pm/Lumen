@@ -70,9 +70,20 @@ final class ComposeController: NSObject {
     }
 
     private func fallbackSMS(recipients: [String], body: String) async -> String {
-        let to = recipients.joined(separator: ",")
-        let encBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let url = URL(string: "sms:\(to)&body=\(encBody)") ?? URL(string: "sms:\(to)") else {
+        let to = recipients
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ",")
+
+        var components = URLComponents()
+        components.scheme = "sms"
+        components.path = to
+
+        if !body.isEmpty {
+            components.queryItems = [URLQueryItem(name: "body", value: body)]
+        }
+
+        guard let url = components.url ?? URL(string: "sms:\(to)") else {
             return "This device can't send messages."
         }
         let opened = await UIApplication.shared.open(url)

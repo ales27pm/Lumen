@@ -76,10 +76,14 @@ actor LlamaService {
 
     // MARK: - Model loading
 
-    func loadChatModel(path: String, contextSize: Int = 4096) throws {
+    func loadChatModel(path: String, contextSize: Int = 4096) async throws {
         ensureBackend()
         if chatModelPath == path, chatModel != nil { return }
+        let hadPrevious = chatModel != nil || chatContext != nil || chatVocab != nil
         unloadChat()
+        if hadPrevious {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
 
         var mparams = llama_model_default_params()
         mparams.n_gpu_layers = 99
@@ -104,10 +108,14 @@ actor LlamaService {
         chatModelPath = path
     }
 
-    func loadEmbeddingModel(path: String) throws {
+    func loadEmbeddingModel(path: String) async throws {
         ensureBackend()
         if embedModelPath == path, embedModel != nil { return }
+        let hadPrevious = embedModel != nil || embedContext != nil || embedVocab != nil
         unloadEmbed()
+        if hadPrevious {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
 
         var mparams = llama_model_default_params()
         mparams.n_gpu_layers = 99
@@ -151,21 +159,21 @@ actor LlamaService {
         embedModelPath = nil
     }
 
-    var isChatLoaded: Bool { chatModel != nil }
-    var isEmbedLoaded: Bool { embedModel != nil }
+    var isChatLoaded: Bool { chatModel != nil && chatContext != nil && chatVocab != nil }
+    var isEmbedLoaded: Bool { embedModel != nil && embedContext != nil && embedVocab != nil }
     var loadedChatPath: String? { chatModelPath }
     var loadedEmbedPath: String? { embedModelPath }
 
-    func reloadChat(contextSize: Int = 4096) throws {
+    func reloadChat(contextSize: Int = 4096) async throws {
         guard let path = chatModelPath else { throw LlamaError.noModelLoaded }
         unloadChat()
-        try loadChatModel(path: path, contextSize: contextSize)
+        try await loadChatModel(path: path, contextSize: contextSize)
     }
 
-    func reloadEmbed() throws {
+    func reloadEmbed() async throws {
         guard let path = embedModelPath else { throw LlamaError.noModelLoaded }
         unloadEmbed()
-        try loadEmbeddingModel(path: path)
+        try await loadEmbeddingModel(path: path)
     }
 
     // MARK: - Streaming generation
@@ -260,7 +268,8 @@ actor LlamaService {
             if isLast {
                 batch.logits[chunkSize - 1] = 1
             }
-            if llama_decode(context, batch) != 0 { throw LlamaError.decodeFailed }
+            let decodeStatus = autoreleasepool { llama_decode(context, batch) }
+            if decodeStatus != 0 { throw LlamaError.decodeFailed }
             idx += chunkSize
         }
 
@@ -303,7 +312,8 @@ actor LlamaService {
             batch.logits[0] = 1
             pos += 1
 
-            if llama_decode(context, batch) != 0 { throw LlamaError.decodeFailed }
+            let decodeStatus = autoreleasepool { llama_decode(context, batch) }
+            if decodeStatus != 0 { throw LlamaError.decodeFailed }
 
             await Task.yield()
         }
@@ -433,7 +443,8 @@ actor LlamaService {
             if let seqIds = batch.seq_id, let seqId = seqIds[i] { seqId[0] = 0 }
             batch.logits[i] = 1
         }
-        if llama_decode(context, batch) != 0 { throw LlamaError.decodeFailed }
+        let decodeStatus = autoreleasepool { llama_decode(context, batch) }
+        if decodeStatus != 0 { throw LlamaError.decodeFailed }
 
         let nEmbd = Int(llama_model_n_embd(embedModel!))
         guard nEmbd > 0 else { throw LlamaError.decodeFailed }

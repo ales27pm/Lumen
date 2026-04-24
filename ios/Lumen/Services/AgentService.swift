@@ -185,13 +185,56 @@ nonisolated enum AgentTurnParser {
     private static func parseArgs(from obj: [String: Any]) -> [String: String]? {
         let argsValue = obj["args"] ?? obj["arguments"] ?? obj["input"]
         guard let argsValue else { return [:] }
-        guard let rawArgs = argsValue as? [String: Any] else { return nil }
+        if let rawArgs = argsValue as? [String: Any] {
+            return normalizeArgs(rawArgs)
+        }
+        if let inputText = argsValue as? String {
+            let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return [:] }
+            if let data = trimmed.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data),
+               let rawArgs = json as? [String: Any] {
+                return normalizeArgs(rawArgs)
+            }
+            return ["query": trimmed]
+        }
+        return nil
+    }
+
+    private static func normalizeArgs(_ rawArgs: [String: Any]) -> [String: String]? {
         var args: [String: String] = [:]
         for (k, v) in rawArgs {
-            guard let s = v as? String else { return nil }
-            args[k] = s
+            guard let normalized = stringifyArgValue(v) else { return nil }
+            args[k] = normalized
         }
         return args
+    }
+
+    private static func stringifyArgValue(_ value: Any) -> String? {
+        switch value {
+        case let text as String:
+            return text
+        case let number as NSNumber:
+            if number.isBoolLike {
+                return number.boolValue ? "true" : "false"
+            }
+            return number.stringValue
+        case let array as [Any]:
+            return jsonString(array)
+        case let dictionary as [String: Any]:
+            return jsonString(dictionary)
+        default:
+            return nil
+        }
+    }
+
+    private static func jsonString(_ value: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value),
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return text
     }
 
     private static func extractSingleJSONObject(from text: String) -> Result<[String: Any], AgentTurnParseError> {
@@ -315,6 +358,12 @@ nonisolated enum AgentTurnParser {
 
     private static func invalid(_ error: AgentTurnParseError) -> AgentTurn {
         AgentTurn(thought: nil, action: nil, final: nil, parseError: error)
+    }
+}
+
+private extension NSNumber {
+    var isBoolLike: Bool {
+        CFGetTypeID(self) == CFBooleanGetTypeID()
     }
 }
 
@@ -883,9 +932,9 @@ final class AgentService {
         min(max(userTopP, 0.1), 0.85)
     }
 
-    private func diagnosticReflection(for parseError: AgentTurnParseError, raw: String) -> String {
+    private func diagnosticReflection(for _: AgentTurnParseError, raw: String) -> String {
         let noise = AgentNoiseInspector.inspect(raw)
-        var parts = ["Invalid structured output (\(parseError.rawValue)); repaired into a plain answer."]
+        var parts = ["I hit an internal formatting issue and repaired it into a plain answer."]
         if let prefix = noise.prefixNoise, !prefix.isEmpty {
             parts.append("Prefix noise: \(String(prefix.prefix(120)))")
         }

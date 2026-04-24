@@ -26,6 +26,19 @@ nonisolated struct ToolDefinition: Identifiable, Hashable, Sendable {
         default: .cyan
         }
     }
+
+    var permissionKind: PermissionKind? {
+        if let key = permissionKey, let kind = PermissionKind(usageDescriptionKey: key) {
+            return kind
+        }
+
+        switch id {
+        case "trigger.create", "trigger.list", "trigger.cancel":
+            return .notifications
+        default:
+            return nil
+        }
+    }
 }
 
 nonisolated enum ToolCategory: String, CaseIterable, Sendable {

@@ -10,6 +10,9 @@ import Photos
 import CoreMotion
 import HealthKit
 import UserNotifications
+#if canImport(AlarmKit)
+import AlarmKit
+#endif
 
 enum PermissionState: Sendable, Equatable {
     case notDetermined
@@ -55,7 +58,7 @@ enum PermissionState: Sendable, Equatable {
 }
 
 enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
-    case calendar, reminders, contacts, location, microphone, speech, camera, photos, motion, health, notifications
+    case calendar, reminders, contacts, location, microphone, speech, camera, photos, motion, health, notifications, alarms
 
     var id: String { rawValue }
 
@@ -72,6 +75,7 @@ enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
         case .motion: return "Motion & Fitness"
         case .health: return "Health"
         case .notifications: return "Notifications"
+        case .alarms: return "Alarms"
         }
     }
 
@@ -88,6 +92,7 @@ enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
         case .motion: return "figure.walk.motion"
         case .health: return "heart.text.square"
         case .notifications: return "bell.badge"
+        case .alarms: return "alarm.waves.left.and.right"
         }
     }
 
@@ -104,6 +109,39 @@ enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
         case .motion: return "Summarize steps and activity."
         case .health: return "Read activity and sleep metrics."
         case .notifications: return "Deliver trigger results in the background."
+        case .alarms: return "Allow scheduling and managing AlarmKit alarms."
+        }
+    }
+
+    init?(usageDescriptionKey: String) {
+        switch usageDescriptionKey {
+        case "NSCalendarsFullAccessUsageDescription":
+            self = .calendar
+        case "NSRemindersFullAccessUsageDescription":
+            self = .reminders
+        case "NSContactsUsageDescription":
+            self = .contacts
+        case "NSLocationWhenInUseUsageDescription":
+            self = .location
+        case "NSLocationAlwaysAndWhenInUseUsageDescription",
+            "NSLocationAlwaysUsageDescription":
+            self = .location
+        case "NSMicrophoneUsageDescription":
+            self = .microphone
+        case "NSSpeechRecognitionUsageDescription":
+            self = .speech
+        case "NSCameraUsageDescription":
+            self = .camera
+        case "NSPhotoLibraryUsageDescription":
+            self = .photos
+        case "NSMotionUsageDescription":
+            self = .motion
+        case "NSHealthShareUsageDescription":
+            self = .health
+        case "NSAlarmKitUsageDescription":
+            self = .alarms
+        default:
+            return nil
         }
     }
 }
@@ -166,6 +204,8 @@ final class PermissionsCenter {
             return asked ? .granted : .notDetermined
         case .notifications:
             return states[.notifications] ?? .notDetermined
+        case .alarms:
+            return currentAlarmState()
         }
     }
 
@@ -221,6 +261,8 @@ final class PermissionsCenter {
             if let granted = states[.notifications] {
                 TriggerScheduler.shared.lastPermissionGranted = (granted == .granted)
             }
+        case .alarms:
+            _ = await AlarmTools.requestAuthorization()
         }
 
         refreshAll()
@@ -364,6 +406,24 @@ final class PermissionsCenter {
         case .authorized: return .granted
         @unknown default: return .notDetermined
         }
+    }
+
+    private func currentAlarmState() -> PermissionState {
+#if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            switch AlarmManager.shared.authorizationState {
+            case .notDetermined:
+                return .notDetermined
+            case .authorized:
+                return .granted
+            case .denied:
+                return .denied
+            @unknown default:
+                return .notDetermined
+            }
+        }
+#endif
+        return .unavailable
     }
 }
 

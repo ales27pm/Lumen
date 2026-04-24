@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import MapKit
+import AVKit
 
 struct EmbeddedWebBrowserSheet: View {
     let url: URL
@@ -105,4 +106,78 @@ struct EmbeddedMapSheet: View {
 private struct SearchMarker {
     let name: String
     let coordinate: CLLocationCoordinate2D
+}
+
+
+struct EmbeddedImageSheet: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                ScrollView([.horizontal, .vertical]) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView("Loading image…")
+                                .padding(.top, 40)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .padding(12)
+                        case .failure:
+                            VStack(spacing: 8) {
+                                Image(systemName: "photo.badge.exclamationmark")
+                                    .font(.title2)
+                                    .foregroundStyle(Theme.textTertiary)
+                                Text("Couldn't load image.")
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .padding(.top, 40)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Image")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct EmbeddedVideoSheet: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var player = AVPlayer()
+
+    var body: some View {
+        NavigationStack {
+            VideoPlayer(player: player)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle("Video")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+                .onAppear {
+                    player.replaceCurrentItem(with: AVPlayerItem(url: url))
+                    player.play()
+                }
+                .onDisappear {
+                    player.pause()
+                    player.replaceCurrentItem(with: nil)
+                }
+        }
+    }
 }

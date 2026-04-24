@@ -9,6 +9,8 @@ struct MessageBubble: View {
     @State private var didBookmark: Bool = false
     @State private var webPreview: WebPreviewItem?
     @State private var mapPreview: MapPreviewItem?
+    @State private var imagePreview: ImagePreviewItem?
+    @State private var videoPreview: VideoPreviewItem?
 
     static func streaming(text: String) -> some View {
         let fake = ChatMessage(role: .assistant, content: text)
@@ -73,6 +75,24 @@ struct MessageBubble: View {
                             mapPreview = MapPreviewItem(query: mapQuery)
                         }
                     }
+                    if let imageURL = firstImageURL(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "photo",
+                            title: "Open Image",
+                            subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent
+                        ) {
+                            imagePreview = ImagePreviewItem(url: imageURL)
+                        }
+                    }
+                    if let videoURL = firstVideoURL(from: message.content) {
+                        EmbeddedContentButton(
+                            icon: "play.rectangle",
+                            title: "Open Video",
+                            subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent
+                        ) {
+                            videoPreview = VideoPreviewItem(url: videoURL)
+                        }
+                    }
 
                     HStack(spacing: 10) {
                         if message.wasStopped {
@@ -105,6 +125,12 @@ struct MessageBubble: View {
         }
         .sheet(item: $mapPreview) { item in
             EmbeddedMapSheet(query: item.query)
+        }
+        .sheet(item: $imagePreview) { item in
+            EmbeddedImageSheet(url: item.url)
+        }
+        .sheet(item: $videoPreview) { item in
+            EmbeddedVideoSheet(url: item.url)
         }
     }
 
@@ -148,6 +174,36 @@ struct MessageBubble: View {
         return nil
     }
 
+    private func firstImageURL(from text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let ns = text as NSString
+        let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let imageExt: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp"]
+        for match in matches {
+            guard let url = match.url else { continue }
+            let ext = url.pathExtension.lowercased()
+            if imageExt.contains(ext) { return url }
+        }
+        return nil
+    }
+
+    private func firstVideoURL(from text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let ns = text as NSString
+        let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let videoExt: Set<String> = ["mp4", "mov", "m4v", "webm"]
+        for match in matches {
+            guard let url = match.url else { continue }
+            let ext = url.pathExtension.lowercased()
+            if videoExt.contains(ext) { return url }
+        }
+        return nil
+    }
+
     private func bookmark() {
         guard !didBookmark else { return }
         let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -170,6 +226,16 @@ private struct WebPreviewItem: Identifiable {
 private struct MapPreviewItem: Identifiable {
     let id = UUID()
     let query: String
+}
+
+private struct ImagePreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct VideoPreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 private struct EmbeddedContentButton: View {

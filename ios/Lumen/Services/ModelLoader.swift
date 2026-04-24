@@ -20,10 +20,20 @@ enum ModelLoader {
 
     @discardableResult
     static func ensureChatLoaded(appState: AppState, stored: [StoredModel]) async -> Bool {
-        if await LlamaService.shared.isChatLoaded { return true }
+        let preferredID = appState.activeChatModelID
+        if let preferredID,
+           let preferred = stored.first(where: { $0.id.uuidString == preferredID && $0.modelRole == .chat }) {
+            let resolvedPath = ModelStorage.resolvedModelURL(from: preferred.localPath, fileName: preferred.fileName).path
+            if await LlamaService.shared.isChatLoaded,
+               await LlamaService.shared.loadedChatPath == resolvedPath {
+                return true
+            }
+        } else if await LlamaService.shared.isChatLoaded {
+            return true
+        }
 
         let candidates: [StoredModel] = candidateList(
-            preferredID: appState.activeChatModelID,
+            preferredID: preferredID,
             role: .chat,
             stored: stored
         )
@@ -37,11 +47,12 @@ enum ModelLoader {
                 }
                 return true
             } catch {
-                // Fallback: retry once with a smaller context if init failed
                 if case LlamaError.contextInitFailed = error {
                     do {
                         try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
-                        appState.activeChatModelID = candidate.id.uuidString
+                        if appState.activeChatModelID != candidate.id.uuidString {
+                            appState.activeChatModelID = candidate.id.uuidString
+                        }
                         return true
                     } catch {
                         continue
@@ -55,10 +66,20 @@ enum ModelLoader {
 
     @discardableResult
     static func ensureEmbedLoaded(appState: AppState, stored: [StoredModel]) async -> Bool {
-        if await LlamaService.shared.isEmbedLoaded { return true }
+        let preferredID = appState.activeEmbeddingModelID
+        if let preferredID,
+           let preferred = stored.first(where: { $0.id.uuidString == preferredID && $0.modelRole == .embedding }) {
+            let resolvedPath = ModelStorage.resolvedModelURL(from: preferred.localPath, fileName: preferred.fileName).path
+            if await LlamaService.shared.isEmbedLoaded,
+               await LlamaService.shared.loadedEmbedPath == resolvedPath {
+                return true
+            }
+        } else if await LlamaService.shared.isEmbedLoaded {
+            return true
+        }
 
         let candidates: [StoredModel] = candidateList(
-            preferredID: appState.activeEmbeddingModelID,
+            preferredID: preferredID,
             role: .embedding,
             stored: stored
         )

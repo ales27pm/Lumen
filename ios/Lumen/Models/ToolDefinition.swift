@@ -48,6 +48,7 @@ nonisolated enum ToolRegistry {
         ToolDefinition(id: "mail.draft", name: "Draft Email", category: .communication, description: "Compose an email draft. Args: to or recipient or email, subject, body or message or text.", icon: "envelope.fill", tint: "indigo", requiresApproval: true, permissionKey: nil),
         ToolDefinition(id: "phone.call", name: "Start Call", category: .communication, description: "Open the phone dialer for a number. Args: number. Never use for general lookup.", icon: "phone.fill", tint: "green", requiresApproval: true, permissionKey: nil),
         ToolDefinition(id: "location.current", name: "Current Location", category: .location, description: "Get the user's current GPS location. Args: none. Use before nearby/local map searches when location context is needed.", icon: "location.fill", tint: "teal", requiresApproval: false, permissionKey: "NSLocationWhenInUseUsageDescription"),
+        ToolDefinition(id: "weather", name: "Current Weather", category: .location, description: "Get current weather using GPS or a city. Args: optional location or city. Use when the user asks weather, temperature, rain, snow, wind, forecast now, or conditions.", icon: "cloud.sun.fill", tint: "blue", requiresApproval: false, permissionKey: "NSLocationWhenInUseUsageDescription"),
         ToolDefinition(id: "maps.directions", name: "Get Directions", category: .location, description: "Open Apple Maps directions to a real destination. Args: destination. Use only for navigation/route requests.", icon: "map.fill", tint: "teal", requiresApproval: false, permissionKey: nil),
         ToolDefinition(id: "maps.search", name: "Search Nearby", category: .location, description: "Find nearby/local places in Apple Maps. Args: query. Use only for local places like coffee near me, pharmacy nearby, closest hardware store, addresses, or directions. Do not use for DIY, tutorials, research, articles, or general web search.", icon: "mappin.and.ellipse", tint: "teal", requiresApproval: false, permissionKey: "NSLocationWhenInUseUsageDescription"),
         ToolDefinition(id: "photos.search", name: "Search Photos", category: .media, description: "Search the user's photo library by date/category terms. Args: query. Not for web image search.", icon: "photo.on.rectangle.angled", tint: "purple", requiresApproval: false, permissionKey: "NSPhotoLibraryUsageDescription"),
@@ -77,5 +78,8 @@ nonisolated enum ToolRegistry {
         ToolDefinition(id: "alarm.cancel", name: "Cancel Alarm", category: .productivity, description: "Cancel a scheduled alarm. Args: id UUID or title fallback.", icon: "alarm", tint: "red", requiresApproval: true, permissionKey: "NSAlarmKitUsageDescription"),
     ]
 
-    static func find(id: String) -> ToolDefinition? { all.first { $0.id == id } }
+    static func find(id: String) -> ToolDefinition? {
+        let canonical = ToolRouteGuard.canonicalToolID(id)
+        return all.first { $0.id == canonical }
+    }
 }

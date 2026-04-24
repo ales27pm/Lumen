@@ -28,12 +28,13 @@ enum ContactsTools {
     }
 
     static func call(number: String) async -> String {
-        let trimmed = number.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let url = URL(string: "tel://\(trimmed)") else {
+        let trimmed = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(of: "[^0-9+]", with: "", options: .regularExpression)
+        guard !normalized.isEmpty, let url = URL(string: "tel://\(normalized)") else {
             return "No phone number provided."
         }
         let ok = await UIApplication.shared.open(url)
-        return ok ? "Calling \(trimmed)…" : "Couldn't start call to \(trimmed)."
+        return ok ? "Calling \(normalized)…" : "Couldn't start call to \(normalized)."
     }
 
     static func composeMessage(arguments: [String: String]) async -> String {

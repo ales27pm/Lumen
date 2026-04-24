@@ -3,7 +3,7 @@ import SwiftUI
 struct ToolsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
-    @State private var permissions = PermissionsCenter.shared
+    private let permissions = PermissionsCenter.shared
 
     var body: some View {
         NavigationStack {
@@ -89,45 +89,7 @@ struct ToolsView: View {
     }
 
     private func permissionState(for tool: ToolDefinition) -> PermissionState? {
-        let kind: PermissionKind?
-        switch tool.id {
-        case "calendar.create", "calendar.list":
-            kind = .calendar
-        case "reminders.create", "reminders.list":
-            kind = .reminders
-        case "contacts.search":
-            kind = .contacts
-        case "location.current", "weather", "maps.search":
-            kind = .location
-        case "photos.search", "rag.index_photos":
-            kind = .photos
-        case "camera.capture":
-            kind = .camera
-        case "health.summary":
-            kind = .health
-        case "motion.activity":
-            kind = .motion
-        case "trigger.create", "trigger.list", "trigger.cancel":
-            kind = .notifications
-        case "alarm.authorization_status",
-            "alarm.request_authorization",
-            "alarm.schedule",
-            "alarm.countdown",
-            "alarm.list",
-            "alarm.pause",
-            "alarm.resume",
-            "alarm.stop",
-            "alarm.snooze",
-            "alarm.cancel":
-            kind = .alarms
-        default:
-            if let key = tool.permissionKey {
-                kind = PermissionKind(usageDescriptionKey: key)
-            } else {
-                kind = nil
-            }
-        }
-        guard let kind else { return nil }
+        guard let kind = tool.permissionKind else { return nil }
         return permissions.state(kind)
     }
 }

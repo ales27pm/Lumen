@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ToolsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var permissions = PermissionsCenter.shared
 
     var body: some View {
         NavigationStack {
@@ -20,7 +22,8 @@ struct ToolsView: View {
                                     let tools = ToolRegistry.all.filter { $0.category == category }
                                     ForEach(Array(tools.enumerated()), id: \.element.id) { idx, tool in
                                         ToolToggleRow(tool: tool,
-                                                      isEnabled: appState.enabledToolIDs.contains(tool.id)) {
+                                                      isEnabled: appState.enabledToolIDs.contains(tool.id),
+                                                      permissionState: permissionState(for: tool)) {
                                             appState.toggleTool(tool.id)
                                             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                                         }
@@ -44,6 +47,21 @@ struct ToolsView: View {
                 }
             }
             .navigationTitle("Tools")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        PermissionsView()
+                    } label: {
+                        Image(systemName: "hand.raised")
+                    }
+                }
+            }
+            .onAppear { permissions.refreshAll() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    permissions.refreshAll()
+                }
+            }
         }
     }
 
@@ -69,11 +87,55 @@ struct ToolsView: View {
                 .strokeBorder(Theme.border, lineWidth: 1)
         }
     }
+
+    private func permissionState(for tool: ToolDefinition) -> PermissionState? {
+        let kind: PermissionKind?
+        switch tool.id {
+        case "calendar.create", "calendar.list":
+            kind = .calendar
+        case "reminders.create", "reminders.list":
+            kind = .reminders
+        case "contacts.search":
+            kind = .contacts
+        case "location.current", "weather", "maps.search":
+            kind = .location
+        case "photos.search", "rag.index_photos":
+            kind = .photos
+        case "camera.capture":
+            kind = .camera
+        case "health.summary":
+            kind = .health
+        case "motion.activity":
+            kind = .motion
+        case "trigger.create", "trigger.list", "trigger.cancel":
+            kind = .notifications
+        case "alarm.authorization_status",
+            "alarm.request_authorization",
+            "alarm.schedule",
+            "alarm.countdown",
+            "alarm.list",
+            "alarm.pause",
+            "alarm.resume",
+            "alarm.stop",
+            "alarm.snooze",
+            "alarm.cancel":
+            kind = .alarms
+        default:
+            if let key = tool.permissionKey {
+                kind = PermissionKind(usageDescriptionKey: key)
+            } else {
+                kind = nil
+            }
+        }
+        guard let kind else { return nil }
+        return permissions.state(kind)
+    }
 }
 
 struct ToolToggleRow: View {
     let tool: ToolDefinition
     let isEnabled: Bool
+    let permissionState: PermissionState?
     var onToggle: () -> Void
 
     var body: some View {
@@ -92,6 +154,16 @@ struct ToolToggleRow: View {
                 }
                 Text(tool.description).font(.caption).foregroundStyle(Theme.textSecondary)
                     .lineLimit(2)
+                if let state = permissionState {
+                    HStack(spacing: 4) {
+                        Image(systemName: state.systemImage)
+                            .font(.caption2)
+                            .foregroundStyle(Color(state.tint))
+                        Text(state.label)
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
             }
             Spacer()
             Toggle("", isOn: Binding(get: { isEnabled }, set: { _ in onToggle() }))

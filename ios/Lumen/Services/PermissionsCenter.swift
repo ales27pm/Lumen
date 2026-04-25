@@ -57,7 +57,7 @@ enum PermissionState: Sendable, Equatable {
     }
 }
 
-enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
     case calendar, reminders, contacts, location, microphone, speech, camera, photos, motion, health, notifications, alarms
 
     var id: String { rawValue }

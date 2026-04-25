@@ -1,11 +1,66 @@
 import Foundation
 import llama   // exposes the C API via `llama.h`
+import Darwin
 
 private typealias LlamaModelRef = OpaquePointer
 private typealias LlamaContextRef = OpaquePointer
 private typealias LlamaSamplerRef = OpaquePointer
 private typealias LlamaVocabRef = OpaquePointer
 private typealias LlamaToken = Int32
+
+private nonisolated enum LlamaSymbolCompat {
+    private typealias BackendInitFn = @convention(c) () -> Void
+    private typealias BackendFreeFn = @convention(c) () -> Void
+    private typealias ModelDefaultParamsFn = @convention(c) () -> llama_model_params
+    private typealias ContextDefaultParamsFn = @convention(c) () -> llama_context_params
+    private typealias ModelLoadFromFileFn = @convention(c) (UnsafePointer<CChar>, llama_model_params) -> OpaquePointer?
+    private typealias ModelFreeFn = @convention(c) (OpaquePointer?) -> Void
+    private typealias ContextFreeFn = @convention(c) (OpaquePointer?) -> Void
+    private typealias SamplerFreeFn = @convention(c) (OpaquePointer?) -> Void
+
+    private static func resolve<T>(_ symbol: String, as type: T.Type) -> T? {
+        guard let ptr = dlsym(nil, symbol) else { return nil }
+        return unsafeBitCast(ptr, to: type)
+    }
+
+    static func backendInit() {
+        resolve("llama_backend_init", as: BackendInitFn.self)?()
+    }
+
+    static func backendFree() {
+        resolve("llama_backend_free", as: BackendFreeFn.self)?()
+    }
+
+    static func modelDefaultParams() -> llama_model_params {
+        if let fn = resolve("llama_model_default_params", as: ModelDefaultParamsFn.self) {
+            return fn()
+        }
+        return llama_model_params()
+    }
+
+    static func contextDefaultParams() -> llama_context_params {
+        if let fn = resolve("llama_context_default_params", as: ContextDefaultParamsFn.self) {
+            return fn()
+        }
+        return llama_context_params()
+    }
+
+    static func modelLoadFromFile(_ path: UnsafePointer<CChar>, _ params: llama_model_params) -> OpaquePointer? {
+        resolve("llama_model_load_from_file", as: ModelLoadFromFileFn.self)?(path, params)
+    }
+
+    static func modelFree(_ model: OpaquePointer?) {
+        resolve("llama_model_free", as: ModelFreeFn.self)?(model)
+    }
+
+    static func contextFree(_ context: OpaquePointer?) {
+        resolve("llama_free", as: ContextFreeFn.self)?(context)
+    }
+
+    static func samplerFree(_ sampler: OpaquePointer?) {
+        resolve("llama_sampler_free", as: SamplerFreeFn.self)?(sampler)
+    }
+}
 
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
@@ -81,16 +136,16 @@ final actor LlamaService {
 
     deinit {
         if let sampler {
-            llama_sampler_free(sampler)
+            LlamaSymbolCompat.samplerFree(sampler)
         }
         if let context {
-            llama_free(context)
+            LlamaSymbolCompat.contextFree(context)
         }
         if let model {
-            llama_model_free(model)
+            LlamaSymbolCompat.modelFree(model)
         }
         if backendInitialized {
-            llama_backend_free()
+            LlamaSymbolCompat.backendFree()
         }
     }
 
@@ -172,32 +227,32 @@ final actor LlamaService {
         freeResources()
 
         if !backendInitialized {
-            llama_backend_init()
+            LlamaSymbolCompat.backendInit()
             backendInitialized = true
         }
 
-        var modelParams = llama_model_default_params()
+        var modelParams = LlamaSymbolCompat.modelDefaultParams()
         modelParams.n_gpu_layers = 0
 
         let loadedModel = url.path.withCString { pathPtr in
-            llama_model_load_from_file(pathPtr, modelParams)
+            LlamaSymbolCompat.modelLoadFromFile(pathPtr, modelParams)
         }
         guard let loadedModel else {
             throw LlamaError.couldNotLoadModel
         }
 
-        var ctxParams = llama_context_default_params()
+        var ctxParams = LlamaSymbolCompat.contextDefaultParams()
         ctxParams.n_ctx = UInt32(max(1, contextSize))
 
         guard let loadedContext = llama_init_from_model(loadedModel, ctxParams) else {
-            llama_model_free(loadedModel)
+            LlamaSymbolCompat.modelFree(loadedModel)
             throw LlamaError.couldNotInitContext
         }
 
         var chainParams = llama_sampler_chain_default_params()
         guard let loadedSampler = llama_sampler_chain_init(chainParams) else {
-            llama_free(loadedContext)
-            llama_model_free(loadedModel)
+            LlamaSymbolCompat.contextFree(loadedContext)
+            LlamaSymbolCompat.modelFree(loadedModel)
             throw LlamaError.notInitialized
         }
 
@@ -270,15 +325,15 @@ final actor LlamaService {
 
     func freeResources() {
         if let sampler {
-            llama_sampler_free(sampler)
+            LlamaSymbolCompat.samplerFree(sampler)
             self.sampler = nil
         }
         if let context {
-            llama_free(context)
+            LlamaSymbolCompat.contextFree(context)
             self.context = nil
         }
         if let model {
-            llama_model_free(model)
+            LlamaSymbolCompat.modelFree(model)
             self.model = nil
         }
         modelPath = nil

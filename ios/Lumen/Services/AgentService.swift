@@ -99,7 +99,7 @@ nonisolated enum AgentTurnParseError: String, Error, Sendable, Codable {
     case invalidActionArgsType
 }
 
-private enum AgentJSONCandidateSelector {
+private nonisolated enum AgentJSONCandidateSelector {
     struct Selection {
         let object: [String: Any]
         let selectedJSON: String

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-fileprivate enum UserSettingsKeys {
+fileprivate nonisolated enum UserSettingsKeys {
     static let activeChatModelID = "activeChatModelID"
     static let activeEmbeddingModelID = "activeEmbeddingModelID"
     static let enabledToolIDs = "enabledToolIDs"

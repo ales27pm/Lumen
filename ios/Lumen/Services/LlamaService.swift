@@ -207,12 +207,9 @@ final actor LlamaService {
         freeResources()
         modelPath = url.path
         self.contextSize = contextSize
-
-        // The Swift package for llama.cpp can expose different symbol sets
-        // across versions/platforms. If required native generation bindings are
-        // unavailable at compile time, keep the app functional and surface a
-        // clear runtime error from generation APIs.
-        throw LlamaError.nativeBindingsUnavailable
+        activeSessionID = nil
+        cachedPrompt = ""
+        nPast = 0
     }
 
     func generate(
@@ -221,9 +218,6 @@ final actor LlamaService {
         sessionID: String,
         onChunk: @Sendable (String) -> Void
     ) throws {
-        guard let model, let context, let sampler else {
-            throw LlamaError.notInitialized
-        }
         _ = (model, context, sampler, maxTokens, prompt, sessionID, onChunk)
         throw LlamaError.nativeBindingsUnavailable
     }

@@ -47,7 +47,7 @@ enum ModelLoader {
                 }
                 return true
             } catch {
-                if case LlamaError.contextInitFailed = error {
+                if case LlamaError.couldNotInitContext = error {
                     do {
                         try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
                         if appState.activeChatModelID != candidate.id.uuidString {

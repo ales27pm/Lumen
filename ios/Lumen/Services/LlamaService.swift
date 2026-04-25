@@ -1,4 +1,5 @@
 import Foundation
+import llama   // exposes the C API via `llama.h`
 
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
@@ -46,186 +47,225 @@ nonisolated enum GenerationToken: Sendable {
 }
 
 nonisolated enum LlamaError: Error, Sendable {
+    case notInitialized
     case noModelLoaded
-    case modelLoadFailed(String)
-    case contextInitFailed
+    case couldNotLoadModel
+    case couldNotInitContext
     case tokenizationFailed
     case decodeFailed
 }
 
-private struct LlamaModelHandle {
-    let modelPath: String
-    let contextSize: Int
-
-    func cancel() {
-        // TODO: Cancel llama.cpp generation task when bridge is integrated.
-    }
-
-    func offload() async {
-        // TODO: Release llama.cpp resources when bridge is integrated.
-    }
-}
-
-actor LlamaService {
+final actor LlamaService {
     static let shared = LlamaService()
 
-    private var chatHandle: LlamaModelHandle?
-    private var chatModelPath: String?
+    private var backendInitialized = false
 
-    private var embedHandle: LlamaModelHandle?
-    private var embedModelPath: String?
+    private var model: UnsafeMutablePointer<llama_model>? = nil
+    private var context: UnsafeMutablePointer<llama_context>? = nil
+    private var sampler: UnsafeMutablePointer<llama_sampler>? = nil
 
-    private var activeChatSessionID: String?
+    private var modelPath: String?
+    private var contextSize: Int = 4096
 
-    // MARK: - Model loading
+    private init() {}
+
+    deinit {
+        if let sampler {
+            llama_sampler_free(sampler)
+        }
+        if let context {
+            llama_free(context)
+        }
+        if let model {
+            llama_model_free(model)
+        }
+        if backendInitialized {
+            llama_backend_free()
+        }
+    }
+
+    // MARK: - Compatibility API
+
+    var isChatLoaded: Bool { model != nil && context != nil }
+    var isEmbedLoaded: Bool { false }
+    var loadedChatPath: String? { modelPath }
+    var loadedEmbedPath: String? { nil }
 
     func loadChatModel(path: String, contextSize: Int = 4096) async throws {
-        if chatModelPath == path, chatHandle != nil { return }
-        let hadPrevious = chatHandle != nil
-        await unloadChat()
-        if hadPrevious {
-            try? await Task.sleep(for: .milliseconds(150))
-        }
-
-        do {
-            chatHandle = try await makeHandle(path: path, contextSize: contextSize)
-            chatModelPath = path
-            invalidateChatCache()
-        } catch {
-            throw mapModelLoadError(error, modelPath: path)
-        }
+        try loadModel(from: URL(fileURLWithPath: path), contextSize: contextSize)
     }
 
     func loadEmbeddingModel(path: String) async throws {
-        if embedModelPath == path, embedHandle != nil { return }
-        let hadPrevious = embedHandle != nil
-        await unloadEmbed()
-        if hadPrevious {
-            try? await Task.sleep(for: .milliseconds(150))
-        }
-
-        do {
-            embedHandle = try await makeHandle(path: path, contextSize: 2048)
-            embedModelPath = path
-        } catch {
-            throw mapModelLoadError(error, modelPath: path)
-        }
+        let _ = path
     }
 
     func unloadChat() async {
-        invalidateChatCache()
-        guard let handle = chatHandle else {
-            chatModelPath = nil
-            return
-        }
-        handle.cancel()
-        await handle.offload()
-        chatHandle = nil
-        chatModelPath = nil
+        freeResources()
     }
 
-    func unloadEmbed() async {
-        guard let handle = embedHandle else {
-            embedModelPath = nil
-            return
-        }
-        handle.cancel()
-        await handle.offload()
-        embedHandle = nil
-        embedModelPath = nil
-    }
-
-    var isChatLoaded: Bool { chatHandle != nil }
-    var isEmbedLoaded: Bool { embedHandle != nil }
-    var loadedChatPath: String? { chatModelPath }
-    var loadedEmbedPath: String? { embedModelPath }
+    func unloadEmbed() async {}
 
     func reloadChat(contextSize: Int = 4096) async throws {
-        guard let path = chatModelPath else { throw LlamaError.noModelLoaded }
-        invalidateChatCache()
-        await unloadChat()
-        try await loadChatModel(path: path, contextSize: contextSize)
+        guard let modelPath else { throw LlamaError.noModelLoaded }
+        try loadModel(from: URL(fileURLWithPath: modelPath), contextSize: contextSize)
     }
 
-    private func invalidateChatCache() {
-        activeChatSessionID = nil
-    }
-
-    func reloadEmbed() async throws {
-        guard let path = embedModelPath else { throw LlamaError.noModelLoaded }
-        await unloadEmbed()
-        try await loadEmbeddingModel(path: path)
-    }
-
-    // MARK: - Streaming generation
+    func reloadEmbed() async throws {}
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
-        AsyncStream { continuation in
-            let task = Task {
-                do {
-                    guard var handle = chatHandle else {
-                        throw LlamaError.noModelLoaded
-                    }
+        let prompt = buildPrompt(req: req)
 
-                    let prompt = buildPrompt(req: req)
-                    let stream = try await generate(prompt: prompt, req: req, using: &handle)
-                    chatHandle = handle
-
-                    for try await piece in stream {
-                        if Task.isCancelled { break }
-                        continuation.yield(.text(piece))
-                    }
-
-                    if !Task.isCancelled {
-                        activeChatSessionID = req.sessionID ?? "model:\(req.modelName)"
-                    }
-
+        return AsyncStream { continuation in
+            Task.detached { [weak self] in
+                guard let self else {
                     continuation.yield(.done)
                     continuation.finish()
-                } catch {
-                    let message: String
-                    switch error {
-                    case LlamaError.noModelLoaded:
-                        message = "No model loaded. Download and activate a chat model from the Models tab."
-                    case LlamaError.modelLoadFailed(let path):
-                        message = "Failed to load the model at \(path). The file may be corrupt or incompatible."
-                    case LlamaError.contextInitFailed:
-                        message = "Unable to initialize the llama.cpp context. Try a smaller context size."
-                    case LlamaError.tokenizationFailed:
-                        message = "Tokenization failed for this prompt."
-                    case LlamaError.decodeFailed:
-                        message = "Inference failed. The context may be full — start a new chat."
-                    default:
-                        message = "Generation error: \(error.localizedDescription)"
-                    }
-                    continuation.yield(.text(message))
-                    continuation.yield(.done)
-                    continuation.finish()
+                    return
                 }
+
+                do {
+                    let generated = try await self.generate(prompt: prompt, maxTokens: req.maxTokens)
+                    for await chunk in generated {
+                        continuation.yield(.text(chunk))
+                    }
+                } catch {
+                    continuation.yield(.text("Generation error: \(error.localizedDescription)"))
+                }
+
+                continuation.yield(.done)
+                continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    private func generate(
-        prompt: String,
-        req: GenerateRequest,
-        using handle: inout LlamaModelHandle
-    ) async throws -> AsyncThrowingStream<String, any Error> {
-        let _ = prompt
-        let _ = req
-        let _ = handle
-        // TODO: Stream tokens from a llama.cpp session backed by a reusable KV-cache.
-        return AsyncThrowingStream { continuation in
-            continuation.finish()
+    func embed(text: String, dimensions: Int = 256) async -> [Double] {
+        hashEmbed(text: text, dimensions: dimensions)
+    }
+
+    // MARK: - Native llama.cpp API
+
+    func loadModel(from url: URL, contextSize: Int) throws {
+        freeResources()
+
+        if !backendInitialized {
+            llama_backend_init()
+            backendInitialized = true
         }
+
+        var modelParams = llama_model_default_params()
+        modelParams.n_gpu_layers = 0
+
+        let loadedModel = url.path.withCString { pathPtr in
+            llama_model_load_from_file(pathPtr, modelParams)
+        }
+        guard let loadedModel else {
+            throw LlamaError.couldNotLoadModel
+        }
+
+        var ctxParams = llama_context_default_params()
+        ctxParams.n_ctx = UInt32(max(1, contextSize))
+
+        guard let loadedContext = llama_init_from_model(loadedModel, ctxParams) else {
+            llama_model_free(loadedModel)
+            throw LlamaError.couldNotInitContext
+        }
+
+        var chainParams = llama_sampler_chain_default_params()
+        guard let loadedSampler = llama_sampler_chain_init(chainParams) else {
+            llama_free(loadedContext)
+            llama_model_free(loadedModel)
+            throw LlamaError.notInitialized
+        }
+
+        llama_sampler_chain_add(loadedSampler, llama_sampler_init_greedy())
+
+        model = loadedModel
+        context = loadedContext
+        sampler = loadedSampler
+        modelPath = url.path
+        self.contextSize = contextSize
+    }
+
+    func generate(prompt: String, maxTokens: Int) async throws -> AsyncStream<String> {
+        guard let model, let context, let sampler else {
+            throw LlamaError.notInitialized
+        }
+
+        let vocab = llama_model_get_vocab(model)
+        var tokens = [llama_token](repeating: 0, count: max(1024, prompt.utf8.count * 2))
+
+        let nTokens: Int32 = prompt.withCString { promptPtr in
+            llama_tokenize(
+                vocab,
+                promptPtr,
+                Int32(prompt.utf8.count),
+                &tokens,
+                Int32(tokens.count),
+                true,
+                false
+            )
+        }
+
+        guard nTokens > 0 else {
+            throw LlamaError.tokenizationFailed
+        }
+
+        var tokenBuffer = tokens
+        let decodeResult = tokenBuffer.withUnsafeMutableBufferPointer { ptr -> Int32 in
+            var batch = llama_batch_get_one(ptr.baseAddress, nTokens)
+            return llama_decode(context, batch)
+        }
+        guard decodeResult == 0 else {
+            throw LlamaError.decodeFailed
+        }
+
+        return AsyncStream { continuation in
+            Task.detached {
+                for _ in 0..<maxTokens {
+                    let token = llama_sampler_sample(sampler, context, -1)
+                    if llama_vocab_is_eog(vocab, token) {
+                        break
+                    }
+
+                    var nextToken = token
+                    var nextBatch = llama_batch_get_one(&nextToken, 1)
+                    if llama_decode(context, nextBatch) != 0 {
+                        break
+                    }
+
+                    var piece = [CChar](repeating: 0, count: 256)
+                    let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, true)
+                    if length > 0 {
+                        continuation.yield(String(cString: piece))
+                    }
+                }
+
+                continuation.finish()
+            }
+        }
+    }
+
+    func freeResources() {
+        if let sampler {
+            llama_sampler_free(sampler)
+            self.sampler = nil
+        }
+        if let context {
+            llama_free(context)
+            self.context = nil
+        }
+        if let model {
+            llama_model_free(model)
+            self.model = nil
+        }
+        modelPath = nil
     }
 
     // MARK: - Prompt building
 
     private func buildPrompt(req: GenerateRequest) -> String {
         let budget = PromptBudget.make(
-            contextSize: 4096,
+            contextSize: contextSize,
             maxTokens: req.maxTokens,
             systemPromptChars: req.systemPrompt.count,
             userMessageChars: req.userMessage.count,
@@ -255,50 +295,12 @@ actor LlamaService {
         }
         messages.append(("user", assembly.userMessage))
 
-        // TODO: Replace this fallback with llama.cpp-native prompt/session handling when bridge is integrated.
         var out = ""
         for (role, content) in messages {
             out += "<|im_start|>\(role)\n\(content)<|im_end|>\n"
         }
         out += "<|im_start|>assistant\n"
         return out
-    }
-
-    // MARK: - Embeddings
-
-    func embed(text: String, dimensions: Int = 256) async -> [Double] {
-        guard let handle = embedHandle else {
-            return hashEmbed(text: text, dimensions: dimensions)
-        }
-
-        do {
-            var copy = handle
-            let stream = try await generate(
-                prompt: "Embed this text as a compact semantic representation:\n\n\(text)",
-                req: GenerateRequest(
-                    systemPrompt: "",
-                    history: [],
-                    userMessage: text,
-                    temperature: 0,
-                    topP: 1,
-                    repetitionPenalty: 1,
-                    maxTokens: max(32, dimensions),
-                    modelName: "embed",
-                    relevantMemories: []
-                ),
-                using: &copy
-            )
-            embedHandle = copy
-
-            var materialized = ""
-            for try await token in stream {
-                materialized.append(token)
-                if materialized.count > 2048 { break }
-            }
-            return hashEmbed(text: materialized.isEmpty ? text : materialized, dimensions: dimensions)
-        } catch {
-            return hashEmbed(text: text, dimensions: dimensions)
-        }
     }
 
     private func hashEmbed(text: String, dimensions: Int) -> [Double] {
@@ -308,23 +310,18 @@ actor LlamaService {
             .filter { !$0.isEmpty }
         for token in tokens {
             var hash: UInt64 = 5381
-            for ch in token.unicodeScalars { hash = (hash &* 33) &+ UInt64(ch.value) }
+            for ch in token.unicodeScalars {
+                hash = (hash &* 33) &+ UInt64(ch.value)
+            }
             let idx = Int(hash % UInt64(dimensions))
             v[idx] += 1.0
         }
         let norm = sqrt(v.reduce(0.0) { $0 + $1 * $1 })
-        if norm > 0 { for i in 0..<v.count { v[i] /= norm } }
+        if norm > 0 {
+            for i in 0..<v.count {
+                v[i] /= norm
+            }
+        }
         return v
     }
-
-    private func makeHandle(path: String, contextSize: Int) async throws -> LlamaModelHandle {
-        // TODO: Create and initialize a llama.cpp model/session wrapper here.
-        LlamaModelHandle(modelPath: path, contextSize: contextSize)
-    }
-
-    private func mapModelLoadError(_ error: Error, modelPath: String) -> LlamaError {
-        let _ = error
-        return .modelLoadFailed(modelPath)
-    }
 }
-

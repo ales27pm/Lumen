@@ -364,6 +364,7 @@ struct ChatView: View {
 
     private func runPlain(text: String, memories: [String], attachments: [ChatAttachment]) async {
         let request = GenerateRequest(
+            sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
             history: conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) },
             userMessage: text,
@@ -421,6 +422,7 @@ struct ChatView: View {
         }
 
         let request = GenerateRequest(
+            sessionID: conversation.id.uuidString,
             systemPrompt: "Answer the user's request directly in plain language. Do not output JSON. Do not copy schema examples. Do not emit placeholder tokens literally.",
             history: conversation.sortedMessages.dropLast().suffix(4).map { ($0.messageRole, $0.content) },
             userMessage: userText,

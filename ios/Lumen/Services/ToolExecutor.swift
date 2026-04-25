@@ -1,20 +1,28 @@
 import Foundation
 
-/// Thin dispatcher that routes a tool ID + arguments to the appropriate
-/// domain-specific service. All actual logic lives in `Services/Tools/*.swift`.
-/// The public contract (`ToolExecutor.shared.execute(id, arguments:)`) is
-/// preserved so the rest of the app keeps working unchanged.
+nonisolated enum ToolExecutionApproval: Sendable {
+    case autonomous
+    case userApproved
+}
+
 @MainActor
 final class ToolExecutor {
     static let shared = ToolExecutor()
 
     private init() {}
 
-    func execute(_ toolID: String, arguments: [String: String]) async -> String {
+    func execute(
+        _ toolID: String,
+        arguments: [String: String],
+        approval: ToolExecutionApproval = .autonomous
+    ) async -> String {
         let id = ToolRouteGuard.canonicalToolID(toolID)
 
+        guard ToolRouteGuard.canExecuteTool(id, arguments: arguments, approval: approval) else {
+            return ToolRouteGuard.approvalRequiredMessage(for: id)
+        }
+
         switch id {
-        // Calendar / Reminders
         case "calendar.create":
             return await CalendarTools.createEvent(
                 title: arguments["title"] ?? "New Event",
@@ -26,8 +34,6 @@ final class ToolExecutor {
             return await CalendarTools.createReminder(title: arguments["title"] ?? "Reminder")
         case "reminders.list":
             return await CalendarTools.listReminders()
-
-        // Contacts / Communication
         case "contacts.search":
             return await ContactsTools.searchContacts(query: arguments["query"] ?? "")
         case "messages.draft":
@@ -36,8 +42,6 @@ final class ToolExecutor {
             return await ContactsTools.composeMail(arguments: arguments)
         case "phone.call":
             return await ContactsTools.call(number: arguments["number"] ?? "")
-
-        // Location / Maps / Weather
         case "location.current":
             return await LocationTools.currentLocation()
         case "weather":
@@ -50,54 +54,36 @@ final class ToolExecutor {
                 return await WebTools.webSearch(query: query)
             }
             return await LocationTools.searchNearby(query: query)
-
-        // Photos / Camera
         case "photos.search":
             return await PhotosTools.searchPhotos(query: arguments["query"] ?? "")
         case "camera.capture":
             return await PhotosTools.captureImage()
-
-        // Health / Motion
         case "health.summary":
             return await HealthTools.healthSummary()
         case "motion.activity":
             return await MotionTools.shared.motionActivity()
-
-        // Web / Files
         case "web.search":
             return await WebTools.webSearch(query: arguments["query"] ?? "")
         case "web.fetch":
             return await WebTools.webFetch(url: arguments["url"] ?? "")
         case "files.read":
             return await FilesTools.readImportedFile(name: arguments["name"] ?? "")
-
-        // Memory / RAG
         case "memory.save":
-            return await MemoryTools.save(
-                content: arguments["content"] ?? "",
-                kind: arguments["kind"] ?? "fact"
-            )
+            return await MemoryTools.save(content: arguments["content"] ?? "", kind: arguments["kind"] ?? "fact")
         case "memory.recall":
             return await MemoryTools.recall(query: arguments["query"] ?? "")
         case "rag.search":
-            return await MemoryTools.ragSearch(
-                query: arguments["query"] ?? "",
-                limit: Int(arguments["limit"] ?? "5") ?? 5
-            )
+            return await MemoryTools.ragSearch(query: arguments["query"] ?? "", limit: Int(arguments["limit"] ?? "5") ?? 5)
         case "rag.index_files":
             return await MemoryTools.ragIndexFiles()
         case "rag.index_photos":
             return await MemoryTools.ragIndexPhotos(months: Int(arguments["months"] ?? "6") ?? 6)
-
-        // Triggers
         case "trigger.create":
             return await TriggerTools.create(args: arguments)
         case "trigger.list":
             return await TriggerTools.list()
         case "trigger.cancel":
             return await TriggerTools.cancel(title: arguments["title"] ?? arguments["id"] ?? "")
-
-        // AlarmKit
         case "alarm.authorization_status":
             return await AlarmTools.authorizationStatus()
         case "alarm.request_authorization":
@@ -118,7 +104,6 @@ final class ToolExecutor {
             return await AlarmTools.snooze(id: arguments["id"] ?? "")
         case "alarm.cancel":
             return await AlarmTools.cancel(id: arguments["id"] ?? arguments["title"] ?? "")
-
         default:
             return "Unknown tool: \(toolID). Available weather/search tools are: weather, web.search, maps.search, location.current."
         }
@@ -142,56 +127,61 @@ nonisolated enum ToolRouteGuard {
         }
     }
 
+    static func canExecuteTool(_ canonicalToolID: String, arguments: [String: String], approval: ToolExecutionApproval) -> Bool {
+        if requiresUserApproval(canonicalToolID), approval != .userApproved {
+            return false
+        }
+
+        if canonicalToolID == "calendar.create" {
+            return isExplicitCalendarCreateIntent(arguments: arguments)
+        }
+        return true
+    }
+
+    static func approvalRequiredMessage(for canonicalToolID: String) -> String {
+        if canonicalToolID == "calendar.create" {
+            return "Calendar event creation requires explicit user approval. I did not create an event."
+        }
+        return "This tool requires explicit user approval before it can run: \(canonicalToolID)."
+    }
+
+    static func requiresUserApproval(_ canonicalToolID: String) -> Bool {
+        ToolRegistry.find(id: canonicalToolID)?.requiresApproval ?? false
+    }
+
+    static func isExplicitCalendarCreateIntent(arguments: [String: String]) -> Bool {
+        let title = arguments["title"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !title.isEmpty else { return false }
+
+        let startsIn = arguments["startsInMinutes"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasValidStart = Int(startsIn).map { $0 >= 0 } ?? false
+        guard hasValidStart else { return false }
+
+        let suspiciousGreetingTitles = ["hi", "hello", "hey", "hi lumen", "hello lumen", "hey lumen"]
+        return !suspiciousGreetingTitles.contains(title.lowercased())
+    }
+
     static func shouldUseWebSearchInsteadOfNearbySearch(query: String) -> Bool {
-        let normalized = query
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return false }
 
         let localIntentMarkers = [
-            "near me",
-            "nearby",
-            "closest",
-            "around me",
-            "around here",
-            "in my area",
-            "directions",
-            "route to",
-            "open maps",
-            "address of",
-            "store near",
-            "restaurant near",
-            "coffee near",
-            "gas station",
-            "pharmacy near"
+            "near me", "nearby", "closest", "around me", "around here", "in my area",
+            "directions", "route to", "open maps", "address of", "store near",
+            "restaurant near", "coffee near", "gas station", "pharmacy near"
         ]
         if localIntentMarkers.contains(where: { normalized.contains($0) }) {
             return false
         }
 
         let webIntentMarkers = [
-            "diy",
-            "how to",
-            "tutorial",
-            "guide",
-            "research",
-            "internet",
-            "web",
-            "article",
-            "manual",
-            "documentation",
-            "plans",
-            "blueprint",
-            "build",
-            "underground shelter",
-            "shelter diy"
+            "diy", "how to", "tutorial", "guide", "research", "internet", "web",
+            "article", "manual", "documentation", "plans", "blueprint", "build"
         ]
         if webIntentMarkers.contains(where: { normalized.contains($0) }) {
             return true
         }
 
-        // Generic "search for ..." requests are knowledge/web searches unless
-        // the wording explicitly asks for local places.
         if normalized.hasPrefix("search ") || normalized.hasPrefix("search for ") || normalized.hasPrefix("look up ") {
             return true
         }

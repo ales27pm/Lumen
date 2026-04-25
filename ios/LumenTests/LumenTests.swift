@@ -388,6 +388,41 @@ struct LumenTests {
         #expect(summary.topEntries[0].count == 2)
     }
 
+    @Test func parseNoiseSummarySkipsCorruptLinesAndRespectsTopN() async throws {
+        let validA = makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 0, prefixNoise: "pre a", suffixNoise: "suf a")
+        let validB = makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "pre b", suffixNoise: "suf b")
+        let jsonl = [validA, "{not-json", validA, validB].joined(separator: "\n")
+        let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: jsonl, topN: 1)
+
+        #expect(summary.totalLines == 4)
+        #expect(summary.decodedLines == 3)
+        #expect(summary.skippedLines == 1)
+        #expect(summary.topEntries.count == 1)
+        #expect(summary.topEntries[0].modelName == "agent-json")
+        #expect(summary.topEntries[0].stepIndex == 0)
+        #expect(summary.topEntries[0].count == 2)
+    }
+
+    @Test func parseNoiseSummaryGroupsByNormalizedSignaturesModelAndStep() async throws {
+        let lines = [
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "Prefix Noise Alpha", suffixNoise: "Suffix One"),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "prefix   noise alpha", suffixNoise: "suffix one"),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 2, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+            makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+        ]
+        let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
+
+        #expect(summary.totalLines == 4)
+        #expect(summary.decodedLines == 4)
+        #expect(summary.skippedLines == 0)
+        #expect(summary.topEntries.count == 3)
+        #expect(summary.topEntries[0].count == 2)
+        #expect(summary.topEntries[0].modelName == "agent-json")
+        #expect(summary.topEntries[0].stepIndex == 1)
+        #expect(summary.topEntries[0].prefixSignature.hasPrefix("prefix noise alpha#"))
+        #expect(summary.topEntries[0].suffixSignature.hasPrefix("suffix one#"))
+    }
+
 }
 
 private func makeParseFailureTraceLine(
@@ -409,6 +444,33 @@ private func makeParseFailureTraceLine(
         rawOutputPrefix: "raw",
         streamedThoughtPrefix: "",
         streamedFinalPrefix: "",
+        selectedJSONPrefix: nil,
+        prefixNoise: prefixNoise,
+        suffixNoise: suffixNoise
+    )
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let data = try! encoder.encode(trace)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func makeParseNoiseTraceLine(
+    modelName: String,
+    stepIndex: Int,
+    prefixNoise: String?,
+    suffixNoise: String?
+) -> String {
+    let trace = AgentParseNoiseTrace(
+        id: UUID(),
+        createdAt: Date(timeIntervalSince1970: 1_000),
+        modelName: modelName,
+        temperature: 0.1,
+        topP: 0.8,
+        maxTokens: 512,
+        stepIndex: stepIndex,
+        systemPromptPrefix: "system",
+        userTurnPrefix: "user",
+        rawOutputPrefix: "raw",
         selectedJSONPrefix: nil,
         prefixNoise: prefixNoise,
         suffixNoise: suffixNoise

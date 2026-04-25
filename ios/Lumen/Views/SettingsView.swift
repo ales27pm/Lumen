@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var showDeveloperAlert = false
     @State private var developerAlertMessage = ""
     @State private var parseFailureSummary = "• Parse-failure traces: loading…"
+    @State private var parseNoiseSummary = "• Recoverable noise traces: loading…"
 
     var body: some View {
         @Bindable var state = appState
@@ -217,6 +218,9 @@ struct SettingsView: View {
         return """
         Permissions:
         \(permissions)
+
+        Recoverable noise signatures:
+        \(parseNoiseSummary)
         """
     }
 
@@ -245,10 +249,14 @@ struct SettingsView: View {
     }
 
     private func refreshParseFailureSummary() async {
-        let summaryText = await Task.detached(priority: .utility) {
-            AgentParseFailureSummaryLoader.developerText(topN: 5)
+        let summary = await Task.detached(priority: .utility) {
+            (
+                AgentParseFailureSummaryLoader.developerText(topN: 5),
+                AgentParseNoiseSummaryLoader.developerText(topN: 5)
+            )
         }.value
-        parseFailureSummary = summaryText
+        parseFailureSummary = summary.0
+        parseNoiseSummary = summary.1
     }
 }
 

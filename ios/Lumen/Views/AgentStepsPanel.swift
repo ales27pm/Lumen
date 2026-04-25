@@ -4,44 +4,51 @@ struct AgentStepsPanel: View {
     let steps: [AgentStep]
     @State var expanded: Bool
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.caption)
-                        .foregroundStyle(Theme.textSecondary)
-                    Text("\(steps.count) reasoning step\(steps.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(Theme.textSecondary)
-                    Spacer()
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-            }
-            .buttonStyle(.plain)
+    private var visibleSteps: [AgentStep] {
+        AgentVisibleContentSanitizer.sanitizedSteps(steps)
+    }
 
-            if expanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(steps.enumerated()), id: \.element.id) { idx, step in
-                        AgentStepRow(step: step, index: idx + 1, isLast: idx == steps.count - 1)
+    var body: some View {
+        let displaySteps = visibleSteps
+        if !displaySteps.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("\(displaySteps.count) reasoning step\(displaySteps.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer()
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+                .buttonStyle(.plain)
+
+                if expanded {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(displaySteps.enumerated()), id: \.element.id) { idx, step in
+                            AgentStepRow(step: step, index: idx + 1, isLast: idx == displaySteps.count - 1)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+                }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface)
-        .clipShape(.rect(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surface)
+            .clipShape(.rect(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Theme.border, lineWidth: 1)
+            }
         }
     }
 }

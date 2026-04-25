@@ -470,6 +470,50 @@ struct LumenTests {
         #expect(summary.topEntries[0].suffixSignature.hasPrefix("suffix one#"))
     }
 
+    @Test func parseFailureSummaryComputesRecentTrendWindowsAndRegression() async throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let lines = [
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-172_800)),
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-36_000)),
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-3_600)),
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-600)),
+            makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-300)),
+        ]
+        let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
+
+        #expect(summary.decodedLines == 5)
+        #expect(summary.recentLineWindowSize == 5)
+        #expect(summary.recent24hCount == 4)
+        #expect(summary.recent24hTopEntries.count == 2)
+        #expect(summary.recent24hTopEntries[0].parseError == "invalidJSONObject")
+        #expect(summary.recent24hTopEntries[0].recentCount == 3)
+        #expect(summary.recent24hTopEntries[0].isRegression)
+        #expect(summary.recent24hTopEntries[0].recentShare > summary.recent24hTopEntries[0].baselineShare)
+    }
+
+    @Test func parseNoiseSummaryComputesRecentTrendWindowsAndRegression() async throws {
+        let now = Date(timeIntervalSince1970: 3_000_000)
+        let lines = [
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-200_000)),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-180_000)),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-1_000)),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-500)),
+            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-100)),
+            makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-50)),
+        ]
+        let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
+
+        #expect(summary.decodedLines == 6)
+        #expect(summary.recentLineWindowSize == 6)
+        #expect(summary.recent24hCount == 4)
+        #expect(summary.recent24hTopEntries.count == 2)
+        #expect(summary.recent24hTopEntries[0].modelName == "agent-json")
+        #expect(summary.recent24hTopEntries[0].stepIndex == 1)
+        #expect(summary.recent24hTopEntries[0].recentCount == 3)
+        #expect(summary.recent24hTopEntries[0].isRegression)
+        #expect(summary.recent24hTopEntries[0].recentShare > summary.recent24hTopEntries[0].baselineShare)
+    }
+
     @Test func agentRoutingAttachmentNormalizationReducesStructuralNoiseForCodeHeavyContent() async throws {
         let content = """
         ```json
@@ -555,11 +599,12 @@ struct LumenTests {
 private func makeParseFailureTraceLine(
     parseError: String,
     prefixNoise: String?,
-    suffixNoise: String?
+    suffixNoise: String?,
+    createdAt: Date = Date(timeIntervalSince1970: 1_000)
 ) -> String {
     let trace = AgentParseFailureTrace(
         id: UUID(),
-        createdAt: Date(timeIntervalSince1970: 1_000),
+        createdAt: createdAt,
         parseError: parseError,
         modelName: "agent-json",
         temperature: 0.1,
@@ -585,11 +630,12 @@ private func makeParseNoiseTraceLine(
     modelName: String,
     stepIndex: Int,
     prefixNoise: String?,
-    suffixNoise: String?
+    suffixNoise: String?,
+    createdAt: Date = Date(timeIntervalSince1970: 1_000)
 ) -> String {
     let trace = AgentParseNoiseTrace(
         id: UUID(),
-        createdAt: Date(timeIntervalSince1970: 1_000),
+        createdAt: createdAt,
         modelName: modelName,
         temperature: 0.1,
         topP: 0.8,

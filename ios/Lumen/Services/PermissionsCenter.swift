@@ -165,14 +165,20 @@ final class PermissionsCenter {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshAlarmState()
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshAlarmState()
+            }
         }
         activeObserver = center.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshAlarmState()
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshAlarmState()
+            }
         }
         refreshAll()
     }

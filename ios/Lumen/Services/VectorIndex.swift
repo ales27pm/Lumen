@@ -9,7 +9,7 @@ import Accelerate
 ///   backwards compatibility). At first search we load them into a contiguous Float32
 ///   matrix laid out row-major so a single `vDSP_mmul` computes every cosine score
 ///   in one BLAS call.
-/// - Embeddings from `LlamaService` are already L2-normalized, so `dot == cosine`.
+/// - Embeddings from `AppLlamaService` are already L2-normalized, so `dot == cosine`.
 ///   We defensively re-normalize on load so stale data can't poison the index.
 /// - Bucket metadata (e.g. `RAGSourceType.rawValue`) is kept parallel to the matrix
 ///   so source-aware filtering happens before ranking with no extra allocation.

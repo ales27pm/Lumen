@@ -6,7 +6,7 @@ enum MemoryStore {
     static func recall(query: String, context: ModelContext, limit: Int = 5) async -> [MemoryItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, limit > 0 else { return [] }
-        let queryVec = await LlamaService.shared.embed(text: trimmed)
+        let queryVec = await AppLlamaService.shared.embed(text: trimmed)
         guard !queryVec.isEmpty else { return [] }
 
         MemoryVectorIndex.shared.ensureLoaded(context: context)
@@ -29,7 +29,7 @@ enum MemoryStore {
                 return
             }
         }
-        let embedding = await LlamaService.shared.embed(text: trimmed)
+        let embedding = await AppLlamaService.shared.embed(text: trimmed)
         let item = MemoryItem(content: trimmed, kind: kind, source: source, embedding: embedding, topic: topic)
         context.insert(item)
         try? context.save()

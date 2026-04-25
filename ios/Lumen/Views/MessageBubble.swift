@@ -13,6 +13,10 @@ struct MessageBubble: View {
     @State private var videoPreview: VideoPreviewItem?
     @State private var pdfPreview: PDFPreviewItem?
 
+    private var assistantVisibleContent: String {
+        AssistantOutputSanitizer.sanitize(streamingOverride ?? message.content)
+    }
+
     static func streaming(text: String) -> some View {
         let fake = ChatMessage(role: .assistant, content: text)
         return MessageBubble(message: fake, streamingOverride: text)
@@ -46,39 +50,40 @@ struct MessageBubble: View {
 
     private var assistantBubble: some View {
         let steps = streamingOverride == nil ? message.agentSteps : []
+        let visibleContent = assistantVisibleContent
         return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
                 if !steps.isEmpty {
                     AgentStepsPanel(steps: steps, expanded: false)
                 }
-                Text(streamingOverride ?? message.content)
+                Text(visibleContent)
                     .font(.body)
                     .foregroundStyle(Theme.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if streamingOverride == nil {
-                    if let webURL = firstWebURL(from: message.content) {
+                    if let webURL = firstWebURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "globe", title: "Open Web Page", subtitle: webURL.host() ?? webURL.absoluteString) {
                             webPreview = WebPreviewItem(url: webURL)
                         }
                     }
-                    if let mapQuery = firstMapQuery(from: message.content) {
+                    if let mapQuery = firstMapQuery(from: visibleContent) {
                         EmbeddedContentButton(icon: "map", title: "Open Map", subtitle: mapQuery) {
                             mapPreview = MapPreviewItem(query: mapQuery)
                         }
                     }
-                    if let imageURL = firstImageURL(from: message.content) {
+                    if let imageURL = firstImageURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "photo", title: "Open Image", subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent) {
                             imagePreview = ImagePreviewItem(url: imageURL)
                         }
                     }
-                    if let videoURL = firstVideoURL(from: message.content) {
+                    if let videoURL = firstVideoURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "play.rectangle", title: "Open Video", subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent) {
                             videoPreview = VideoPreviewItem(url: videoURL)
                         }
                     }
-                    if let pdfURL = firstPDFURL(from: message.content) {
+                    if let pdfURL = firstPDFURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "doc.richtext", title: "Open PDF", subtitle: pdfURL.lastPathComponent.isEmpty ? (pdfURL.host() ?? pdfURL.absoluteString) : pdfURL.lastPathComponent) {
                             pdfPreview = PDFPreviewItem(url: pdfURL)
                         }
@@ -95,9 +100,9 @@ struct MessageBubble: View {
                             .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border, lineWidth: 1) }
                         }
                         MessageActionButton(icon: "doc.on.doc") {
-                            UIPasteboard.general.string = message.content
+                            UIPasteboard.general.string = visibleContent
                         }
-                        MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") { bookmark() }
+                        MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") { bookmark(content: visibleContent) }
                     }
                     .padding(.top, 2)
                 }
@@ -182,13 +187,13 @@ struct MessageBubble: View {
         return nil
     }
 
-    private func bookmark() {
+    private func bookmark(content: String) {
         guard !didBookmark else { return }
-        let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
+        let cleaned = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
         didBookmark = true
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-        let snippet = String(content.prefix(400))
+        let snippet = String(cleaned.prefix(400))
         let ctx = modelContext
         Task { @MainActor in
             await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)

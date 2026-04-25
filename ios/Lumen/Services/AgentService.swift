@@ -1115,13 +1115,14 @@ final class AgentService {
         No explanations outside JSON.
 
         Valid schemas, choose exactly one:
-        {"thought":"short private routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
-        {"thought":"short private routing note","final":"answer shown to the user"}
+        {"thought":"<PRIVATE_REASONING>","action":{"tool":"tool.id","args":{"key":"value"}}}
+        {"thought":"<PRIVATE_REASONING>","final":"<USER_FINAL_TEXT>"}
 
         JSON rules:
         - Use double quotes for every key and string.
         - Escape newlines as \\n inside string values.
         - `args` values must all be strings. Use {} when no arguments are needed.
+        - Do not emit placeholder tokens literally.
         - Never include both `action` and `final` in the same object.
         - Never repeat an action with the same arguments.
         - If no tool is required, emit `final` immediately.

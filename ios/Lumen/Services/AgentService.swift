@@ -702,7 +702,10 @@ final class AgentService {
                     steps.append(obs)
                     continuation.yield(.step(obs))
                     observations.append((action.tool, obs.content))
-                    scratchpad += "\nAction: \(action.displayContent)\nObservation: \(obs.content)"
+                    scratchpad += "\nAction: \(action.displayContent)\nObservation: \(compactScratchpadObservation(obs.content))"
+                    if let locationObservation = currentLocationScratchpadContext(from: obs.content) {
+                        scratchpad += "\nContext: \(locationObservation)"
+                    }
                     continue
                 }
                 if executedActionKeys.contains(action.dedupeKey) {
@@ -731,7 +734,10 @@ final class AgentService {
                 steps.append(obs)
                 continuation.yield(.step(obs))
                 observations.append((action.tool, result))
-                scratchpad += "\nAction: \(action.displayContent)\nObservation: \(result)"
+                scratchpad += "\nAction: \(action.displayContent)\nObservation: \(compactScratchpadObservation(result))"
+                if let locationObservation = currentLocationScratchpadContext(from: result) {
+                    scratchpad += "\nContext: \(locationObservation)"
+                }
 
                 if stepIndex == maxSteps - 1 {
                     finalAnswer = await synthesizeFallback(req: req, observations: observations, reason: .maxSteps)
@@ -865,6 +871,8 @@ final class AgentService {
 
         sys += "Routing guidelines:\n"
         sys += "- For nearest/near me/closest questions, call `location.current` first, then `maps.search` once, then emit `final`.\n"
+        sys += "- For follow-up map intents like \"show me on map\"/\"open on map\", if prior observations already include `Current location:` coordinates from `location.current`, do not call `location.current` again.\n"
+        sys += "- In those follow-ups, route directly to `maps.search` (or equivalent map-opening behavior) using the preserved current-location observation, then emit `final`.\n"
         sys += "- For web/current-info requests, call `web.search` if available.\n"
         sys += "- Keep `thought` short. Keep `final` direct.\n"
         sys += "- The next assistant message must be only the JSON object."
@@ -886,11 +894,44 @@ final class AgentService {
         if stepIndex > 0 {
             out += "\n\nPrior structured turns and observations:\n"
             out += scratchpad
+            if let locationObservation = latestCurrentLocationObservation(in: scratchpad) {
+                out += "\n\nReusable location context:\n"
+                out += "Observation: \(locationObservation)"
+            }
             out += "\n\nEmit the next JSON object now. Choose either action or final."
         } else {
             out += "\n\nEmit the first JSON object now. Choose either action or final."
         }
         return out
+    }
+
+    private func compactScratchpadObservation(_ text: String) -> String {
+        var compact = text.replacingOccurrences(of: "\n", with: " ")
+        while compact.contains("  ") {
+            compact = compact.replacingOccurrences(of: "  ", with: " ")
+        }
+        return compact.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func currentLocationScratchpadContext(from text: String) -> String? {
+        let compact = compactScratchpadObservation(text)
+        guard let range = compact.range(of: "Current location:", options: .caseInsensitive) else { return nil }
+        let suffix = compact[range.lowerBound...]
+        let normalized = String(suffix).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.contains(",") else { return nil }
+        return normalized
+    }
+
+    private func latestCurrentLocationObservation(in scratchpad: String) -> String? {
+        var latest: String?
+        for line in scratchpad.split(separator: "\n") {
+            let raw = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard raw.hasPrefix("Observation:") || raw.hasPrefix("Context:") else { continue }
+            if let context = currentLocationScratchpadContext(from: raw) {
+                latest = context
+            }
+        }
+        return latest
     }
 
     private func sanitizedHistoryContext(_ history: [(role: MessageRole, content: String)]) -> String {

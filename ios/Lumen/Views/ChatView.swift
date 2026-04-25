@@ -489,28 +489,7 @@ struct ChatView: View {
     }
 
     private func ensureChatModelLoaded() async -> Bool {
-        if await AppLlamaService.shared.isChatLoaded { return true }
-        guard let id = appState.activeChatModelID,
-              let m = storedModels.first(where: { $0.id.uuidString == id }),
-              m.modelRole == .chat,
-              FileManager.default.fileExists(atPath: m.localPath) else {
-            if let fallback = storedModels.first(where: { $0.modelRole == .chat && FileManager.default.fileExists(atPath: $0.localPath) }) {
-                appState.activeChatModelID = fallback.id.uuidString
-                do {
-                    try await AppLlamaService.shared.loadChatModel(path: fallback.localPath, contextSize: appState.contextSize)
-                    return true
-                } catch {
-                    return false
-                }
-            }
-            return false
-        }
-        do {
-            try await AppLlamaService.shared.loadChatModel(path: m.localPath, contextSize: appState.contextSize)
-            return true
-        } catch {
-            return false
-        }
+        await ModelLoader.ensureChatLoaded(appState: appState, stored: storedModels)
     }
 
     private func stop() {

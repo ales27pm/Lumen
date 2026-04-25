@@ -1,8 +1,10 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @MainActor
 enum ModelLoader {
+    private static let logger = Logger(subsystem: "com.lumen.ios", category: "ModelLoader")
     static func syncChat(appState: AppState, stored: [StoredModel]) async {
         await ensureChatLoaded(appState: appState, stored: stored)
     }
@@ -47,6 +49,12 @@ enum ModelLoader {
                 }
                 return true
             } catch {
+                logger.error(
+                    "Primary chat load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)"
+                )
+                if let cocoaError = error as? CocoaError, cocoaError.code == .fileNoSuchFile {
+                    continue
+                }
                 do {
                     try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
                     if appState.activeChatModelID != candidate.id.uuidString {

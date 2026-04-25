@@ -13,6 +13,7 @@ nonisolated struct GenerateRequest: Sendable {
     let modelName: String
     let relevantMemories: [String]
     let attachments: [ChatAttachment]
+    let seed: UInt32?
 
     init(
         sessionID: String? = nil,
@@ -25,7 +26,8 @@ nonisolated struct GenerateRequest: Sendable {
         maxTokens: Int,
         modelName: String,
         relevantMemories: [String],
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        seed: UInt32? = nil
     ) {
         self.sessionID = sessionID
         self.systemPrompt = systemPrompt
@@ -38,6 +40,7 @@ nonisolated struct GenerateRequest: Sendable {
         self.modelName = modelName
         self.relevantMemories = relevantMemories
         self.attachments = attachments
+        self.seed = seed
     }
 }
 
@@ -78,13 +81,14 @@ final actor AppLlamaService {
 
     var isChatLoaded: Bool { service != nil }
     var isEmbedLoaded: Bool { embedModelPath != nil }
+    var hasSemanticEmbeddingRuntime: Bool { false }
     var loadedChatPath: String? { modelPath }
     var loadedEmbedPath: String? { embedModelPath }
 
     /// Load a GGUF model from your bundle.
     func loadModel(named name: String, contextSize: UInt32 = 4096, batchSize: UInt32 = 512) throws {
         guard let url = Bundle.main.url(forResource: name, withExtension: "gguf") else {
-            throw NSError(domain: "Model not found", code: 1)
+            throw LlamaError.modelNotFound
         }
 
         let config = LlamaConfig(batchSize: batchSize, maxTokenCount: contextSize, useGPU: false)
@@ -102,6 +106,9 @@ final actor AppLlamaService {
     }
 
     func loadEmbeddingModel(path: String) async throws {
+        // TODO: SwiftLlama chat path is integrated, but semantic embedding extraction has not
+        // been wired yet. Keep this path so settings can retain user preference while `embed(text:)`
+        // continues to use deterministic hash embeddings.
         guard !path.isEmpty else { throw LlamaError.noModelLoaded }
         embedModelPath = path
     }
@@ -129,30 +136,95 @@ final actor AppLlamaService {
     func streamResponse(
         messages: [LlamaChatMessage],
         temperature: Float = 0.8,
-        seed: UInt32 = 42
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let service else { throw NSError(domain: "Model not loaded", code: 2) }
-        let sampling = LlamaSamplingConfig(temperature: temperature, seed: seed)
-        return try await service.streamCompletion(of: messages, samplingConfig: sampling)
+        guard let service else { throw LlamaError.noModelLoaded }
+
+        let resolvedSeed = seed ?? makeRandomSeed()
+        let sampling = LlamaSamplingConfig(
+            temperature: temperature,
+            seed: resolvedSeed,
+            topP: topP,
+            repetitionPenaltyConfig: LlamaRepetitionPenaltyConfig(repeatPenalty: repetitionPenalty)
+        )
+        let rawStream = try await service.streamCompletion(of: messages, samplingConfig: sampling)
+        guard let maxTokens else { return rawStream }
+
+        return AsyncThrowingStream { continuation in
+            let cap = max(0, maxTokens)
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                if cap == 0 {
+                    await self.stopActiveCompletion()
+                    continuation.finish()
+                    return
+                }
+
+                var emitted = 0
+                do {
+                    for try await chunk in rawStream {
+                        continuation.yield(chunk)
+                        emitted += 1
+                        if emitted >= cap {
+                            await self.stopActiveCompletion()
+                            break
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+            }
+        }
     }
 
     /// Generate a full response at once.
     func respond(
         messages: [LlamaChatMessage],
         temperature: Float = 0.8,
-        seed: UInt32 = 42
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
     ) async throws -> String {
-        guard let service else { throw NSError(domain: "Model not loaded", code: 2) }
-        let sampling = LlamaSamplingConfig(temperature: temperature, seed: seed)
-        return try await service.respond(to: messages, samplingConfig: sampling)
+        guard service != nil else { throw LlamaError.noModelLoaded }
+        let stream = try await streamResponse(
+            messages: messages,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            seed: seed
+        )
+        var output = ""
+        for try await chunk in stream {
+            output += chunk
+        }
+        return output
     }
 
-    /// Clear the KV cache.
-    func resetKVCache() async {
+    /// Fully restarts the model service to force a fresh session.
+    /// This is expensive because it recreates `SwiftLlama.LlamaService` and remaps GGUF.
+    func restartSession() async {
         service = nil
         guard let modelPath else { return }
         let config = LlamaConfig(batchSize: 512, maxTokenCount: UInt32(max(1, contextSize)), useGPU: false)
         service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: modelPath), config: config)
+    }
+
+    /// Backwards-compatible alias for older call sites.
+    /// Note: this performs a full model service restart (not an in-place KV clear).
+    func resetKVCache() async {
+        await restartSession()
     }
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
@@ -176,17 +248,13 @@ final actor AppLlamaService {
                     let stream = try await self.streamResponse(
                         messages: messages,
                         temperature: Float(req.temperature),
-                        seed: 42
+                        topP: Float(req.topP),
+                        repetitionPenalty: Float(req.repetitionPenalty),
+                        maxTokens: req.maxTokens,
+                        seed: req.seed
                     )
-
-                    var emittedTokenCount = 0
                     for try await chunk in stream {
                         continuation.yield(.text(chunk))
-                        emittedTokenCount += 1
-                        if emittedTokenCount >= req.maxTokens {
-                            await self.stopActiveCompletion()
-                            break
-                        }
                     }
                 } catch {
                     continuation.yield(.text("Generation error: \(error.localizedDescription)"))
@@ -208,6 +276,10 @@ final actor AppLlamaService {
 
     private func stopActiveCompletion() async {
         await service?.stopCompletion()
+    }
+
+    private func makeRandomSeed() -> UInt32 {
+        UInt32.random(in: UInt32.min...UInt32.max)
     }
 
     // MARK: - Prompt building

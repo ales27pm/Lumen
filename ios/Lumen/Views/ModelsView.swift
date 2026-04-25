@@ -96,7 +96,7 @@ struct ModelsView: View {
     private var activeRow: some View {
         HStack(spacing: 10) {
             ActivePill(title: "Chat", name: storedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
-            ActivePill(title: "Embed", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
+            ActivePill(title: "Embed (hash)", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
         }
     }
 
@@ -153,8 +153,10 @@ struct ModelsView: View {
             set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
         }
         if let p = await AppLlamaService.shared.loadedEmbedPath {
-            let fileName = URL(fileURLWithPath: p).lastPathComponent
-            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+            if await AppLlamaService.shared.hasSemanticEmbeddingRuntime {
+                let fileName = URL(fileURLWithPath: p).lastPathComponent
+                set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+            }
         }
         loadedPaths = set
     }

@@ -337,7 +337,8 @@ actor LlamaService {
             userMessage: req.userMessage,
             memories: req.relevantMemories,
             attachments: req.attachments,
-            budget: budget
+            budget: budget,
+            attachmentNormalization: req.modelName == "agent-json" ? .agentRouting : .preserveRaw
         )
 
         var messages: [(String, String)] = [("system", assembly.systemPrompt)]

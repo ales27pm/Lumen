@@ -3,9 +3,7 @@ import Foundation
 enum ModelStorage {
     static func modelsDirectoryURL(fileManager: FileManager = .default) -> URL {
         let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let hybridCoderDirectory = base.appendingPathComponent("Hybrid Coder", isDirectory: true)
-        let directory = hybridCoderDirectory.appendingPathComponent("Models", isDirectory: true)
-        try? fileManager.createDirectory(at: hybridCoderDirectory, withIntermediateDirectories: true)
+        let directory = base.appendingPathComponent("Models", isDirectory: true)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
@@ -28,9 +26,12 @@ enum ModelStorage {
         }
 
         let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let legacy = base.appendingPathComponent("Models", isDirectory: true).appendingPathComponent(fileName)
-        if fileManager.fileExists(atPath: legacy.path) {
-            return legacy
+        let previousNested = base
+            .appendingPathComponent("Hybrid Coder", isDirectory: true)
+            .appendingPathComponent("Models", isDirectory: true)
+            .appendingPathComponent(fileName)
+        if fileManager.fileExists(atPath: previousNested.path) {
+            return previousNested
         }
 
         return storedURL

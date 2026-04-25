@@ -11,6 +11,9 @@ private typealias LlamaToken = Int32
 private nonisolated enum LlamaSymbolCompat {
     private typealias BackendInitFn = @convention(c) () -> Void
     private typealias BackendFreeFn = @convention(c) () -> Void
+    private typealias ModelDefaultParamsFn = @convention(c) () -> llama_model_params
+    private typealias ContextDefaultParamsFn = @convention(c) () -> llama_context_params
+    private typealias ModelLoadFromFileFn = @convention(c) (UnsafePointer<CChar>, llama_model_params) -> OpaquePointer?
     private typealias ModelFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias ContextFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias SamplerFreeFn = @convention(c) (OpaquePointer?) -> Void
@@ -34,6 +37,18 @@ private nonisolated enum LlamaSymbolCompat {
 
     static func backendFree() {
         resolve("llama_backend_free", as: BackendFreeFn.self)?()
+    }
+
+    static func modelDefaultParams() -> llama_model_params? {
+        resolve("llama_model_default_params", as: ModelDefaultParamsFn.self)?()
+    }
+
+    static func contextDefaultParams() -> llama_context_params? {
+        resolve("llama_context_default_params", as: ContextDefaultParamsFn.self)?()
+    }
+
+    static func modelLoadFromFile(_ path: UnsafePointer<CChar>, _ params: llama_model_params) -> OpaquePointer? {
+        resolve("llama_model_load_from_file", as: ModelLoadFromFileFn.self)?(path, params)
     }
 
     static func modelFree(_ model: OpaquePointer?) {
@@ -120,6 +135,27 @@ nonisolated enum LlamaError: Error, Sendable {
     case nativeBindingsUnavailable
     case tokenizationFailed
     case decodeFailed
+}
+
+extension LlamaError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .notInitialized:
+            return "Model runtime is not initialized."
+        case .noModelLoaded:
+            return "No model is currently loaded."
+        case .couldNotLoadModel:
+            return "Failed to load the model file."
+        case .couldNotInitContext:
+            return "Failed to initialize model context. Try lowering context size."
+        case .nativeBindingsUnavailable:
+            return "Native llama runtime bindings are unavailable."
+        case .tokenizationFailed:
+            return "Prompt tokenization failed."
+        case .decodeFailed:
+            return "Model decode failed."
+        }
+    }
 }
 
 final actor LlamaService {
@@ -230,13 +266,52 @@ final actor LlamaService {
     // MARK: - Native llama.cpp API
 
     func loadModel(from url: URL, contextSize: Int) throws {
-        _ = url
         freeResources()
-        self.contextSize = contextSize
+        guard let modelParamsDefault = LlamaSymbolCompat.modelDefaultParams(),
+              let contextParamsDefault = LlamaSymbolCompat.contextDefaultParams() else {
+            throw LlamaError.nativeBindingsUnavailable
+        }
 
-        // Treat loading as a no-op when generation bindings are unavailable.
-        // This keeps non-generation flows working while avoiding a misleading
-        // partially initialized chat model state.
+        if !backendInitialized {
+            LlamaSymbolCompat.backendInit()
+            backendInitialized = true
+        }
+
+        var modelParams = modelParamsDefault
+        modelParams.n_gpu_layers = 0
+
+        let loadedModel = url.path.withCString { pathPtr in
+            LlamaSymbolCompat.modelLoadFromFile(pathPtr, modelParams)
+        }
+        guard let loadedModel else {
+            throw LlamaError.couldNotLoadModel
+        }
+
+        var ctxParams = contextParamsDefault
+        ctxParams.n_ctx = UInt32(max(1, contextSize))
+
+        guard let loadedContext = llama_init_from_model(loadedModel, ctxParams) else {
+            LlamaSymbolCompat.modelFree(loadedModel)
+            throw LlamaError.couldNotInitContext
+        }
+
+        var chainParams = llama_sampler_chain_default_params()
+        guard let loadedSampler = llama_sampler_chain_init(chainParams) else {
+            LlamaSymbolCompat.contextFree(loadedContext)
+            LlamaSymbolCompat.modelFree(loadedModel)
+            throw LlamaError.notInitialized
+        }
+
+        llama_sampler_chain_add(loadedSampler, llama_sampler_init_greedy())
+
+        model = loadedModel
+        context = loadedContext
+        sampler = loadedSampler
+        modelPath = url.path
+        self.contextSize = contextSize
+        activeSessionID = nil
+        cachedPrompt = ""
+        nPast = 0
     }
 
     func generate(
@@ -245,8 +320,46 @@ final actor LlamaService {
         sessionID: String,
         onChunk: @Sendable (String) -> Void
     ) throws {
-        _ = (model, context, sampler, maxTokens, prompt, sessionID, onChunk)
-        throw LlamaError.nativeBindingsUnavailable
+        guard let model, let context, let sampler else {
+            throw LlamaError.notInitialized
+        }
+
+        let vocab = llama_model_get_vocab(model)
+        if activeSessionID != sessionID {
+            resetKVCache()
+            activeSessionID = sessionID
+        }
+
+        var promptToEval = prompt
+        if !cachedPrompt.isEmpty, prompt.hasPrefix(cachedPrompt) {
+            promptToEval = String(prompt.dropFirst(cachedPrompt.count))
+        } else if !cachedPrompt.isEmpty {
+            resetKVCache()
+        }
+
+        if !promptToEval.isEmpty {
+            if promptToEval == prompt && nPast > 0 {
+                resetKVCache()
+            }
+            let promptTokens = try tokenize(promptToEval, vocab: vocab, addSpecial: nPast == 0)
+            try decodeTokens(promptTokens, context: context)
+            cachedPrompt = prompt
+        }
+
+        let evalLimit = Int(llama_n_ctx(context))
+
+        for _ in 0..<maxTokens {
+            if Task.isCancelled { break }
+            if Int(self.nPast) >= evalLimit - 1 { break }
+
+            let token = llama_sampler_sample(sampler, context, -1)
+            if llama_vocab_is_eog(vocab, token) { break }
+
+            try self.decodeTokens([token], context: context)
+            if let piece = self.tokenPieceString(vocab: vocab, token: token) {
+                onChunk(piece)
+            }
+        }
     }
 
     func freeResources() {
@@ -337,20 +450,73 @@ final actor LlamaService {
         vocab: LlamaVocabRef,
         addSpecial: Bool
     ) throws -> [LlamaToken] {
-        _ = (text, vocab, addSpecial)
-        throw LlamaError.nativeBindingsUnavailable
+        var tokens = [LlamaToken](repeating: 0, count: max(256, text.utf8.count + 8))
+        var nTokens = text.withCString { promptPtr in
+            llama_tokenize(
+                vocab,
+                promptPtr,
+                Int32(text.utf8.count),
+                &tokens,
+                Int32(tokens.count),
+                addSpecial,
+                false
+            )
+        }
+
+        if nTokens < 0 {
+            let required = Int(-nTokens)
+            tokens = [LlamaToken](repeating: 0, count: required)
+            nTokens = text.withCString { promptPtr in
+                llama_tokenize(
+                    vocab,
+                    promptPtr,
+                    Int32(text.utf8.count),
+                    &tokens,
+                    Int32(tokens.count),
+                    addSpecial,
+                    false
+                )
+            }
+        }
+
+        guard nTokens > 0 else {
+            throw LlamaError.tokenizationFailed
+        }
+
+        return Array(tokens.prefix(Int(nTokens)))
     }
 
     private func decodeTokens(
         _ tokens: [LlamaToken],
         context: LlamaContextRef
     ) throws {
-        _ = (tokens, context)
-        throw LlamaError.nativeBindingsUnavailable
+        guard !tokens.isEmpty else { return }
+
+        var batch = llama_batch_init(Int32(tokens.count), 0, 1)
+        defer { llama_batch_free(batch) }
+
+        for (index, token) in tokens.enumerated() {
+            batch.token[index] = token
+            batch.pos[index] = nPast + Int32(index)
+            batch.n_seq_id[index] = 1
+            batch.seq_id[index]![0] = 0
+            batch.logits[index] = index == tokens.count - 1 ? 1 : 0
+        }
+        batch.n_tokens = Int32(tokens.count)
+
+        if llama_decode(context, batch) != 0 {
+            throw LlamaError.decodeFailed
+        }
+
+        nPast += Int32(tokens.count)
     }
 
     private func resetKVCache() {
-        guard context != nil else { return }
+        guard let context else { return }
+        llama_memory_clear(llama_get_memory(context), true)
+        if let sampler {
+            llama_sampler_reset(sampler)
+        }
         cachedPrompt = ""
         nPast = 0
     }

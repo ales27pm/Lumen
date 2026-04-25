@@ -1,5 +1,4 @@
 import Foundation
-import SpeziLLM
 import SpeziLLMLocal
 
 nonisolated struct GenerateRequest: Sendable {

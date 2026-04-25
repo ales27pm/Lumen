@@ -755,6 +755,21 @@ nonisolated struct AgentParseFailureSummary: Sendable {
     let topEntries: [AgentParseFailureSummaryEntry]
 }
 
+nonisolated struct AgentParseNoiseSummaryEntry: Sendable, Hashable {
+    let modelName: String
+    let stepIndex: Int
+    let prefixSignature: String
+    let suffixSignature: String
+    let count: Int
+}
+
+nonisolated struct AgentParseNoiseSummary: Sendable {
+    let totalLines: Int
+    let decodedLines: Int
+    let skippedLines: Int
+    let topEntries: [AgentParseNoiseSummaryEntry]
+}
+
 nonisolated enum AgentParseFailureSummaryLoader {
     static func load(topN: Int = 5) -> AgentParseFailureSummary {
         do {
@@ -842,6 +857,126 @@ nonisolated enum AgentParseFailureSummaryLoader {
         lines.append("• Top signatures:")
         for entry in summary.topEntries {
             lines.append("  - \(entry.count)x \(entry.parseError) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func noiseSignature(_ value: String?) -> String {
+        let normalized = normalizeNoise(value)
+        guard !normalized.isEmpty else { return "∅#00" }
+        let snippet = String(normalized.prefix(24))
+        let bucket = String(format: "%02X", stableHash(normalized) % 64)
+        return "\(snippet)#\(bucket)"
+    }
+
+    private static func normalizeNoise(_ value: String?) -> String {
+        guard let value else { return "" }
+        var text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return "" }
+        text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return text.lowercased()
+    }
+
+    private static func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 5381
+        for byte in text.utf8 {
+            hash = ((hash << 5) &+ hash) &+ UInt64(byte)
+        }
+        return hash
+    }
+}
+
+nonisolated enum AgentParseNoiseSummaryLoader {
+    static func load(topN: Int = 5) -> AgentParseNoiseSummary {
+        do {
+            let directory = try AgentParseFailureRecorder.diagnosticsDirectory()
+            let url = directory.appendingPathComponent("agent-parse-noise.jsonl", isDirectory: false)
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+            }
+            let text = String(decoding: data, as: UTF8.self)
+            return load(fromJSONLText: text, topN: topN)
+        } catch {
+            return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+        }
+    }
+
+    static func load(fromJSONLText text: String, topN: Int = 5) -> AgentParseNoiseSummary {
+        struct Key: Hashable {
+            let modelName: String
+            let stepIndex: Int
+            let prefixSignature: String
+            let suffixSignature: String
+        }
+
+        let lines = text.split(whereSeparator: \.isNewline)
+        if lines.isEmpty {
+            return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+        }
+
+        var counts: [Key: Int] = [:]
+        var decodedLines = 0
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        for line in lines {
+            guard let data = String(line).data(using: .utf8),
+                  let trace = try? decoder.decode(AgentParseNoiseTrace.self, from: data) else {
+                continue
+            }
+            decodedLines += 1
+            let key = Key(
+                modelName: trace.modelName,
+                stepIndex: trace.stepIndex,
+                prefixSignature: noiseSignature(trace.prefixNoise),
+                suffixSignature: noiseSignature(trace.suffixNoise)
+            )
+            counts[key, default: 0] += 1
+        }
+
+        let topEntries = counts
+            .map {
+                AgentParseNoiseSummaryEntry(
+                    modelName: $0.key.modelName,
+                    stepIndex: $0.key.stepIndex,
+                    prefixSignature: $0.key.prefixSignature,
+                    suffixSignature: $0.key.suffixSignature,
+                    count: $0.value
+                )
+            }
+            .sorted {
+                if $0.count != $1.count { return $0.count > $1.count }
+                if $0.modelName != $1.modelName { return $0.modelName < $1.modelName }
+                if $0.stepIndex != $1.stepIndex { return $0.stepIndex < $1.stepIndex }
+                if $0.prefixSignature != $1.prefixSignature { return $0.prefixSignature < $1.prefixSignature }
+                return $0.suffixSignature < $1.suffixSignature
+            }
+
+        return AgentParseNoiseSummary(
+            totalLines: lines.count,
+            decodedLines: decodedLines,
+            skippedLines: lines.count - decodedLines,
+            topEntries: Array(topEntries.prefix(max(0, topN)))
+        )
+    }
+
+    static func developerText(topN: Int = 5) -> String {
+        let summary = load(topN: topN)
+        if summary.totalLines == 0 {
+            return "• Recoverable noise traces: 0"
+        }
+
+        var lines: [String] = [
+            "• Recoverable noise traces: \(summary.decodedLines) loaded (\(summary.skippedLines) skipped)"
+        ]
+        if summary.topEntries.isEmpty {
+            lines.append("• Top recurring signatures: none")
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append("• Top recurring signatures:")
+        for entry in summary.topEntries {
+            lines.append("  - \(entry.count)x model=\(entry.modelName) step=\(entry.stepIndex) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature)")
         }
         return lines.joined(separator: "\n")
     }

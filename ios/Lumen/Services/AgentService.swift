@@ -76,6 +76,7 @@ nonisolated struct AgentTurn: Sendable {
     let action: AgentAction?
     let final: String?
     let parseError: AgentTurnParseError?
+    let hadNoise: Bool
 
     var isStructured: Bool { action != nil || (final?.isEmpty == false) }
 }
@@ -99,21 +100,26 @@ nonisolated enum AgentTurnParseError: String, Error, Sendable, Codable {
 }
 
 nonisolated enum AgentTurnParser {
+    private struct ExtractedJSONObject {
+        let object: [String: Any]
+        let hadNoise: Bool
+    }
+
     static func parse(_ raw: String) -> AgentTurn {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return AgentTurn(thought: nil, action: nil, final: nil, parseError: .empty)
+            return AgentTurn(thought: nil, action: nil, final: nil, parseError: .empty, hadNoise: false)
         }
 
         switch extractSingleJSONObject(from: trimmed) {
-        case .success(let obj):
-            return buildTurn(from: obj)
+        case .success(let extracted):
+            return buildTurn(from: extracted.object, hadNoise: extracted.hadNoise)
         case .failure(let error):
-            return AgentTurn(thought: nil, action: nil, final: nil, parseError: error)
+            return AgentTurn(thought: nil, action: nil, final: nil, parseError: error, hadNoise: false)
         }
     }
 
-    private static func buildTurn(from obj: [String: Any]) -> AgentTurn {
+    private static func buildTurn(from obj: [String: Any], hadNoise: Bool) -> AgentTurn {
         if let value = obj["thought"], !(value is String) { return invalid(.invalidThoughtType) }
         if let value = obj["reasoning"], !(value is String) { return invalid(.invalidThoughtType) }
         if let value = obj["final"], !(value is String) { return invalid(.invalidFinalType) }
@@ -162,7 +168,8 @@ nonisolated enum AgentTurnParser {
             thought: cleanThought,
             action: action,
             final: hasFinal ? finalTrimmed : nil,
-            parseError: nil
+            parseError: nil,
+            hadNoise: hadNoise
         )
     }
 
@@ -237,7 +244,7 @@ nonisolated enum AgentTurnParser {
         return text
     }
 
-    private static func extractSingleJSONObject(from text: String) -> Result<[String: Any], AgentTurnParseError> {
+    private static func extractSingleJSONObject(from text: String) -> Result<ExtractedJSONObject, AgentTurnParseError> {
         let chars = Array(text)
         var ranges: [(Int, Int)] = []
         var depth = 0
@@ -299,10 +306,8 @@ nonisolated enum AgentTurnParser {
         }
 
         let selected = candidates[0]
-        if hasUnsupportedNoise(in: chars, selectedRange: selected.range) {
-            return .failure(.noisyOutput)
-        }
-        return .success(selected.object)
+        let hadNoise = hasUnsupportedNoise(in: chars, selectedRange: selected.range)
+        return .success(ExtractedJSONObject(object: selected.object, hadNoise: hadNoise))
     }
 
     private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> [String: Any]? {
@@ -357,7 +362,7 @@ nonisolated enum AgentTurnParser {
     }
 
     private static func invalid(_ error: AgentTurnParseError) -> AgentTurn {
-        AgentTurn(thought: nil, action: nil, final: nil, parseError: error)
+        AgentTurn(thought: nil, action: nil, final: nil, parseError: error, hadNoise: false)
     }
 }
 
@@ -480,6 +485,22 @@ nonisolated struct AgentParseFailureTrace: Codable, Sendable {
     let suffixNoise: String?
 }
 
+nonisolated struct AgentParseNoiseTrace: Codable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let modelName: String
+    let temperature: Double
+    let topP: Double
+    let maxTokens: Int
+    let stepIndex: Int
+    let systemPromptPrefix: String
+    let userTurnPrefix: String
+    let rawOutputPrefix: String
+    let selectedJSONPrefix: String?
+    let prefixNoise: String?
+    let suffixNoise: String?
+}
+
 nonisolated enum AgentNoiseInspector {
     struct Snapshot: Sendable {
         let selectedJSON: String?
@@ -597,6 +618,31 @@ nonisolated enum AgentParseFailureRecorder {
     }
 }
 
+nonisolated enum AgentParseNoiseRecorder {
+    static func record(_ trace: AgentParseNoiseTrace) {
+        do {
+            let directory = try AgentParseFailureRecorder.diagnosticsDirectory()
+            let url = directory.appendingPathComponent("agent-parse-noise.jsonl", isDirectory: false)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(trace)
+            var line = data
+            line.append(0x0A)
+
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } else {
+                try line.write(to: url, options: [.atomic])
+            }
+        } catch {
+            // Diagnostics must never break chat generation.
+        }
+    }
+}
+
 // MARK: - AgentService
 
 @MainActor
@@ -672,6 +718,16 @@ final class AgentService {
             if Task.isCancelled { break }
 
             let turn = AgentTurnParser.parse(raw)
+
+            if turn.hadNoise {
+                recordRecoverableNoise(
+                    req: req,
+                    raw: raw,
+                    systemPrompt: sys,
+                    userTurn: userTurn,
+                    stepIndex: stepIndex
+                )
+            }
 
             // Commit thought step with the fully-parsed value (in case streaming extracted less).
             if let thought = turn.thought, !thought.isEmpty {
@@ -1017,6 +1073,32 @@ final class AgentService {
             suffixNoise: snapshot.suffixNoise.map { String($0.prefix(1_000)) }
         )
         AgentParseFailureRecorder.record(trace)
+    }
+
+    private func recordRecoverableNoise(
+        req: AgentRequest,
+        raw: String,
+        systemPrompt: String,
+        userTurn: String,
+        stepIndex: Int
+    ) {
+        let snapshot = AgentNoiseInspector.inspect(raw)
+        let trace = AgentParseNoiseTrace(
+            id: UUID(),
+            createdAt: Date(),
+            modelName: "agent-json",
+            temperature: agentTemperature(from: req.temperature),
+            topP: agentTopP(from: req.topP),
+            maxTokens: req.maxTokens,
+            stepIndex: stepIndex,
+            systemPromptPrefix: String(systemPrompt.prefix(2_000)),
+            userTurnPrefix: String(userTurn.prefix(2_000)),
+            rawOutputPrefix: String(raw.prefix(4_000)),
+            selectedJSONPrefix: snapshot.selectedJSON.map { String($0.prefix(2_000)) },
+            prefixNoise: snapshot.prefixNoise.map { String($0.prefix(1_000)) },
+            suffixNoise: snapshot.suffixNoise.map { String($0.prefix(1_000)) }
+        )
+        AgentParseNoiseRecorder.record(trace)
     }
 
     // MARK: - Fallback synthesis

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		XX78EC446F828DF3560117XX /* SpeziLLM in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEXX /* SpeziLLM */; };
 		XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */; };
 /* End PBXBuildFile section */
 
@@ -57,7 +56,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				XX78EC446F828DF3560117XX /* SpeziLLM in Frameworks */,
 				XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -119,7 +117,6 @@
 			);
 			name = Lumen;
 			packageProductDependencies = (
-				XX880297366DF2ABAA7DFEXX /* SpeziLLM */,
 				XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */,
 			);
 			productName = Lumen;
@@ -636,11 +633,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		XX880297366DF2ABAA7DFEXX /* SpeziLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;
-			productName = SpeziLLM;
-		};
 		XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;

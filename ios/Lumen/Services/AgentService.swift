@@ -1264,7 +1264,7 @@ final class AgentService {
         - If a tool result is enough, summarize it in `final` and stop.
         """
 
-        let appPrompt = req.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let appPrompt = sanitizeSystemPromptForStructuredOutput(req.systemPrompt)
         if !appPrompt.isEmpty {
             sys += "\n\nLower-priority style/context note. Follow it only when it does not conflict with the JSON contract:\n"
             sys += appPrompt
@@ -1400,6 +1400,37 @@ final class AgentService {
 
     func sanitizeHistoryContentForTests(_ content: String) -> String {
         sanitizeHistoryContent(content)
+    }
+
+    private func sanitizeSystemPromptForStructuredOutput(_ systemPrompt: String) -> String {
+        let trimmed = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        let blockedPhrases = [
+            "markdown",
+            "code fence",
+            "code fences",
+            "fenced code block",
+            "fenced code blocks",
+            "headings",
+            "step-by-step",
+            "step by step"
+        ]
+
+        let parts = trimmed.components(separatedBy: .newlines)
+        var kept: [String] = []
+        for part in parts {
+            let sentence = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !sentence.isEmpty else { continue }
+            let lowered = sentence.lowercased()
+            if blockedPhrases.contains(where: { lowered.contains($0) }) { continue }
+            kept.append(sentence)
+        }
+        return kept.joined(separator: "\n")
+    }
+
+    func sanitizeSystemPromptForStructuredOutputForTests(_ systemPrompt: String) -> String {
+        sanitizeSystemPromptForStructuredOutput(systemPrompt)
     }
 
     private func agentTemperature(from userTemperature: Double) -> Double {

@@ -1,86 +1,5 @@
 import Foundation
-import llama   // exposes the C API via `llama.h`
-import Darwin
-
-private typealias LlamaModelRef = OpaquePointer
-private typealias LlamaContextRef = OpaquePointer
-private typealias LlamaSamplerRef = OpaquePointer
-private typealias LlamaVocabRef = OpaquePointer
-private typealias LlamaToken = Int32
-
-private nonisolated enum LlamaSymbolCompat {
-    private typealias BackendInitFn = @convention(c) () -> Void
-    private typealias BackendFreeFn = @convention(c) () -> Void
-    private typealias ModelDefaultParamsFn = @convention(c) () -> llama_model_params
-    private typealias ContextDefaultParamsFn = @convention(c) () -> llama_context_params
-    private typealias ModelLoadFromFileFn = @convention(c) (UnsafePointer<CChar>, llama_model_params) -> OpaquePointer?
-    private typealias ModelFreeFn = @convention(c) (OpaquePointer?) -> Void
-    private typealias ContextFreeFn = @convention(c) (OpaquePointer?) -> Void
-    private typealias SamplerFreeFn = @convention(c) (OpaquePointer?) -> Void
-    private typealias TokenToPieceFn = @convention(c) (
-        OpaquePointer?,
-        Int32,
-        UnsafeMutablePointer<CChar>?,
-        Int32,
-        Int32,
-        Bool
-    ) -> Int32
-
-    private static func resolve<T>(_ symbol: String, as type: T.Type) -> T? {
-        guard let ptr = dlsym(nil, symbol) else { return nil }
-        return unsafeBitCast(ptr, to: type)
-    }
-
-    static func backendInit() {
-        resolve("llama_backend_init", as: BackendInitFn.self)?()
-    }
-
-    static func backendFree() {
-        resolve("llama_backend_free", as: BackendFreeFn.self)?()
-    }
-
-    static func modelDefaultParams() -> llama_model_params? {
-        resolve("llama_model_default_params", as: ModelDefaultParamsFn.self)?()
-    }
-
-    static func contextDefaultParams() -> llama_context_params? {
-        resolve("llama_context_default_params", as: ContextDefaultParamsFn.self)?()
-    }
-
-    static func modelLoadFromFile(_ path: UnsafePointer<CChar>, _ params: llama_model_params) -> OpaquePointer? {
-        resolve("llama_model_load_from_file", as: ModelLoadFromFileFn.self)?(path, params)
-    }
-
-    static func modelFree(_ model: OpaquePointer?) {
-        resolve("llama_model_free", as: ModelFreeFn.self)?(model)
-    }
-
-    static func contextFree(_ context: OpaquePointer?) {
-        resolve("llama_free", as: ContextFreeFn.self)?(context)
-    }
-
-    static func samplerFree(_ sampler: OpaquePointer?) {
-        resolve("llama_sampler_free", as: SamplerFreeFn.self)?(sampler)
-    }
-
-    static func tokenToPiece(
-        _ vocab: OpaquePointer?,
-        _ token: Int32,
-        _ piece: UnsafeMutablePointer<CChar>?,
-        _ length: Int32,
-        _ special: Int32,
-        _ parseSpecial: Bool
-    ) -> Int32? {
-        resolve("llama_token_to_piece", as: TokenToPieceFn.self)?(
-            vocab,
-            token,
-            piece,
-            length,
-            special,
-            parseSpecial
-        )
-    }
-}
+import SwiftLlama
 
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
@@ -94,6 +13,7 @@ nonisolated struct GenerateRequest: Sendable {
     let modelName: String
     let relevantMemories: [String]
     let attachments: [ChatAttachment]
+    let seed: UInt32?
 
     init(
         sessionID: String? = nil,
@@ -106,7 +26,8 @@ nonisolated struct GenerateRequest: Sendable {
         maxTokens: Int,
         modelName: String,
         relevantMemories: [String],
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        seed: UInt32? = nil
     ) {
         self.sessionID = sessionID
         self.systemPrompt = systemPrompt
@@ -119,6 +40,7 @@ nonisolated struct GenerateRequest: Sendable {
         self.modelName = modelName
         self.relevantMemories = relevantMemories
         self.attachments = attachments
+        self.seed = seed
     }
 }
 
@@ -128,87 +50,72 @@ nonisolated enum GenerationToken: Sendable {
 }
 
 nonisolated enum LlamaError: Error, Sendable {
-    case notInitialized
     case noModelLoaded
-    case couldNotLoadModel
-    case couldNotInitContext
-    case nativeBindingsUnavailable
-    case tokenizationFailed
-    case decodeFailed
+    case modelNotFound
 }
 
 extension LlamaError: LocalizedError {
     var errorDescription: String? {
         switch self {
-        case .notInitialized:
-            return "Model runtime is not initialized."
         case .noModelLoaded:
             return "No model is currently loaded."
-        case .couldNotLoadModel:
-            return "Failed to load the model file."
-        case .couldNotInitContext:
-            return "Failed to initialize model context. Try lowering context size."
-        case .nativeBindingsUnavailable:
-            return "Native llama runtime bindings are unavailable."
-        case .tokenizationFailed:
-            return "Prompt tokenization failed."
-        case .decodeFailed:
-            return "Model decode failed."
+        case .modelNotFound:
+            return "Model file could not be found."
         }
     }
 }
 
-final actor LlamaService {
-    static let shared = LlamaService()
+/// A high-level service for GGUF models powered by llama.cpp.
+/// Manages the model and KV cache using SwiftLlama's built-in types.
+final actor AppLlamaService {
+    static let shared = AppLlamaService()
 
-    private var backendInitialized = false
-
-    private var model: LlamaModelRef? = nil
-    private var context: LlamaContextRef? = nil
-    private var sampler: LlamaSamplerRef? = nil
-
+    private var service: SwiftLlama.LlamaService?
     private var modelPath: String?
     private var embedModelPath: String?
     private var contextSize: Int = 4096
-    private var activeSessionID: String?
-    private var cachedPrompt: String = ""
-    private var nPast: Int32 = 0
 
     private init() {}
 
-    deinit {
-        if let sampler {
-            LlamaSymbolCompat.samplerFree(sampler)
-        }
-        if let context {
-            LlamaSymbolCompat.contextFree(context)
-        }
-        if let model {
-            LlamaSymbolCompat.modelFree(model)
-        }
-        if backendInitialized {
-            LlamaSymbolCompat.backendFree()
-        }
-    }
-
     // MARK: - Compatibility API
 
-    var isChatLoaded: Bool { model != nil && context != nil }
+    var isChatLoaded: Bool { service != nil }
     var isEmbedLoaded: Bool { embedModelPath != nil }
+    var hasSemanticEmbeddingRuntime: Bool { false }
     var loadedChatPath: String? { modelPath }
     var loadedEmbedPath: String? { embedModelPath }
 
+    /// Load a GGUF model from your bundle.
+    func loadModel(named name: String, contextSize: UInt32 = 4096, batchSize: UInt32 = 512) throws {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "gguf") else {
+            throw LlamaError.modelNotFound
+        }
+
+        let config = LlamaConfig(batchSize: batchSize, maxTokenCount: contextSize, useGPU: false)
+        service = SwiftLlama.LlamaService(modelUrl: url, config: config)
+        modelPath = url.path
+        self.contextSize = Int(contextSize)
+    }
+
     func loadChatModel(path: String, contextSize: Int = 4096) async throws {
-        try loadModel(from: URL(fileURLWithPath: path), contextSize: contextSize)
+        let url = URL(fileURLWithPath: path)
+        let config = LlamaConfig(batchSize: 512, maxTokenCount: UInt32(max(1, contextSize)), useGPU: false)
+        service = SwiftLlama.LlamaService(modelUrl: url, config: config)
+        modelPath = path
+        self.contextSize = contextSize
     }
 
     func loadEmbeddingModel(path: String) async throws {
+        // TODO: SwiftLlama chat path is integrated, but semantic embedding extraction has not
+        // been wired yet. Keep this path so settings can retain user preference while `embed(text:)`
+        // continues to use deterministic hash embeddings.
         guard !path.isEmpty else { throw LlamaError.noModelLoaded }
         embedModelPath = path
     }
 
     func unloadChat() async {
-        freeResources()
+        service = nil
+        modelPath = nil
     }
 
     func unloadEmbed() async {
@@ -217,7 +124,7 @@ final actor LlamaService {
 
     func reloadChat(contextSize: Int = 4096) async throws {
         guard let modelPath else { throw LlamaError.noModelLoaded }
-        try loadModel(from: URL(fileURLWithPath: modelPath), contextSize: contextSize)
+        try await loadChatModel(path: modelPath, contextSize: contextSize)
     }
 
     func reloadEmbed() async throws {
@@ -225,9 +132,103 @@ final actor LlamaService {
         try await loadEmbeddingModel(path: embedModelPath)
     }
 
+    /// Stream a response from the LLM, yielding tokens incrementally.
+    func streamResponse(
+        messages: [LlamaChatMessage],
+        temperature: Float = 0.8,
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
+    ) async throws -> AsyncThrowingStream<String, Error> {
+        guard let service else { throw LlamaError.noModelLoaded }
+
+        let resolvedSeed = seed ?? makeRandomSeed()
+        let sampling = LlamaSamplingConfig(
+            temperature: temperature,
+            seed: resolvedSeed,
+            topP: topP,
+            repetitionPenaltyConfig: LlamaRepetitionPenaltyConfig(repeatPenalty: repetitionPenalty)
+        )
+        let rawStream = try await service.streamCompletion(of: messages, samplingConfig: sampling)
+        guard let maxTokens else { return rawStream }
+
+        return AsyncThrowingStream { continuation in
+            let cap = max(0, maxTokens)
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                if cap == 0 {
+                    await self.stopActiveCompletion()
+                    continuation.finish()
+                    return
+                }
+
+                var emitted = 0
+                do {
+                    for try await chunk in rawStream {
+                        continuation.yield(chunk)
+                        emitted += 1
+                        if emitted >= cap {
+                            await self.stopActiveCompletion()
+                            break
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+            }
+        }
+    }
+
+    /// Generate a full response at once.
+    func respond(
+        messages: [LlamaChatMessage],
+        temperature: Float = 0.8,
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
+    ) async throws -> String {
+        guard service != nil else { throw LlamaError.noModelLoaded }
+        let stream = try await streamResponse(
+            messages: messages,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            seed: seed
+        )
+        var output = ""
+        for try await chunk in stream {
+            output += chunk
+        }
+        return output
+    }
+
+    /// Fully restarts the model service to force a fresh session.
+    /// This is expensive because it recreates `SwiftLlama.LlamaService` and remaps GGUF.
+    func restartSession() async {
+        service = nil
+        guard let modelPath else { return }
+        let config = LlamaConfig(batchSize: 512, maxTokenCount: UInt32(max(1, contextSize)), useGPU: false)
+        service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: modelPath), config: config)
+    }
+
+    /// Backwards-compatible alias for older call sites.
+    /// Note: this performs a full model service restart (not an in-place KV clear).
+    func resetKVCache() async {
+        await restartSession()
+    }
+
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
-        let prompt = buildPrompt(req: req)
-        let sessionID = req.sessionID ?? "model:\(req.modelName)"
+        let messages = buildMessages(req: req)
 
         return AsyncStream { continuation in
             let generationTask = Task { [weak self] in
@@ -238,11 +239,21 @@ final actor LlamaService {
                 }
 
                 do {
-                    try await self.generate(
-                        prompt: prompt,
+                    guard req.maxTokens > 0 else {
+                        continuation.yield(.done)
+                        continuation.finish()
+                        return
+                    }
+
+                    let stream = try await self.streamResponse(
+                        messages: messages,
+                        temperature: Float(req.temperature),
+                        topP: Float(req.topP),
+                        repetitionPenalty: Float(req.repetitionPenalty),
                         maxTokens: req.maxTokens,
-                        sessionID: sessionID
-                    ) { chunk in
+                        seed: req.seed
+                    )
+                    for try await chunk in stream {
                         continuation.yield(.text(chunk))
                     }
                 } catch {
@@ -263,127 +274,17 @@ final actor LlamaService {
         hashEmbed(text: text, dimensions: dimensions)
     }
 
-    // MARK: - Native llama.cpp API
-
-    func loadModel(from url: URL, contextSize: Int) throws {
-        freeResources()
-        guard let modelParamsDefault = LlamaSymbolCompat.modelDefaultParams(),
-              let contextParamsDefault = LlamaSymbolCompat.contextDefaultParams() else {
-            throw LlamaError.nativeBindingsUnavailable
-        }
-
-        if !backendInitialized {
-            LlamaSymbolCompat.backendInit()
-            backendInitialized = true
-        }
-
-        var modelParams = modelParamsDefault
-        modelParams.n_gpu_layers = 0
-
-        let loadedModel = url.path.withCString { pathPtr in
-            LlamaSymbolCompat.modelLoadFromFile(pathPtr, modelParams)
-        }
-        guard let loadedModel else {
-            throw LlamaError.couldNotLoadModel
-        }
-
-        var ctxParams = contextParamsDefault
-        ctxParams.n_ctx = UInt32(max(1, contextSize))
-
-        guard let loadedContext = llama_init_from_model(loadedModel, ctxParams) else {
-            LlamaSymbolCompat.modelFree(loadedModel)
-            throw LlamaError.couldNotInitContext
-        }
-
-        var chainParams = llama_sampler_chain_default_params()
-        guard let loadedSampler = llama_sampler_chain_init(chainParams) else {
-            LlamaSymbolCompat.contextFree(loadedContext)
-            LlamaSymbolCompat.modelFree(loadedModel)
-            throw LlamaError.notInitialized
-        }
-
-        llama_sampler_chain_add(loadedSampler, llama_sampler_init_greedy())
-
-        model = loadedModel
-        context = loadedContext
-        sampler = loadedSampler
-        modelPath = url.path
-        self.contextSize = contextSize
-        activeSessionID = nil
-        cachedPrompt = ""
-        nPast = 0
+    private func stopActiveCompletion() async {
+        await service?.stopCompletion()
     }
 
-    func generate(
-        prompt: String,
-        maxTokens: Int,
-        sessionID: String,
-        onChunk: @Sendable (String) -> Void
-    ) throws {
-        guard let model, let context, let sampler else {
-            throw LlamaError.notInitialized
-        }
-
-        let vocab = llama_model_get_vocab(model)
-        if activeSessionID != sessionID {
-            resetKVCache()
-            activeSessionID = sessionID
-        }
-
-        var promptToEval = prompt
-        if !cachedPrompt.isEmpty, prompt.hasPrefix(cachedPrompt) {
-            promptToEval = String(prompt.dropFirst(cachedPrompt.count))
-        } else if !cachedPrompt.isEmpty {
-            resetKVCache()
-        }
-
-        if !promptToEval.isEmpty {
-            if promptToEval == prompt && nPast > 0 {
-                resetKVCache()
-            }
-            let promptTokens = try tokenize(promptToEval, vocab: vocab, addSpecial: nPast == 0)
-            try decodeTokens(promptTokens, context: context)
-            cachedPrompt = prompt
-        }
-
-        let evalLimit = Int(llama_n_ctx(context))
-
-        for _ in 0..<maxTokens {
-            if Task.isCancelled { break }
-            if Int(self.nPast) >= evalLimit - 1 { break }
-
-            let token = llama_sampler_sample(sampler, context, -1)
-            if llama_vocab_is_eog(vocab, token) { break }
-
-            try self.decodeTokens([token], context: context)
-            if let piece = self.tokenPieceString(vocab: vocab, token: token) {
-                onChunk(piece)
-            }
-        }
-    }
-
-    func freeResources() {
-        if let sampler {
-            LlamaSymbolCompat.samplerFree(sampler)
-            self.sampler = nil
-        }
-        if let context {
-            LlamaSymbolCompat.contextFree(context)
-            self.context = nil
-        }
-        if let model {
-            LlamaSymbolCompat.modelFree(model)
-            self.model = nil
-        }
-        modelPath = nil
-        activeSessionID = nil
-        cachedPrompt = ""
-        nPast = 0
+    private func makeRandomSeed() -> UInt32 {
+        UInt32.random(in: UInt32.min...UInt32.max)
     }
 
     // MARK: - Prompt building
 
-    private func buildPrompt(req: GenerateRequest) -> String {
+    private func buildMessages(req: GenerateRequest) -> [LlamaChatMessage] {
         let budget = PromptBudget.make(
             contextSize: contextSize,
             maxTokens: req.maxTokens,
@@ -392,6 +293,7 @@ final actor LlamaService {
             hasAttachments: !req.attachments.isEmpty,
             hasMemories: !req.relevantMemories.isEmpty
         )
+
         let assembly = PromptAssembler.assemble(
             systemPrompt: req.systemPrompt,
             history: req.history,
@@ -402,25 +304,25 @@ final actor LlamaService {
             attachmentNormalization: req.modelName == "agent-json" ? .agentRouting : .preserveRaw
         )
 
-        var messages: [(String, String)] = [("system", assembly.systemPrompt)]
-        for h in assembly.history {
-            let role: String
-            switch h.role {
-            case .user: role = "user"
-            case .assistant: role = "assistant"
-            case .system: continue
-            case .tool: role = "tool"
-            }
-            messages.append((role, h.content))
-        }
-        messages.append(("user", assembly.userMessage))
+        var messages: [LlamaChatMessage] = [
+            LlamaChatMessage(role: .system, content: assembly.systemPrompt)
+        ]
 
-        var out = ""
-        for (role, content) in messages {
-            out += "<|im_start|>\(role)\n\(content)<|im_end|>\n"
+        for h in assembly.history {
+            switch h.role {
+            case .system:
+                continue
+            case .user:
+                messages.append(LlamaChatMessage(role: .user, content: h.content))
+            case .assistant:
+                messages.append(LlamaChatMessage(role: .assistant, content: h.content))
+            case .tool:
+                messages.append(LlamaChatMessage(role: .user, content: h.content))
+            }
         }
-        out += "<|im_start|>assistant\n"
-        return out
+
+        messages.append(LlamaChatMessage(role: .user, content: assembly.userMessage))
+        return messages
     }
 
     private func hashEmbed(text: String, dimensions: Int) -> [Double] {
@@ -428,6 +330,7 @@ final actor LlamaService {
         let tokens = text.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
+
         for token in tokens {
             var hash: UInt64 = 5381
             for ch in token.unicodeScalars {
@@ -436,125 +339,14 @@ final actor LlamaService {
             let idx = Int(hash % UInt64(dimensions))
             v[idx] += 1.0
         }
+
         let norm = sqrt(v.reduce(0.0) { $0 + $1 * $1 })
         if norm > 0 {
             for i in 0..<v.count {
                 v[i] /= norm
             }
         }
+
         return v
-    }
-
-    private func tokenize(
-        _ text: String,
-        vocab: LlamaVocabRef,
-        addSpecial: Bool
-    ) throws -> [LlamaToken] {
-        var tokens = [LlamaToken](repeating: 0, count: max(256, text.utf8.count + 8))
-        var nTokens = text.withCString { promptPtr in
-            llama_tokenize(
-                vocab,
-                promptPtr,
-                Int32(text.utf8.count),
-                &tokens,
-                Int32(tokens.count),
-                addSpecial,
-                false
-            )
-        }
-
-        if nTokens < 0 {
-            let required = Int(-nTokens)
-            tokens = [LlamaToken](repeating: 0, count: required)
-            nTokens = text.withCString { promptPtr in
-                llama_tokenize(
-                    vocab,
-                    promptPtr,
-                    Int32(text.utf8.count),
-                    &tokens,
-                    Int32(tokens.count),
-                    addSpecial,
-                    false
-                )
-            }
-        }
-
-        guard nTokens > 0 else {
-            throw LlamaError.tokenizationFailed
-        }
-
-        return Array(tokens.prefix(Int(nTokens)))
-    }
-
-    private func decodeTokens(
-        _ tokens: [LlamaToken],
-        context: LlamaContextRef
-    ) throws {
-        guard !tokens.isEmpty else { return }
-
-        var batch = llama_batch_init(Int32(tokens.count), 0, 1)
-        defer { llama_batch_free(batch) }
-
-        for (index, token) in tokens.enumerated() {
-            batch.token[index] = token
-            batch.pos[index] = nPast + Int32(index)
-            batch.n_seq_id[index] = 1
-            batch.seq_id[index]![0] = 0
-            batch.logits[index] = index == tokens.count - 1 ? 1 : 0
-        }
-        batch.n_tokens = Int32(tokens.count)
-
-        if llama_decode(context, batch) != 0 {
-            throw LlamaError.decodeFailed
-        }
-
-        nPast += Int32(tokens.count)
-    }
-
-    private func resetKVCache() {
-        guard let context else { return }
-        llama_memory_clear(llama_get_memory(context), true)
-        if let sampler {
-            llama_sampler_reset(sampler)
-        }
-        cachedPrompt = ""
-        nPast = 0
-    }
-
-    private func tokenPieceString(
-        vocab: LlamaVocabRef,
-        token: LlamaToken
-    ) -> String? {
-        var piece = [CChar](repeating: 0, count: 256)
-
-        while true {
-            guard let length = LlamaSymbolCompat.tokenToPiece(
-                vocab,
-                token,
-                &piece,
-                Int32(piece.count),
-                0,
-                true
-            ) else {
-                return nil
-            }
-            if length < 0 {
-                let required = max(Int(-length), piece.count * 2)
-                piece = [CChar](repeating: 0, count: required)
-                continue
-            }
-            if length == 0 {
-                return nil
-            }
-            if Int(length) >= piece.count {
-                piece = [CChar](repeating: 0, count: piece.count * 2)
-                continue
-            }
-
-            return piece.withUnsafeBufferPointer { buffer in
-                let bytes = UnsafeRawBufferPointer(start: buffer.baseAddress, count: Int(length))
-                return String(bytes: bytes, encoding: .utf8)
-            }
-        }
     }
 }

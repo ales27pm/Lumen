@@ -19,7 +19,7 @@ enum RAGStore {
     ) async -> [(chunk: RAGChunk, score: Double)] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, limit > 0 else { return [] }
-        let queryVec = await LlamaService.shared.embed(text: trimmed)
+        let queryVec = await AppLlamaService.shared.embed(text: trimmed)
         guard !queryVec.isEmpty else { return [] }
 
         RAGVectorIndex.shared.ensureLoaded(context: context)
@@ -163,7 +163,7 @@ enum RAGStore {
         let pieces = chunkText(text)
         var count = 0
         for (i, piece) in pieces.enumerated() {
-            let emb = await LlamaService.shared.embed(text: piece)
+            let emb = await AppLlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
             if i % 8 == 7 { try? context.save() }
@@ -228,7 +228,7 @@ enum RAGStore {
             \(favorites) favorites, \(videos) videos, \(screenshots) screenshots, \(selfies) selfies, \(livePhotos) live photos, \(portraits) portraits, \(geo) with location.
             """
 
-            let emb = await LlamaService.shared.embed(text: summary)
+            let emb = await AppLlamaService.shared.embed(text: summary)
             let chunk = RAGChunk(content: summary, sourceType: .photo, sourceName: "Photos \(month)", sourceRef: month, chunkIndex: 0, embedding: emb)
             context.insert(chunk)
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
@@ -245,7 +245,7 @@ enum RAGStore {
         let pieces = chunkText(body)
         var count = 0
         for (i, piece) in pieces.enumerated() {
-            let emb = await LlamaService.shared.embed(text: piece)
+            let emb = await AppLlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: .note, sourceName: title, sourceRef: nil, chunkIndex: i, embedding: emb)
             context.insert(chunk)
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)

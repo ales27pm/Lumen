@@ -1322,7 +1322,7 @@ final class AgentService {
             var thoughtStepYielded = false
             var streamedFinalLen = 0
 
-            for await token in await LlamaService.shared.stream(genReq) {
+            for await token in await AppLlamaService.shared.stream(genReq) {
                 if Task.isCancelled { break }
                 switch token {
                 case .text(let s):
@@ -1828,7 +1828,7 @@ final class AgentService {
             relevantMemories: []
         )
         var out = ""
-        for await token in await LlamaService.shared.stream(genReq) {
+        for await token in await AppLlamaService.shared.stream(genReq) {
             if Task.isCancelled { break }
             if case .text(let s) = token { out += s }
             if case .done = token { break }
@@ -1876,7 +1876,7 @@ final class AgentService {
         )
 
         var out = ""
-        for await token in await LlamaService.shared.stream(genReq) {
+        for await token in await AppLlamaService.shared.stream(genReq) {
             if Task.isCancelled { break }
             if case .text(let s) = token { out += s }
             if case .done = token { break }

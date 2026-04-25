@@ -1,8 +1,10 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @MainActor
 enum ModelLoader {
+    private static let logger = Logger(subsystem: "com.lumen.ios", category: "ModelLoader")
     static func syncChat(appState: AppState, stored: [StoredModel]) async {
         await ensureChatLoaded(appState: appState, stored: stored)
     }
@@ -24,11 +26,11 @@ enum ModelLoader {
         if let preferredID,
            let preferred = stored.first(where: { $0.id.uuidString == preferredID && $0.modelRole == .chat }) {
             let resolvedPath = ModelStorage.resolvedModelURL(from: preferred.localPath, fileName: preferred.fileName).path
-            if await LlamaService.shared.isChatLoaded,
-               await LlamaService.shared.loadedChatPath == resolvedPath {
+            if await AppLlamaService.shared.isChatLoaded,
+               await AppLlamaService.shared.loadedChatPath == resolvedPath {
                 return true
             }
-        } else if await LlamaService.shared.isChatLoaded {
+        } else if await AppLlamaService.shared.isChatLoaded {
             return true
         }
 
@@ -41,24 +43,27 @@ enum ModelLoader {
             let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
             do {
-                try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
+                try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                 if appState.activeChatModelID != candidate.id.uuidString {
                     appState.activeChatModelID = candidate.id.uuidString
                 }
                 return true
             } catch {
-                if case LlamaError.couldNotInitContext = error {
-                    do {
-                        try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
-                        if appState.activeChatModelID != candidate.id.uuidString {
-                            appState.activeChatModelID = candidate.id.uuidString
-                        }
-                        return true
-                    } catch {
-                        continue
-                    }
+                logger.error(
+                    "Primary chat load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)"
+                )
+                if let cocoaError = error as? CocoaError, cocoaError.code == .fileNoSuchFile {
+                    continue
                 }
-                continue
+                do {
+                    try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
+                    if appState.activeChatModelID != candidate.id.uuidString {
+                        appState.activeChatModelID = candidate.id.uuidString
+                    }
+                    return true
+                } catch {
+                    continue
+                }
             }
         }
         return false
@@ -70,11 +75,11 @@ enum ModelLoader {
         if let preferredID,
            let preferred = stored.first(where: { $0.id.uuidString == preferredID && $0.modelRole == .embedding }) {
             let resolvedPath = ModelStorage.resolvedModelURL(from: preferred.localPath, fileName: preferred.fileName).path
-            if await LlamaService.shared.isEmbedLoaded,
-               await LlamaService.shared.loadedEmbedPath == resolvedPath {
+            if await AppLlamaService.shared.isEmbedLoaded,
+               await AppLlamaService.shared.loadedEmbedPath == resolvedPath {
                 return true
             }
-        } else if await LlamaService.shared.isEmbedLoaded {
+        } else if await AppLlamaService.shared.isEmbedLoaded {
             return true
         }
 
@@ -87,7 +92,7 @@ enum ModelLoader {
             let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
             do {
-                try await LlamaService.shared.loadEmbeddingModel(path: resolvedPath)
+                try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
                 if appState.activeEmbeddingModelID != candidate.id.uuidString {
                     appState.activeEmbeddingModelID = candidate.id.uuidString
                 }

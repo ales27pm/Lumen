@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9A1B2C3D4E5F678901234560 /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = 9A1B2C3D4E5F678901234561 /* llama */; };
+		9A1B2C3D4E5F678901234570 /* SwiftLlama in Frameworks */ = {isa = PBXBuildFile; productRef = 9A1B2C3D4E5F678901234571 /* SwiftLlama */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9A1B2C3D4E5F678901234560 /* llama in Frameworks */,
+				9A1B2C3D4E5F678901234570 /* SwiftLlama in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,7 +117,7 @@
 			);
 			name = Lumen;
 			packageProductDependencies = (
-				9A1B2C3D4E5F678901234561 /* llama */,
+				9A1B2C3D4E5F678901234571 /* SwiftLlama */,
 			);
 			productName = Lumen;
 			productReference = 105FC57A2E9EAD3100EA8BCF /* Lumen.app */;
@@ -203,7 +203,7 @@
 			mainGroup = 105FC5712E9EAD3100EA8BCF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				9A1B2C3D4E5F678901234562 /* XCRemoteSwiftPackageReference "llama.cpp" */,
+				9A1B2C3D4E5F678901234572 /* XCRemoteSwiftPackageReference "swift-llama-cpp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 105FC57B2E9EAD3100EA8BCF /* Products */;
@@ -279,21 +279,21 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		9A1B2C3D4E5F678901234562 /* XCRemoteSwiftPackageReference "llama.cpp" */ = {
+		9A1B2C3D4E5F678901234572 /* XCRemoteSwiftPackageReference "swift-llama-cpp" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ggml-org/llama.cpp.git";
+			repositoryURL = "https://github.com/pgorzelany/swift-llama-cpp.git";
 			requirement = {
-				kind = revision;
-				revision = d39ffd9556482b77d4ea5b118b453fc1c097a31d;
+				kind = exactVersion;
+				version = 1.2.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		9A1B2C3D4E5F678901234561 /* llama */ = {
+		9A1B2C3D4E5F678901234571 /* SwiftLlama */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 9A1B2C3D4E5F678901234562 /* XCRemoteSwiftPackageReference "llama.cpp" */;
-			productName = llama;
+			package = 9A1B2C3D4E5F678901234572 /* XCRemoteSwiftPackageReference "swift-llama-cpp" */;
+			productName = SwiftLlama;
 		};
 /* End XCSwiftPackageProductDependency section */
 

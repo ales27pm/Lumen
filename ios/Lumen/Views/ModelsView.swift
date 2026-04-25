@@ -96,7 +96,7 @@ struct ModelsView: View {
     private var activeRow: some View {
         HStack(spacing: 10) {
             ActivePill(title: "Chat", name: storedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
-            ActivePill(title: "Embed", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
+            ActivePill(title: "Embed (hash)", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
         }
     }
 
@@ -148,13 +148,15 @@ struct ModelsView: View {
 
     private func refreshLoaded() async {
         var set: Set<String> = []
-        if let p = await LlamaService.shared.loadedChatPath {
+        if let p = await AppLlamaService.shared.loadedChatPath {
             let fileName = URL(fileURLWithPath: p).lastPathComponent
             set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
         }
-        if let p = await LlamaService.shared.loadedEmbedPath {
-            let fileName = URL(fileURLWithPath: p).lastPathComponent
-            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+        if let p = await AppLlamaService.shared.loadedEmbedPath {
+            if await AppLlamaService.shared.hasSemanticEmbeddingRuntime {
+                let fileName = URL(fileURLWithPath: p).lastPathComponent
+                set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+            }
         }
         loadedPaths = set
     }
@@ -164,10 +166,10 @@ struct ModelsView: View {
             do {
                 if sm.modelRole == .chat {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    try await LlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
+                    try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                 } else {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    try await LlamaService.shared.loadEmbeddingModel(path: resolvedPath)
+                    try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
                 }
                 await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -180,9 +182,9 @@ struct ModelsView: View {
     private func unload(_ sm: StoredModel) {
         Task {
             if sm.modelRole == .chat {
-                await LlamaService.shared.unloadChat()
+                await AppLlamaService.shared.unloadChat()
             } else {
-                await LlamaService.shared.unloadEmbed()
+                await AppLlamaService.shared.unloadEmbed()
             }
             await refreshLoaded()
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
@@ -193,9 +195,9 @@ struct ModelsView: View {
         Task {
             do {
                 if sm.modelRole == .chat {
-                    try await LlamaService.shared.reloadChat(contextSize: appState.contextSize)
+                    try await AppLlamaService.shared.reloadChat(contextSize: appState.contextSize)
                 } else {
-                    try await LlamaService.shared.reloadEmbed()
+                    try await AppLlamaService.shared.reloadEmbed()
                 }
                 await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)

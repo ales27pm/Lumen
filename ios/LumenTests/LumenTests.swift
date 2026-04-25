@@ -271,4 +271,23 @@ struct LumenTests {
         #expect(decoded[1].toolArgs?["city"] == "Boston")
     }
 
+    @Test func sanitizeHistoryContentStripsMarkdownXmlAndToolWrappers() async throws {
+        let raw = """
+        <tool_call>
+        ```json
+        {"name":"web.search","arguments":{"query":"Swift"}}
+        ```
+        </tool_call>
+        <response>Sure — let's continue with your question.</response>
+        """
+        let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
+        #expect(sanitized == "Sure — let's continue with your question.")
+    }
+
+    @Test func sanitizeHistoryContentCollapsesRepeatedStructuralPunctuation() async throws {
+        let raw = #"Answer:::: {{{{done}}}} [[ok]] <final>Great!!!</final> ##"#
+        let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
+        #expect(sanitized == "Answer: {done} [ok] Great!!! ##")
+    }
+
 }

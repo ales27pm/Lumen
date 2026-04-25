@@ -1093,15 +1093,32 @@ final class AgentService {
 
     private func sanitizeHistoryContent(_ content: String) -> String {
         var text = content
-            .replacingOccurrences(of: "```json", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "```swift", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "```", with: "")
+        text = text.replacingOccurrences(
+            of: #"```[\s\S]*?```"#,
+            with: " ",
+            options: .regularExpression
+        )
+        text = text.replacingOccurrences(
+            of: #"</?[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^<>]*?)?/?>"#,
+            with: " ",
+            options: .regularExpression
+        )
+        text = text.replacingOccurrences(
+            of: #"([{}\[\]<>`"':,;|\\/_=-])\1+"#,
+            with: "$1",
+            options: .regularExpression
+        )
+        text = text
             .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         text = text.replacingOccurrences(of: "\n", with: " ")
         while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
         return String(text.prefix(700))
+    }
+
+    func sanitizeHistoryContentForTests(_ content: String) -> String {
+        sanitizeHistoryContent(content)
     }
 
     private func agentTemperature(from userTemperature: Double) -> Double {

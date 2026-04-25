@@ -99,6 +99,149 @@ nonisolated enum AgentTurnParseError: String, Error, Sendable, Codable {
     case invalidActionArgsType
 }
 
+private enum AgentJSONCandidateSelector {
+    struct Selection {
+        let object: [String: Any]
+        let selectedJSON: String
+        let prefixNoise: String?
+        let suffixNoise: String?
+        let hadUnsupportedNoise: Bool
+    }
+
+    static func select(from text: String) -> Result<Selection, AgentTurnParseError> {
+        let chars = Array(text)
+        let rangesResult = discoverRanges(in: chars)
+        switch rangesResult {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let ranges):
+            guard !ranges.isEmpty else { return .failure(.noJSONObject) }
+
+            var candidates: [(range: (Int, Int), object: [String: Any], score: Int)] = []
+            for range in ranges {
+                guard let obj = parseJSONObject(chars: chars, range: range) else { continue }
+                candidates.append((range: range, object: obj, score: scoreCandidate(object: obj)))
+            }
+            guard !candidates.isEmpty else {
+                return .failure(ranges.count > 1 ? .multipleJSONObjects : .invalidJSONObject)
+            }
+
+            candidates.sort { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.range.0 > rhs.range.0
+            }
+
+            let selected = candidates[0]
+            let selectedJSON = String(chars[selected.range.0...selected.range.1])
+            let prefix = String(chars[..<selected.range.0])
+            let suffixStart = selected.range.1 + 1
+            let suffix = suffixStart < chars.count ? String(chars[suffixStart..<chars.count]) : ""
+            let prefixNoise = nonEmpty(stripFenceNoise(prefix))
+            let suffixNoise = nonEmpty(stripFenceNoise(suffix))
+            return .success(
+                Selection(
+                    object: selected.object,
+                    selectedJSON: selectedJSON,
+                    prefixNoise: prefixNoise,
+                    suffixNoise: suffixNoise,
+                    hadUnsupportedNoise: prefixNoise != nil || suffixNoise != nil
+                )
+            )
+        }
+    }
+
+    private static func discoverRanges(in chars: [Character]) -> Result<[(Int, Int)], AgentTurnParseError> {
+        var ranges: [(Int, Int)] = []
+        var depth = 0
+        var start: Int?
+        var inString = false
+        var escape = false
+        var i = 0
+
+        while i < chars.count {
+            let ch = chars[i]
+            if inString {
+                if escape {
+                    if !isValidEscape(at: i, in: chars) {
+                        return .failure(.malformedEscapeSequence)
+                    }
+                    if ch == "u" { i += 4 }
+                    escape = false
+                } else if ch == "\\" {
+                    escape = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                i += 1
+                continue
+            }
+
+            if ch == "\"" {
+                inString = true
+            } else if ch == "{" {
+                if depth == 0 { start = i }
+                depth += 1
+            } else if ch == "}" {
+                guard depth > 0 else { return .failure(.invalidJSONObject) }
+                depth -= 1
+                if depth == 0, let s = start {
+                    ranges.append((s, i))
+                    start = nil
+                }
+            }
+            i += 1
+        }
+
+        if inString || depth != 0 { return .failure(.incompleteJSON) }
+        return .success(ranges)
+    }
+
+    private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> [String: Any]? {
+        let jsonStr = String(chars[range.0...range.1])
+        guard let data = jsonStr.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func scoreCandidate(object: [String: Any]) -> Int {
+        var score = 0
+        if object["action"] != nil || object["tool"] != nil { score += 4 }
+        if object["final"] != nil || object["final_answer"] != nil || object["answer"] != nil { score += 4 }
+        if object["thought"] != nil || object["reasoning"] != nil { score += 2 }
+        if object["args"] != nil || object["arguments"] != nil || object["input"] != nil { score += 1 }
+        return score
+    }
+
+    private static func stripFenceNoise(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "```json", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "```", with: "")
+            .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func nonEmpty(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func isValidEscape(at index: Int, in chars: [Character]) -> Bool {
+        let esc = chars[index]
+        switch esc {
+        case "\"", "\\", "/", "b", "f", "n", "r", "t":
+            return true
+        case "u":
+            guard index + 4 < chars.count else { return false }
+            for j in (index + 1)...(index + 4) {
+                if chars[j].hexDigitValue == nil { return false }
+            }
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 nonisolated enum AgentTurnParser {
     private struct ExtractedJSONObject {
         let object: [String: Any]
@@ -245,119 +388,16 @@ nonisolated enum AgentTurnParser {
     }
 
     private static func extractSingleJSONObject(from text: String) -> Result<ExtractedJSONObject, AgentTurnParseError> {
-        let chars = Array(text)
-        var ranges: [(Int, Int)] = []
-        var depth = 0
-        var start: Int?
-        var inString = false
-        var escape = false
-        var i = 0
-
-        while i < chars.count {
-            let ch = chars[i]
-            if inString {
-                if escape {
-                    if !isValidEscape(at: i, in: chars) {
-                        return .failure(.malformedEscapeSequence)
-                    }
-                    if ch == "u" { i += 4 }
-                    escape = false
-                } else if ch == "\\" {
-                    escape = true
-                } else if ch == "\"" {
-                    inString = false
-                }
-                i += 1
-                continue
-            }
-
-            if ch == "\"" {
-                inString = true
-            } else if ch == "{" {
-                if depth == 0 { start = i }
-                depth += 1
-            } else if ch == "}" {
-                guard depth > 0 else { return .failure(.invalidJSONObject) }
-                depth -= 1
-                if depth == 0, let s = start {
-                    ranges.append((s, i))
-                    start = nil
-                }
-            }
-            i += 1
-        }
-
-        if inString || depth != 0 { return .failure(.incompleteJSON) }
-        guard !ranges.isEmpty else { return .failure(.noJSONObject) }
-
-        var candidates: [(range: (Int, Int), object: [String: Any], score: Int)] = []
-        for range in ranges {
-            guard let obj = parseJSONObject(chars: chars, range: range) else { continue }
-            let score = scoreCandidate(object: obj)
-            candidates.append((range: range, object: obj, score: score))
-        }
-        guard !candidates.isEmpty else {
-            return ranges.count > 1 ? .failure(.multipleJSONObjects) : .failure(.invalidJSONObject)
-        }
-
-        candidates.sort { lhs, rhs in
-            if lhs.score != rhs.score { return lhs.score > rhs.score }
-            return lhs.range.0 > rhs.range.0
-        }
-
-        let selected = candidates[0]
-        let hadNoise = hasUnsupportedNoise(in: chars, selectedRange: selected.range)
-        return .success(ExtractedJSONObject(object: selected.object, hadNoise: hadNoise))
-    }
-
-    private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> [String: Any]? {
-        let jsonStr = String(chars[range.0...range.1])
-        guard let data = jsonStr.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    }
-
-    private static func scoreCandidate(object: [String: Any]) -> Int {
-        var score = 0
-        if object["action"] != nil || object["tool"] != nil { score += 4 }
-        if object["final"] != nil || object["final_answer"] != nil || object["answer"] != nil { score += 4 }
-        if object["thought"] != nil || object["reasoning"] != nil { score += 2 }
-        if object["args"] != nil || object["arguments"] != nil || object["input"] != nil { score += 1 }
-        return score
-    }
-
-    private static func hasUnsupportedNoise(
-        in chars: [Character],
-        selectedRange: (Int, Int)
-    ) -> Bool {
-        let prefix = String(chars[..<selectedRange.0])
-        let suffixStart = selectedRange.1 + 1
-        let suffix = suffixStart < chars.count ? String(chars[suffixStart..<chars.count]) : ""
-        return containsUnsupportedNoise(prefix) || containsUnsupportedNoise(suffix)
-    }
-
-    private static func containsUnsupportedNoise(_ text: String) -> Bool {
-        let normalized = text
-            .replacingOccurrences(of: "```json", with: "")
-            .replacingOccurrences(of: "```JSON", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .replacingOccurrences(of: "<json>", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "</json>", with: "", options: .caseInsensitive)
-        return !normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private static func isValidEscape(at index: Int, in chars: [Character]) -> Bool {
-        let esc = chars[index]
-        switch esc {
-        case "\"", "\\", "/", "b", "f", "n", "r", "t":
-            return true
-        case "u":
-            guard index + 4 < chars.count else { return false }
-            for j in (index + 1)...(index + 4) {
-                if chars[j].hexDigitValue == nil { return false }
-            }
-            return true
-        default:
-            return false
+        switch AgentJSONCandidateSelector.select(from: text) {
+        case .success(let selection):
+            return .success(
+                ExtractedJSONObject(
+                    object: selection.object,
+                    hadNoise: selection.hadUnsupportedNoise
+                )
+            )
+        case .failure(let error):
+            return .failure(error)
         }
     }
 
@@ -509,63 +549,20 @@ nonisolated enum AgentNoiseInspector {
     }
 
     static func inspect(_ raw: String) -> Snapshot {
-        let chars = Array(raw)
-        var ranges: [(Int, Int)] = []
-        var depth = 0
-        var start: Int?
-        var inString = false
-        var escape = false
-        var i = 0
-
-        while i < chars.count {
-            let ch = chars[i]
-            if inString {
-                if escape {
-                    if ch == "u" { i += 4 }
-                    escape = false
-                } else if ch == "\\" {
-                    escape = true
-                } else if ch == "\"" {
-                    inString = false
-                }
-                i += 1
-                continue
-            }
-
-            if ch == "\"" {
-                inString = true
-            } else if ch == "{" {
-                if depth == 0 { start = i }
-                depth += 1
-            } else if ch == "}" {
-                if depth > 0 {
-                    depth -= 1
-                    if depth == 0, let s = start {
-                        ranges.append((s, i))
-                        start = nil
-                    }
-                }
-            }
-            i += 1
-        }
-
-        guard let selected = ranges.last else {
+        switch AgentJSONCandidateSelector.select(from: raw) {
+        case .success(let selection):
+            return Snapshot(
+                selectedJSON: selection.selectedJSON,
+                prefixNoise: selection.prefixNoise,
+                suffixNoise: selection.suffixNoise
+            )
+        case .failure:
             return Snapshot(
                 selectedJSON: nil,
                 prefixNoise: nonEmpty(raw),
                 suffixNoise: nil
             )
         }
-
-        let json = String(chars[selected.0...selected.1])
-        let prefix = String(chars[..<selected.0])
-        let suffixStart = selected.1 + 1
-        let suffix = suffixStart < chars.count ? String(chars[suffixStart..<chars.count]) : ""
-        return Snapshot(
-            selectedJSON: nonEmpty(json),
-            prefixNoise: nonEmpty(stripFenceNoise(prefix)),
-            suffixNoise: nonEmpty(stripFenceNoise(suffix))
-        )
     }
 
     private static func stripFenceNoise(_ text: String) -> String {

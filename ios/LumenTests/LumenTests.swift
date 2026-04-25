@@ -345,7 +345,13 @@ struct LumenTests {
     @Test func sanitizeHistoryContentCollapsesRepeatedStructuralPunctuation() async throws {
         let raw = #"Answer:::: {{{{done}}}} [[ok]] <final>Great!!!</final> ##"#
         let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
-        #expect(sanitized == "Answer: {done} [ok] Great!!! ##")
+        #expect(sanitized == "Answer:::: {done} [ok] Great!!! ##")
+    }
+
+    @Test func sanitizeHistoryContentPreservesURLPathAndMarkupTokens() async throws {
+        let raw = #"Noise {{{{ https://example.com/a//b?x=1::2#frag /Users/me/Hybrid Coder/Models/model.gguf ./Sources//AgentService.swift **bold** __under__ ~~strike~~ }}"#
+        let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
+        #expect(sanitized == "Noise { https://example.com/a//b?x=1::2#frag /Users/me/Hybrid Coder/Models/model.gguf ./Sources//AgentService.swift **bold** __under__ ~~strike~~ }")
     }
 
     @Test func parseFailureSummaryAggregatesByErrorAndNoiseSignatures() async throws {

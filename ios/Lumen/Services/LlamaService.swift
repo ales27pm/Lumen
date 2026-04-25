@@ -135,12 +135,11 @@ final actor LlamaService {
                 }
 
                 do {
-                    let generated = try await self.generate(
+                    try await self.generate(
                         prompt: prompt,
                         maxTokens: req.maxTokens,
                         sessionID: sessionID
-                    )
-                    for await chunk in generated {
+                    ) { chunk in
                         continuation.yield(.text(chunk))
                     }
                 } catch {
@@ -208,7 +207,12 @@ final actor LlamaService {
         nPast = 0
     }
 
-    func generate(prompt: String, maxTokens: Int, sessionID: String) async throws -> AsyncStream<String> {
+    func generate(
+        prompt: String,
+        maxTokens: Int,
+        sessionID: String,
+        onChunk: @Sendable (String) -> Void
+    ) throws {
         guard let model, let context, let sampler else {
             throw LlamaError.notInitialized
         }
@@ -237,33 +241,23 @@ final actor LlamaService {
 
         let evalLimit = Int(llama_n_ctx(context))
 
-        return AsyncStream { continuation in
-            Task {
-                for _ in 0..<maxTokens {
-                    if Task.isCancelled {
-                        break
-                    }
-                    if Int(self.nPast) >= evalLimit - 1 {
-                        break
-                    }
+        for _ in 0..<maxTokens {
+            if Task.isCancelled {
+                break
+            }
+            if Int(self.nPast) >= evalLimit - 1 {
+                break
+            }
 
-                    let token = llama_sampler_sample(sampler, context, -1)
-                    if llama_vocab_is_eog(vocab, token) {
-                        break
-                    }
+            let token = llama_sampler_sample(sampler, context, -1)
+            if llama_vocab_is_eog(vocab, token) {
+                break
+            }
 
-                    do {
-                        try self.decodeTokens([token], context: context)
-                    } catch {
-                        break
-                    }
+            try self.decodeTokens([token], context: context)
 
-                    if let piece = self.tokenPieceString(vocab: vocab, token: token) {
-                        continuation.yield(piece)
-                    }
-                }
-
-                continuation.finish()
+            if let piece = self.tokenPieceString(vocab: vocab, token: token) {
+                onChunk(piece)
             }
         }
     }

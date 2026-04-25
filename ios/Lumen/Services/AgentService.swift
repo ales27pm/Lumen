@@ -1721,10 +1721,10 @@ final class AgentService {
     private func diagnosticReflection(for _: AgentTurnParseError, raw: String) -> String {
         let noise = AgentNoiseInspector.inspect(raw)
         var parts = ["I hit an internal formatting issue and repaired it into a plain answer."]
-        if let prefix = noise.prefixNoise, !prefix.isEmpty {
+        if let prefix = noise.prefixNoise, !prefix.isEmpty, Self.isMeaningfulDiagnosticNoise(prefix) {
             parts.append("Prefix noise: \(String(prefix.prefix(120)))")
         }
-        if let suffix = noise.suffixNoise, !suffix.isEmpty {
+        if let suffix = noise.suffixNoise, !suffix.isEmpty, Self.isMeaningfulDiagnosticNoise(suffix) {
             parts.append("Suffix noise: \(String(suffix.prefix(120)))")
         }
         if noise.selectedJSON == nil && raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -1892,7 +1892,7 @@ final class AgentService {
     }
 
     private nonisolated static func firstUsefulPlainTextFallback(from raw: String) -> String? {
-        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = sanitizeInternalErrorNoise(from: raw)
         guard !text.isEmpty else { return nil }
 
         text = text
@@ -1911,5 +1911,33 @@ final class AgentService {
         guard !looksLikeStructuredTurn else { return nil }
         guard text.count >= 8 else { return nil }
         return String(text.prefix(4_000))
+    }
+
+    private nonisolated static func sanitizeInternalErrorNoise(from raw: String) -> String {
+        var text = raw
+        let knownNoisePatterns = [
+            #"(?im)^\s*Generation error:.*(?:\R|$)"#,
+            #"(?im)^\s*The operation couldn[’']t be completed\..*(?:\R|$)"#,
+            #"(?im)^\s*\(SwiftLlama\.LlamaError error \d+\)\.?(?:\R|$)"#,
+            #"(?im)^\s*I hit an internal formatting issue and repaired it into a plain answer\..*(?:\R|$)"#,
+            #"(?im)^\s*Prefix noise:.*(?:\R|$)"#,
+            #"(?im)^\s*Suffix noise:.*(?:\R|$)"#,
+            #"(?im)^\s*No valid JSON object found in raw model output\..*(?:\R|$)"#
+        ]
+
+        for pattern in knownNoisePatterns {
+            text = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private nonisolated static func isMeaningfulDiagnosticNoise(_ text: String) -> Bool {
+        let sanitized = sanitizeInternalErrorNoise(from: text)
+        return !sanitized.isEmpty
+    }
+
+    func sanitizeInternalErrorNoiseForTests(_ raw: String) -> String {
+        Self.sanitizeInternalErrorNoise(from: raw)
     }
 }

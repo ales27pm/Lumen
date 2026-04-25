@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */; };
-		XX9A23B76CBA103A1109D0AA /* Spezi in Frameworks */ = {isa = PBXBuildFile; productRef = XX9A23B66CBA103A1109D0AA /* Spezi */; };
-		XX9A23BA6CBA103A1109D0AA /* SpeziLLM in Frameworks */ = {isa = PBXBuildFile; productRef = XX9A23B96CBA103A1109D0AA /* SpeziLLM */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,9 +55,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */,
-				XX9A23B76CBA103A1109D0AA /* Spezi in Frameworks */,
-				XX9A23BA6CBA103A1109D0AA /* SpeziLLM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,9 +115,6 @@
 			);
 			name = Lumen;
 			packageProductDependencies = (
-				XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */,
-				XX9A23B66CBA103A1109D0AA /* Spezi */,
-				XX9A23B96CBA103A1109D0AA /* SpeziLLM */,
 			);
 			productName = Lumen;
 			productReference = 105FC57A2E9EAD3100EA8BCF /* Lumen.app */;
@@ -209,8 +200,6 @@
 			mainGroup = 105FC5712E9EAD3100EA8BCF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */,
-				XX9A23B56CBA103A1109D0AA /* XCRemoteSwiftPackageReference "Spezi" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 105FC57B2E9EAD3100EA8BCF /* Products */;
@@ -628,42 +617,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = https://github.com/StanfordSpezi/SpeziLLM.git;
-			requirement = {
-				kind = exactVersion;
-				version = 0.13.8;
-			};
-		};
-		XX9A23B56CBA103A1109D0AA /* XCRemoteSwiftPackageReference "Spezi" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = https://github.com/StanfordSpezi/Spezi.git;
-			requirement = {
-				kind = exactVersion;
-				version = 1.9.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;
-			productName = SpeziLLMLocal;
-		};
-		XX9A23B66CBA103A1109D0AA /* Spezi */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = XX9A23B56CBA103A1109D0AA /* XCRemoteSwiftPackageReference "Spezi" */;
-			productName = Spezi;
-		};
-		XX9A23B96CBA103A1109D0AA /* SpeziLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;
-			productName = SpeziLLM;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 105FC5722E9EAD3100EA8BCF /* Project object */;
 }

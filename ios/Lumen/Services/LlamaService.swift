@@ -429,7 +429,12 @@ final actor LlamaService {
 
         while true {
             let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, true)
-            if length <= 0 {
+            if length < 0 {
+                let required = max(Int(-length), piece.count * 2)
+                piece = [CChar](repeating: 0, count: required)
+                continue
+            }
+            if length == 0 {
                 return nil
             }
             if Int(length) >= piece.count {

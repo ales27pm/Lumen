@@ -85,6 +85,9 @@ final actor AppLlamaService {
     private var embeddingModelPath: String?
     private var embeddingModel: LlamaModel?
     private var embeddingContext: LlamaContext?
+    private var embeddingContextSize: UInt32 = 2048
+    private var embeddingBatchSize: UInt32 = 256
+    private var embeddingThreads: Int32 = 1
 
     private init() {}
 
@@ -117,15 +120,7 @@ final actor AppLlamaService {
             throw LlamaError.failedToInitializeContext("Unable to load embedding GGUF")
         }
 
-        var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 2048
-        contextParams.n_batch = 256
-        contextParams.n_ubatch = 256
-        contextParams.n_threads = 1
-        contextParams.n_threads_batch = 1
-        contextParams.offload_kqv = false
-
-        guard let context = LlamaContext(model: model, parameters: contextParams) else {
+        guard let context = makeEmbeddingContext(for: model) else {
             throw LlamaError.failedToInitializeContext("Unable to create embedding context")
         }
 
@@ -294,7 +289,15 @@ final actor AppLlamaService {
         guard !trimmed.isEmpty else { return [] }
 
         guard let embeddingModel else { throw LlamaError.embeddingModelNotLoaded }
-        guard let embeddingContext else { throw LlamaError.embeddingModelNotLoaded }
+        guard embeddingContext != nil else { throw LlamaError.embeddingModelNotLoaded }
+        guard let embeddingContext = makeEmbeddingContext(for: embeddingModel) else {
+            throw LlamaError.failedToInitializeContext("Unable to reset embedding context")
+        }
+
+        // Reset per-request embedding sequence state by recreating the context.
+        // This avoids stale sequence-0 KV state contaminating pooled embeddings
+        // across calls in long-lived app sessions.
+        self.embeddingContext = embeddingContext
 
         let tokens = embeddingModel.tokenize(text: trimmed, addBos: embeddingModel.shouldAddBos(), special: false)
         guard !tokens.isEmpty else { return [] }
@@ -303,7 +306,6 @@ final actor AppLlamaService {
             throw LlamaError.embeddingFailed("Input exceeds embedding context window")
         }
 
-        embeddingContext.clearKVCache()
         embeddingContext.setEmbeddingsOutput(true)
         embeddingContext.setCausalAttention(false)
 
@@ -351,6 +353,17 @@ final actor AppLlamaService {
         chatService = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
         chatModelPath = path
         chatContextSize = contextSize
+    }
+
+    private func makeEmbeddingContext(for model: LlamaModel) -> LlamaContext? {
+        var contextParams = llama_context_default_params()
+        contextParams.n_ctx = embeddingContextSize
+        contextParams.n_batch = embeddingBatchSize
+        contextParams.n_ubatch = embeddingBatchSize
+        contextParams.n_threads = embeddingThreads
+        contextParams.n_threads_batch = embeddingThreads
+        contextParams.offload_kqv = false
+        return LlamaContext(model: model, parameters: contextParams)
     }
 
     private func stopActiveCompletion() async {

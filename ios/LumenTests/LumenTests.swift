@@ -230,6 +230,18 @@ struct LumenTests {
         #expect(scanner.final.isEmpty)
     }
 
+    @Test func streamingScannerIgnoresFinalWordInsideThoughtText() async throws {
+        let scanner = StreamingJSONScanner()
+        let events1 = scanner.feed(#"{"thought":"I might write \"final\" later"#)
+        #expect(events1.count == 1)
+        #expect(scanner.thought == #"I might write "final" later"#)
+        #expect(scanner.final.isEmpty)
+
+        let events2 = scanner.feed(#"","final":"Actual final"}"#)
+        #expect(events2.count >= 1)
+        #expect(scanner.final == "Actual final")
+    }
+
     @Test func agentActionDedupeKeyAndDisplayAreDeterministic() async throws {
         let action1 = AgentAction(tool: "web.search", args: ["q": "swift", "city": "Boston"])
         let action2 = AgentAction(tool: "web.search", args: ["city": "Boston", "q": "swift"])

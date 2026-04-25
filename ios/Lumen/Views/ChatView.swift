@@ -219,9 +219,12 @@ struct ChatView: View {
     private func runAgent(text: String, memories: [String], attachments: [ChatAttachment]) async {
         let history = conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) }
         let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
-        let routedTools = AgentIntentRouter.filteredTools(from: enabledTools, userMessage: text, attachments: attachments)
+        let routingDecision = AgentIntentRouter.decide(userMessage: text, attachments: attachments)
+        let routedTools = enabledTools.filter { routingDecision.allowedToolIDs.contains($0.id) }
+        let baseSystemPrompt = conversation.systemPrompt ?? appState.systemPrompt
+        let routedSystemPrompt = baseSystemPrompt + AgentIntentRouter.routingSystemNote(for: routingDecision)
         let req = AgentRequest(
-            systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
+            systemPrompt: routedSystemPrompt,
             history: Array(history),
             userMessage: text,
             temperature: appState.temperature,

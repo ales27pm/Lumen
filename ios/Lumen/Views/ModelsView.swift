@@ -96,7 +96,7 @@ struct ModelsView: View {
     private var activeRow: some View {
         HStack(spacing: 10) {
             ActivePill(title: "Chat", name: storedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
-            ActivePill(title: "Embed (hash)", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
+            ActivePill(title: "Embed", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
         }
     }
 
@@ -460,7 +460,7 @@ struct ModelPickerSheet: View {
                         }
                     }
                     if stored.filter({ $0.modelRole == .chat }).isEmpty {
-                        Text("Download a chat model from Models tab.")
+                        Text("Add a .gguf chat model from your app bundle or Files app.")
                             .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                 }
@@ -472,7 +472,7 @@ struct ModelPickerSheet: View {
                         }
                     }
                     if stored.filter({ $0.modelRole == .embedding }).isEmpty {
-                        Text("Download an embedding model from Models tab.")
+                        Text("Add a .gguf embedding model from your app bundle or Files app.")
                             .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                 }
@@ -501,68 +501,71 @@ struct AddModelSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-    @State private var repoId: String = ""
-    @State private var fileName: String = ""
+    @State private var candidates: [LocalModelFile] = []
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("owner/repo-name", text: $repoId)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField("filename.gguf", text: $fileName)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Hugging Face")
-                } footer: {
-                    Text("Paste any public GGUF repository ID and exact filename. The file will download directly from huggingface.co.")
-                }
-
-                Section {
-                    Button {
-                        addCustom()
-                    } label: {
-                        Text("Start download").frame(maxWidth: .infinity)
+            List {
+                if candidates.isEmpty {
+                    Text("No .gguf files found in app bundle or Documents directory.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                } else {
+                    ForEach(candidates) { model in
+                        Button {
+                            addLocal(model)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(model.displayName)
+                                    .font(.body.weight(.medium))
+                                Text("\(model.fileName) • \(model.source)")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                        }
                     }
-                    .disabled(repoId.isEmpty || fileName.isEmpty)
                 }
             }
-            .navigationTitle("Add Model")
+            .navigationTitle("Select GGUF")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Refresh") { candidates = LocalModelDiscovery.discoverGGUF() }
+                }
             }
+            .task { candidates = LocalModelDiscovery.discoverGGUF() }
         }
     }
 
-    private func addCustom() {
-        let model = CatalogModel(
-            id: UUID().uuidString,
-            name: fileName.replacingOccurrences(of: ".gguf", with: ""),
-            repoId: repoId,
+    private func addLocal(_ file: LocalModelFile) {
+        let fileName = file.fileName
+        let role: ModelRole = fileName.lowercased().contains("embed") ? .embedding : .chat
+        let attrs = (try? FileManager.default.attributesOfItem(atPath: file.url.path)) ?? [:]
+        let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+
+        let stored = StoredModel(
+            name: file.displayName,
+            repoId: "local/\(file.source.lowercased())",
             fileName: fileName,
-            parameters: "custom",
-            quantization: "custom",
-            sizeBytes: 0,
-            role: fileName.lowercased().contains("embed") ? .embedding : .chat,
-            description: "Custom model from \(repoId)",
-            tags: ["custom"]
+            sizeBytes: size,
+            quantization: "local",
+            parameters: "local",
+            role: role,
+            localPath: file.url.path
         )
-        ModelDownloader.shared.start(model) { localURL in
-            Task { @MainActor in
-                let stored = StoredModel(
-                    name: model.name, repoId: model.repoId, fileName: model.fileName,
-                    sizeBytes: model.sizeBytes, quantization: model.quantization,
-                    parameters: model.parameters, role: model.role, localPath: localURL.path
-                )
-                modelContext.insert(stored)
-                try? modelContext.save()
-            }
+        modelContext.insert(stored)
+        try? modelContext.save()
+
+        if role == .chat && appState.activeChatModelID == nil {
+            appState.activeChatModelID = stored.id.uuidString
         }
+        if role == .embedding && appState.activeEmbeddingModelID == nil {
+            appState.activeEmbeddingModelID = stored.id.uuidString
+        }
+
         dismiss()
     }
 }

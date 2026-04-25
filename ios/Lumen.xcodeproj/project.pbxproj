@@ -284,7 +284,7 @@
 			repositoryURL = "https://github.com/ggml-org/llama.cpp.git";
 			requirement = {
 				kind = revision;
-				revision = dcad77cc3b0865153f486327064fb0320a57a476;
+				revision = 5bbe6a9fe9a8796a9389c85accec89dbc4d91e39;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

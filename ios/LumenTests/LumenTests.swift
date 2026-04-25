@@ -470,6 +470,86 @@ struct LumenTests {
         #expect(summary.topEntries[0].suffixSignature.hasPrefix("suffix one#"))
     }
 
+    @Test func agentRoutingAttachmentNormalizationReducesStructuralNoiseForCodeHeavyContent() async throws {
+        let content = """
+        ```json
+        {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+        "tool":"web.search","args":{"query":"swift parser"}}
+        ]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+        /////////////////////////////////////////////////
+        ###############################################
+        ```
+        """
+        let attachment = makeTestAttachment(name: "code-heavy.txt", kind: .text, content: content)
+        let budget = PromptBudget(totalChars: 12_000, attachmentsShare: 4_000, memoriesShare: 0, historyShare: 2_000)
+
+        let rawAssembly = PromptAssembler.assemble(
+            systemPrompt: "sys",
+            history: [],
+            userMessage: "route this",
+            memories: [],
+            attachments: [attachment],
+            budget: budget,
+            attachmentNormalization: .preserveRaw
+        )
+        let normalizedAssembly = PromptAssembler.assemble(
+            systemPrompt: "sys",
+            history: [],
+            userMessage: "route this",
+            memories: [],
+            attachments: [attachment],
+            budget: budget,
+            attachmentNormalization: .agentRouting
+        )
+
+        let rawNoise = structuralNoiseScore(rawAssembly.systemPrompt)
+        let normalizedNoise = structuralNoiseScore(normalizedAssembly.systemPrompt)
+
+        #expect(normalizedNoise < rawNoise)
+        #expect(normalizedAssembly.systemPrompt.contains("\"tool\":\"web.search\""))
+        #expect(!normalizedAssembly.systemPrompt.contains("```json"))
+    }
+
+    @Test func agentRoutingAttachmentNormalizationKeepsPdfExtractedRelevantContent() async throws {
+        let content = """
+        ```text
+        ----- PAGE 1 -----
+        ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+        Invoice Number: INV-9381
+        Due Date: 2026-05-01
+        Total: $4,920.55
+        [][()][()][()][()][()][()][()][()][()][()][()][()][()][()]
+        ----- END PAGE -----
+        ```
+        """
+        let attachment = makeTestAttachment(name: "scan-extract.txt", kind: .text, content: content)
+        let budget = PromptBudget(totalChars: 12_000, attachmentsShare: 4_000, memoriesShare: 0, historyShare: 2_000)
+
+        let rawAssembly = PromptAssembler.assemble(
+            systemPrompt: "sys",
+            history: [],
+            userMessage: "extract invoice total",
+            memories: [],
+            attachments: [attachment],
+            budget: budget,
+            attachmentNormalization: .preserveRaw
+        )
+        let normalizedAssembly = PromptAssembler.assemble(
+            systemPrompt: "sys",
+            history: [],
+            userMessage: "extract invoice total",
+            memories: [],
+            attachments: [attachment],
+            budget: budget,
+            attachmentNormalization: .agentRouting
+        )
+
+        #expect(structuralNoiseScore(normalizedAssembly.systemPrompt) < structuralNoiseScore(rawAssembly.systemPrompt))
+        #expect(normalizedAssembly.systemPrompt.contains("Invoice Number: INV-9381"))
+        #expect(normalizedAssembly.systemPrompt.contains("Total: $4,920.55"))
+        #expect(!normalizedAssembly.systemPrompt.contains("```text"))
+    }
+
 }
 
 private func makeParseFailureTraceLine(
@@ -526,4 +606,25 @@ private func makeParseNoiseTraceLine(
     encoder.dateEncodingStrategy = .iso8601
     let data = try! encoder.encode(trace)
     return String(decoding: data, as: UTF8.self)
+}
+
+private func makeTestAttachment(name: String, kind: ChatAttachment.Kind, content: String) -> ChatAttachment {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let fileURL = dir.appendingPathComponent(name)
+    try! content.write(to: fileURL, atomically: true, encoding: .utf8)
+    return ChatAttachment(
+        name: name,
+        kind: kind,
+        path: fileURL.path,
+        byteSize: content.utf8.count
+    )
+}
+
+private func structuralNoiseScore(_ text: String) -> Int {
+    let pattern = #"[`|#=_\-\*<>\[\]\(\)\{\}/\\:;,+]{4,}"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return 0 }
+    let range = NSRange(location: 0, length: (text as NSString).length)
+    let matches = regex.matches(in: text, options: [], range: range)
+    return matches.reduce(0) { $0 + $1.range.length }
 }

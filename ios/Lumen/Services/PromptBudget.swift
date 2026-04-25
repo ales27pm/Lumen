@@ -99,6 +99,11 @@ nonisolated struct PromptAssembly: Sendable {
     }
 }
 
+nonisolated enum AttachmentNormalizationMode: Sendable {
+    case preserveRaw
+    case agentRouting
+}
+
 /// Deterministic, priority-based prompt assembly.
 ///
 /// Truncation priority (first to shrink, in order):
@@ -120,7 +125,8 @@ nonisolated enum PromptAssembler {
         userMessage: String,
         memories: [String],
         attachments: [ChatAttachment],
-        budget: PromptBudget
+        budget: PromptBudget,
+        attachmentNormalization: AttachmentNormalizationMode = .preserveRaw
     ) -> PromptAssembly {
         let userCap = min(userMessage.count, max(PromptBudgetConstants.minUserCharCap, budget.totalChars / 4))
         let boundedUser = truncateMiddle(userMessage, maxChars: userCap)
@@ -128,7 +134,8 @@ nonisolated enum PromptAssembler {
         let memoriesBlock = buildMemoriesBlock(memories: memories, share: budget.memoriesShare)
         let (attachmentsBlock, states) = buildAttachmentsBlock(
             attachments: attachments,
-            share: budget.attachmentsShare
+            share: budget.attachmentsShare,
+            normalization: attachmentNormalization
         )
         let finalSystem = systemPrompt + memoriesBlock + attachmentsBlock
 
@@ -166,7 +173,11 @@ nonisolated enum PromptAssembler {
             hasAttachments: true,
             hasMemories: hasMemories
         )
-        let (_, states) = buildAttachmentsBlock(attachments: attachments, share: budget.attachmentsShare)
+        let (_, states) = buildAttachmentsBlock(
+            attachments: attachments,
+            share: budget.attachmentsShare,
+            normalization: .preserveRaw
+        )
         return states
     }
 
@@ -191,13 +202,22 @@ nonisolated enum PromptAssembler {
 
     private static func buildAttachmentsBlock(
         attachments: [ChatAttachment],
-        share: Int
+        share: Int,
+        normalization: AttachmentNormalizationMode
     ) -> (String, [AttachmentRenderState]) {
         guard !attachments.isEmpty else { return ("", []) }
 
         struct Loaded { let attachment: ChatAttachment; let raw: String }
         let loaded: [Loaded] = attachments.map {
-            Loaded(attachment: $0, raw: AttachmentResolver.rawExtractText($0))
+            let raw = AttachmentResolver.rawExtractText($0)
+            let prepared: String
+            switch normalization {
+            case .preserveRaw:
+                prepared = raw
+            case .agentRouting:
+                prepared = normalizeForAgentRouting(raw)
+            }
+            return Loaded(attachment: $0, raw: prepared)
         }
 
         if share <= 0 {
@@ -280,5 +300,33 @@ nonisolated enum PromptAssembler {
         if maxChars <= 64 { return String(s.prefix(maxChars)) }
         let half = (maxChars - 32) / 2
         return String(s.prefix(half)) + "\n[... truncated ...]\n" + String(s.suffix(half))
+    }
+
+    private static func normalizeForAgentRouting(_ text: String) -> String {
+        var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        normalized = stripCodeFenceWrapperIfPresent(normalized)
+        normalized = collapseNoisyStructuralRuns(normalized)
+        normalized = normalized.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+        normalized = normalized.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        return normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func stripCodeFenceWrapperIfPresent(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```"), trimmed.hasSuffix("```") else { return text }
+        let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines.count >= 2 else { return text }
+        guard String(lines[0]).hasPrefix("```"), String(lines[lines.count - 1]) == "```" else { return text }
+        return lines.dropFirst().dropLast().joined(separator: "\n")
+    }
+
+    private static func collapseNoisyStructuralRuns(_ text: String) -> String {
+        var out = text
+        out = out.replacingOccurrences(of: #"`{4,}"#, with: "```", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"[=_\-\*#]{8,}"#, with: "-----", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"[|]{4,}"#, with: "|||", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"[<>]{4,}"#, with: "<<<>>>", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"[\\/\[\]\(\)\{\}:;,+]{12,}"#, with: " [structural-run-collapsed] ", options: .regularExpression)
+        return out
     }
 }

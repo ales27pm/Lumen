@@ -167,14 +167,26 @@ final actor AppLlamaService {
                 }
 
                 do {
+                    guard req.maxTokens > 0 else {
+                        continuation.yield(.done)
+                        continuation.finish()
+                        return
+                    }
+
                     let stream = try await self.streamResponse(
                         messages: messages,
                         temperature: Float(req.temperature),
                         seed: 42
                     )
 
+                    var emittedTokenCount = 0
                     for try await chunk in stream {
                         continuation.yield(.text(chunk))
+                        emittedTokenCount += 1
+                        if emittedTokenCount >= req.maxTokens {
+                            await self.stopActiveCompletion()
+                            break
+                        }
                     }
                 } catch {
                     continuation.yield(.text("Generation error: \(error.localizedDescription)"))
@@ -192,6 +204,10 @@ final actor AppLlamaService {
 
     func embed(text: String, dimensions: Int = 256) async -> [Double] {
         hashEmbed(text: text, dimensions: dimensions)
+    }
+
+    private func stopActiveCompletion() async {
+        await service?.stopCompletion()
     }
 
     // MARK: - Prompt building

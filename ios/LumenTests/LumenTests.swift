@@ -139,6 +139,24 @@ struct LumenTests {
         #expect(turn.hadNoise)
     }
 
+    @Test func parserAndDiagnosticsSelectSameCandidateWhenScoresDiffer() async throws {
+        let raw = #"prefix {"final":"fallback"} middle {"tool":"web.search","args":{"query":"swift"}} suffix"#
+        let turn = AgentTurnParser.parse(raw)
+        let snapshot = AgentNoiseInspector.inspect(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "web.search")
+        #expect(snapshot.selectedJSON == #"{"tool":"web.search","args":{"query":"swift"}}"#)
+    }
+
+    @Test func parserAndDiagnosticsSelectSameCandidateWhenScoresTieAndRecencyWins() async throws {
+        let raw = #"{"final":"first"}{"final":"second"}"#
+        let turn = AgentTurnParser.parse(raw)
+        let snapshot = AgentNoiseInspector.inspect(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "second")
+        #expect(snapshot.selectedJSON == #"{"final":"second"}"#)
+    }
+
     @Test func parserRejectsMixedActionShapes() async throws {
         let raw = #"{"action":{"tool":"web.search","args":{"query":"llama"}},"tool":"web.search","args":{"query":"llama"}}"#
         let turn = AgentTurnParser.parse(raw)

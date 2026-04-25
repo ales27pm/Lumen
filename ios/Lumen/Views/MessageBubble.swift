@@ -59,47 +59,27 @@ struct MessageBubble: View {
 
                 if streamingOverride == nil {
                     if let webURL = firstWebURL(from: message.content) {
-                        EmbeddedContentButton(
-                            icon: "globe",
-                            title: "Open Web Page",
-                            subtitle: webURL.host() ?? webURL.absoluteString
-                        ) {
+                        EmbeddedContentButton(icon: "globe", title: "Open Web Page", subtitle: webURL.host() ?? webURL.absoluteString) {
                             webPreview = WebPreviewItem(url: webURL)
                         }
                     }
                     if let mapQuery = firstMapQuery(from: message.content) {
-                        EmbeddedContentButton(
-                            icon: "map",
-                            title: "Open Map",
-                            subtitle: mapQuery
-                        ) {
+                        EmbeddedContentButton(icon: "map", title: "Open Map", subtitle: mapQuery) {
                             mapPreview = MapPreviewItem(query: mapQuery)
                         }
                     }
                     if let imageURL = firstImageURL(from: message.content) {
-                        EmbeddedContentButton(
-                            icon: "photo",
-                            title: "Open Image",
-                            subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent
-                        ) {
+                        EmbeddedContentButton(icon: "photo", title: "Open Image", subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent) {
                             imagePreview = ImagePreviewItem(url: imageURL)
                         }
                     }
                     if let videoURL = firstVideoURL(from: message.content) {
-                        EmbeddedContentButton(
-                            icon: "play.rectangle",
-                            title: "Open Video",
-                            subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent
-                        ) {
+                        EmbeddedContentButton(icon: "play.rectangle", title: "Open Video", subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent) {
                             videoPreview = VideoPreviewItem(url: videoURL)
                         }
                     }
                     if let pdfURL = firstPDFURL(from: message.content) {
-                        EmbeddedContentButton(
-                            icon: "doc.richtext",
-                            title: "Open PDF",
-                            subtitle: pdfURL.lastPathComponent.isEmpty ? (pdfURL.host() ?? pdfURL.absoluteString) : pdfURL.lastPathComponent
-                        ) {
+                        EmbeddedContentButton(icon: "doc.richtext", title: "Open PDF", subtitle: pdfURL.lastPathComponent.isEmpty ? (pdfURL.host() ?? pdfURL.absoluteString) : pdfURL.lastPathComponent) {
                             pdfPreview = PDFPreviewItem(url: pdfURL)
                         }
                     }
@@ -107,50 +87,32 @@ struct MessageBubble: View {
                     HStack(spacing: 10) {
                         if message.wasStopped {
                             HStack(spacing: 4) {
-                                Image(systemName: "stop.circle")
-                                    .font(.caption2)
-                                Text("Stopped")
-                                    .font(.caption2.weight(.medium))
+                                Image(systemName: "stop.circle").font(.caption2)
+                                Text("Stopped").font(.caption2.weight(.medium))
                             }
                             .foregroundStyle(Theme.textTertiary)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border, lineWidth: 1)
-                            }
+                            .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border, lineWidth: 1) }
                         }
                         MessageActionButton(icon: "doc.on.doc") {
                             UIPasteboard.general.string = message.content
                         }
-                        MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") {
-                            bookmark()
-                        }
+                        MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") { bookmark() }
                     }
                     .padding(.top, 2)
                 }
             }
             Spacer(minLength: 32)
         }
-        .sheet(item: $webPreview) { item in
-            EmbeddedWebBrowserSheet(url: item.url)
-        }
-        .sheet(item: $mapPreview) { item in
-            EmbeddedMapSheet(query: item.query)
-        }
-        .sheet(item: $imagePreview) { item in
-            EmbeddedImageSheet(url: item.url)
-        }
-        .sheet(item: $videoPreview) { item in
-            EmbeddedVideoSheet(url: item.url)
-        }
-        .sheet(item: $pdfPreview) { item in
-            EmbeddedPDFSheet(url: item.url)
-        }
+        .sheet(item: $webPreview) { item in EmbeddedWebBrowserSheet(url: item.url) }
+        .sheet(item: $mapPreview) { item in EmbeddedMapSheet(query: item.query) }
+        .sheet(item: $imagePreview) { item in EmbeddedImageSheet(url: item.url) }
+        .sheet(item: $videoPreview) { item in EmbeddedVideoSheet(url: item.url) }
+        .sheet(item: $pdfPreview) { item in EmbeddedPDFSheet(url: item.url) }
     }
 
     private func firstWebURL(from text: String) -> URL? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return nil
-        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let ns = text as NSString
         let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
         let mediaExt: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp", "mp4", "mov", "m4v", "webm", "pdf"]
@@ -171,12 +133,8 @@ struct MessageBubble: View {
             for match in matches {
                 guard let url = match.url, (url.host()?.lowercased().contains("maps.apple.com") == true) else { continue }
                 if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-                    if let daddr = comps.queryItems?.first(where: { $0.name == "daddr" })?.value, !daddr.isEmpty {
-                        return daddr
-                    }
-                    if let q = comps.queryItems?.first(where: { $0.name == "q" })?.value, !q.isEmpty {
-                        return q
-                    }
+                    if let daddr = comps.queryItems?.first(where: { $0.name == "daddr" })?.value, !daddr.isEmpty { return daddr }
+                    if let q = comps.queryItems?.first(where: { $0.name == "q" })?.value, !q.isEmpty { return q }
                 }
             }
         }
@@ -190,39 +148,31 @@ struct MessageBubble: View {
     }
 
     private func firstImageURL(from text: String) -> URL? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return nil
-        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let ns = text as NSString
         let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
         let imageExt: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp"]
         for match in matches {
             guard let url = match.url else { continue }
-            let ext = url.pathExtension.lowercased()
-            if imageExt.contains(ext) { return url }
+            if imageExt.contains(url.pathExtension.lowercased()) { return url }
         }
         return nil
     }
 
     private func firstVideoURL(from text: String) -> URL? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return nil
-        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let ns = text as NSString
         let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
         let videoExt: Set<String> = ["mp4", "mov", "m4v", "webm"]
         for match in matches {
             guard let url = match.url else { continue }
-            let ext = url.pathExtension.lowercased()
-            if videoExt.contains(ext) { return url }
+            if videoExt.contains(url.pathExtension.lowercased()) { return url }
         }
         return nil
     }
 
     private func firstPDFURL(from text: String) -> URL? {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return nil
-        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let ns = text as NSString
         let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
         for match in matches {
@@ -246,30 +196,11 @@ struct MessageBubble: View {
     }
 }
 
-private struct WebPreviewItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct MapPreviewItem: Identifiable {
-    let id = UUID()
-    let query: String
-}
-
-private struct ImagePreviewItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct VideoPreviewItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct PDFPreviewItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
+private struct WebPreviewItem: Identifiable { let id = UUID(); let url: URL }
+private struct MapPreviewItem: Identifiable { let id = UUID(); let query: String }
+private struct ImagePreviewItem: Identifiable { let id = UUID(); let url: URL }
+private struct VideoPreviewItem: Identifiable { let id = UUID(); let url: URL }
+private struct PDFPreviewItem: Identifiable { let id = UUID(); let url: URL }
 
 private struct EmbeddedContentButton: View {
     let icon: String
@@ -280,22 +211,13 @@ private struct EmbeddedContentButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
+                Image(systemName: icon).font(.caption).foregroundStyle(Theme.textSecondary)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(Theme.textSecondary)
-                        .lineLimit(1)
+                    Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                    Text(subtitle).font(.caption2).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textTertiary)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Theme.textTertiary)
             }
             .padding(8)
             .background(Theme.surfaceHigh)
@@ -310,9 +232,7 @@ struct MessageActionButton: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(Theme.textTertiary)
+            Image(systemName: icon).font(.caption).foregroundStyle(Theme.textTertiary)
         }
         .buttonStyle(.plain)
     }
@@ -333,20 +253,12 @@ struct ToolCallCard: View {
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 22, height: 22)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(tool?.name ?? toolID)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text(statusLabel)
-                        .font(.caption)
-                        .foregroundStyle(Theme.textSecondary)
+                    Text(tool?.name ?? toolID).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textPrimary)
+                    Text(statusLabel).font(.caption).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
-                } label: {
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(Theme.textTertiary)
+                Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: {
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(Theme.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
@@ -364,16 +276,11 @@ struct ToolCallCard: View {
 
                 if message.status == .pendingApproval {
                     HStack(spacing: 8) {
-                        Button(role: .destructive) { deny() } label: {
-                            Text("Deny").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button { approve() } label: {
-                            Text("Approve").frame(maxWidth: .infinity).fontWeight(.medium)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.accent)
+                        Button(role: .destructive) { deny() } label: { Text("Deny").frame(maxWidth: .infinity) }
+                            .buttonStyle(.bordered)
+                        Button { approve() } label: { Text("Approve").frame(maxWidth: .infinity).fontWeight(.medium) }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Theme.accent)
                     }
                 } else if let result = message.toolResult, !result.isEmpty {
                     Text(result)
@@ -389,10 +296,7 @@ struct ToolCallCard: View {
         .padding(12)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
     }
 
     private var statusLabel: String {
@@ -411,7 +315,11 @@ struct ToolCallCard: View {
         message.toolStatus = ToolStatus.running.rawValue
         let args = parseArgs(message.content)
         Task {
-            let result = await ToolExecutor.shared.execute(message.toolName ?? "", arguments: args)
+            let result = await ToolExecutor.shared.execute(
+                message.toolName ?? "",
+                arguments: args,
+                approval: .userApproved
+            )
             message.toolStatus = ToolStatus.completed.rawValue
             message.toolResult = result
             try? modelContext.save()

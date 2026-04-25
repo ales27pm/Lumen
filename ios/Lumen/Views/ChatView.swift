@@ -2,6 +2,66 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+enum SchemaPlaceholderDetector {
+    private static let repairFallback = "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
+
+    private static let exactPlaceholderVariants: Set<String> = [
+        "answershowntotheuser",
+        "youranswertotheuser",
+        "shortprivateroutingnote",
+        "shortreasoning",
+        "toolid",
+        "key",
+        "value",
+        "privatereasoning",
+        "userfinaltext"
+    ]
+
+    private static let sentinelPrefixVariants: [String] = [
+        "answershowntotheuser",
+        "youranswertotheuser",
+        "shortprivateroutingnote",
+        "shortreasoning",
+        "privatereasoning",
+        "userfinaltext"
+    ]
+
+    static func isPlaceholderPrefix(_ text: String) -> Bool {
+        let compact = compacted(text)
+        guard !compact.isEmpty else { return false }
+        return sentinelPrefixVariants.contains { $0.hasPrefix(compact) }
+    }
+
+    static func isPlaceholderFinal(_ text: String) -> Bool {
+        let compact = compacted(text)
+        guard !compact.isEmpty else { return false }
+        if exactPlaceholderVariants.contains(compact) { return true }
+        if compact.count >= 6 {
+            if sentinelPrefixVariants.contains(where: { $0.hasPrefix(compact) }) { return true }
+        }
+        return false
+    }
+
+    static func repairOrFallback(_ text: String) -> String {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty || isPlaceholderFinal(clean) {
+            return repairFallback
+        }
+        return clean
+    }
+
+    private static func compacted(_ text: String) -> String {
+        text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(
+                of: #"[^a-z0-9]+"#,
+                with: "",
+                options: .regularExpression
+            )
+    }
+}
+
 struct ChatView: View {
     @Bindable var conversation: Conversation
     @Environment(AppState.self) private var appState
@@ -228,7 +288,7 @@ struct ChatView: View {
                 }
             case .finalDelta(let chunk):
                 finalText += chunk
-                if isSchemaPlaceholderPrefix(finalText) {
+                if SchemaPlaceholderDetector.isPlaceholderPrefix(finalText) {
                     streamingText = ""
                 } else {
                     streamingText = finalText
@@ -314,7 +374,7 @@ struct ChatView: View {
         attachments: [ChatAttachment]
     ) async -> String {
         let trimmed = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isSchemaPlaceholderFinal(trimmed) else { return finalText }
+        guard SchemaPlaceholderDetector.isPlaceholderFinal(trimmed) else { return finalText }
 
         if appState.enabledToolIDs.contains("web.search"), shouldUseWebRepair(for: userText) {
             let query = cleanedSearchQuery(userText)
@@ -325,7 +385,7 @@ struct ChatView: View {
         }
 
         let request = GenerateRequest(
-            systemPrompt: "Answer the user's request directly in plain language. Do not output JSON. Do not copy schema examples. Do not say 'answer shown to the user'.",
+            systemPrompt: "Answer the user's request directly in plain language. Do not output JSON. Do not copy schema examples. Do not emit placeholder tokens literally.",
             history: conversation.sortedMessages.dropLast().suffix(4).map { ($0.messageRole, $0.content) },
             userMessage: userText,
             temperature: min(appState.temperature, 0.35),
@@ -348,42 +408,7 @@ struct ChatView: View {
             }
         }
 
-        let clean = repaired.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.isEmpty || isSchemaPlaceholderFinal(clean) {
-            return "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
-        }
-        return clean
-    }
-
-    private func isSchemaPlaceholderPrefix(_ text: String) -> Bool {
-        let normalized = normalizePlaceholderText(text)
-        let placeholder = "answer shown to the user"
-        return !normalized.isEmpty && placeholder.hasPrefix(normalized)
-    }
-
-    private func isSchemaPlaceholderFinal(_ text: String) -> Bool {
-        let normalized = normalizePlaceholderText(text)
-        let badValues: Set<String> = [
-            "answer shown to the user",
-            "your answer to the user",
-            "short private routing note",
-            "short reasoning",
-            "tool.id",
-            "key",
-            "value"
-        ]
-        return badValues.contains(normalized)
-    }
-
-    private func normalizePlaceholderText(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`{}[]"))
-            .lowercased()
-            .replacingOccurrences(of: "\\n", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return SchemaPlaceholderDetector.repairOrFallback(repaired)
     }
 
     private func shouldUseWebRepair(for userText: String) -> Bool {

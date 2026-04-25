@@ -126,6 +126,13 @@ struct LumenTests {
         #expect(turn.action == nil)
     }
 
+    @Test func parserAcceptsSentinelLiteralFinal() async throws {
+        let raw = #"{"thought":"<PRIVATE_REASONING>","final":"<USER_FINAL_TEXT>"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "<USER_FINAL_TEXT>")
+    }
+
     @Test func parserAcceptsNoisyOutputOutsideJSON() async throws {
         let raw = #"prefix {"final":"ok"} suffix"#
         let turn = AgentTurnParser.parse(raw)
@@ -278,6 +285,26 @@ struct LumenTests {
         let action2 = AgentAction(tool: "web.search", args: ["city": "Boston", "q": "swift"])
         #expect(action1.dedupeKey == action2.dedupeKey)
         #expect(action1.displayContent == "web.search(city=Boston, q=swift)")
+    }
+
+    @Test func placeholderDetectorFlagsSentinelVariantsAndPartialCopies() async throws {
+        #expect(SchemaPlaceholderDetector.isPlaceholderFinal("<USER_FINAL_TEXT>"))
+        #expect(SchemaPlaceholderDetector.isPlaceholderFinal("<PRIVATE_REASONING>"))
+        #expect(SchemaPlaceholderDetector.isPlaceholderFinal("<USER_FI"))
+        #expect(SchemaPlaceholderDetector.isPlaceholderFinal("answer shown to the user"))
+    }
+
+    @Test func placeholderDetectorPrefixMatchesStreamingSentinelCopy() async throws {
+        #expect(SchemaPlaceholderDetector.isPlaceholderPrefix("<USE"))
+        #expect(SchemaPlaceholderDetector.isPlaceholderPrefix("<PRIVATE_REAS"))
+        #expect(!SchemaPlaceholderDetector.isPlaceholderPrefix("Here is the answer"))
+    }
+
+    @Test func placeholderRepairFallsBackForSentinelCopies() async throws {
+        let fallback = "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
+        #expect(SchemaPlaceholderDetector.repairOrFallback("<USER_FINAL_TEXT>") == fallback)
+        #expect(SchemaPlaceholderDetector.repairOrFallback("   ") == fallback)
+        #expect(SchemaPlaceholderDetector.repairOrFallback("Use two eggs and whisk.") == "Use two eggs and whisk.")
     }
 
     @Test @MainActor func toolExecutorReturnsUnknownToolMessage() async throws {

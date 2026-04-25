@@ -594,6 +594,25 @@ struct LumenTests {
         #expect(!normalizedAssembly.systemPrompt.contains("```text"))
     }
 
+    @Test func sanitizeInternalErrorNoiseRemovesRepairPrefixArtifacts() async throws {
+        let raw = """
+        I hit an internal formatting issue and repaired it into a plain answer. Prefix noise: Generation error: The operation couldn't be completed.
+        (SwiftLlama.LlamaError error 0.) No valid JSON object found in raw model output.
+        Here's the real answer: hi there.
+        """
+        let cleaned = AgentService().sanitizeInternalErrorNoiseForTests(raw)
+        #expect(cleaned == "Here's the real answer: hi there.")
+    }
+
+    @Test func sanitizeInternalErrorNoiseRemovesStandaloneGenerationError() async throws {
+        let raw = """
+        Generation error: The operation couldn't be completed.
+        (SwiftLlama.LlamaError error 0.)
+        """
+        let cleaned = AgentService().sanitizeInternalErrorNoiseForTests(raw)
+        #expect(cleaned.isEmpty)
+    }
+
 }
 
 private func makeParseFailureTraceLine(

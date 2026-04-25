@@ -14,6 +14,14 @@ private nonisolated enum LlamaSymbolCompat {
     private typealias ModelFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias ContextFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias SamplerFreeFn = @convention(c) (OpaquePointer?) -> Void
+    private typealias TokenToPieceFn = @convention(c) (
+        OpaquePointer?,
+        Int32,
+        UnsafeMutablePointer<CChar>?,
+        Int32,
+        Int32,
+        Bool
+    ) -> Int32
 
     private static func resolve<T>(_ symbol: String, as type: T.Type) -> T? {
         guard let ptr = dlsym(nil, symbol) else { return nil }
@@ -38,6 +46,24 @@ private nonisolated enum LlamaSymbolCompat {
 
     static func samplerFree(_ sampler: OpaquePointer?) {
         resolve("llama_sampler_free", as: SamplerFreeFn.self)?(sampler)
+    }
+
+    static func tokenToPiece(
+        _ vocab: OpaquePointer?,
+        _ token: Int32,
+        _ piece: UnsafeMutablePointer<CChar>?,
+        _ length: Int32,
+        _ special: Int32,
+        _ parseSpecial: Bool
+    ) -> Int32? {
+        resolve("llama_token_to_piece", as: TokenToPieceFn.self)?(
+            vocab,
+            token,
+            piece,
+            length,
+            special,
+            parseSpecial
+        )
     }
 }
 
@@ -336,7 +362,16 @@ final actor LlamaService {
         var piece = [CChar](repeating: 0, count: 256)
 
         while true {
-            let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, true)
+            guard let length = LlamaSymbolCompat.tokenToPiece(
+                vocab,
+                token,
+                &piece,
+                Int32(piece.count),
+                0,
+                true
+            ) else {
+                return nil
+            }
             if length < 0 {
                 let required = max(Int(-length), piece.count * 2)
                 piece = [CChar](repeating: 0, count: required)

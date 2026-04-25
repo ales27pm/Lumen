@@ -402,10 +402,14 @@ nonisolated enum AgentTurnParser {
     private static func normalizeArgs(_ rawArgs: [String: Any]) -> [String: String]? {
         var args: [String: String] = [:]
         for (k, v) in rawArgs {
-            guard let normalized = v as? String else { return nil }
+            guard let normalized = stringifyArgValue(v) else { return nil }
             args[k] = normalized
         }
         return args
+    }
+
+    private static func stringifyArgValue(_ value: Any) -> String? {
+        value as? String
     }
 
     private static func extractSingleJSONObject(from text: String) -> Result<ExtractedJSONObject, AgentTurnParseError> {

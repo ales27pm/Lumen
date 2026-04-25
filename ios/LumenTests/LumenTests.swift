@@ -218,6 +218,21 @@ struct LumenTests {
         #expect(turn.action?.args["query"] == "swift testing")
     }
 
+    @Test func parserRejectsRawInputStringContainingJSONObjectWithNonStringArgs() async throws {
+        let raw = #"{"tool":"web.search","input":"{\"query\":3}"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == .invalidActionArgsType)
+        #expect(turn.action == nil)
+    }
+
+    @Test func parserAcceptsRawInputStringAsFreeTextQueryFallback() async throws {
+        let raw = #"{"tool":"web.search","input":"swift testing"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "web.search")
+        #expect(turn.action?.args["query"] == "swift testing")
+    }
+
     @Test func parserRejectsNestedActionMissingToolName() async throws {
         let raw = #"{"action":{"args":{"query":"x"}}}"#
         let turn = AgentTurnParser.parse(raw)

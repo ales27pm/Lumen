@@ -1,5 +1,6 @@
 import Foundation
 import SwiftLlama
+import llama
 
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
@@ -51,88 +52,112 @@ nonisolated enum GenerationToken: Sendable {
 
 nonisolated enum LlamaError: Error, Sendable {
     case noModelLoaded
-    case modelNotFound
+    case modelFileNotFound(String)
+    case failedToInitializeContext(String)
+    case embeddingModelNotLoaded
+    case embeddingFailed(String)
 }
 
 extension LlamaError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noModelLoaded:
-            return "No model is currently loaded."
-        case .modelNotFound:
-            return "Model file could not be found."
+            return "No chat model is currently loaded."
+        case .modelFileNotFound(let path):
+            return "Model file not found at \(path)."
+        case .failedToInitializeContext(let details):
+            return "Failed to initialize context: \(details)"
+        case .embeddingModelNotLoaded:
+            return "No embedding model is currently loaded."
+        case .embeddingFailed(let details):
+            return "Failed to compute embedding: \(details)"
         }
     }
 }
 
-/// A high-level service for GGUF models powered by llama.cpp.
-/// Manages the model and KV cache using SwiftLlama's built-in types.
 final actor AppLlamaService {
     static let shared = AppLlamaService()
 
-    private var service: SwiftLlama.LlamaService?
-    private var modelPath: String?
-    private var embedModelPath: String?
-    private var contextSize: Int = 4096
+    private var chatService: SwiftLlama.LlamaService?
+    private var chatModelPath: String?
+    private var chatContextSize: Int = 2048
+
+    private var embeddingModelPath: String?
+    private var embeddingModel: LlamaModel?
+    private var embeddingContext: LlamaContext?
 
     private init() {}
 
-    // MARK: - Compatibility API
+    var isChatLoaded: Bool { chatService != nil }
+    var isEmbedLoaded: Bool { embeddingContext != nil }
+    var hasSemanticEmbeddingRuntime: Bool { embeddingContext != nil }
+    var loadedChatPath: String? { chatModelPath }
+    var loadedEmbedPath: String? { embeddingModelPath }
 
-    var isChatLoaded: Bool { service != nil }
-    var isEmbedLoaded: Bool { embedModelPath != nil }
-    var hasSemanticEmbeddingRuntime: Bool { false }
-    var loadedChatPath: String? { modelPath }
-    var loadedEmbedPath: String? { embedModelPath }
-
-    /// Load a GGUF model from your bundle.
-    func loadModel(named name: String, contextSize: UInt32 = 4096, batchSize: UInt32 = 512) throws {
+    func loadModel(named name: String, contextSize: UInt32 = 2048, batchSize: UInt32 = 256) throws {
         guard let url = Bundle.main.url(forResource: name, withExtension: "gguf") else {
-            throw LlamaError.modelNotFound
+            throw LlamaError.modelFileNotFound("Bundle resource: \(name).gguf")
         }
-
-        let config = LlamaConfig(batchSize: batchSize, maxTokenCount: contextSize, useGPU: false)
-        service = SwiftLlama.LlamaService(modelUrl: url, config: config)
-        modelPath = url.path
-        self.contextSize = Int(contextSize)
+        try loadChatModelSync(path: url.path, contextSize: Int(contextSize), batchSize: batchSize)
     }
 
-    func loadChatModel(path: String, contextSize: Int = 4096) async throws {
-        let url = URL(fileURLWithPath: path)
-        let config = LlamaConfig(batchSize: 512, maxTokenCount: UInt32(max(1, contextSize)), useGPU: false)
-        service = SwiftLlama.LlamaService(modelUrl: url, config: config)
-        modelPath = path
-        self.contextSize = contextSize
+    func loadChatModel(path: String, contextSize: Int = 2048) async throws {
+        try loadChatModelSync(path: path, contextSize: contextSize, batchSize: 256)
     }
 
     func loadEmbeddingModel(path: String) async throws {
-        // TODO: SwiftLlama chat path is integrated, but semantic embedding extraction has not
-        // been wired yet. Keep this path so settings can retain user preference while `embed(text:)`
-        // continues to use deterministic hash embeddings.
-        guard !path.isEmpty else { throw LlamaError.noModelLoaded }
-        embedModelPath = path
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw LlamaError.modelFileNotFound(path)
+        }
+
+        var modelParams = llama_model_default_params()
+        modelParams.n_gpu_layers = 0
+
+        guard let model = LlamaModel(path: path, parameters: modelParams) else {
+            throw LlamaError.failedToInitializeContext("Unable to load embedding GGUF")
+        }
+
+        var contextParams = llama_context_default_params()
+        contextParams.n_ctx = 2048
+        contextParams.n_batch = 256
+        contextParams.n_ubatch = 256
+        contextParams.n_threads = 1
+        contextParams.n_threads_batch = 1
+        contextParams.offload_kqv = false
+
+        guard let context = LlamaContext(model: model, parameters: contextParams) else {
+            throw LlamaError.failedToInitializeContext("Unable to create embedding context")
+        }
+
+        context.setEmbeddingsOutput(true)
+        context.setCausalAttention(false)
+
+        embeddingModel = model
+        embeddingContext = context
+        embeddingModelPath = path
     }
 
     func unloadChat() async {
-        service = nil
-        modelPath = nil
+        chatService = nil
+        chatModelPath = nil
     }
 
     func unloadEmbed() async {
-        embedModelPath = nil
+        embeddingModelPath = nil
+        embeddingModel = nil
+        embeddingContext = nil
     }
 
-    func reloadChat(contextSize: Int = 4096) async throws {
-        guard let modelPath else { throw LlamaError.noModelLoaded }
-        try await loadChatModel(path: modelPath, contextSize: contextSize)
+    func reloadChat(contextSize: Int = 2048) async throws {
+        guard let chatModelPath else { throw LlamaError.noModelLoaded }
+        try loadChatModelSync(path: chatModelPath, contextSize: contextSize, batchSize: 256)
     }
 
     func reloadEmbed() async throws {
-        guard let embedModelPath else { throw LlamaError.noModelLoaded }
-        try await loadEmbeddingModel(path: embedModelPath)
+        guard let embeddingModelPath else { throw LlamaError.embeddingModelNotLoaded }
+        try await loadEmbeddingModel(path: embeddingModelPath)
     }
 
-    /// Stream a response from the LLM, yielding tokens incrementally.
     func streamResponse(
         messages: [LlamaChatMessage],
         temperature: Float = 0.8,
@@ -141,7 +166,7 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let service else { throw LlamaError.noModelLoaded }
+        guard let chatService else { throw LlamaError.noModelLoaded }
 
         let resolvedSeed = seed ?? makeRandomSeed()
         let sampling = LlamaSamplingConfig(
@@ -150,7 +175,7 @@ final actor AppLlamaService {
             topP: topP,
             repetitionPenaltyConfig: LlamaRepetitionPenaltyConfig(repeatPenalty: repetitionPenalty)
         )
-        let rawStream = try await service.streamCompletion(of: messages, samplingConfig: sampling)
+        let rawStream = try await chatService.streamCompletion(of: messages, samplingConfig: sampling)
         guard let maxTokens else { return rawStream }
 
         return AsyncThrowingStream { continuation in
@@ -187,7 +212,6 @@ final actor AppLlamaService {
         }
     }
 
-    /// Generate a full response at once.
     func respond(
         messages: [LlamaChatMessage],
         temperature: Float = 0.8,
@@ -196,7 +220,7 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> String {
-        guard service != nil else { throw LlamaError.noModelLoaded }
+        guard chatService != nil else { throw LlamaError.noModelLoaded }
         let stream = try await streamResponse(
             messages: messages,
             temperature: temperature,
@@ -212,19 +236,14 @@ final actor AppLlamaService {
         return output
     }
 
-    /// Fully restarts the model service to force a fresh session.
-    /// This is expensive because it recreates `SwiftLlama.LlamaService` and remaps GGUF.
-    func restartSession() async {
-        service = nil
-        guard let modelPath else { return }
-        let config = LlamaConfig(batchSize: 512, maxTokenCount: UInt32(max(1, contextSize)), useGPU: false)
-        service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: modelPath), config: config)
-    }
-
-    /// Backwards-compatible alias for older call sites.
-    /// Note: this performs a full model service restart (not an in-place KV clear).
     func resetKVCache() async {
-        await restartSession()
+        guard let chatModelPath else { return }
+        do {
+            try loadChatModelSync(path: chatModelPath, contextSize: chatContextSize, batchSize: 256)
+        } catch {
+            chatService = nil
+            chatModelPath = nil
+        }
     }
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
@@ -270,23 +289,87 @@ final actor AppLlamaService {
         }
     }
 
+    func embed(_ text: String) async throws -> [Double] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        guard let embeddingModel else { throw LlamaError.embeddingModelNotLoaded }
+        guard let embeddingContext else { throw LlamaError.embeddingModelNotLoaded }
+
+        let tokens = embeddingModel.tokenize(text: trimmed, addBos: embeddingModel.shouldAddBos(), special: false)
+        guard !tokens.isEmpty else { return [] }
+
+        if tokens.count >= Int(embeddingContext.contextSize()) {
+            throw LlamaError.embeddingFailed("Input exceeds embedding context window")
+        }
+
+        embeddingContext.clearKVCache()
+        embeddingContext.setEmbeddingsOutput(true)
+        embeddingContext.setCausalAttention(false)
+
+        let batch = LlamaBatch(initialSize: 1)
+        do {
+            for (index, token) in tokens.enumerated() {
+                batch.reset()
+                batch.addToken(token, at: Int32(index), logits: index == (tokens.count - 1))
+                try embeddingContext.decode(batch: batch)
+            }
+        } catch {
+            throw LlamaError.embeddingFailed(error.localizedDescription)
+        }
+
+        let raw = embeddingContext.pooledEmbeddings(for: 0) ?? embeddingContext.embeddings(at: -1) ?? []
+        guard !raw.isEmpty else {
+            throw LlamaError.embeddingFailed("Model returned an empty embedding vector")
+        }
+
+        return normalize(raw.map(Double.init))
+    }
+
     func embed(text: String, dimensions: Int = 256) async -> [Double] {
-        hashEmbed(text: text, dimensions: dimensions)
+        do {
+            return try await embed(text)
+        } catch {
+            print("Embedding error: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private func loadChatModelSync(path: String, contextSize: Int, batchSize: UInt32) throws {
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw LlamaError.modelFileNotFound(path)
+        }
+        guard contextSize > 0 else {
+            throw LlamaError.failedToInitializeContext("Context size must be greater than 0")
+        }
+
+        let config = LlamaConfig(
+            batchSize: batchSize,
+            maxTokenCount: UInt32(max(1, contextSize)),
+            useGPU: false
+        )
+        chatService = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
+        chatModelPath = path
+        chatContextSize = contextSize
     }
 
     private func stopActiveCompletion() async {
-        await service?.stopCompletion()
+        await chatService?.stopCompletion()
+    }
+
+    private func normalize(_ vector: [Double]) -> [Double] {
+        let norm = sqrt(vector.reduce(0.0) { $0 + ($1 * $1) })
+        guard norm > 0 else { return vector }
+        return vector.map { $0 / norm }
     }
 
     private func makeRandomSeed() -> UInt32 {
         UInt32.random(in: UInt32.min...UInt32.max)
     }
 
-    // MARK: - Prompt building
-
     private func buildMessages(req: GenerateRequest) -> [LlamaChatMessage] {
         let budget = PromptBudget.make(
-            contextSize: contextSize,
+            contextSize: chatContextSize,
             maxTokens: req.maxTokens,
             systemPromptChars: req.systemPrompt.count,
             userMessageChars: req.userMessage.count,
@@ -323,30 +406,5 @@ final actor AppLlamaService {
 
         messages.append(LlamaChatMessage(role: .user, content: assembly.userMessage))
         return messages
-    }
-
-    private func hashEmbed(text: String, dimensions: Int) -> [Double] {
-        var v = [Double](repeating: 0, count: dimensions)
-        let tokens = text.lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-
-        for token in tokens {
-            var hash: UInt64 = 5381
-            for ch in token.unicodeScalars {
-                hash = (hash &* 33) &+ UInt64(ch.value)
-            }
-            let idx = Int(hash % UInt64(dimensions))
-            v[idx] += 1.0
-        }
-
-        let norm = sqrt(v.reduce(0.0) { $0 + $1 * $1 })
-        if norm > 0 {
-            for i in 0..<v.count {
-                v[i] /= norm
-            }
-        }
-
-        return v
     }
 }

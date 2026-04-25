@@ -290,4 +290,67 @@ struct LumenTests {
         #expect(sanitized == "Answer: {done} [ok] Great!!! ##")
     }
 
+    @Test func parseFailureSummaryAggregatesByErrorAndNoiseSignatures() async throws {
+        let lines = [
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "Prefix NOISE alpha", suffixNoise: "Suffix one"),
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise beta", suffixNoise: "suffix one"),
+            makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: nil, suffixNoise: nil),
+        ]
+        let jsonl = lines.joined(separator: "\n")
+        let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: jsonl, topN: 5)
+
+        #expect(summary.totalLines == 4)
+        #expect(summary.decodedLines == 4)
+        #expect(summary.skippedLines == 0)
+        #expect(summary.topEntries.count == 3)
+        #expect(summary.topEntries[0].count == 2)
+        #expect(summary.topEntries[0].parseError == "invalidJSONObject")
+        #expect(summary.topEntries[0].suffixSignature.hasPrefix("suffix one#"))
+        #expect(summary.topEntries[0].prefixSignature.hasPrefix("prefix noise alpha#"))
+    }
+
+    @Test func parseFailureSummarySkipsCorruptLinesAndRespectsTopN() async throws {
+        let validA = makeParseFailureTraceLine(parseError: "invalidFinalType", prefixNoise: "pre a", suffixNoise: "suf a")
+        let validB = makeParseFailureTraceLine(parseError: "invalidThoughtType", prefixNoise: "pre b", suffixNoise: "suf b")
+        let jsonl = [validA, "{not-json", validA, validB].joined(separator: "\n")
+        let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: jsonl, topN: 1)
+
+        #expect(summary.totalLines == 4)
+        #expect(summary.decodedLines == 3)
+        #expect(summary.skippedLines == 1)
+        #expect(summary.topEntries.count == 1)
+        #expect(summary.topEntries[0].parseError == "invalidFinalType")
+        #expect(summary.topEntries[0].count == 2)
+    }
+
+}
+
+private func makeParseFailureTraceLine(
+    parseError: String,
+    prefixNoise: String?,
+    suffixNoise: String?
+) -> String {
+    let trace = AgentParseFailureTrace(
+        id: UUID(),
+        createdAt: Date(timeIntervalSince1970: 1_000),
+        parseError: parseError,
+        modelName: "agent-json",
+        temperature: 0.1,
+        topP: 0.8,
+        maxTokens: 512,
+        stepIndex: 0,
+        systemPromptPrefix: "system",
+        userTurnPrefix: "user",
+        rawOutputPrefix: "raw",
+        streamedThoughtPrefix: "",
+        streamedFinalPrefix: "",
+        selectedJSONPrefix: nil,
+        prefixNoise: prefixNoise,
+        suffixNoise: suffixNoise
+    )
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let data = try! encoder.encode(trace)
+    return String(decoding: data, as: UTF8.self)
 }

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showDeveloperAlert = false
     @State private var developerAlertMessage = ""
+    @State private var parseFailureSummary = "• Parse-failure traces: loading…"
 
     var body: some View {
         @Bindable var state = appState
@@ -147,6 +148,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .task {
+                await refreshParseFailureSummary()
+            }
             .alert("Run tests", isPresented: $showDeveloperAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -185,6 +189,7 @@ struct SettingsView: View {
         • Imported files: \(imported.count)
         • Model files: \(modelFiles.count)
         • Models path: \(modelsDirectory.path)
+        \(parseFailureSummary)
         """
     }
 
@@ -237,6 +242,13 @@ struct SettingsView: View {
             .joined(separator: "\n")
         developerAlertMessage = "\(passed)/\(checks.count) checks passed\n\n\(summary)"
         showDeveloperAlert = true
+    }
+
+    private func refreshParseFailureSummary() async {
+        let summaryText = await Task.detached(priority: .utility) {
+            AgentParseFailureSummaryLoader.developerText(topN: 5)
+        }.value
+        parseFailureSummary = summaryText
     }
 }
 

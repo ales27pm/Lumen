@@ -1,12 +1,13 @@
 import Foundation
 
-/// Narrows the agent's action space before generation. The goal is not to
-/// patch bad final text after the fact; it is to prevent unrelated tools from
-/// being shown to the model unless the user's request actually needs them.
+/// Narrows the agent's action space before generation. It also detects low-
+/// confidence or underspecified requests early so Lumen can ask one concise
+/// clarification instead of guessing or inventing tool results.
 nonisolated enum AgentIntentRouter {
     enum Intent: Sendable, Equatable, CaseIterable {
         case conversation
         case answerWithContext
+        case clarify
         case webSearch
         case fetchURL
         case calendarList
@@ -45,6 +46,9 @@ nonisolated enum AgentIntentRouter {
         let reason: String
         let allowedToolIDs: Set<String>
         let requiresUserApproval: Bool
+        let shouldAskClarification: Bool
+        let clarificationQuestion: String?
+        let alternatives: [Intent]
 
         var allowsTools: Bool { !allowedToolIDs.isEmpty }
     }
@@ -88,7 +92,7 @@ nonisolated enum AgentIntentRouter {
         add(.mapsSearch, score(text, strong: ["near me", "nearby", "closest", "around me", "around here", "in my area"], weak: ["local", "address of"]), "local search terms")
 
         let calendarMentions = containsAny(text, ["calendar", "event", "meeting", "appointment"])
-        if calendarMentions {
+        if calendarMentions || containsAny(text, ["schedule", "book me", "put it on"]) {
             add(.calendarCreate, score(text, strong: ["create", "add", "schedule", "book", "put", "make", "set up"], weak: ["tomorrow", "today", "next week", "at "]) + 4, "calendar write intent")
             add(.calendarList, score(text, strong: ["show", "list", "what", "when", "next", "upcoming"], weak: ["today", "tomorrow", "this week"]) + 4, "calendar read intent")
         }
@@ -135,16 +139,36 @@ nonisolated enum AgentIntentRouter {
 
         add(.webSearch, score(text, strong: ["search the web", "web search", "look up", "find online", "research online"], weak: ["google", "internet", "latest", "current", "documentation", "research"]), "web knowledge intent")
 
-        let best = candidates.sorted { lhs, rhs in
+        let ranked = candidates.sorted { lhs, rhs in
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return priority(lhs.intent) > priority(rhs.intent)
-        }.first
+        }
 
-        guard let best, best.score >= 7 else {
+        guard let best = ranked.first, best.score >= 7 else {
+            if looksLikeUnderspecifiedCommand(text) {
+                return makeClarificationDecision(question: "What do you want me to do with that?", reason: "underspecified command", alternatives: [])
+            }
             return makeDecision(.answerWithContext, confidence: 82, reason: "no tool intent above threshold")
         }
 
+        let closeAlternatives = ranked
+            .dropFirst()
+            .filter { abs($0.score - best.score) <= 3 && $0.score >= 7 }
+            .map(\.intent)
+
+        if shouldClarifyAmbiguity(best: best, alternatives: closeAlternatives, text: text) {
+            return makeClarificationDecision(
+                question: clarificationQuestion(best: best.intent, alternatives: closeAlternatives, text: text),
+                reason: "ambiguous intent: \(best.intent) vs \(closeAlternatives.map(String.init(describing:)).joined(separator: ", "))",
+                alternatives: [best.intent] + closeAlternatives
+            )
+        }
+
         let intent = normalizeConflicts(best.intent, text: text)
+        if let missing = missingRequiredDetails(for: intent, text: text) {
+            return makeClarificationDecision(question: missing, reason: "missing required details for \(intent)", alternatives: [intent])
+        }
+
         return makeDecision(intent, confidence: min(100, best.score * 10), reason: best.reason)
     }
 
@@ -154,21 +178,24 @@ nonisolated enum AgentIntentRouter {
 
     static func filteredTools(from enabledTools: [ToolDefinition], userMessage: String, attachments: [ChatAttachment] = []) -> [ToolDefinition] {
         let decision = decide(userMessage: userMessage, attachments: attachments)
-        guard decision.allowsTools else { return [] }
+        guard decision.allowsTools, !decision.shouldAskClarification else { return [] }
         return enabledTools.filter { decision.allowedToolIDs.contains($0.id) }
     }
 
     static func routingSystemNote(for decision: Decision) -> String {
+        if decision.shouldAskClarification {
+            return "\n\nRouting: The user's intent is not clear enough to act. Ask exactly one concise clarification question. Do not use tools. Do not invent completed actions."
+        }
         if decision.allowedToolIDs.isEmpty {
-            return "\n\nRouting: No tools are available for this turn. Answer directly in natural language. Do not invent tool results or claim that actions were performed."
+            return "\n\nRouting: No tools are available for this turn. Answer directly in natural language. Do not invent tool results or claim that actions were performed. If the user's request is unclear, ask one concise clarification question."
         }
         let tools = decision.allowedToolIDs.sorted().joined(separator: ", ")
-        return "\n\nRouting: The user's inferred intent is \(decision.intent). Only these tools are available for this turn: \(tools). Use a tool only if it is necessary. Do not invent tool results. Tools that require approval must not be described as completed until they actually return a successful result."
+        return "\n\nRouting: The user's inferred intent is \(decision.intent) with confidence \(decision.confidence). Only these tools are available for this turn: \(tools). Use a tool only if it is necessary. If key details are missing, ask one concise clarification question before acting. Do not invent tool results. Tools that require approval must not be described as completed until they actually return a successful result."
     }
 
     static func allowedToolIDs(for intent: Intent) -> Set<String> {
         switch intent {
-        case .conversation, .answerWithContext: []
+        case .conversation, .answerWithContext, .clarify: []
         case .webSearch: ["web.search"]
         case .fetchURL: ["web.fetch", "web.search"]
         case .calendarList: ["calendar.list"]
@@ -205,17 +232,78 @@ nonisolated enum AgentIntentRouter {
     private static func makeDecision(_ intent: Intent, confidence: Int, reason: String) -> Decision {
         let allowed = allowedToolIDs(for: intent)
         let requiresApproval = allowed.contains { ToolRegistry.find(id: $0)?.requiresApproval == true }
-        return Decision(intent: intent, confidence: confidence, reason: reason, allowedToolIDs: allowed, requiresUserApproval: requiresApproval)
+        return Decision(intent: intent, confidence: confidence, reason: reason, allowedToolIDs: allowed, requiresUserApproval: requiresApproval, shouldAskClarification: false, clarificationQuestion: nil, alternatives: [])
+    }
+
+    private static func makeClarificationDecision(question: String, reason: String, alternatives: [Intent]) -> Decision {
+        Decision(intent: .clarify, confidence: 50, reason: reason, allowedToolIDs: [], requiresUserApproval: false, shouldAskClarification: true, clarificationQuestion: question, alternatives: alternatives)
     }
 
     private static func normalizeConflicts(_ intent: Intent, text: String) -> Intent {
         if intent == .mapsSearch, containsAny(text, ["how to", "tutorial", "guide", "plans", "blueprint", "documentation"]) { return .webSearch }
-        if intent == .calendarCreate, !containsAny(text, ["calendar", "event", "meeting", "appointment", "schedule"]) { return .answerWithContext }
+        if intent == .calendarCreate, !containsAny(text, ["calendar", "event", "meeting", "appointment", "schedule", "book"]) { return .answerWithContext }
         return intent
     }
 
+    private static func missingRequiredDetails(for intent: Intent, text: String) -> String? {
+        switch intent {
+        case .calendarCreate:
+            let hasTime = containsAny(text, ["today", "tomorrow", "am", "pm", " at ", "next ", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])
+            let hasSubject = text.replacingOccurrences(of: "calendar", with: "").replacingOccurrences(of: "event", with: "").split(separator: " ").count > 3
+            if !hasSubject && !hasTime { return "What event should I create, and when should it start?" }
+            if !hasSubject { return "What should I call the event?" }
+            if !hasTime { return "When should the event start?" }
+        case .reminderCreate:
+            if !containsAny(text, ["remind me", "to ", "about "]) { return "What should I remind you about?" }
+        case .draftMail:
+            if !containsAny(text, [" to ", "email "]) { return "Who should the email go to, and what should it say?" }
+        case .draftMessage:
+            if !containsAny(text, [" to ", "text ", "message "]) { return "Who should the message go to, and what should it say?" }
+        case .phoneCall:
+            if text.split(separator: " ").count <= 2 { return "Who do you want to call?" }
+        case .mapsDirections:
+            if text.split(separator: " ").count <= 3 { return "Where do you want directions to?" }
+        default:
+            break
+        }
+        return nil
+    }
+
+    private static func shouldClarifyAmbiguity(best: Candidate, alternatives: [Intent], text: String) -> Bool {
+        guard !alternatives.isEmpty else { return false }
+        let actionIntents: Set<Intent> = [.calendarCreate, .reminderCreate, .draftMail, .draftMessage, .phoneCall, .triggerCreate, .alarmSchedule, .mapsDirections]
+        if actionIntents.contains(best.intent) || alternatives.contains(where: { actionIntents.contains($0) }) { return true }
+        return best.score < 12 && text.split(separator: " ").count < 5
+    }
+
+    private static func clarificationQuestion(best: Intent, alternatives: [Intent], text: String) -> String {
+        let options = ([best] + alternatives).prefix(3).map(userFacingName(for:)).joined(separator: ", ")
+        return "Do you want me to \(options)?"
+    }
+
+    private static func userFacingName(for intent: Intent) -> String {
+        switch intent {
+        case .calendarCreate: "create a calendar event"
+        case .calendarList: "check your calendar"
+        case .reminderCreate: "create a reminder"
+        case .reminderList: "list reminders"
+        case .draftMail: "draft an email"
+        case .draftMessage: "draft a message"
+        case .phoneCall: "start a call"
+        case .mapsDirections: "get directions"
+        case .mapsSearch: "search nearby places"
+        case .webSearch: "search the web"
+        case .weather: "check the weather"
+        default: "continue"
+        }
+    }
+
+    private static func looksLikeUnderspecifiedCommand(_ text: String) -> Bool {
+        text.split(separator: " ").count <= 4 && containsAny(text, ["do it", "make it", "fix it", "that", "this", "go", "run it", "continue"])
+    }
+
     private static func isPureConversation(text: String, compact: String) -> Bool {
-        if ["hi", "hello", "hey", "yo", "sup", "bonjour", "salut", "allo", "ok", "okay", "thanks", "thankyou", "merci"].contains(compact) { return true }
+        if ["hi", "hello", "hey", "yo", "sup", "bonjour", "salut", "allo", "ok", "okay", "thanks", "thankyou", "merci", "yes", "no"].contains(compact) { return true }
         if text.count < 30, containsAny(text, ["how are you", "what's up", "whats up", "good morning", "good evening"]) { return true }
         return false
     }

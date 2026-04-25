@@ -1250,7 +1250,7 @@ final class AgentService {
             options: .regularExpression
         )
         text = text.replacingOccurrences(
-            of: #"([{}\[\]<>`"':,;|\\/_=-])\1+"#,
+            of: #"([{}\[\]`|])\1+"#,
             with: "$1",
             options: .regularExpression
         )

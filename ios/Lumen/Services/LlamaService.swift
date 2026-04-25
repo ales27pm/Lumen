@@ -66,6 +66,9 @@ final actor LlamaService {
 
     private var modelPath: String?
     private var contextSize: Int = 4096
+    private var activeSessionID: String?
+    private var cachedPrompt: String = ""
+    private var nPast: Int32 = 0
 
     private init() {}
 
@@ -114,6 +117,7 @@ final actor LlamaService {
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
         let prompt = buildPrompt(req: req)
+        let sessionID = req.sessionID ?? "model:\(req.modelName)"
 
         return AsyncStream { continuation in
             Task.detached { [weak self] in
@@ -124,7 +128,11 @@ final actor LlamaService {
                 }
 
                 do {
-                    let generated = try await self.generate(prompt: prompt, maxTokens: req.maxTokens)
+                    let generated = try await self.generate(
+                        prompt: prompt,
+                        maxTokens: req.maxTokens,
+                        sessionID: sessionID
+                    )
                     for await chunk in generated {
                         continuation.yield(.text(chunk))
                     }
@@ -184,52 +192,52 @@ final actor LlamaService {
         sampler = loadedSampler
         modelPath = url.path
         self.contextSize = contextSize
+        activeSessionID = nil
+        cachedPrompt = ""
+        nPast = 0
     }
 
-    func generate(prompt: String, maxTokens: Int) async throws -> AsyncStream<String> {
+    func generate(prompt: String, maxTokens: Int, sessionID: String) async throws -> AsyncStream<String> {
         guard let model, let context, let sampler else {
             throw LlamaError.notInitialized
         }
 
         let vocab = llama_model_get_vocab(model)
-        var tokens = [llama_token](repeating: 0, count: max(1024, prompt.utf8.count * 2))
-
-        let nTokens: Int32 = prompt.withCString { promptPtr in
-            llama_tokenize(
-                vocab,
-                promptPtr,
-                Int32(prompt.utf8.count),
-                &tokens,
-                Int32(tokens.count),
-                true,
-                false
-            )
+        if activeSessionID != sessionID {
+            resetKVCache()
+            activeSessionID = sessionID
         }
 
-        guard nTokens > 0 else {
-            throw LlamaError.tokenizationFailed
+        var promptToEval = prompt
+        if !cachedPrompt.isEmpty, prompt.hasPrefix(cachedPrompt) {
+            promptToEval = String(prompt.dropFirst(cachedPrompt.count))
+        } else if !cachedPrompt.isEmpty {
+            resetKVCache()
         }
 
-        var tokenBuffer = tokens
-        let decodeResult = tokenBuffer.withUnsafeMutableBufferPointer { ptr -> Int32 in
-            var batch = llama_batch_get_one(ptr.baseAddress, nTokens)
-            return llama_decode(context, batch)
+        if !promptToEval.isEmpty {
+            let promptTokens = try tokenize(promptToEval, vocab: vocab, addSpecial: nPast == 0)
+            try decodeTokens(promptTokens, context: context)
+            cachedPrompt = prompt
         }
-        guard decodeResult == 0 else {
-            throw LlamaError.decodeFailed
-        }
+
+        let evalLimit = Int(llama_n_ctx(context))
 
         return AsyncStream { continuation in
-            Task.detached {
+            Task {
                 for _ in 0..<maxTokens {
+                    if Int(self.nPast) >= evalLimit - 1 {
+                        break
+                    }
+
                     let token = llama_sampler_sample(sampler, context, -1)
                     if llama_vocab_is_eog(vocab, token) {
                         break
                     }
 
-                    var nextToken = token
-                    var nextBatch = llama_batch_get_one(&nextToken, 1)
-                    if llama_decode(context, nextBatch) != 0 {
+                    do {
+                        try self.decodeTokens([token], context: context)
+                    } catch {
                         break
                     }
 
@@ -259,6 +267,9 @@ final actor LlamaService {
             self.model = nil
         }
         modelPath = nil
+        activeSessionID = nil
+        cachedPrompt = ""
+        nPast = 0
     }
 
     // MARK: - Prompt building
@@ -323,5 +334,81 @@ final actor LlamaService {
             }
         }
         return v
+    }
+
+    private func tokenize(
+        _ text: String,
+        vocab: UnsafePointer<llama_vocab>,
+        addSpecial: Bool
+    ) throws -> [llama_token] {
+        var tokens = [llama_token](repeating: 0, count: max(256, text.utf8.count + 8))
+        var nTokens = text.withCString { promptPtr in
+            llama_tokenize(
+                vocab,
+                promptPtr,
+                Int32(text.utf8.count),
+                &tokens,
+                Int32(tokens.count),
+                addSpecial,
+                false
+            )
+        }
+
+        if nTokens < 0 {
+            let required = Int(-nTokens)
+            tokens = [llama_token](repeating: 0, count: required)
+            nTokens = text.withCString { promptPtr in
+                llama_tokenize(
+                    vocab,
+                    promptPtr,
+                    Int32(text.utf8.count),
+                    &tokens,
+                    Int32(tokens.count),
+                    addSpecial,
+                    false
+                )
+            }
+        }
+
+        guard nTokens > 0 else {
+            throw LlamaError.tokenizationFailed
+        }
+
+        return Array(tokens.prefix(Int(nTokens)))
+    }
+
+    private func decodeTokens(
+        _ tokens: [llama_token],
+        context: UnsafeMutablePointer<llama_context>
+    ) throws {
+        guard !tokens.isEmpty else { return }
+
+        var batch = llama_batch_init(Int32(tokens.count), 0, 1)
+        defer { llama_batch_free(batch) }
+
+        for (index, token) in tokens.enumerated() {
+            batch.token[index] = token
+            batch.pos[index] = nPast + Int32(index)
+            batch.n_seq_id[index] = 1
+            batch.seq_id[index]![0] = 0
+            batch.logits[index] = index == tokens.count - 1 ? 1 : 0
+        }
+        batch.n_tokens = Int32(tokens.count)
+
+        if llama_decode(context, batch) != 0 {
+            throw LlamaError.decodeFailed
+        }
+
+        nPast += Int32(tokens.count)
+    }
+
+    private func resetKVCache() {
+        guard let context else { return }
+        llama_memory_clear(llama_get_memory(context), true)
+        if let sampler {
+            llama_sampler_reset(sampler)
+        }
+        cachedPrompt = ""
+        nPast = 0
     }
 }

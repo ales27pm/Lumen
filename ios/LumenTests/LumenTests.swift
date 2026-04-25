@@ -180,6 +180,21 @@ struct LumenTests {
         #expect(turn.action?.args["kind"] == "fact")
     }
 
+    @Test func parserRejectsInputAliasWithNonStringArgs() async throws {
+        let raw = #"{"tool":"memory.save","input":{"content":"remember this","priority":1}}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == .invalidActionArgsType)
+        #expect(turn.action == nil)
+    }
+
+    @Test func parserAcceptsRawInputStringContainingJSONObject() async throws {
+        let raw = #"{"tool":"web.search","input":"{\"query\":\"swift testing\"}"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "web.search")
+        #expect(turn.action?.args["query"] == "swift testing")
+    }
+
     @Test func parserRejectsNestedActionMissingToolName() async throws {
         let raw = #"{"action":{"args":{"query":"x"}}}"#
         let turn = AgentTurnParser.parse(raw)

@@ -338,7 +338,7 @@ nonisolated enum AgentTurnParser {
         if let rawArgs = argsValue as? [String: Any] {
             return normalizeArgs(rawArgs)
         }
-        if let inputText = argsValue as? String {
+        if obj["input"] != nil, let inputText = argsValue as? String {
             let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return [:] }
             if let data = trimmed.data(using: .utf8),
@@ -354,37 +354,10 @@ nonisolated enum AgentTurnParser {
     private static func normalizeArgs(_ rawArgs: [String: Any]) -> [String: String]? {
         var args: [String: String] = [:]
         for (k, v) in rawArgs {
-            guard let normalized = stringifyArgValue(v) else { return nil }
+            guard let normalized = v as? String else { return nil }
             args[k] = normalized
         }
         return args
-    }
-
-    private static func stringifyArgValue(_ value: Any) -> String? {
-        switch value {
-        case let text as String:
-            return text
-        case let number as NSNumber:
-            if number.isBoolLike {
-                return number.boolValue ? "true" : "false"
-            }
-            return number.stringValue
-        case let array as [Any]:
-            return jsonString(array)
-        case let dictionary as [String: Any]:
-            return jsonString(dictionary)
-        default:
-            return nil
-        }
-    }
-
-    private static func jsonString(_ value: Any) -> String? {
-        guard JSONSerialization.isValidJSONObject(value),
-              let data = try? JSONSerialization.data(withJSONObject: value),
-              let text = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return text
     }
 
     private static func extractSingleJSONObject(from text: String) -> Result<ExtractedJSONObject, AgentTurnParseError> {
@@ -403,12 +376,6 @@ nonisolated enum AgentTurnParser {
 
     private static func invalid(_ error: AgentTurnParseError) -> AgentTurn {
         AgentTurn(thought: nil, action: nil, final: nil, parseError: error, hadNoise: false)
-    }
-}
-
-private extension NSNumber {
-    var isBoolLike: Bool {
-        CFGetTypeID(self) == CFBooleanGetTypeID()
     }
 }
 

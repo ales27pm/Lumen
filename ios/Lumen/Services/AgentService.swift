@@ -752,11 +752,25 @@ nonisolated struct AgentParseFailureSummaryEntry: Sendable, Hashable {
     let count: Int
 }
 
+nonisolated struct AgentParseFailureTrendEntry: Sendable, Hashable {
+    let parseError: String
+    let prefixSignature: String
+    let suffixSignature: String
+    let recentCount: Int
+    let recentShare: Double
+    let baselineShare: Double
+    let isRegression: Bool
+}
+
 nonisolated struct AgentParseFailureSummary: Sendable {
     let totalLines: Int
     let decodedLines: Int
     let skippedLines: Int
     let topEntries: [AgentParseFailureSummaryEntry]
+    let recentLineWindowSize: Int
+    let recent24hCount: Int
+    let recentLineTopEntries: [AgentParseFailureTrendEntry]
+    let recent24hTopEntries: [AgentParseFailureTrendEntry]
 }
 
 nonisolated struct AgentParseNoiseSummaryEntry: Sendable, Hashable {
@@ -767,41 +781,85 @@ nonisolated struct AgentParseNoiseSummaryEntry: Sendable, Hashable {
     let count: Int
 }
 
+nonisolated struct AgentParseNoiseTrendEntry: Sendable, Hashable {
+    let modelName: String
+    let stepIndex: Int
+    let prefixSignature: String
+    let suffixSignature: String
+    let recentCount: Int
+    let recentShare: Double
+    let baselineShare: Double
+    let isRegression: Bool
+}
+
 nonisolated struct AgentParseNoiseSummary: Sendable {
     let totalLines: Int
     let decodedLines: Int
     let skippedLines: Int
     let topEntries: [AgentParseNoiseSummaryEntry]
+    let recentLineWindowSize: Int
+    let recent24hCount: Int
+    let recentLineTopEntries: [AgentParseNoiseTrendEntry]
+    let recent24hTopEntries: [AgentParseNoiseTrendEntry]
 }
 
 nonisolated enum AgentParseFailureSummaryLoader {
+    private static let recentLineWindowSize = 50
+    private struct Key: Hashable {
+        let parseError: String
+        let prefixSignature: String
+        let suffixSignature: String
+    }
+
     static func load(topN: Int = 5) -> AgentParseFailureSummary {
         do {
             let directory = try AgentParseFailureRecorder.diagnosticsDirectory()
             let url = directory.appendingPathComponent("agent-parse-failures.jsonl", isDirectory: false)
             guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                return AgentParseFailureSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+                return AgentParseFailureSummary(
+                    totalLines: 0,
+                    decodedLines: 0,
+                    skippedLines: 0,
+                    topEntries: [],
+                    recentLineWindowSize: 0,
+                    recent24hCount: 0,
+                    recentLineTopEntries: [],
+                    recent24hTopEntries: []
+                )
             }
             let text = String(decoding: data, as: UTF8.self)
             return load(fromJSONLText: text, topN: topN)
         } catch {
-            return AgentParseFailureSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+            return AgentParseFailureSummary(
+                totalLines: 0,
+                decodedLines: 0,
+                skippedLines: 0,
+                topEntries: [],
+                recentLineWindowSize: 0,
+                recent24hCount: 0,
+                recentLineTopEntries: [],
+                recent24hTopEntries: []
+            )
         }
     }
 
     static func load(fromJSONLText text: String, topN: Int = 5) -> AgentParseFailureSummary {
-        struct Key: Hashable {
-            let parseError: String
-            let prefixSignature: String
-            let suffixSignature: String
-        }
-
         let lines = text.split(whereSeparator: \.isNewline)
         if lines.isEmpty {
-            return AgentParseFailureSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+            return AgentParseFailureSummary(
+                totalLines: 0,
+                decodedLines: 0,
+                skippedLines: 0,
+                topEntries: [],
+                recentLineWindowSize: 0,
+                recent24hCount: 0,
+                recentLineTopEntries: [],
+                recent24hTopEntries: []
+            )
         }
 
         var counts: [Key: Int] = [:]
+        var traces: [(key: Key, createdAt: Date)] = []
         var decodedLines = 0
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -818,6 +876,7 @@ nonisolated enum AgentParseFailureSummaryLoader {
                 suffixSignature: noiseSignature(trace.suffixNoise)
             )
             counts[key, default: 0] += 1
+            traces.append((key: key, createdAt: trace.createdAt))
         }
 
         let topEntries = counts
@@ -836,11 +895,35 @@ nonisolated enum AgentParseFailureSummaryLoader {
                 return $0.suffixSignature < $1.suffixSignature
             }
 
+        let recentLineWindow = Array(traces.suffix(recentLineWindowSize))
+        let recent24hWindow: [(key: Key, createdAt: Date)] = {
+            guard let newest = traces.map(\.createdAt).max() else { return [] }
+            let cutoff = newest.addingTimeInterval(-86_400)
+            return traces.filter { $0.createdAt >= cutoff }
+        }()
+
+        let recentLineTopEntries = trendEntries(
+            baselineCounts: counts,
+            recentWindow: recentLineWindow,
+            totalBaseline: decodedLines,
+            topN: topN
+        )
+        let recent24hTopEntries = trendEntries(
+            baselineCounts: counts,
+            recentWindow: recent24hWindow,
+            totalBaseline: decodedLines,
+            topN: topN
+        )
+
         return AgentParseFailureSummary(
             totalLines: lines.count,
             decodedLines: decodedLines,
             skippedLines: lines.count - decodedLines,
-            topEntries: Array(topEntries.prefix(max(0, topN)))
+            topEntries: Array(topEntries.prefix(max(0, topN))),
+            recentLineWindowSize: recentLineWindow.count,
+            recent24hCount: recent24hWindow.count,
+            recentLineTopEntries: recentLineTopEntries,
+            recent24hTopEntries: recent24hTopEntries
         )
     }
 
@@ -858,11 +941,73 @@ nonisolated enum AgentParseFailureSummaryLoader {
             return lines.joined(separator: "\n")
         }
 
-        lines.append("• Top signatures:")
+        lines.append("• Top signatures (all-time):")
         for entry in summary.topEntries {
             lines.append("  - \(entry.count)x \(entry.parseError) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature)")
         }
+        lines.append("• Recent windows: last \(summary.recentLineWindowSize) lines, last 24h \(summary.recent24hCount) lines")
+        lines.append("• Recent top signatures (last 50 lines):")
+        if summary.recentLineTopEntries.isEmpty {
+            lines.append("  - none")
+        } else {
+            appendTrendLines(summary.recentLineTopEntries, to: &lines)
+        }
+        lines.append("• Recent top signatures (last 24h):")
+        if summary.recent24hTopEntries.isEmpty {
+            lines.append("  - none")
+        } else {
+            appendTrendLines(summary.recent24hTopEntries, to: &lines)
+        }
         return lines.joined(separator: "\n")
+    }
+
+    private static func trendEntries(
+        baselineCounts: [Key: Int],
+        recentWindow: [(key: Key, createdAt: Date)],
+        totalBaseline: Int,
+        topN: Int
+    ) -> [AgentParseFailureTrendEntry] {
+        guard !recentWindow.isEmpty, totalBaseline > 0 else { return [] }
+        var recentCounts: [Key: Int] = [:]
+        for trace in recentWindow {
+            recentCounts[trace.key, default: 0] += 1
+        }
+        let recentTotal = recentWindow.count
+
+        return recentCounts
+            .map { key, recentCount in
+                let baselineCount = baselineCounts[key, default: 0]
+                let recentShare = Double(recentCount) / Double(recentTotal)
+                let baselineShare = Double(baselineCount) / Double(totalBaseline)
+                return AgentParseFailureTrendEntry(
+                    parseError: key.parseError,
+                    prefixSignature: key.prefixSignature,
+                    suffixSignature: key.suffixSignature,
+                    recentCount: recentCount,
+                    recentShare: recentShare,
+                    baselineShare: baselineShare,
+                    isRegression: recentShare > baselineShare
+                )
+            }
+            .sorted {
+                if $0.recentCount != $1.recentCount { return $0.recentCount > $1.recentCount }
+                if $0.parseError != $1.parseError { return $0.parseError < $1.parseError }
+                if $0.prefixSignature != $1.prefixSignature { return $0.prefixSignature < $1.prefixSignature }
+                return $0.suffixSignature < $1.suffixSignature
+            }
+            .prefix(max(0, topN))
+            .map { $0 }
+    }
+
+    private static func appendTrendLines(_ entries: [AgentParseFailureTrendEntry], to lines: inout [String]) {
+        for entry in entries {
+            let recentPct = Int((entry.recentShare * 100).rounded())
+            let baselinePct = Int((entry.baselineShare * 100).rounded())
+            let trend = entry.isRegression ? "↑ regression" : "≈ baseline"
+            lines.append(
+                "  - \(entry.recentCount)x \(entry.parseError) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature) | recent=\(recentPct)% baseline=\(baselinePct)% \(trend)"
+            )
+        }
     }
 
     private static func noiseSignature(_ value: String?) -> String {
@@ -891,34 +1036,63 @@ nonisolated enum AgentParseFailureSummaryLoader {
 }
 
 nonisolated enum AgentParseNoiseSummaryLoader {
+    private static let recentLineWindowSize = 50
+    private struct Key: Hashable {
+        let modelName: String
+        let stepIndex: Int
+        let prefixSignature: String
+        let suffixSignature: String
+    }
+
     static func load(topN: Int = 5) -> AgentParseNoiseSummary {
         do {
             let directory = try AgentParseFailureRecorder.diagnosticsDirectory()
             let url = directory.appendingPathComponent("agent-parse-noise.jsonl", isDirectory: false)
             guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+                return AgentParseNoiseSummary(
+                    totalLines: 0,
+                    decodedLines: 0,
+                    skippedLines: 0,
+                    topEntries: [],
+                    recentLineWindowSize: 0,
+                    recent24hCount: 0,
+                    recentLineTopEntries: [],
+                    recent24hTopEntries: []
+                )
             }
             let text = String(decoding: data, as: UTF8.self)
             return load(fromJSONLText: text, topN: topN)
         } catch {
-            return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+            return AgentParseNoiseSummary(
+                totalLines: 0,
+                decodedLines: 0,
+                skippedLines: 0,
+                topEntries: [],
+                recentLineWindowSize: 0,
+                recent24hCount: 0,
+                recentLineTopEntries: [],
+                recent24hTopEntries: []
+            )
         }
     }
 
     static func load(fromJSONLText text: String, topN: Int = 5) -> AgentParseNoiseSummary {
-        struct Key: Hashable {
-            let modelName: String
-            let stepIndex: Int
-            let prefixSignature: String
-            let suffixSignature: String
-        }
-
         let lines = text.split(whereSeparator: \.isNewline)
         if lines.isEmpty {
-            return AgentParseNoiseSummary(totalLines: 0, decodedLines: 0, skippedLines: 0, topEntries: [])
+            return AgentParseNoiseSummary(
+                totalLines: 0,
+                decodedLines: 0,
+                skippedLines: 0,
+                topEntries: [],
+                recentLineWindowSize: 0,
+                recent24hCount: 0,
+                recentLineTopEntries: [],
+                recent24hTopEntries: []
+            )
         }
 
         var counts: [Key: Int] = [:]
+        var traces: [(key: Key, createdAt: Date)] = []
         var decodedLines = 0
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -936,6 +1110,7 @@ nonisolated enum AgentParseNoiseSummaryLoader {
                 suffixSignature: noiseSignature(trace.suffixNoise)
             )
             counts[key, default: 0] += 1
+            traces.append((key: key, createdAt: trace.createdAt))
         }
 
         let topEntries = counts
@@ -956,11 +1131,35 @@ nonisolated enum AgentParseNoiseSummaryLoader {
                 return $0.suffixSignature < $1.suffixSignature
             }
 
+        let recentLineWindow = Array(traces.suffix(recentLineWindowSize))
+        let recent24hWindow: [(key: Key, createdAt: Date)] = {
+            guard let newest = traces.map(\.createdAt).max() else { return [] }
+            let cutoff = newest.addingTimeInterval(-86_400)
+            return traces.filter { $0.createdAt >= cutoff }
+        }()
+
+        let recentLineTopEntries = trendEntries(
+            baselineCounts: counts,
+            recentWindow: recentLineWindow,
+            totalBaseline: decodedLines,
+            topN: topN
+        )
+        let recent24hTopEntries = trendEntries(
+            baselineCounts: counts,
+            recentWindow: recent24hWindow,
+            totalBaseline: decodedLines,
+            topN: topN
+        )
+
         return AgentParseNoiseSummary(
             totalLines: lines.count,
             decodedLines: decodedLines,
             skippedLines: lines.count - decodedLines,
-            topEntries: Array(topEntries.prefix(max(0, topN)))
+            topEntries: Array(topEntries.prefix(max(0, topN))),
+            recentLineWindowSize: recentLineWindow.count,
+            recent24hCount: recent24hWindow.count,
+            recentLineTopEntries: recentLineTopEntries,
+            recent24hTopEntries: recent24hTopEntries
         )
     }
 
@@ -978,11 +1177,75 @@ nonisolated enum AgentParseNoiseSummaryLoader {
             return lines.joined(separator: "\n")
         }
 
-        lines.append("• Top recurring signatures:")
+        lines.append("• Top recurring signatures (all-time):")
         for entry in summary.topEntries {
             lines.append("  - \(entry.count)x model=\(entry.modelName) step=\(entry.stepIndex) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature)")
         }
+        lines.append("• Recent windows: last \(summary.recentLineWindowSize) lines, last 24h \(summary.recent24hCount) lines")
+        lines.append("• Recent recurring signatures (last 50 lines):")
+        if summary.recentLineTopEntries.isEmpty {
+            lines.append("  - none")
+        } else {
+            appendTrendLines(summary.recentLineTopEntries, to: &lines)
+        }
+        lines.append("• Recent recurring signatures (last 24h):")
+        if summary.recent24hTopEntries.isEmpty {
+            lines.append("  - none")
+        } else {
+            appendTrendLines(summary.recent24hTopEntries, to: &lines)
+        }
         return lines.joined(separator: "\n")
+    }
+
+    private static func trendEntries(
+        baselineCounts: [Key: Int],
+        recentWindow: [(key: Key, createdAt: Date)],
+        totalBaseline: Int,
+        topN: Int
+    ) -> [AgentParseNoiseTrendEntry] {
+        guard !recentWindow.isEmpty, totalBaseline > 0 else { return [] }
+        var recentCounts: [Key: Int] = [:]
+        for trace in recentWindow {
+            recentCounts[trace.key, default: 0] += 1
+        }
+        let recentTotal = recentWindow.count
+
+        return recentCounts
+            .map { key, recentCount in
+                let baselineCount = baselineCounts[key, default: 0]
+                let recentShare = Double(recentCount) / Double(recentTotal)
+                let baselineShare = Double(baselineCount) / Double(totalBaseline)
+                return AgentParseNoiseTrendEntry(
+                    modelName: key.modelName,
+                    stepIndex: key.stepIndex,
+                    prefixSignature: key.prefixSignature,
+                    suffixSignature: key.suffixSignature,
+                    recentCount: recentCount,
+                    recentShare: recentShare,
+                    baselineShare: baselineShare,
+                    isRegression: recentShare > baselineShare
+                )
+            }
+            .sorted {
+                if $0.recentCount != $1.recentCount { return $0.recentCount > $1.recentCount }
+                if $0.modelName != $1.modelName { return $0.modelName < $1.modelName }
+                if $0.stepIndex != $1.stepIndex { return $0.stepIndex < $1.stepIndex }
+                if $0.prefixSignature != $1.prefixSignature { return $0.prefixSignature < $1.prefixSignature }
+                return $0.suffixSignature < $1.suffixSignature
+            }
+            .prefix(max(0, topN))
+            .map { $0 }
+    }
+
+    private static func appendTrendLines(_ entries: [AgentParseNoiseTrendEntry], to lines: inout [String]) {
+        for entry in entries {
+            let recentPct = Int((entry.recentShare * 100).rounded())
+            let baselinePct = Int((entry.baselineShare * 100).rounded())
+            let trend = entry.isRegression ? "↑ regression" : "≈ baseline"
+            lines.append(
+                "  - \(entry.recentCount)x model=\(entry.modelName) step=\(entry.stepIndex) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature) | recent=\(recentPct)% baseline=\(baselinePct)% \(trend)"
+            )
+        }
     }
 
     private static func noiseSignature(_ value: String?) -> String {

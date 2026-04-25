@@ -4,39 +4,20 @@ import UniformTypeIdentifiers
 
 enum SchemaPlaceholderDetector {
     private static let repairFallback = "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
-    private static let normalizedLiteralSentinelVariants: Set<String> = [
-        "<user_final_text>",
-        "<private_reasoning>"
-    ]
-
+    private static let normalizedLiteralSentinelVariants: Set<String> = ["<user_final_text>", "<private_reasoning>"]
     private static let exactPlaceholderVariants: Set<String> = [
-        "answershowntotheuser",
-        "youranswertotheuser",
-        "shortprivateroutingnote",
-        "shortreasoning",
-        "toolid",
-        "key",
-        "value",
-        "privatereasoning",
-        "userfinaltext"
+        "answershowntotheuser", "youranswertotheuser", "shortprivateroutingnote",
+        "shortreasoning", "toolid", "key", "value", "privatereasoning", "userfinaltext"
     ]
-
     private static let sentinelPrefixVariants: [String] = [
-        "answershowntotheuser",
-        "youranswertotheuser",
-        "shortprivateroutingnote",
-        "shortreasoning",
-        "privatereasoning",
-        "userfinaltext"
+        "answershowntotheuser", "youranswertotheuser", "shortprivateroutingnote",
+        "shortreasoning", "privatereasoning", "userfinaltext"
     ]
 
     static func isSchemaPlaceholderPrefix(_ text: String) -> Bool {
         let normalized = normalizedLiteral(text)
         guard !normalized.isEmpty else { return false }
-        if normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) {
-            return true
-        }
-
+        if normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) { return true }
         let compact = compacted(text)
         guard !compact.isEmpty else { return false }
         return sentinelPrefixVariants.contains { $0.hasPrefix(compact) }
@@ -46,55 +27,32 @@ enum SchemaPlaceholderDetector {
         let normalized = normalizedLiteral(text)
         guard !normalized.isEmpty else { return false }
         if normalizedLiteralSentinelVariants.contains(normalized) { return true }
-        if normalized.count >= 6 {
-            if normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) { return true }
-        }
-
+        if normalized.count >= 6, normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) { return true }
         let compact = compacted(text)
         guard !compact.isEmpty else { return false }
         if exactPlaceholderVariants.contains(compact) { return true }
-        if compact.count >= 6 {
-            if sentinelPrefixVariants.contains(where: { $0.hasPrefix(compact) }) { return true }
-        }
+        if compact.count >= 6, sentinelPrefixVariants.contains(where: { $0.hasPrefix(compact) }) { return true }
         return false
     }
 
-    static func isPlaceholderPrefix(_ text: String) -> Bool {
-        isSchemaPlaceholderPrefix(text)
-    }
-
-    static func isPlaceholderFinal(_ text: String) -> Bool {
-        isSchemaPlaceholderFinal(text)
-    }
+    static func isPlaceholderPrefix(_ text: String) -> Bool { isSchemaPlaceholderPrefix(text) }
+    static func isPlaceholderFinal(_ text: String) -> Bool { isSchemaPlaceholderFinal(text) }
 
     static func repairOrFallback(_ text: String) -> String {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.isEmpty || isSchemaPlaceholderFinal(clean) {
-            return repairFallback
-        }
-        return clean
+        return clean.isEmpty || isSchemaPlaceholderFinal(clean) ? repairFallback : clean
     }
 
     private static func normalizedLiteral(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-            .replacingOccurrences(
-                of: #"\s+"#,
-                with: "",
-                options: .regularExpression
-            )
+            .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
     }
 
     private static func compacted(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-            .replacingOccurrences(
-                of: #"[^a-z0-9]+"#,
-                with: "",
-                options: .regularExpression
-            )
+            .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "", options: .regularExpression)
     }
 }
 
@@ -120,16 +78,13 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: 14) {
                         ForEach(conversation.sortedMessages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
+                            MessageBubble(message: message).id(message.id)
                         }
                         if !streamingSteps.isEmpty {
-                            AgentStepsPanel(steps: streamingSteps, expanded: true)
-                                .id("steps")
+                            AgentStepsPanel(steps: streamingSteps, expanded: true).id("steps")
                         }
                         if !streamingText.isEmpty {
-                            MessageBubble.streaming(text: streamingText)
-                                .id("streaming")
+                            MessageBubble.streaming(text: streamingText).id("streaming")
                         }
                         Color.clear.frame(height: 8).id("bottom")
                     }
@@ -139,15 +94,9 @@ struct ChatView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .contentShape(Rectangle())
                 .onTapGesture { isFocused = false }
-                .onChange(of: conversation.messages.count) { _, _ in
-                    withAnimation(.spring) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
-                .onChange(of: streamingText) { _, _ in
-                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
-                .onChange(of: streamingSteps.count) { _, _ in
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
+                .onChange(of: conversation.messages.count) { _, _ in withAnimation(.spring) { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .onChange(of: streamingText) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .onChange(of: streamingSteps.count) { _, _ in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
             }
 
             Divider().background(Theme.border)
@@ -156,18 +105,13 @@ struct ChatView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(attachments) { a in
-                            AttachmentChip(
-                                attachment: a,
-                                state: attachmentPreview[a.id]
-                            ) {
+                            AttachmentChip(attachment: a, state: attachmentPreview[a.id]) {
                                 attachments.removeAll { $0.id == a.id }
                                 recomputeAttachmentPreview()
                             }
                         }
-                    }
-                    .padding(.horizontal, 12)
-                }
-                .padding(.top, 6)
+                    }.padding(.horizontal, 12)
+                }.padding(.top, 6)
             }
 
             ChatInputBar(
@@ -191,26 +135,22 @@ struct ChatView: View {
             }
         }
         .fullScreenCover(isPresented: $showVoiceMode) {
-            VoiceModeView(onTranscript: { text in
-                showVoiceMode = false
-                send(text: text)
-            })
+            VoiceModeView(onTranscript: { text in showVoiceMode = false; send(text: text) })
         }
-        .fileImporter(isPresented: $showFilePicker,
-                      allowedContentTypes: [.plainText, .pdf, .text, .utf8PlainText, .rtf, .commaSeparatedText, .json, .xml, .html, .sourceCode, UTType(filenameExtension: "md") ?? .plainText],
-                      allowsMultipleSelection: true) { result in
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.plainText, .pdf, .text, .utf8PlainText, .rtf, .commaSeparatedText, .json, .xml, .html, .sourceCode, UTType(filenameExtension: "md") ?? .plainText],
+            allowsMultipleSelection: true
+        ) { result in
             if case .success(let urls) = result {
                 for url in urls {
                     if let dest = FileStore.importFile(from: url),
-                       let attachment = AttachmentResolver.make(from: dest) {
-                        if !attachments.contains(where: { $0.path == attachment.path }) {
-                            attachments.append(attachment)
-                        }
+                       let attachment = AttachmentResolver.make(from: dest),
+                       !attachments.contains(where: { $0.path == attachment.path }) {
+                        attachments.append(attachment)
                     }
                 }
-                if !urls.isEmpty {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                }
+                if !urls.isEmpty { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
                 recomputeAttachmentPreview()
             }
         }
@@ -218,10 +158,7 @@ struct ChatView: View {
     }
 
     private func recomputeAttachmentPreview() {
-        guard !attachments.isEmpty else {
-            attachmentPreview = [:]
-            return
-        }
+        guard !attachments.isEmpty else { attachmentPreview = [:]; return }
         let states = PromptAssembler.previewAttachmentStates(
             attachments: attachments,
             contextSize: appState.contextSize,
@@ -240,9 +177,7 @@ struct ChatView: View {
         var text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         let turnAttachments = attachments
         if text.isEmpty && !turnAttachments.isEmpty {
-            text = turnAttachments.count == 1
-                ? "Please review the attached file."
-                : "Please review the attached files."
+            text = turnAttachments.count == 1 ? "Please review the attached file." : "Please review the attached files."
         }
         guard !text.isEmpty, !appState.isGenerating else { return }
         if overrideText == nil { draft = ""; attachments = []; attachmentPreview = [:] }
@@ -251,19 +186,15 @@ struct ChatView: View {
         if turnAttachments.isEmpty {
             displayContent = text
         } else {
-            let list = turnAttachments.map { "• \($0.name)" }.joined(separator: "\n")
-            displayContent = "\(text)\n\nAttached:\n\(list)"
+            displayContent = "\(text)\n\nAttached:\n\(turnAttachments.map { "• \($0.name)" }.joined(separator: "\n"))"
         }
         let userMsg = ChatMessage(role: .user, content: displayContent)
         conversation.messages.append(userMsg)
         conversation.updatedAt = Date()
-        if conversation.title == "New Chat" {
-            conversation.title = String(displayContent.prefix(36))
-        }
+        if conversation.title == "New Chat" { conversation.title = String(displayContent.prefix(36)) }
         try? modelContext.save()
 
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-
         appState.isGenerating = true
         streamingText = ""
         streamingSteps = []
@@ -277,7 +208,6 @@ struct ChatView: View {
                 return
             }
             let memories = await MemoryStore.recall(query: text, context: modelContext).map(\.content)
-
             if appState.agentModeEnabled {
                 await runAgent(text: text, memories: memories, attachments: turnAttachments)
             } else {
@@ -288,7 +218,8 @@ struct ChatView: View {
 
     private func runAgent(text: String, memories: [String], attachments: [ChatAttachment]) async {
         let history = conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) }
-        let tools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
+        let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
+        let routedTools = AgentIntentRouter.filteredTools(from: enabledTools, userMessage: text, attachments: attachments)
         let req = AgentRequest(
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
             history: Array(history),
@@ -298,7 +229,7 @@ struct ChatView: View {
             repetitionPenalty: appState.repetitionPenalty,
             maxTokens: appState.maxTokens,
             maxSteps: appState.maxAgentSteps,
-            availableTools: tools,
+            availableTools: routedTools,
             relevantMemories: memories,
             attachments: attachments
         )
@@ -310,11 +241,7 @@ struct ChatView: View {
             if Task.isCancelled { break }
             switch event {
             case .step(let step):
-                if let idx = steps.firstIndex(where: { $0.id == step.id }) {
-                    steps[idx] = step
-                } else {
-                    steps.append(step)
-                }
+                if let idx = steps.firstIndex(where: { $0.id == step.id }) { steps[idx] = step } else { steps.append(step) }
                 streamingSteps = steps
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             case .stepDelta(let id, let text):
@@ -324,11 +251,8 @@ struct ChatView: View {
                 }
             case .finalDelta(let chunk):
                 finalText += chunk
-                if SchemaPlaceholderDetector.isPlaceholderPrefix(finalText) {
-                    streamingText = ""
-                } else {
-                    streamingText = finalText
-                }
+                let sanitized = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
+                streamingText = SchemaPlaceholderDetector.isPlaceholderPrefix(sanitized) ? "" : sanitized
             case .done(let final, let allSteps):
                 finalText = final.isEmpty ? finalText : final
                 steps = allSteps
@@ -337,23 +261,17 @@ struct ChatView: View {
             }
         }
 
-        finalText = await repairSchemaPlaceholderFinalIfNeeded(
-            finalText,
-            userText: text,
-            memories: memories,
-            attachments: attachments
-        )
+        finalText = await repairSchemaPlaceholderFinalIfNeeded(finalText, userText: text, memories: memories, attachments: attachments)
+        finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
+        let sanitizedSteps = AgentVisibleContentSanitizer.sanitizedSteps(steps)
 
-        let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: steps)
+        let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
         streamingText = ""
         streamingSteps = []
 
         if appState.autoMemory, finalText.count > 60 {
-            await MemoryStore.remember(
-                "User asked: \(text). Assistant: \(String(finalText.prefix(160)))",
-                kind: .conversation, source: "chat", context: modelContext
-            )
+            await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
             await MemoryStore.extractAndStore(userText: text, assistantText: finalText, context: modelContext)
         }
 
@@ -382,21 +300,19 @@ struct ChatView: View {
             switch token {
             case .text(let s):
                 accumulated += s
-                streamingText = accumulated
+                streamingText = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
             case .done:
                 break
             }
         }
 
-        let assistantMsg = ChatMessage(role: .assistant, content: accumulated)
+        let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
+        let assistantMsg = ChatMessage(role: .assistant, content: sanitized)
         conversation.messages.append(assistantMsg)
         streamingText = ""
 
-        if appState.autoMemory, accumulated.count > 60 {
-            await MemoryStore.remember(
-                "User asked: \(text). Assistant said: \(accumulated.prefix(140))",
-                kind: .conversation, source: "chat", context: modelContext
-            )
+        if appState.autoMemory, sanitized.count > 60 {
+            await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
         }
 
         conversation.updatedAt = Date()
@@ -404,21 +320,14 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func repairSchemaPlaceholderFinalIfNeeded(
-        _ finalText: String,
-        userText: String,
-        memories: [String],
-        attachments: [ChatAttachment]
-    ) async -> String {
+    private func repairSchemaPlaceholderFinalIfNeeded(_ finalText: String, userText: String, memories: [String], attachments: [ChatAttachment]) async -> String {
         let trimmed = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SchemaPlaceholderDetector.isPlaceholderFinal(trimmed) else { return finalText }
 
         if appState.enabledToolIDs.contains("web.search"), shouldUseWebRepair(for: userText) {
             let query = cleanedSearchQuery(userText)
             let result = await WebTools.webSearch(query: query)
-            if !isWeakSearchResult(result) {
-                return result
-            }
+            if !isWeakSearchResult(result) { return result }
         }
 
         let request = GenerateRequest(
@@ -439,32 +348,16 @@ struct ChatView: View {
         for await token in await AppLlamaService.shared.stream(request) {
             if Task.isCancelled { break }
             switch token {
-            case .text(let s):
-                repaired += s
-            case .done:
-                break
+            case .text(let s): repaired += s
+            case .done: break
             }
         }
-
         return SchemaPlaceholderDetector.repairOrFallback(repaired)
     }
 
     private func shouldUseWebRepair(for userText: String) -> Bool {
         let normalized = userText.lowercased()
-        let webMarkers = [
-            "search for",
-            "look up",
-            "research",
-            "web",
-            "internet",
-            "diy",
-            "tutorial",
-            "guide",
-            "how to",
-            "plans",
-            "blueprint",
-            "documentation"
-        ]
+        let webMarkers = ["search for", "look up", "research", "web", "internet", "diy", "tutorial", "guide", "how to", "plans", "blueprint", "documentation"]
         return webMarkers.contains { normalized.contains($0) }
     }
 
@@ -482,22 +375,17 @@ struct ChatView: View {
     private func isWeakSearchResult(_ result: String) -> Bool {
         let normalized = result.lowercased()
         if result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
-        return normalized.contains("no direct answer")
-            || normalized.contains("no results")
-            || normalized.contains("search failed")
-            || normalized.contains("need a query")
+        return normalized.contains("no direct answer") || normalized.contains("no results") || normalized.contains("search failed") || normalized.contains("need a query")
     }
 
-    private func ensureChatModelLoaded() async -> Bool {
-        await ModelLoader.ensureChatLoaded(appState: appState, stored: storedModels)
-    }
+    private func ensureChatModelLoaded() async -> Bool { await ModelLoader.ensureChatLoaded(appState: appState, stored: storedModels) }
 
     private func stop() {
         let task = streamingTask
         streamingTask = nil
         task?.cancel()
-        let captured = streamingText
-        let capturedSteps = streamingSteps
+        let captured = AssistantOutputSanitizer.sanitize(streamingText)
+        let capturedSteps = AgentVisibleContentSanitizer.sanitizedSteps(streamingSteps)
         streamingText = ""
         streamingSteps = []
         Task {
@@ -522,36 +410,18 @@ struct AttachmentChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: attachment.kind.icon)
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
+            Image(systemName: attachment.kind.icon).font(.caption).foregroundStyle(Theme.textSecondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text(attachment.name)
-                    .font(.caption)
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let state, state.truncated {
-                    Text(truncationLabel(state))
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
+                Text(attachment.name).font(.caption).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.middle)
+                if let state, state.truncated { Text(truncationLabel(state)).font(.caption2).foregroundStyle(.orange) }
             }
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textTertiary)
-            }
-            .buttonStyle(.plain)
+            Button(action: onRemove) { Image(systemName: "xmark.circle.fill").font(.caption).foregroundStyle(Theme.textTertiary) }.buttonStyle(.plain)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder((state?.truncated ?? false) ? Color.orange.opacity(0.6) : Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder((state?.truncated ?? false) ? Color.orange.opacity(0.6) : Theme.border, lineWidth: 1) }
         .frame(maxWidth: 240)
     }
 
@@ -575,21 +445,9 @@ struct ChatInputBar: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if isFocused {
-                Button(action: onDismissKeyboard) {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.body)
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
+                Button(action: onDismissKeyboard) { Image(systemName: "keyboard.chevron.compact.down").font(.body).foregroundStyle(Theme.textSecondary).frame(width: 36, height: 36) }.buttonStyle(.plain)
             } else {
-                Button(action: onAttach) {
-                    Image(systemName: "paperclip")
-                        .font(.body)
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
+                Button(action: onAttach) { Image(systemName: "paperclip").font(.body).foregroundStyle(Theme.textSecondary).frame(width: 36, height: 36) }.buttonStyle(.plain)
             }
 
             HStack(alignment: .bottom, spacing: 4) {
@@ -601,21 +459,13 @@ struct ChatInputBar: View {
                     .tint(Theme.accent)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
-
                 if !draft.isEmpty {
-                    Button { draft = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-                    .padding(.trailing, 8)
+                    Button { draft = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary) }.padding(.trailing, 8)
                 }
             }
             .background(Theme.surface)
             .clipShape(.rect(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Theme.border, lineWidth: 1)
-            }
+            .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
 
             if draft.trimmingCharacters(in: .whitespaces).isEmpty && !isGenerating {
                 Button(action: onVoice) {
@@ -625,24 +475,17 @@ struct ChatInputBar: View {
                         .frame(width: 36, height: 36)
                         .background(Theme.surface)
                         .clipShape(.rect(cornerRadius: 10))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Theme.border, lineWidth: 1)
-                        }
-                }
-                .buttonStyle(.plain)
+                        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
+                }.buttonStyle(.plain)
             } else {
-                Button {
-                    if isGenerating { onStop() } else { onSend() }
-                } label: {
+                Button { isGenerating ? onStop() : onSend() } label: {
                     Image(systemName: isGenerating ? "stop.fill" : "arrow.up")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
                         .background(isGenerating ? Color.red.opacity(0.85) : Theme.accent)
                         .clipShape(.rect(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
+                }.buttonStyle(.plain)
             }
         }
     }

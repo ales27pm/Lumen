@@ -3,7 +3,7 @@ import SwiftData
 
 @main
 struct LumenApp: App {
-    @ApplicationDelegateAdaptor(LumenAppDelegate.self) private var appDelegate
+    @UIApplicationDelegateAdaptor(LumenAppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     @Environment(\.scenePhase) private var scenePhase
 

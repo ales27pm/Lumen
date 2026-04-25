@@ -1,6 +1,12 @@
 import Foundation
 import llama   // exposes the C API via `llama.h`
 
+private typealias LlamaModelRef = OpaquePointer
+private typealias LlamaContextRef = OpaquePointer
+private typealias LlamaSamplerRef = OpaquePointer
+private typealias LlamaVocabRef = OpaquePointer
+private typealias LlamaToken = Int32
+
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
     let systemPrompt: String
@@ -60,9 +66,9 @@ final actor LlamaService {
 
     private var backendInitialized = false
 
-    private var model: UnsafeMutablePointer<llama_model>? = nil
-    private var context: UnsafeMutablePointer<llama_context>? = nil
-    private var sampler: UnsafeMutablePointer<llama_sampler>? = nil
+    private var model: LlamaModelRef? = nil
+    private var context: LlamaContextRef? = nil
+    private var sampler: LlamaSamplerRef? = nil
 
     private var modelPath: String?
     private var embedModelPath: String?
@@ -347,10 +353,10 @@ final actor LlamaService {
 
     private func tokenize(
         _ text: String,
-        vocab: UnsafePointer<llama_vocab>,
+        vocab: LlamaVocabRef,
         addSpecial: Bool
-    ) throws -> [llama_token] {
-        var tokens = [llama_token](repeating: 0, count: max(256, text.utf8.count + 8))
+    ) throws -> [LlamaToken] {
+        var tokens = [LlamaToken](repeating: 0, count: max(256, text.utf8.count + 8))
         var nTokens = text.withCString { promptPtr in
             llama_tokenize(
                 vocab,
@@ -365,7 +371,7 @@ final actor LlamaService {
 
         if nTokens < 0 {
             let required = Int(-nTokens)
-            tokens = [llama_token](repeating: 0, count: required)
+            tokens = [LlamaToken](repeating: 0, count: required)
             nTokens = text.withCString { promptPtr in
                 llama_tokenize(
                     vocab,
@@ -387,8 +393,8 @@ final actor LlamaService {
     }
 
     private func decodeTokens(
-        _ tokens: [llama_token],
-        context: UnsafeMutablePointer<llama_context>
+        _ tokens: [LlamaToken],
+        context: LlamaContextRef
     ) throws {
         guard !tokens.isEmpty else { return }
 
@@ -422,8 +428,8 @@ final actor LlamaService {
     }
 
     private func tokenPieceString(
-        vocab: UnsafePointer<llama_vocab>,
-        token: llama_token
+        vocab: LlamaVocabRef,
+        token: LlamaToken
     ) -> String? {
         var piece = [CChar](repeating: 0, count: 256)
 

@@ -303,7 +303,11 @@ final actor AppLlamaService {
             throw LlamaError.embeddingFailed("Input exceeds embedding context window")
         }
 
-        embeddingContext.clearKVCache()
+        // NOTE:
+        // `LlamaContext.clearKVCache()` can trap on some iOS/TestFlight builds when the
+        // underlying runtime reports an unavailable buffer, even when `embeddingContext`
+        // itself is non-nil. We avoid that call here and run each embedding pass with a
+        // fresh `LlamaBatch` sequence instead.
         embeddingContext.setEmbeddingsOutput(true)
         embeddingContext.setCausalAttention(false)
 

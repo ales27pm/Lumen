@@ -50,10 +50,12 @@ struct LumenTests {
         #expect(turn.final == "second")
     }
 
-    @Test func parserRejectsMultipleObjectsWithNoiseOutsideJSONRanges() async throws {
+    @Test func parserAcceptsMultipleObjectsWithNoiseOutsideJSONRanges() async throws {
         let raw = #"note {"final":"first"} {"final":"second"}"#
         let turn = AgentTurnParser.parse(raw)
-        #expect(turn.parseError == .noisyOutput)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "second")
+        #expect(turn.hadNoise)
     }
 
     @Test func parserRejectsMultipleObjectsWhenAllAreInvalid() async throws {
@@ -108,10 +110,33 @@ struct LumenTests {
         #expect(turn.action == nil)
     }
 
-    @Test func parserRejectsNoisyOutputOutsideJSON() async throws {
+    @Test func parserAcceptsNoisyOutputOutsideJSON() async throws {
         let raw = #"prefix {"final":"ok"} suffix"#
         let turn = AgentTurnParser.parse(raw)
-        #expect(turn.parseError == .noisyOutput)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "ok")
+        #expect(turn.hadNoise)
+    }
+
+    @Test func parserAcceptsCodeFenceWrappedJSON() async throws {
+        let raw = """
+        ```json
+        {"final":"ok"}
+        ```
+        """
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "ok")
+        #expect(!turn.hadNoise)
+    }
+
+    @Test func parserSelectsDeterministicCandidateWithMultipleObjectsAndStrayText() async throws {
+        let raw = #"notice {"final":"fallback"} stray {"tool":"web.search","args":{"query":"swift"}} trailing"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "web.search")
+        #expect(turn.action?.args["query"] == "swift")
+        #expect(turn.hadNoise)
     }
 
     @Test func parserRejectsMixedActionShapes() async throws {

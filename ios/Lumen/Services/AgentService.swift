@@ -118,11 +118,19 @@ private enum AgentJSONCandidateSelector {
             guard !ranges.isEmpty else { return .failure(.noJSONObject) }
 
             var candidates: [(range: (Int, Int), object: [String: Any], score: Int)] = []
+            var candidateErrors: [AgentTurnParseError] = []
             for range in ranges {
-                guard let obj = parseJSONObject(chars: chars, range: range) else { continue }
-                candidates.append((range: range, object: obj, score: scoreCandidate(object: obj)))
+                switch parseJSONObject(chars: chars, range: range) {
+                case .success(let obj):
+                    candidates.append((range: range, object: obj, score: scoreCandidate(object: obj)))
+                case .failure(let error):
+                    candidateErrors.append(error)
+                }
             }
             guard !candidates.isEmpty else {
+                if ranges.count == 1, let error = candidateErrors.first {
+                    return .failure(error)
+                }
                 return .failure(ranges.count > 1 ? .multipleJSONObjects : .invalidJSONObject)
             }
 
@@ -176,13 +184,16 @@ private enum AgentJSONCandidateSelector {
                 continue
             }
 
-            if ch == "\"" {
+            if ch == "\"", depth > 0 {
                 inString = true
             } else if ch == "{" {
                 if depth == 0 { start = i }
                 depth += 1
             } else if ch == "}" {
-                guard depth > 0 else { return .failure(.invalidJSONObject) }
+                guard depth > 0 else {
+                    i += 1
+                    continue
+                }
                 depth -= 1
                 if depth == 0, let s = start {
                     ranges.append((s, i))
@@ -196,10 +207,17 @@ private enum AgentJSONCandidateSelector {
         return .success(ranges)
     }
 
-    private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> [String: Any]? {
+    private static func parseJSONObject(chars: [Character], range: (Int, Int)) -> Result<[String: Any], AgentTurnParseError> {
         let jsonStr = String(chars[range.0...range.1])
-        guard let data = jsonStr.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let jsonChars = Array(jsonStr)
+        if !validateEscapes(in: jsonChars) {
+            return .failure(.malformedEscapeSequence)
+        }
+        guard let data = jsonStr.data(using: .utf8) else { return .failure(.invalidJSONObject) }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .failure(.invalidJSONObject)
+        }
+        return .success(object)
     }
 
     private static func scoreCandidate(object: [String: Any]) -> Int {
@@ -239,6 +257,36 @@ private enum AgentJSONCandidateSelector {
         default:
             return false
         }
+    }
+
+    private static func validateEscapes(in chars: [Character]) -> Bool {
+        var inString = false
+        var escape = false
+        var i = 0
+
+        while i < chars.count {
+            let ch = chars[i]
+            if inString {
+                if escape {
+                    if !isValidEscape(at: i, in: chars) { return false }
+                    if ch == "u" { i += 4 }
+                    escape = false
+                } else if ch == "\\" {
+                    escape = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                i += 1
+                continue
+            }
+
+            if ch == "\"" {
+                inString = true
+            }
+            i += 1
+        }
+
+        return true
     }
 }
 

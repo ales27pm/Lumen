@@ -77,6 +77,22 @@ struct LumenTests {
         #expect(turn.parseError == .malformedEscapeSequence)
     }
 
+    @Test func parserAcceptsValidTrailingJSONWhenPrefixContainsMalformedEscapedProse() async throws {
+        let raw = #"prefix prose with malformed escape \q and quote "still prose" {"final":"ok"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "ok")
+        #expect(turn.hadNoise)
+    }
+
+    @Test func parserAcceptsValidTrailingJSONWhenPrefixContainsMalformedEscapedQuotedProse() async throws {
+        let raw = #"prefix "prose with malformed escape \q" {"final":"ok"}"#
+        let turn = AgentTurnParser.parse(raw)
+        #expect(turn.parseError == nil)
+        #expect(turn.final == "ok")
+        #expect(turn.hadNoise)
+    }
+
     @Test func parserRejectsMissingActionAndFinal() async throws {
         let raw = #"{"thought":"I should think first"}"#
         let turn = AgentTurnParser.parse(raw)

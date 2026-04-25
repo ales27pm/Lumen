@@ -237,9 +237,9 @@ final actor AppLlamaService {
     }
 
     func resetKVCache() async {
-        guard let chatModelPath else { return }
+        guard let currentChatModelPath = chatModelPath else { return }
         do {
-            try loadChatModelSync(path: chatModelPath, contextSize: chatContextSize, batchSize: 256)
+            try loadChatModelSync(path: currentChatModelPath, contextSize: chatContextSize, batchSize: 256)
         } catch {
             chatService = nil
             chatModelPath = nil

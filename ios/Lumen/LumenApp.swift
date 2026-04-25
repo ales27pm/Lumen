@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import Spezi
 
 @main
 struct LumenApp: App {
+    @ApplicationDelegateAdaptor(LumenAppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -26,6 +28,7 @@ struct LumenApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .spezi(appDelegate)
                 .environment(appState)
                 .environment(VoiceService.shared)
                 .preferredColorScheme(.dark)

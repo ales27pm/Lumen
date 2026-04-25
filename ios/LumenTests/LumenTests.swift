@@ -354,6 +354,23 @@ struct LumenTests {
         #expect(sanitized == "Noise { https://example.com/a//b?x=1::2#frag /Users/me/Hybrid Coder/Models/model.gguf ./Sources//AgentService.swift **bold** __under__ ~~strike~~ }")
     }
 
+    @Test func sanitizeSystemPromptForStructuredOutputRemovesCoderFormattingPressure() async throws {
+        let sanitized = AgentService.shared.sanitizeSystemPromptForStructuredOutputForTests(Presets.coder.prompt)
+        #expect(!sanitized.lowercased().contains("fenced code"))
+        #expect(!sanitized.lowercased().contains("markdown"))
+        #expect(sanitized.contains("You are Lumen in coder mode."))
+        #expect(sanitized.contains("Prefer Swift/SwiftUI for iOS."))
+    }
+
+    @Test func sanitizeSystemPromptForStructuredOutputRemovesResearcherFormattingPressure() async throws {
+        let sanitized = AgentService.shared.sanitizeSystemPromptForStructuredOutputForTests(Presets.researcher.prompt)
+        #expect(!sanitized.lowercased().contains("headings"))
+        #expect(!sanitized.lowercased().contains("step-by-step"))
+        #expect(!sanitized.lowercased().contains("step by step"))
+        #expect(sanitized.contains("You are Lumen in researcher mode."))
+        #expect(sanitized.contains("Be thorough, cite reasoning"))
+    }
+
     @Test func parseFailureSummaryAggregatesByErrorAndNoiseSignatures() async throws {
         let lines = [
             makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "Prefix NOISE alpha", suffixNoise: "Suffix one"),

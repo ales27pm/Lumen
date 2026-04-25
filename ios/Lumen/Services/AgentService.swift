@@ -946,7 +946,7 @@ nonisolated enum AgentParseFailureSummaryLoader {
             lines.append("  - \(entry.count)x \(entry.parseError) | pre=\(entry.prefixSignature) | suf=\(entry.suffixSignature)")
         }
         lines.append("• Recent windows: last \(summary.recentLineWindowSize) lines, last 24h \(summary.recent24hCount) lines")
-        lines.append("• Recent top signatures (last 50 lines):")
+        lines.append("• Recent top signatures (last \(summary.recentLineWindowSize) lines):")
         if summary.recentLineTopEntries.isEmpty {
             lines.append("  - none")
         } else {
@@ -1012,7 +1012,7 @@ nonisolated enum AgentParseFailureSummaryLoader {
 
     private static func noiseSignature(_ value: String?) -> String {
         let normalized = normalizeNoise(value)
-        guard !normalized.isEmpty else { return "∅#00" }
+        guard !normalized.isEmpty else { return "none#00" }
         let snippet = String(normalized.prefix(24))
         let bucket = String(format: "%02X", stableHash(normalized) % 64)
         return "\(snippet)#\(bucket)"

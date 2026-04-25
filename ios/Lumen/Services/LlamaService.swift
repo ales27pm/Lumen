@@ -204,12 +204,13 @@ final actor LlamaService {
     // MARK: - Native llama.cpp API
 
     func loadModel(from url: URL, contextSize: Int) throws {
+        _ = url
         freeResources()
-        modelPath = url.path
         self.contextSize = contextSize
-        activeSessionID = nil
-        cachedPrompt = ""
-        nPast = 0
+
+        // Treat loading as a no-op when generation bindings are unavailable.
+        // This keeps non-generation flows working while avoiding a misleading
+        // partially initialized chat model state.
     }
 
     func generate(

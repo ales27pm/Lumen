@@ -2,6 +2,22 @@ import Foundation
 import SwiftLlama
 import llama
 
+private extension LlamaContext {
+    func safeClearKVCache() {
+        #if os(iOS)
+        // Incident 0DCF1EBC-A3AA-4765-A3D4-87F433F99668 (TestFlight, arm64, iPhone OS 26.4)
+        // crashed in `LlamaContext.clearKVCache()` via `LlamaContext.memory.getter` with:
+        // "Unexpectedly found nil while implicitly unwrapping an Optional value".
+        //
+        // Until upstream/runtime behavior is confirmed fixed for this configuration,
+        // intentionally skip the clear operation on iOS instead of hard-crashing.
+        return
+        #else
+        clearKVCache()
+        #endif
+    }
+}
+
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
     let systemPrompt: String
@@ -303,11 +319,7 @@ final actor AppLlamaService {
             throw LlamaError.embeddingFailed("Input exceeds embedding context window")
         }
 
-        // NOTE:
-        // `LlamaContext.clearKVCache()` can trap on some iOS/TestFlight builds when the
-        // underlying runtime reports an unavailable buffer, even when `embeddingContext`
-        // itself is non-nil. We avoid that call here and run each embedding pass with a
-        // fresh `LlamaBatch` sequence instead.
+        embeddingContext.safeClearKVCache()
         embeddingContext.setEmbeddingsOutput(true)
         embeddingContext.setCausalAttention(false)
 

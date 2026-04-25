@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		XX78EC446F828DF3560117XX /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEXX /* LlamaSwift */; };
+		XX78EC446F828DF3560117XX /* SpeziLLM in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEXX /* SpeziLLM */; };
+		XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */ = {isa = PBXBuildFile; productRef = XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				XX78EC446F828DF3560117XX /* LlamaSwift in Frameworks */,
+				XX78EC446F828DF3560117XX /* SpeziLLM in Frameworks */,
+				XX78EC446F828DF3560118XX /* SpeziLLMLocal in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,7 +119,8 @@
 			);
 			name = Lumen;
 			packageProductDependencies = (
-				XX880297366DF2ABAA7DFEXX /* LlamaSwift */,
+				XX880297366DF2ABAA7DFEXX /* SpeziLLM */,
+				XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */,
 			);
 			productName = Lumen;
 			productReference = 105FC57A2E9EAD3100EA8BCF /* Lumen.app */;
@@ -203,7 +206,7 @@
 			mainGroup = 105FC5712E9EAD3100EA8BCF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "llama.swift.git" */,
+				XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 105FC57B2E9EAD3100EA8BCF /* Products */;
@@ -622,21 +625,26 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "llama.swift.git" */ = {
+		XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = https://github.com/mattt/llama.swift.git;
+			repositoryURL = https://github.com/StanfordSpezi/SpeziLLM.git;
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.8722.0;
+				minimumVersion = 0.12.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		XX880297366DF2ABAA7DFEXX /* LlamaSwift */ = {
+		XX880297366DF2ABAA7DFEXX /* SpeziLLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "llama.swift.git" */;
-			productName = LlamaSwift;
+			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;
+			productName = SpeziLLM;
+		};
+		XX880297366DF2ABAA7DFEYY /* SpeziLLMLocal */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = XX28466B17F119E29592F8XX /* XCRemoteSwiftPackageReference "SpeziLLM" */;
+			productName = SpeziLLMLocal;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

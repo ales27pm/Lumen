@@ -297,12 +297,14 @@ struct LumenTests {
     @Test func placeholderDetectorPrefixMatchesStreamingSentinelCopy() async throws {
         #expect(SchemaPlaceholderDetector.isPlaceholderPrefix("<USE"))
         #expect(SchemaPlaceholderDetector.isPlaceholderPrefix("<PRIVATE_REAS"))
+        #expect(SchemaPlaceholderDetector.isSchemaPlaceholderPrefix("<USER_FIN"))
         #expect(!SchemaPlaceholderDetector.isPlaceholderPrefix("Here is the answer"))
     }
 
     @Test func placeholderRepairFallsBackForSentinelCopies() async throws {
         let fallback = "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
         #expect(SchemaPlaceholderDetector.repairOrFallback("<USER_FINAL_TEXT>") == fallback)
+        #expect(SchemaPlaceholderDetector.repairOrFallback("<PRIVATE_REASONING>") == fallback)
         #expect(SchemaPlaceholderDetector.repairOrFallback("   ") == fallback)
         #expect(SchemaPlaceholderDetector.repairOrFallback("Use two eggs and whisk.") == "Use two eggs and whisk.")
     }

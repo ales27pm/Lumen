@@ -4,6 +4,10 @@ import UniformTypeIdentifiers
 
 enum SchemaPlaceholderDetector {
     private static let repairFallback = "I couldn't produce a valid answer. Try rephrasing, or switch off Agent Mode for this prompt."
+    private static let normalizedLiteralSentinelVariants: Set<String> = [
+        "<user_final_text>",
+        "<private_reasoning>"
+    ]
 
     private static let exactPlaceholderVariants: Set<String> = [
         "answershowntotheuser",
@@ -26,13 +30,26 @@ enum SchemaPlaceholderDetector {
         "userfinaltext"
     ]
 
-    static func isPlaceholderPrefix(_ text: String) -> Bool {
+    static func isSchemaPlaceholderPrefix(_ text: String) -> Bool {
+        let normalized = normalizedLiteral(text)
+        guard !normalized.isEmpty else { return false }
+        if normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) {
+            return true
+        }
+
         let compact = compacted(text)
         guard !compact.isEmpty else { return false }
         return sentinelPrefixVariants.contains { $0.hasPrefix(compact) }
     }
 
-    static func isPlaceholderFinal(_ text: String) -> Bool {
+    static func isSchemaPlaceholderFinal(_ text: String) -> Bool {
+        let normalized = normalizedLiteral(text)
+        guard !normalized.isEmpty else { return false }
+        if normalizedLiteralSentinelVariants.contains(normalized) { return true }
+        if normalized.count >= 6 {
+            if normalizedLiteralSentinelVariants.contains(where: { $0.hasPrefix(normalized) }) { return true }
+        }
+
         let compact = compacted(text)
         guard !compact.isEmpty else { return false }
         if exactPlaceholderVariants.contains(compact) { return true }
@@ -42,12 +59,31 @@ enum SchemaPlaceholderDetector {
         return false
     }
 
+    static func isPlaceholderPrefix(_ text: String) -> Bool {
+        isSchemaPlaceholderPrefix(text)
+    }
+
+    static func isPlaceholderFinal(_ text: String) -> Bool {
+        isSchemaPlaceholderFinal(text)
+    }
+
     static func repairOrFallback(_ text: String) -> String {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.isEmpty || isPlaceholderFinal(clean) {
+        if clean.isEmpty || isSchemaPlaceholderFinal(clean) {
             return repairFallback
         }
         return clean
+    }
+
+    private static func normalizedLiteral(_ text: String) -> String {
+        text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(
+                of: #"\s+"#,
+                with: "",
+                options: .regularExpression
+            )
     }
 
     private static func compacted(_ text: String) -> String {

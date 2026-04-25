@@ -452,55 +452,141 @@ final class StreamingJSONScanner {
     }
 
     private func extractString(key: String) -> (String, Bool)? {
-        let pattern = "\"\(key)\""
-        guard let keyRange = buffer.range(of: pattern) else { return nil }
-        var i = keyRange.upperBound
-        while i < buffer.endIndex, buffer[i].isWhitespace { i = buffer.index(after: i) }
-        guard i < buffer.endIndex, buffer[i] == ":" else { return nil }
-        i = buffer.index(after: i)
-        while i < buffer.endIndex, buffer[i].isWhitespace { i = buffer.index(after: i) }
-        guard i < buffer.endIndex, buffer[i] == "\"" else { return nil }
-        i = buffer.index(after: i)
+        struct JSONContext {
+            let isObject: Bool
+            var lastToken: Character
+        }
 
-        var result = ""
-        var done = false
-        while i < buffer.endIndex {
-            let ch = buffer[i]
-            if ch == "\\" {
-                let next = buffer.index(after: i)
-                guard next < buffer.endIndex else { break }
-                let escCh = buffer[next]
-                switch escCh {
-                case "n": result.append("\n")
-                case "t": result.append("\t")
-                case "r": result.append("\r")
-                case "\"": result.append("\"")
-                case "\\": result.append("\\")
-                case "/": result.append("/")
-                case "b": result.append("\u{08}")
-                case "f": result.append("\u{0C}")
-                case "u":
-                    let h1 = buffer.index(after: next)
-                    guard let h4 = buffer.index(h1, offsetBy: 4, limitedBy: buffer.endIndex) else { return (result, false) }
-                    let hex = String(buffer[h1..<h4])
-                    if let scalar = UInt32(hex, radix: 16), let u = Unicode.Scalar(scalar) {
-                        result.append(Character(u))
-                    }
-                    i = h4
-                    continue
-                default:
-                    result.append(escCh)
-                }
-                i = buffer.index(after: next)
-            } else if ch == "\"" {
-                done = true
-                break
+        let chars = Array(buffer)
+        var stack: [JSONContext] = []
+        var i = 0
+
+        func skipWhitespace(from start: Int) -> Int {
+            var index = start
+            while index < chars.count, chars[index].isWhitespace { index += 1 }
+            return index
+        }
+
+        func markValueConsumed() {
+            guard !stack.isEmpty else { return }
+            if stack[stack.count - 1].isObject {
+                stack[stack.count - 1].lastToken = "v"
             } else {
-                result.append(ch)
-                i = buffer.index(after: i)
+                let last = stack[stack.count - 1].lastToken
+                if last == "[" || last == "," {
+                    stack[stack.count - 1].lastToken = "v"
+                }
             }
         }
-        return (result, done)
+
+        func parseJSONString(startingAt quoteIndex: Int) -> (value: String, closed: Bool, nextIndex: Int) {
+            var index = quoteIndex + 1
+            var output = ""
+
+            while index < chars.count {
+                let ch = chars[index]
+                if ch == "\"" {
+                    return (output, true, index + 1)
+                }
+                if ch == "\\" {
+                    let escIndex = index + 1
+                    guard escIndex < chars.count else { return (output, false, chars.count) }
+                    let esc = chars[escIndex]
+                    switch esc {
+                    case "n": output.append("\n")
+                    case "t": output.append("\t")
+                    case "r": output.append("\r")
+                    case "\"": output.append("\"")
+                    case "\\": output.append("\\")
+                    case "/": output.append("/")
+                    case "b": output.append("\u{08}")
+                    case "f": output.append("\u{0C}")
+                    case "u":
+                        let h1 = escIndex + 1
+                        let hEnd = h1 + 4
+                        guard hEnd <= chars.count else { return (output, false, chars.count) }
+                        let hex = String(chars[h1..<hEnd])
+                        if let scalar = UInt32(hex, radix: 16), let unicode = Unicode.Scalar(scalar) {
+                            output.append(Character(unicode))
+                        }
+                        index = hEnd
+                        continue
+                    default:
+                        output.append(esc)
+                    }
+                    index = escIndex + 1
+                    continue
+                }
+                output.append(ch)
+                index += 1
+            }
+            return (output, false, chars.count)
+        }
+
+        while i < chars.count {
+            let ch = chars[i]
+
+            if ch.isWhitespace {
+                i += 1
+                continue
+            }
+
+            switch ch {
+            case "{":
+                stack.append(JSONContext(isObject: true, lastToken: "{"))
+                i += 1
+            case "[":
+                stack.append(JSONContext(isObject: false, lastToken: "["))
+                i += 1
+            case "}":
+                if !stack.isEmpty { _ = stack.popLast() }
+                markValueConsumed()
+                i += 1
+            case "]":
+                if !stack.isEmpty { _ = stack.popLast() }
+                markValueConsumed()
+                i += 1
+            case ",":
+                if !stack.isEmpty { stack[stack.count - 1].lastToken = "," }
+                i += 1
+            case ":":
+                if !stack.isEmpty { stack[stack.count - 1].lastToken = ":" }
+                i += 1
+            case "\"":
+                let parsed = parseJSONString(startingAt: i)
+                let isObjectKeyPosition = {
+                    guard let context = stack.last, context.isObject else { return false }
+                    return context.lastToken == "{" || context.lastToken == ","
+                }()
+
+                if isObjectKeyPosition {
+                    if !stack.isEmpty { stack[stack.count - 1].lastToken = "k" }
+                    if parsed.closed, parsed.value == key {
+                        var valueStart = skipWhitespace(from: parsed.nextIndex)
+                        guard valueStart < chars.count, chars[valueStart] == ":" else { return nil }
+                        valueStart = skipWhitespace(from: valueStart + 1)
+                        guard valueStart < chars.count, chars[valueStart] == "\"" else { return nil }
+                        let value = parseJSONString(startingAt: valueStart)
+                        return (value.value, value.closed)
+                    }
+                } else {
+                    markValueConsumed()
+                }
+                i = parsed.nextIndex
+            default:
+                var j = i
+                while j < chars.count {
+                    let token = chars[j]
+                    if token.isWhitespace || token == "," || token == "}" || token == "]" {
+                        break
+                    }
+                    j += 1
+                }
+                if j > i { markValueConsumed() }
+                i = max(j, i + 1)
+            }
+        }
+        return nil
     }
 }
 

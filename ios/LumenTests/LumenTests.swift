@@ -371,6 +371,19 @@ struct LumenTests {
         #expect(sanitized.contains("Be thorough, cite reasoning"))
     }
 
+    @Test @MainActor func structuredAgentTurnMaxTokensUsesDedicatedCap() async throws {
+        let low = AgentService.shared.structuredTurnMaxTokensForTests(from: 32)
+        let mid = AgentService.shared.structuredTurnMaxTokensForTests(from: 256)
+        let high = AgentService.shared.structuredTurnMaxTokensForTests(from: 4_096)
+
+        #expect(low == 128)
+        #expect(mid == 256)
+        #expect(high == 384)
+        #expect(low <= 384)
+        #expect(mid <= 384)
+        #expect(high <= 384)
+    }
+
     @Test func parseFailureSummaryAggregatesByErrorAndNoiseSignatures() async throws {
         let lines = [
             makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "Prefix NOISE alpha", suffixNoise: "Suffix one"),

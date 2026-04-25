@@ -1011,6 +1011,8 @@ nonisolated enum AgentParseNoiseSummaryLoader {
 @MainActor
 final class AgentService {
     static let shared = AgentService()
+    private static let structuredTurnMaxTokenCap = 384
+    private static let structuredTurnMinTokenCap = 128
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
         AsyncStream { continuation in
@@ -1041,7 +1043,7 @@ final class AgentService {
                 temperature: agentTemperature(from: req.temperature),
                 topP: agentTopP(from: req.topP),
                 repetitionPenalty: max(req.repetitionPenalty, 1.05),
-                maxTokens: req.maxTokens,
+                maxTokens: structuredTurnMaxTokens(from: req.maxTokens),
                 modelName: "agent-json",
                 relevantMemories: [],
                 attachments: stepIndex == 0 ? req.attachments : []
@@ -1439,6 +1441,14 @@ final class AgentService {
 
     private func agentTopP(from userTopP: Double) -> Double {
         min(max(userTopP, 0.1), 0.85)
+    }
+
+    private func structuredTurnMaxTokens(from requestedMaxTokens: Int) -> Int {
+        min(max(requestedMaxTokens, Self.structuredTurnMinTokenCap), Self.structuredTurnMaxTokenCap)
+    }
+
+    func structuredTurnMaxTokensForTests(from requestedMaxTokens: Int) -> Int {
+        structuredTurnMaxTokens(from: requestedMaxTokens)
     }
 
     private func diagnosticReflection(for _: AgentTurnParseError, raw: String) -> String {

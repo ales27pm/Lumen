@@ -11,9 +11,6 @@ private typealias LlamaToken = Int32
 private nonisolated enum LlamaSymbolCompat {
     private typealias BackendInitFn = @convention(c) () -> Void
     private typealias BackendFreeFn = @convention(c) () -> Void
-    private typealias ModelDefaultParamsFn = @convention(c) () -> llama_model_params
-    private typealias ContextDefaultParamsFn = @convention(c) () -> llama_context_params
-    private typealias ModelLoadFromFileFn = @convention(c) (UnsafePointer<CChar>, llama_model_params) -> OpaquePointer?
     private typealias ModelFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias ContextFreeFn = @convention(c) (OpaquePointer?) -> Void
     private typealias SamplerFreeFn = @convention(c) (OpaquePointer?) -> Void
@@ -29,24 +26,6 @@ private nonisolated enum LlamaSymbolCompat {
 
     static func backendFree() {
         resolve("llama_backend_free", as: BackendFreeFn.self)?()
-    }
-
-    static func modelDefaultParams() -> llama_model_params {
-        if let fn = resolve("llama_model_default_params", as: ModelDefaultParamsFn.self) {
-            return fn()
-        }
-        return llama_model_params()
-    }
-
-    static func contextDefaultParams() -> llama_context_params {
-        if let fn = resolve("llama_context_default_params", as: ContextDefaultParamsFn.self) {
-            return fn()
-        }
-        return llama_context_params()
-    }
-
-    static func modelLoadFromFile(_ path: UnsafePointer<CChar>, _ params: llama_model_params) -> OpaquePointer? {
-        resolve("llama_model_load_from_file", as: ModelLoadFromFileFn.self)?(path, params)
     }
 
     static func modelFree(_ model: OpaquePointer?) {
@@ -231,17 +210,17 @@ final actor LlamaService {
             backendInitialized = true
         }
 
-        var modelParams = LlamaSymbolCompat.modelDefaultParams()
+        var modelParams = llama_model_default_params()
         modelParams.n_gpu_layers = 0
 
         let loadedModel = url.path.withCString { pathPtr in
-            LlamaSymbolCompat.modelLoadFromFile(pathPtr, modelParams)
+            llama_model_load_from_file(pathPtr, modelParams)
         }
         guard let loadedModel else {
             throw LlamaError.couldNotLoadModel
         }
 
-        var ctxParams = LlamaSymbolCompat.contextDefaultParams()
+        var ctxParams = llama_context_default_params()
         ctxParams.n_ctx = UInt32(max(1, contextSize))
 
         guard let loadedContext = llama_init_from_model(loadedModel, ctxParams) else {

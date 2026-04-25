@@ -1,9 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct ToolsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
-    private let permissions = PermissionsCenter.shared
+    @State private var permissions = PermissionsCenter.shared
 
     var body: some View {
         NavigationStack {
@@ -61,6 +62,9 @@ struct ToolsView: View {
                 if phase == .active {
                     permissions.refreshAll()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                permissions.refreshAll()
             }
         }
     }

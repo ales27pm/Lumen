@@ -155,9 +155,39 @@ final class PermissionsCenter {
 
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private let motionActivity = CMMotionActivityManager()
+    @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
+    @ObservationIgnored private var activeObserver: NSObjectProtocol?
 
     private init() {
+        let center = NotificationCenter.default
+        foregroundObserver = center.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshAlarmState()
+            }
+        }
+        activeObserver = center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshAlarmState()
+            }
+        }
         refreshAll()
+    }
+
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+        if let activeObserver {
+            NotificationCenter.default.removeObserver(activeObserver)
+        }
     }
 
     func state(_ kind: PermissionKind) -> PermissionState {
@@ -263,9 +293,20 @@ final class PermissionsCenter {
             }
         case .alarms:
             _ = await AlarmTools.requestAuthorization()
+            await refreshAlarmStateAfterAuthorization()
         }
 
         refreshAll()
+    }
+
+    private func refreshAlarmState() {
+        states[.alarms] = currentAlarmState()
+    }
+
+    private func refreshAlarmStateAfterAuthorization() async {
+        refreshAlarmState()
+        try? await Task.sleep(for: .milliseconds(200))
+        refreshAlarmState()
     }
 
     private func requestLocation() async {
@@ -419,7 +460,7 @@ final class PermissionsCenter {
             case .denied:
                 return .denied
             @unknown default:
-                return .notDetermined
+                return .unavailable
             }
         }
 #endif

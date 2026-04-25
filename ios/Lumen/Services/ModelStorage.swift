@@ -25,6 +25,15 @@ enum ModelStorage {
             return preferred
         }
 
+        let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let previousNested = base
+            .appendingPathComponent("Hybrid Coder", isDirectory: true)
+            .appendingPathComponent("Models", isDirectory: true)
+            .appendingPathComponent(fileName)
+        if fileManager.fileExists(atPath: previousNested.path) {
+            return previousNested
+        }
+
         return storedURL
     }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import SpeziLLMLocal
 
 nonisolated struct GenerateRequest: Sendable {
     let sessionID: String?
@@ -54,19 +53,26 @@ nonisolated enum LlamaError: Error, Sendable {
     case decodeFailed
 }
 
-private struct SpeziModelHandle {
-    let platform: LLMLocalPlatform
-    var session: LLMLocalSession
-    let runTask: Task<Void, Never>
+private struct LlamaModelHandle {
+    let modelPath: String
+    let contextSize: Int
+
+    func cancel() {
+        // TODO: Cancel llama.cpp generation task when bridge is integrated.
+    }
+
+    func offload() async {
+        // TODO: Release llama.cpp resources when bridge is integrated.
+    }
 }
 
 actor LlamaService {
     static let shared = LlamaService()
 
-    private var chatHandle: SpeziModelHandle?
+    private var chatHandle: LlamaModelHandle?
     private var chatModelPath: String?
 
-    private var embedHandle: SpeziModelHandle?
+    private var embedHandle: LlamaModelHandle?
     private var embedModelPath: String?
 
     private var activeChatSessionID: String?
@@ -86,7 +92,7 @@ actor LlamaService {
             chatModelPath = path
             invalidateChatCache()
         } catch {
-            throw mapSpeziError(error, modelPath: path)
+            throw mapModelLoadError(error, modelPath: path)
         }
     }
 
@@ -102,7 +108,7 @@ actor LlamaService {
             embedHandle = try await makeHandle(path: path, contextSize: 2048)
             embedModelPath = path
         } catch {
-            throw mapSpeziError(error, modelPath: path)
+            throw mapModelLoadError(error, modelPath: path)
         }
     }
 
@@ -112,9 +118,8 @@ actor LlamaService {
             chatModelPath = nil
             return
         }
-        handle.session.cancel()
-        await handle.session.offload()
-        handle.runTask.cancel()
+        handle.cancel()
+        await handle.offload()
         chatHandle = nil
         chatModelPath = nil
     }
@@ -124,9 +129,8 @@ actor LlamaService {
             embedModelPath = nil
             return
         }
-        handle.session.cancel()
-        await handle.session.offload()
-        handle.runTask.cancel()
+        handle.cancel()
+        await handle.offload()
         embedHandle = nil
         embedModelPath = nil
     }
@@ -206,32 +210,15 @@ actor LlamaService {
     private func generate(
         prompt: String,
         req: GenerateRequest,
-        using handle: inout SpeziModelHandle
+        using handle: inout LlamaModelHandle
     ) async throws -> AsyncThrowingStream<String, any Error> {
-        let sampling = LLMLocalSamplingParameters(
-            topP: Float(req.topP),
-            temperature: Float(req.temperature),
-            penaltyRepeat: req.repetitionPenalty > 1.0 ? Float(req.repetitionPenalty) : nil,
-            repetitionContextSize: 64
-        )
-        let parameters = LLMLocalParameters(
-            systemPrompt: nil,
-            maxOutputLength: max(1, req.maxTokens),
-            displayEveryNTokens: 1,
-            seed: UInt64.random(in: 1...UInt64.max),
-            chatTemplate: nil
-        )
-
-        let updated = handle.session.update(
-            parameters: parameters,
-            samplingParameters: sampling,
-            injectIntoContext: false
-        )
-        await MainActor.run {
-            updated.customContext = [["role": "user", "content": prompt]]
+        let _ = prompt
+        let _ = req
+        let _ = handle
+        // TODO: Stream tokens from a llama.cpp session backed by a reusable KV-cache.
+        return AsyncThrowingStream { continuation in
+            continuation.finish()
         }
-        handle.session = updated
-        return try await updated.generate()
     }
 
     // MARK: - Prompt building
@@ -268,7 +255,7 @@ actor LlamaService {
         }
         messages.append(("user", assembly.userMessage))
 
-        // SpeziLLM local sessions consume schema-managed prompts; maintain explicit ChatML fallback for deterministic prompts.
+        // TODO: Replace this fallback with llama.cpp-native prompt/session handling when bridge is integrated.
         var out = ""
         for (role, content) in messages {
             out += "<|im_start|>\(role)\n\(content)<|im_end|>\n"
@@ -330,40 +317,14 @@ actor LlamaService {
         return v
     }
 
-    private func makeHandle(path: String, contextSize: Int) async throws -> SpeziModelHandle {
-        let platform = LLMLocalPlatform()
-        platform.configure()
-
-        let runTask = Task {
-            await platform.run()
-        }
-
-        let parameters = LLMLocalParameters(systemPrompt: nil, maxOutputLength: max(1, contextSize), displayEveryNTokens: 1)
-        let schema = LLMLocalSchema(
-            model: .custom(id: path),
-            parameters: parameters,
-            samplingParameters: .init(),
-            injectIntoContext: false
-        )
-
-        let session = platform(with: schema)
-        try await session.setup()
-        return SpeziModelHandle(platform: platform, session: session, runTask: runTask)
+    private func makeHandle(path: String, contextSize: Int) async throws -> LlamaModelHandle {
+        // TODO: Create and initialize a llama.cpp model/session wrapper here.
+        LlamaModelHandle(modelPath: path, contextSize: contextSize)
     }
 
-    private func mapSpeziError(_ error: Error, modelPath: String) -> LlamaError {
-        if let localError = error as? LLMLocalError {
-            switch localError {
-            case .modelNotFound:
-                return .modelLoadFailed(modelPath)
-            case .modelNotReadyYet:
-                return .contextInitFailed
-            case .illegalContext:
-                return .tokenizationFailed
-            case .generationError, .contextSizeMismatch:
-                return .decodeFailed
-            }
-        }
+    private func mapModelLoadError(_ error: Error, modelPath: String) -> LlamaError {
+        let _ = error
         return .modelLoadFailed(modelPath)
     }
 }
+

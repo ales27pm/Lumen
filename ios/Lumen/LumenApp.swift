@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Spezi
 
 @main
 struct LumenApp: App {
@@ -28,7 +27,6 @@ struct LumenApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .spezi(appDelegate)
                 .environment(appState)
                 .environment(VoiceService.shared)
                 .preferredColorScheme(.dark)

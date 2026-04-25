@@ -1,13 +1,10 @@
-import Spezi
-import SpeziLLM
-import SpeziLLMLocal
+import UIKit
 
-class LumenAppDelegate: SpeziAppDelegate {
-    override var configuration: Configuration {
-        Configuration {
-            LLMRunner {
-                LLMLocalPlatform()
-            }
-        }
+class LumenAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        true
     }
 }

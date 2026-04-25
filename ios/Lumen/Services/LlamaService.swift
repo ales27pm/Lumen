@@ -65,6 +65,7 @@ final actor LlamaService {
     private var sampler: UnsafeMutablePointer<llama_sampler>? = nil
 
     private var modelPath: String?
+    private var embedModelPath: String?
     private var contextSize: Int = 4096
     private var activeSessionID: String?
     private var cachedPrompt: String = ""
@@ -90,37 +91,43 @@ final actor LlamaService {
     // MARK: - Compatibility API
 
     var isChatLoaded: Bool { model != nil && context != nil }
-    var isEmbedLoaded: Bool { false }
+    var isEmbedLoaded: Bool { embedModelPath != nil }
     var loadedChatPath: String? { modelPath }
-    var loadedEmbedPath: String? { nil }
+    var loadedEmbedPath: String? { embedModelPath }
 
     func loadChatModel(path: String, contextSize: Int = 4096) async throws {
         try loadModel(from: URL(fileURLWithPath: path), contextSize: contextSize)
     }
 
     func loadEmbeddingModel(path: String) async throws {
-        let _ = path
+        guard !path.isEmpty else { throw LlamaError.noModelLoaded }
+        embedModelPath = path
     }
 
     func unloadChat() async {
         freeResources()
     }
 
-    func unloadEmbed() async {}
+    func unloadEmbed() async {
+        embedModelPath = nil
+    }
 
     func reloadChat(contextSize: Int = 4096) async throws {
         guard let modelPath else { throw LlamaError.noModelLoaded }
         try loadModel(from: URL(fileURLWithPath: modelPath), contextSize: contextSize)
     }
 
-    func reloadEmbed() async throws {}
+    func reloadEmbed() async throws {
+        guard let embedModelPath else { throw LlamaError.noModelLoaded }
+        try await loadEmbeddingModel(path: embedModelPath)
+    }
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
         let prompt = buildPrompt(req: req)
         let sessionID = req.sessionID ?? "model:\(req.modelName)"
 
         return AsyncStream { continuation in
-            Task.detached { [weak self] in
+            let generationTask = Task { [weak self] in
                 guard let self else {
                     continuation.yield(.done)
                     continuation.finish()
@@ -142,6 +149,10 @@ final actor LlamaService {
 
                 continuation.yield(.done)
                 continuation.finish()
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                generationTask.cancel()
             }
         }
     }
@@ -216,6 +227,9 @@ final actor LlamaService {
         }
 
         if !promptToEval.isEmpty {
+            if promptToEval == prompt && nPast > 0 {
+                resetKVCache()
+            }
             let promptTokens = try tokenize(promptToEval, vocab: vocab, addSpecial: nPast == 0)
             try decodeTokens(promptTokens, context: context)
             cachedPrompt = prompt
@@ -226,6 +240,9 @@ final actor LlamaService {
         return AsyncStream { continuation in
             Task {
                 for _ in 0..<maxTokens {
+                    if Task.isCancelled {
+                        break
+                    }
                     if Int(self.nPast) >= evalLimit - 1 {
                         break
                     }
@@ -241,10 +258,8 @@ final actor LlamaService {
                         break
                     }
 
-                    var piece = [CChar](repeating: 0, count: 256)
-                    let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, true)
-                    if length > 0 {
-                        continuation.yield(String(cString: piece))
+                    if let piece = self.tokenPieceString(vocab: vocab, token: token) {
+                        continuation.yield(piece)
                     }
                 }
 
@@ -410,5 +425,28 @@ final actor LlamaService {
         }
         cachedPrompt = ""
         nPast = 0
+    }
+
+    private func tokenPieceString(
+        vocab: UnsafePointer<llama_vocab>,
+        token: llama_token
+    ) -> String? {
+        var piece = [CChar](repeating: 0, count: 256)
+
+        while true {
+            let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, true)
+            if length <= 0 {
+                return nil
+            }
+            if Int(length) >= piece.count {
+                piece = [CChar](repeating: 0, count: piece.count * 2)
+                continue
+            }
+
+            return piece.withUnsafeBufferPointer { buffer in
+                let bytes = UnsafeRawBufferPointer(start: buffer.baseAddress, count: Int(length))
+                return String(bytes: bytes, encoding: .utf8)
+            }
+        }
     }
 }

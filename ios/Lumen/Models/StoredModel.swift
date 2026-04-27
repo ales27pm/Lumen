@@ -50,7 +50,9 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum ModelCatalog {
-    static let featured: [CatalogModel] = [
+    static let featured: [CatalogModel] = LumenModelFleetCatalog.v0Recommended + legacyFeatured
+
+    static let legacyFeatured: [CatalogModel] = [
         CatalogModel(
             id: "qwen2.5-1.5b-q4",
             name: "Qwen 2.5 Instruct",

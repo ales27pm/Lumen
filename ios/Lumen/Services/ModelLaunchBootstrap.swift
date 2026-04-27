@@ -5,34 +5,72 @@ import SwiftData
 enum ModelLaunchBootstrap {
     static func ensureV0FleetDownloaded(appState: AppState, context: ModelContext) async {
         let models = uniqueByArtifact(LumenModelFleetCatalog.v0Recommended)
-        guard !models.isEmpty else { return }
+        guard !models.isEmpty else {
+            appState.runtime.updateBootStep(id: "models", detail: "No bundled fleet catalog entries", state: .warning)
+            return
+        }
+
+        appState.runtime.updateBootStep(
+            id: "models",
+            detail: "Checking \(models.count) fleet model artifacts",
+            state: .running
+        )
+
+        var alreadyPresent = 0
+        var startedDownloads = 0
+        var linkedLocalFiles = 0
 
         for model in models {
-            ensureModelPresent(model, appState: appState, context: context)
+            let result = ensureModelPresent(model, appState: appState, context: context)
+            switch result {
+            case .alreadyStored, .alreadyDownloading:
+                alreadyPresent += 1
+            case .linkedLocalFile:
+                linkedLocalFiles += 1
+            case .startedDownload:
+                startedDownloads += 1
+            }
         }
+
+        let fragments = [
+            alreadyPresent > 0 ? "\(alreadyPresent) ready" : nil,
+            linkedLocalFiles > 0 ? "\(linkedLocalFiles) linked" : nil,
+            startedDownloads > 0 ? "\(startedDownloads) downloading" : nil
+        ].compactMap { $0 }
+
+        let detail = fragments.isEmpty ? "Fleet model check complete" : fragments.joined(separator: " · ")
+        appState.runtime.updateBootStep(id: "models", detail: detail, state: startedDownloads > 0 ? .running : .complete)
     }
 
-    private static func ensureModelPresent(_ model: CatalogModel, appState: AppState, context: ModelContext) {
+    private enum EnsureResult {
+        case alreadyStored
+        case linkedLocalFile
+        case alreadyDownloading
+        case startedDownload
+    }
+
+    private static func ensureModelPresent(_ model: CatalogModel, appState: AppState, context: ModelContext) -> EnsureResult {
         let existingStored = storedModel(for: model, context: context)
         let localURL = ModelDownloader.shared.localURL(for: model)
 
         if FileManager.default.fileExists(atPath: localURL.path) {
             if existingStored == nil {
                 insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                return .linkedLocalFile
             } else if let existingStored {
                 activateIfNeeded(existingStored, appState: appState)
             }
-            return
+            return .alreadyStored
         }
 
         guard existingStored == nil || !FileManager.default.fileExists(atPath: existingStored?.localPath ?? "") else {
             if let existingStored {
                 activateIfNeeded(existingStored, appState: appState)
             }
-            return
+            return .alreadyStored
         }
 
-        guard !ModelDownloader.shared.isDownloading(model) else { return }
+        guard !ModelDownloader.shared.isDownloading(model) else { return .alreadyDownloading }
 
         ModelDownloader.shared.start(model) { localURL in
             Task { @MainActor in
@@ -43,6 +81,7 @@ enum ModelLaunchBootstrap {
                 insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
             }
         }
+        return .startedDownload
     }
 
     private static func storedModel(for catalog: CatalogModel, context: ModelContext) -> StoredModel? {

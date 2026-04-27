@@ -142,7 +142,9 @@ enum LumenModelFleetResolver {
         let activeEmbed = appState.activeEmbeddingModelID.flatMap { id in
             embedModels.first { $0.id.uuidString == id }
         }
-        let fallbackEmbed = activeEmbed ?? preferredModel(for: .embedding, storedModels: embedModels)
+        let fallbackEmbed = activeEmbed
+            ?? preferredModel(for: .embedding, storedModels: embedModels)
+            ?? mostRecentModel(from: embedModels)
 
         if let embed = fallbackEmbed {
             assignments[.embedding] = assignment(slot: .embedding, model: embed)
@@ -168,7 +170,11 @@ enum LumenModelFleetResolver {
     private static func preferredTextModel(from models: [StoredModel]) -> StoredModel? {
         preferredModel(for: .cortex, storedModels: models)
         ?? preferredModel(for: .mouth, storedModels: models)
-        ?? models.sorted { $0.downloadedAt > $1.downloadedAt }.first
+        ?? mostRecentModel(from: models)
+    }
+
+    private static func mostRecentModel(from models: [StoredModel]) -> StoredModel? {
+        models.sorted { $0.downloadedAt > $1.downloadedAt }.first
     }
 
     private static func hintWeights(for slot: LumenModelSlot) -> [String: Int] {

@@ -33,6 +33,10 @@ struct LumenApp: App {
                 .tint(Theme.accent)
                 .task {
                     SharedContainer.shared = sharedModelContainer
+                    let ctx = ModelContext(sharedModelContainer)
+                    await ModelLaunchBootstrap.ensureV0FleetDownloaded(appState: appState, context: ctx)
+                    let storedModels = (try? ctx.fetch(FetchDescriptor<StoredModel>())) ?? []
+                    await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
                     TriggerScheduler.shared.registerTasks()
                     TriggerScheduler.shared.scheduleBackgroundRefresh()
                     await TriggerScheduler.shared.requestPermission()

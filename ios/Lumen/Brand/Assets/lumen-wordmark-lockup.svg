@@ -1,0 +1,24 @@
+<svg width="2048" height="1024" viewBox="0 0 2048 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(504 512) rotate(90) scale(420)">
+      <stop offset="0" stop-color="#FFEAA3" stop-opacity="0.60"/>
+      <stop offset="0.34" stop-color="#A3CCFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#03040A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="orb" x1="312" y1="278" x2="716" y2="746" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF8D8"/>
+      <stop offset="0.36" stop-color="#FFE07A"/>
+      <stop offset="0.68" stop-color="#8DB7FF"/>
+      <stop offset="1" stop-color="#7A5CFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="2048" height="1024" rx="144" fill="#03040A"/>
+  <rect width="1024" height="1024" fill="url(#halo)"/>
+  <circle cx="512" cy="512" r="232" fill="url(#orb)"/>
+  <circle cx="512" cy="512" r="232" stroke="white" stroke-opacity="0.42" stroke-width="18"/>
+  <circle cx="438" cy="450" r="42" fill="white" fill-opacity="0.92"/>
+  <path d="M512 326C612 343 701 429 714 543C731 690 616 791 512 829C408 791 293 690 310 543C323 429 412 343 512 326Z" stroke="white" stroke-opacity="0.82" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M512 390V742M381 567H643" stroke="white" stroke-opacity="0.82" stroke-width="25" stroke-linecap="round"/>
+  <text x="858" y="505" fill="white" fill-opacity="0.96" font-family="Avenir Next, Inter, SF Pro Rounded, system-ui, sans-serif" font-size="188" font-weight="650" letter-spacing="-6">Lumen</text>
+  <text x="866" y="614" fill="white" fill-opacity="0.58" font-family="Avenir Next, Inter, SF Pro Rounded, system-ui, sans-serif" font-size="46" font-weight="600" letter-spacing="14">ON-DEVICE LIGHT</text>
+</svg>

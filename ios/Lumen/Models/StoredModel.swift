@@ -50,7 +50,17 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum ModelCatalog {
-    static let featured: [CatalogModel] = [
+    static let defaultOnboardingModelID = "qwen2.5-1.5b-q4"
+    static let featured: [CatalogModel] = uniqueByArtifact(LumenModelFleetCatalog.v0Recommended + legacyFeatured)
+
+    static var defaultOnboardingModel: CatalogModel {
+        legacyFeatured.first { $0.id == defaultOnboardingModelID }
+        ?? featured.first { $0.id == defaultOnboardingModelID }
+        ?? legacyFeatured.first
+        ?? featured[0]
+    }
+
+    static let legacyFeatured: [CatalogModel] = [
         CatalogModel(
             id: "qwen2.5-1.5b-q4",
             name: "Qwen 2.5 Instruct",
@@ -136,4 +146,18 @@ nonisolated enum ModelCatalog {
             tags: ["embedding", "tiny"]
         ),
     ]
+
+    private static func uniqueByArtifact(_ models: [CatalogModel]) -> [CatalogModel] {
+        var seen: Set<String> = []
+        var unique: [CatalogModel] = []
+        unique.reserveCapacity(models.count)
+
+        for model in models {
+            let artifactKey = "\(model.repoId.lowercased())/\(model.fileName.lowercased())"
+            guard seen.insert(artifactKey).inserted else { continue }
+            unique.append(model)
+        }
+
+        return unique
+    }
 }

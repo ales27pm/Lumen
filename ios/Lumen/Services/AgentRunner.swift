@@ -14,7 +14,7 @@ enum AgentRunner {
         let memories = await MemoryStore.recall(query: prompt, context: context).map(\.content)
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
         let req = AgentRequest(
-            systemPrompt: settings.systemPrompt,
+            systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt),
             history: [],
             userMessage: prompt,
             temperature: settings.temperature,
@@ -45,5 +45,36 @@ enum AgentRunner {
             }
         }
         return (final.trimmingCharacters(in: .whitespacesAndNewlines), steps)
+    }
+
+    private static func composedSystemPrompt(basePrompt: String) -> String {
+        let trimmedBasePrompt = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let contracts = LumenModelSlotContract.all
+            .filter { $0.slot != .embedding }
+            .map { contract in
+                "- \(contract.slot.displayName): \(contract.systemContract)"
+            }
+            .joined(separator: "\n")
+
+        let fleetPrompt = """
+        Lumen model fleet v0 is enabled. The runtime may map several logical slots to the same small local model, but each slot has a strict behavioral contract:
+        \(contracts)
+
+        When acting as the agent, keep decisions separate from final user-facing wording. Prefer compact structured turns when a native capability is needed.
+        """
+
+        guard !trimmedBasePrompt.isEmpty else {
+            return """
+            You are Lumen, a concise on-device assistant.
+
+            \(fleetPrompt)
+            """
+        }
+
+        return """
+        \(trimmedBasePrompt)
+
+        \(fleetPrompt)
+        """
     }
 }

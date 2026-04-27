@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(520 420) rotate(90) scale(620)">
+      <stop offset="0" stop-color="#FFEAA3" stop-opacity="0.42"/>
+      <stop offset="0.25" stop-color="#A3CCFF" stop-opacity="0.22"/>
+      <stop offset="0.62" stop-color="#788FFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#03040A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orb" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(296)">
+      <stop offset="0" stop-color="#FFF5C4"/>
+      <stop offset="0.38" stop-color="#FFE07A"/>
+      <stop offset="0.66" stop-color="#7EA9FF"/>
+      <stop offset="1" stop-color="#7A5CFF"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="232" fill="#03040A"/>
+  <rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <path d="M512 318L170 934H854L512 318Z" fill="url(#bg)" opacity="0.72"/>
+  <circle cx="512" cy="424" r="218" fill="url(#orb)"/>
+  <circle cx="512" cy="424" r="218" stroke="white" stroke-opacity="0.42" stroke-width="18"/>
+  <circle cx="445" cy="372" r="42" fill="white" fill-opacity="0.92"/>
+  <path d="M512 248C606 264 690 345 702 452C718 590 610 685 512 721C414 685 306 590 322 452C334 345 418 264 512 248Z" stroke="white" stroke-opacity="0.82" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M512 306V640M388 473H636" stroke="white" stroke-opacity="0.82" stroke-width="24" stroke-linecap="round"/>
+</svg>

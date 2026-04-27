@@ -2,25 +2,24 @@ import SwiftUI
 
 struct AppBackground: View {
     var body: some View {
-        Color(red: 0.055, green: 0.055, blue: 0.06)
-            .ignoresSafeArea()
+        LumenBrandBackground(intensity: 0.72)
     }
 }
 
 struct AuroraBackground: View {
     var body: some View {
-        AppBackground()
+        LumenBrandBackground(intensity: 0.84)
     }
 }
 
 enum Theme {
-    static let background = Color(red: 0.055, green: 0.055, blue: 0.06)
-    static let surface = Color(red: 0.10, green: 0.10, blue: 0.11)
-    static let surfaceHigh = Color(red: 0.13, green: 0.13, blue: 0.14)
-    static let border = Color.white.opacity(0.08)
-    static let borderStrong = Color.white.opacity(0.14)
-    static let textPrimary = Color.white.opacity(0.95)
-    static let textSecondary = Color.white.opacity(0.58)
-    static let textTertiary = Color.white.opacity(0.38)
-    static let accent = Color(red: 0.45, green: 0.62, blue: 1.0)
+    static let background = LumenBrand.midnight
+    static let surface = LumenBrand.glass
+    static let surfaceHigh = LumenBrand.glassHigh
+    static let border = LumenBrand.edge
+    static let borderStrong = LumenBrand.edgeStrong
+    static let textPrimary = LumenBrand.text
+    static let textSecondary = LumenBrand.textMuted
+    static let textTertiary = LumenBrand.textFaint
+    static let accent = LumenBrand.lumen
 }

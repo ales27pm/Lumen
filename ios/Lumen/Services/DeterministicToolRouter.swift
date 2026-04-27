@@ -4,8 +4,8 @@ import Foundation
 /// This prevents small local models from hallucinating tool output or leaking
 /// dataset placeholders such as PRESIDIO_ANONYMIZED_PERSON for obvious commands.
 nonisolated enum DeterministicToolRouter {
-    struct Decision: Sendable, Equatable {
-        enum Route: Sendable, Equatable {
+    struct Decision: Sendable {
+        enum Route: Sendable {
             case directReply(String)
             case executeTool(toolID: String, arguments: [String: String], approval: ToolExecutionApproval)
         }

@@ -66,7 +66,7 @@ struct OnboardingSheet: View {
     }
 
     private func startDefault() {
-        let model = ModelCatalog.featured[0]
+        let model = ModelCatalog.defaultOnboardingModel
         ModelDownloader.shared.start(model) { localURL in
             Task { @MainActor in
                 let stored = StoredModel(

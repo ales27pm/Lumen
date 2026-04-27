@@ -50,7 +50,15 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum ModelCatalog {
+    static let defaultOnboardingModelID = "qwen2.5-1.5b-q4"
     static let featured: [CatalogModel] = LumenModelFleetCatalog.v0Recommended + legacyFeatured
+
+    static var defaultOnboardingModel: CatalogModel {
+        legacyFeatured.first { $0.id == defaultOnboardingModelID }
+        ?? featured.first { $0.id == defaultOnboardingModelID }
+        ?? legacyFeatured.first
+        ?? featured[0]
+    }
 
     static let legacyFeatured: [CatalogModel] = [
         CatalogModel(

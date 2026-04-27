@@ -88,8 +88,16 @@ nonisolated struct LumenModelSlotContract: Sendable, Hashable {
 
     static let all: [LumenModelSlotContract] = [.cortex, .executor, .mouth, .mimicry, .rem, .embedding]
 
-    static func contract(for slot: LumenModelSlot) -> LumenModelSlotContract {
-        all.first { $0.slot == slot } ?? .mouth
+    static func contract(for slot: LumenModelSlot) -> LumenModelSlotContract? {
+        all.first { $0.slot == slot }
+    }
+
+    static func requiredContract(for slot: LumenModelSlot) -> LumenModelSlotContract {
+        if let contract = contract(for: slot) {
+            return contract
+        }
+        assertionFailure("Missing LumenModelSlotContract for slot: \(slot.rawValue)")
+        return .mouth
     }
 }
 
@@ -131,8 +139,12 @@ enum LumenModelFleetResolver {
         }
 
         let embedModels = storedModels.filter { $0.modelRole == .embedding }
-        let activeEmbed = appState.activeEmbeddingModelID.flatMap { id in embedModels.first { $0.id.uuidString == id } }
-        if let embed = activeEmbed ?? embedModels.first {
+        let activeEmbed = appState.activeEmbeddingModelID.flatMap { id in
+            embedModels.first { $0.id.uuidString == id }
+        }
+        let fallbackEmbed = activeEmbed ?? preferredModel(for: .embedding, storedModels: embedModels)
+
+        if let embed = fallbackEmbed {
             assignments[.embedding] = assignment(slot: .embedding, model: embed)
         }
 
@@ -141,27 +153,56 @@ enum LumenModelFleetResolver {
     }
 
     private static func preferredModel(for slot: LumenModelSlot, storedModels: [StoredModel]) -> StoredModel? {
-        let hints: [String]
-        switch slot {
-        case .cortex, .executor: hints = ["coder", "qwen"]
-        case .mouth, .mimicry: hints = ["qwen", "smollm"]
-        case .rem: hints = ["smollm", "phi"]
-        case .embedding: hints = ["embed", "nomic"]
-        }
-
-        return storedModels.first { model in
-            let haystack = [model.name, model.repoId, model.fileName, model.parameters, model.quantization].joined(separator: " ").lowercased()
-            return hints.allSatisfy { haystack.contains($0) }
-        } ?? storedModels.first { model in
-            let haystack = [model.name, model.repoId, model.fileName].joined(separator: " ").lowercased()
-            return hints.contains { haystack.contains($0) }
-        }
+        let weights = hintWeights(for: slot)
+        return storedModels
+            .map { model in (model: model, score: score(model, weights: weights)) }
+            .filter { $0.score > 0 }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.model.downloadedAt > rhs.model.downloadedAt
+            }
+            .first?
+            .model
     }
 
     private static func preferredTextModel(from models: [StoredModel]) -> StoredModel? {
-        models.first { $0.fileName.lowercased().contains("qwen") }
-        ?? models.first { $0.fileName.lowercased().contains("smollm") }
-        ?? models.first
+        preferredModel(for: .cortex, storedModels: models)
+        ?? preferredModel(for: .mouth, storedModels: models)
+        ?? models.sorted { $0.downloadedAt > $1.downloadedAt }.first
+    }
+
+    private static func hintWeights(for slot: LumenModelSlot) -> [String: Int] {
+        switch slot {
+        case .cortex:
+            return ["coder": 50, "qwen": 35, "0.5b": 15, "1.5b": 12, "fleet": 10]
+        case .executor:
+            return ["coder": 55, "qwen": 35, "0.5b": 20, "json": 10, "structured": 10]
+        case .mouth:
+            return ["qwen": 35, "smollm": 30, "voice": 20, "mouth": 20, "0.5b": 10]
+        case .mimicry:
+            return ["qwen": 35, "mimicry": 25, "voice": 15, "0.5b": 15, "smollm": 10]
+        case .rem:
+            return ["smollm": 45, "phi": 35, "rem": 25, "idle": 10, "1.7b": 10]
+        case .embedding:
+            return ["nomic": 50, "embed": 40, "embedding": 30, "memory": 15]
+        }
+    }
+
+    private static func score(_ model: StoredModel, weights: [String: Int]) -> Int {
+        let primary = [model.name, model.repoId, model.fileName]
+            .joined(separator: " ")
+            .lowercased()
+        let secondary = [model.parameters, model.quantization, model.role]
+            .joined(separator: " ")
+            .lowercased()
+
+        return weights.reduce(0) { partial, item in
+            let hint = item.key.lowercased()
+            let weight = item.value
+            if primary.contains(hint) { return partial + weight }
+            if secondary.contains(hint) { return partial + max(1, weight / 2) }
+            return partial
+        }
     }
 
     private static func assignment(slot: LumenModelSlot, model: StoredModel) -> LumenModelAssignment {

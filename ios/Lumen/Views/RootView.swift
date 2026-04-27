@@ -36,34 +36,42 @@ struct RootView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(MenuItem.allCases, selection: $selection) { item in
-                NavigationLink(value: item) {
-                    Label(item.title, systemImage: item.systemImage)
+        ZStack {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                List(MenuItem.allCases, selection: $selection) { item in
+                    NavigationLink(value: item) {
+                        Label(item.title, systemImage: item.systemImage)
+                    }
+                }
+                .navigationTitle("Lumen")
+                .listStyle(.sidebar)
+            } detail: {
+                NavigationStack {
+                    detailView(for: selection ?? .chat)
                 }
             }
-            .navigationTitle("Lumen")
-            .listStyle(.sidebar)
-        } detail: {
-            NavigationStack {
-                detailView(for: selection ?? .chat)
-            }
-        }
-        .tint(Theme.accent)
-        .task {
-            await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
-        }
-        .task(id: appState.activeChatModelID) {
-            await ModelLoader.syncChat(appState: appState, stored: storedModels)
-        }
-        .task(id: appState.activeEmbeddingModelID) {
-            await ModelLoader.syncEmbed(appState: appState, stored: storedModels)
-        }
-        .onChange(of: storedModels.count) { _, _ in
-            Task {
+            .tint(Theme.accent)
+            .task {
                 await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
             }
+            .task(id: appState.activeChatModelID) {
+                await ModelLoader.syncChat(appState: appState, stored: storedModels)
+            }
+            .task(id: appState.activeEmbeddingModelID) {
+                await ModelLoader.syncEmbed(appState: appState, stored: storedModels)
+            }
+            .onChange(of: storedModels.count) { _, _ in
+                Task {
+                    await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
+                }
+            }
+
+            if appState.runtime.bootSplashVisible {
+                BootSplashView()
+                    .zIndex(10)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: appState.runtime.bootSplashVisible)
     }
 
     @ViewBuilder

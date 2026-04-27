@@ -26,22 +26,20 @@ struct BootSplashView: View {
 
     var body: some View {
         ZStack {
-            Theme.background.ignoresSafeArea()
+            LumenBrandBackground(intensity: 1.0)
+            LumenLightBeam()
+                .opacity(0.80)
 
             VStack(spacing: 22) {
                 Spacer(minLength: 24)
 
-                VStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                    Text("Lumen")
-                        .font(.largeTitle.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
+                VStack(spacing: 8) {
+                    LumenAssistantMark(showsWordmark: true, size: 104)
                     Text(appState.runtime.bootHeadline)
                         .font(.subheadline)
                         .foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center)
+                        .padding(.top, 2)
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -90,11 +88,12 @@ struct BootSplashView: View {
                     } label: {
                         Text(hasActiveDownloads ? "Continue while downloads finish" : "Continue")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(LumenBrand.midnight)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .background(Theme.accent)
                             .clipShape(.rect(cornerRadius: 12))
+                            .shadow(color: LumenBrand.lumen.opacity(0.40), radius: 18, y: 8)
                     }
                     .buttonStyle(.plain)
                 }

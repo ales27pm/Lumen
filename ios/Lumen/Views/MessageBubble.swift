@@ -317,18 +317,37 @@ struct ToolCallCard: View {
 
     private func approve() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        message.toolStatus = ToolStatus.running.rawValue
+        let toolID = message.toolName ?? ""
         let args = parseArgs(message.content)
+        let routing = IntentRouter.classify(inferredUserPrompt())
+        guard IntentRouter.isToolAllowed(toolID, for: routing) else {
+            message.toolStatus = ToolStatus.denied.rawValue
+            message.toolResult = IntentRouter.blockedToolMessage(for: routing)
+            try? modelContext.save()
+            return
+        }
+
+        message.toolStatus = ToolStatus.running.rawValue
         Task {
             let result = await ToolExecutor.shared.execute(
-                message.toolName ?? "",
+                toolID,
                 arguments: args,
                 approval: .userApproved
             )
             message.toolStatus = ToolStatus.completed.rawValue
-            message.toolResult = result
+            message.toolResult = FinalIntentValidator.validate(result, routing: routing, fallback: nil)
             try? modelContext.save()
         }
+    }
+
+    private func inferredUserPrompt() -> String {
+        guard let conversation = message.conversation else { return message.content }
+        let sorted = conversation.sortedMessages
+        guard let currentIndex = sorted.firstIndex(where: { $0.id == message.id }) else {
+            return sorted.last(where: { $0.messageRole == .user })?.content ?? message.content
+        }
+        let previous = sorted[..<currentIndex].last(where: { $0.messageRole == .user })
+        return previous?.content ?? message.content
     }
 
     private func deny() {

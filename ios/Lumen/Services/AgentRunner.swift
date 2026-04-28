@@ -6,7 +6,7 @@ enum AgentRunner {
     /// Foreground entry point. Uses the live `AppState` (reads its current snapshot).
     static func runHeadless(prompt: String, appState: AppState, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
-        let fleet = LumenModelFleetResolver.resolveV0(appState: appState, storedModels: stored)
+        let fleet = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
         return await runHeadless(
             prompt: prompt,
             settings: appState.snapshot,
@@ -20,7 +20,7 @@ enum AgentRunner {
     /// tasks never depend on live in-memory mutable state.
     static func runHeadless(prompt: String, settings: SettingsSnapshot, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
-        let fleet = LumenModelFleetResolver.resolveV0(settings: settings, storedModels: stored)
+        let fleet = LumenModelFleetResolver.resolveV1(settings: settings, storedModels: stored)
         return await runHeadless(
             prompt: prompt,
             settings: settings,
@@ -86,7 +86,8 @@ enum AgentRunner {
         let assignments = LumenModelSlot.allCases
             .map { slot -> String in
                 if let assignment = fleetSnapshot.assignment(for: slot) {
-                    return "- \(slot.displayName): \(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization)"
+                    let residency = fleetSnapshot.residentSlots.contains(slot) ? "resident" : "planned hot-swap"
+                    return "- \(slot.displayName): \(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization) · \(residency)"
                 }
                 return "- \(slot.displayName): missing"
             }
@@ -97,17 +98,17 @@ enum AgentRunner {
             : fleetSnapshot.missingSlots.map(\.displayName).joined(separator: ", ")
 
         let runtimeMode = """
-        Fleet runtime mode: v0-single-runtime.
-        Dedicated per-slot model execution is not available in v0. Slot contracts are behavioral routing contracts applied inside the current single local runtime.
+        Fleet runtime mode: \(fleetSnapshot.mode.displayName).
+        iPhone memory cap: only one chat GGUF and one embedding GGUF may be loaded at the same time. Dedicated v1 slot models are assignment plans; non-resident chat slots require explicit unload/load hot-swap before execution.
         """
 
         let fleetPrompt = """
-        Lumen model fleet v0 is enabled. The runtime may map several logical slots to the same small local model, but each slot has a strict behavioral contract:
+        Lumen model fleet v1 planning is enabled. Logical slots may resolve to different installed models, but runtime residency is capped:
         \(contracts)
 
         \(runtimeMode)
 
-        Current v0 slot assignments:
+        Current v1 slot assignments:
         \(assignments)
 
         Missing slots: \(missingText).

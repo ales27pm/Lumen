@@ -183,14 +183,22 @@ nonisolated enum AgentIntentRouter {
     }
 
     static func routingSystemNote(for decision: Decision) -> String {
+        let compatibility = """
+        Tool-call compatibility rules:
+        - If you call a tool, emit exactly one JSON object and no prose around it.
+        - Use either {"tool":"tool.id","args":{...}} or {"action":{"tool":"tool.id","args":{...}}}.
+        - Every value inside args must be a JSON string. Convert numbers, booleans, arrays, dates, and nested objects to strings before emitting them.
+        - Do not emit privacy/anonymizer placeholders such as <PRESIDIO_ANONYMIZED_PERSON>. Use available user text or ask one concise follow-up.
+        """
+
         if decision.shouldAskClarification {
-            return "\n\nRouting: The user's intent is not clear enough to act. Ask exactly one concise clarification question. Do not use tools. Do not invent completed actions."
+            return "\n\nRouting: The user's intent is not clear enough to act. Ask exactly one concise clarification question. Do not use tools. Do not invent completed actions.\n\n\(compatibility)"
         }
         if decision.allowedToolIDs.isEmpty {
-            return "\n\nRouting: No tools are available for this turn. Answer directly in natural language. Do not invent tool results or claim that actions were performed. If the user's request is unclear, ask one concise clarification question."
+            return "\n\nRouting: No tools are available for this turn. Answer directly in natural language. Do not invent tool results or claim that actions were performed. If the user's request is unclear, ask one concise clarification question.\n\n\(compatibility)"
         }
         let tools = decision.allowedToolIDs.sorted().joined(separator: ", ")
-        return "\n\nRouting: The user's inferred intent is \(decision.intent) with confidence \(decision.confidence). Only these tools are available for this turn: \(tools). Use a tool only if it is necessary. If key details are missing, ask one concise clarification question before acting. Do not invent tool results. Tools that require approval must not be described as completed until they actually return a successful result."
+        return "\n\nRouting: The user's inferred intent is \(decision.intent) with confidence \(decision.confidence). Only these tools are available for this turn: \(tools). Use a tool only if it is necessary. If key details are missing, ask one concise clarification question before acting. Do not invent tool results. Tools that require approval must not be described as completed until they actually return a successful result.\n\n\(compatibility)"
     }
 
     static func allowedToolIDs(for intent: Intent) -> Set<String> {

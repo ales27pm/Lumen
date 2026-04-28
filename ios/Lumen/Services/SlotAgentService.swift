@@ -1,0 +1,207 @@
+import Foundation
+
+@MainActor
+final class SlotAgentService {
+    static let shared = SlotAgentService()
+
+    private init() {}
+
+    func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
+        AsyncStream { continuation in
+            let task = Task { @MainActor in
+                var steps: [AgentStep] = []
+                var observations: [String] = []
+                var finalText = ""
+
+                let maxSteps = max(1, req.maxSteps)
+                for stepIndex in 0..<maxSteps {
+                    let turnPrompt = makeStructuredTurnPrompt(req: req, observations: observations, stepIndex: stepIndex)
+                    let turnOutput = await generateText(
+                        slot: stepIndex == 0 ? .cortex : .executor,
+                        req: req,
+                        userMessage: turnPrompt,
+                        temperature: stepIndex == 0 ? 0.15 : 0.0,
+                        topP: stepIndex == 0 ? 0.85 : 0.1,
+                        maxTokens: min(req.maxTokens, stepIndex == 0 ? 320 : 220),
+                        modelName: stepIndex == 0 ? "cortex-json" : "executor-json"
+                    )
+
+                    let parsed = AgentTurnParser.parse(turnOutput)
+                    if let thought = parsed.thought, !thought.isEmpty {
+                        let thoughtStep = AgentStep(kind: .thought, content: thought, toolID: nil, toolArgs: nil)
+                        steps.append(thoughtStep)
+                        continuation.yield(.step(thoughtStep))
+                    }
+
+                    if let final = parsed.final, !final.isEmpty {
+                        finalText = await generateFinal(req: req, observations: observations, draft: final)
+                        for chunk in chunk(finalText) {
+                            continuation.yield(.finalDelta(chunk))
+                        }
+                        continuation.yield(.done(finalText: finalText, steps: steps))
+                        continuation.finish()
+                        return
+                    }
+
+                    guard let action = parsed.action else {
+                        let repairStep = AgentStep(
+                            kind: .reflection,
+                            content: "Structured turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Falling back to Mouth.",
+                            toolID: nil,
+                            toolArgs: nil
+                        )
+                        steps.append(repairStep)
+                        continuation.yield(.step(repairStep))
+                        finalText = await generateFinal(req: req, observations: observations, draft: turnOutput)
+                        for chunk in chunk(finalText) {
+                            continuation.yield(.finalDelta(chunk))
+                        }
+                        continuation.yield(.done(finalText: finalText, steps: steps))
+                        continuation.finish()
+                        return
+                    }
+
+                    let actionStep = AgentStep(
+                        kind: .action,
+                        content: action.displayContent,
+                        toolID: action.tool,
+                        toolArgs: action.args.stringCoerced
+                    )
+                    steps.append(actionStep)
+                    continuation.yield(.step(actionStep))
+
+                    let observation = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
+                    observations.append("\(action.tool): \(observation)")
+                    let observationStep = AgentStep(kind: .observation, content: observation, toolID: action.tool, toolArgs: action.args.stringCoerced)
+                    steps.append(observationStep)
+                    continuation.yield(.step(observationStep))
+                }
+
+                finalText = await generateFinal(req: req, observations: observations, draft: nil)
+                for chunk in chunk(finalText) {
+                    continuation.yield(.finalDelta(chunk))
+                }
+                continuation.yield(.done(finalText: finalText, steps: steps))
+                continuation.finish()
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func generateFinal(req: AgentRequest, observations: [String], draft: String?) async -> String {
+        let prompt = makeMouthPrompt(req: req, observations: observations, draft: draft)
+        let text = await generateText(
+            slot: .mouth,
+            req: req,
+            userMessage: prompt,
+            temperature: req.temperature,
+            topP: req.topP,
+            maxTokens: req.maxTokens,
+            modelName: "mouth-final"
+        )
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty, let draft, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return trimmed
+    }
+
+    private func generateText(
+        slot: LumenModelSlot,
+        req: AgentRequest,
+        userMessage: String,
+        temperature: Double,
+        topP: Double,
+        maxTokens: Int,
+        modelName: String
+    ) async -> String {
+        let generation = GenerateRequest(
+            systemPrompt: req.systemPrompt,
+            history: req.history,
+            userMessage: userMessage,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: req.repetitionPenalty,
+            maxTokens: max(1, maxTokens),
+            modelName: modelName,
+            relevantMemories: req.relevantMemories,
+            attachments: req.attachments
+        )
+
+        var output = ""
+        for await token in AppLlamaService.shared.stream(generation, slot: slot) {
+            switch token {
+            case .text(let text):
+                output += text
+            case .done:
+                break
+            }
+        }
+        return output
+    }
+
+    private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int) -> String {
+        let tools = req.availableTools.map { tool in
+            "- \(tool.id): \(tool.description)"
+        }.joined(separator: "\n")
+        let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
+
+        return """
+        You are running Lumen v1 step \(stepIndex + 1). Return exactly one JSON object and no markdown.
+
+        User request:
+        \(req.userMessage)
+
+        Previous observations:
+        \(observationBlock)
+
+        Available tools:
+        \(tools)
+
+        Output schema for using a tool:
+        {"thought":"short private routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
+
+        Output schema for final answer:
+        {"thought":"short private routing note","final":"answer shown to the user"}
+
+        Rules:
+        - Use a tool only when live device data or an action is needed.
+        - If enough information is available, return final.
+        - Do not include prose outside JSON.
+        """
+    }
+
+    private func makeMouthPrompt(req: AgentRequest, observations: [String], draft: String?) -> String {
+        let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
+        let draftBlock = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
+        return """
+        Write the final user-facing answer. Do not output JSON.
+
+        User request:
+        \(req.userMessage)
+
+        Tool observations:
+        \(observationBlock)
+
+        Draft final from Cortex/Executor:
+        \(draftBlock)
+
+        Keep it concise, accurate, and do not claim actions that did not happen.
+        """
+    }
+
+    private func chunk(_ text: String, size: Int = 48) -> [String] {
+        guard !text.isEmpty else { return [] }
+        var chunks: [String] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            let next = text.index(index, offsetBy: size, limitedBy: text.endIndex) ?? text.endIndex
+            chunks.append(String(text[index..<next]))
+            index = next
+        }
+        return chunks
+    }
+}

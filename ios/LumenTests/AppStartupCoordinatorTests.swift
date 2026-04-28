@@ -72,4 +72,19 @@ struct AppStartupCoordinatorTests {
         #expect(attempts == 2)
         #expect({ if case .ready = coordinator.state { true } else { false } }())
     }
+    @Test func continueInLimitedModeTransitionsToReady() async throws {
+        var coordinator = AppStartupCoordinator()
+        let appState = AppState()
+
+        await coordinator.initialize(
+            appState: appState,
+            createContainer: { throw TestError.failed },
+            bootstrap: { _, _ in }
+        )
+
+        coordinator.continueInLimitedMode(appState: appState)
+
+        #expect({ if case .ready = coordinator.state { true } else { false } }())
+    }
+
 }

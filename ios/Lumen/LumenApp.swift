@@ -70,6 +70,32 @@ struct AppStartupCoordinator {
         return FailureContext(stage: stage, message: nsError.localizedDescription, domain: nsError.domain, code: nsError.code)
     }
 
+    mutating func continueInLimitedMode(appState: AppState) {
+        do {
+            let container = try Self.inMemoryContainerFactory()
+            SharedContainer.shared = container
+            appState.runtime.completeBootCore()
+            state = .ready(container)
+        } catch {
+            let failure = Self.failureContext(stage: .container, from: error)
+            emitFailureTelemetry(failure)
+            state = .failed(failure)
+        }
+    }
+
+    private static func inMemoryContainerFactory() throws -> ModelContainer {
+        let schema = Schema([
+            Conversation.self,
+            ChatMessage.self,
+            MemoryItem.self,
+            StoredModel.self,
+            RAGChunk.self,
+            Trigger.self,
+        ])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [config])
+    }
+
     private static func defaultContainerFactory() throws -> ModelContainer {
         let schema = Schema([
             Conversation.self,
@@ -138,6 +164,7 @@ struct LumenApp: App {
                     BootSplashView(onDone: {})
                 case .ready(let container):
                     RootView()
+                        .modelContainer(container)
                         .onChange(of: scenePhase) { _, phase in
                             if phase == .active {
                                 Task { @MainActor in
@@ -154,7 +181,7 @@ struct LumenApp: App {
                             SharedContainer.shared = container
                         }
                     } safeModeAction: {
-                        appState.runtime.completeBootCore()
+                        startup.continueInLimitedMode(appState: appState)
                     }
                 }
             }

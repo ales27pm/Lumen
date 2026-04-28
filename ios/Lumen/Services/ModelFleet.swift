@@ -33,12 +33,12 @@ nonisolated enum LumenModelSlot: String, Codable, CaseIterable, Sendable, Identi
 
 nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
     case v0SingleRuntime
-    case v1MultiResident
+    case v1MultiResidentPlanned
 
     var displayName: String {
         switch self {
         case .v0SingleRuntime: return "v0 single runtime"
-        case .v1MultiResident: return "v1 multi-resident"
+        case .v1MultiResidentPlanned: return "v1 multi-resident planned"
         }
     }
 }
@@ -127,18 +127,21 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
     let mode: LumenFleetRuntimeMode
     let assignments: [LumenModelSlot: LumenModelAssignment]
     let missingSlots: [LumenModelSlot]
-    let residentSlots: Set<LumenModelSlot>
+    let targetResidentSlots: Set<LumenModelSlot>
+    let runtimeResidentSlots: Set<LumenModelSlot>
 
     init(
         mode: LumenFleetRuntimeMode = .v0SingleRuntime,
         assignments: [LumenModelSlot: LumenModelAssignment],
         missingSlots: [LumenModelSlot],
-        residentSlots: Set<LumenModelSlot> = []
+        targetResidentSlots: Set<LumenModelSlot> = [],
+        runtimeResidentSlots: Set<LumenModelSlot> = []
     ) {
         self.mode = mode
         self.assignments = assignments
         self.missingSlots = missingSlots
-        self.residentSlots = residentSlots
+        self.targetResidentSlots = targetResidentSlots
+        self.runtimeResidentSlots = runtimeResidentSlots
     }
 
     func assignment(for slot: LumenModelSlot) -> LumenModelAssignment? {
@@ -196,7 +199,8 @@ enum LumenModelFleetResolver {
             mode: .v0SingleRuntime,
             assignments: assignments,
             missingSlots: missing,
-            residentSlots: Set(assignments.keys)
+            targetResidentSlots: Set(assignments.keys),
+            runtimeResidentSlots: Set(assignments.keys)
         )
     }
 
@@ -233,11 +237,13 @@ enum LumenModelFleetResolver {
         }
 
         let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
+        let runtimeResident = Set([LumenModelSlot.cortex, .embedding].filter { assignments[$0] != nil })
         return LumenModelFleetSnapshot(
-            mode: .v1MultiResident,
+            mode: .v1MultiResidentPlanned,
             assignments: assignments,
             missingSlots: missing,
-            residentSlots: Set(assignments.keys)
+            targetResidentSlots: Set(assignments.keys),
+            runtimeResidentSlots: runtimeResident
         )
     }
 

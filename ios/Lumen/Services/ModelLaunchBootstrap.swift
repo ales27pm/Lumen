@@ -11,6 +11,11 @@ enum ModelLaunchBootstrap {
             linkExistingFleetFiles(appState: appState, context: context)
             return
         }
+        guard !appState.confirmFleetDownloads else {
+            appState.runtime.updateBootStep(id: "models", detail: "Fleet download waiting for manual repair", state: .warning)
+            linkExistingFleetFiles(appState: appState, context: context)
+            return
+        }
         await repairV0Fleet(appState: appState, context: context, source: .launch)
     }
 

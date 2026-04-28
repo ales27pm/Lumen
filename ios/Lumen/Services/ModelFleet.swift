@@ -142,7 +142,7 @@ enum LumenModelFleetResolver {
         )
     }
 
-    private static func resolveV0(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+    static func resolveV0(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
         var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
         let textModels = storedModels.filter { $0.modelRole == .chat }
         let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }

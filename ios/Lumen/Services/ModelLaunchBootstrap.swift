@@ -5,7 +5,7 @@ import SwiftData
 enum ModelLaunchBootstrap {
     private static let storageSafetyBufferBytes: Int64 = 500_000_000
 
-    static func ensureV0FleetDownloaded(appState: AppState, context: ModelContext) async {
+    static func ensureFleetDownloaded(appState: AppState, context: ModelContext) async {
         guard appState.autoDownloadFleetModels else {
             appState.runtime.updateBootStep(id: "models", detail: "Fleet auto-download disabled", state: .warning)
             linkExistingFleetFiles(appState: appState, context: context)
@@ -16,13 +16,13 @@ enum ModelLaunchBootstrap {
             linkExistingFleetFiles(appState: appState, context: context)
             return
         }
-        await repairV0Fleet(appState: appState, context: context, source: .launch)
+        await repairFleet(appState: appState, context: context, source: .launch)
     }
 
-    static func repairV0Fleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
-        let models = uniqueByArtifact(LumenModelFleetCatalog.v0Recommended)
+    static func repairFleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
+        let models = fleetModelsForInstall()
         guard !models.isEmpty else {
-            appState.runtime.updateBootStep(id: "models", detail: "No bundled fleet catalog entries", state: .warning)
+            appState.runtime.updateBootStep(id: "models", detail: "No fleet catalog entries", state: .warning)
             return
         }
 
@@ -73,6 +73,15 @@ enum ModelLaunchBootstrap {
         appState.runtime.updateBootStep(id: "models", detail: detail, state: startedDownloads > 0 ? .running : .complete)
     }
 
+    // Compatibility wrappers for older call sites during the v0 -> v1 transition.
+    static func ensureV0FleetDownloaded(appState: AppState, context: ModelContext) async {
+        await ensureFleetDownloaded(appState: appState, context: context)
+    }
+
+    static func repairV0Fleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
+        await repairFleet(appState: appState, context: context, source: source)
+    }
+
     enum RepairSource: Sendable {
         case launch
         case manual
@@ -83,6 +92,10 @@ enum ModelLaunchBootstrap {
         case linkedLocalFile
         case alreadyDownloading
         case startedDownload
+    }
+
+    private static func fleetModelsForInstall() -> [CatalogModel] {
+        uniqueByArtifact(LumenModelFleetCatalog.allFleetModels)
     }
 
     private static func ensureModelPresent(
@@ -143,7 +156,7 @@ enum ModelLaunchBootstrap {
     }
 
     private static func linkExistingFleetFiles(appState: AppState, context: ModelContext) {
-        for model in uniqueByArtifact(LumenModelFleetCatalog.v0Recommended) {
+        for model in fleetModelsForInstall() {
             let localURL = ModelDownloader.shared.localURL(for: model)
             guard FileManager.default.fileExists(atPath: localURL.path) else { continue }
             if storedModel(for: model, context: context) == nil {
@@ -185,7 +198,7 @@ enum ModelLaunchBootstrap {
     private static func readyFleetArtifactCount(context: ModelContext) -> Int {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
         let installedKeys = Set(stored.map { artifactKey(repoId: $0.repoId, fileName: $0.fileName) })
-        return uniqueByArtifact(LumenModelFleetCatalog.v0Recommended).reduce(0) { count, model in
+        return fleetModelsForInstall().reduce(0) { count, model in
             let localReady = FileManager.default.fileExists(atPath: ModelDownloader.shared.localURL(for: model).path)
             let storedReady = installedKeys.contains(artifactKey(repoId: model.repoId, fileName: model.fileName))
             return localReady || storedReady ? count + 1 : count

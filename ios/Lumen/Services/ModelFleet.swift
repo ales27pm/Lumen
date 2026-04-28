@@ -127,9 +127,25 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
 @MainActor
 enum LumenModelFleetResolver {
     static func resolveV0(appState: AppState, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+        resolveV0(
+            activeChatModelID: appState.activeChatModelID,
+            activeEmbeddingModelID: appState.activeEmbeddingModelID,
+            storedModels: storedModels
+        )
+    }
+
+    static func resolveV0(settings: SettingsSnapshot, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+        resolveV0(
+            activeChatModelID: settings.activeChatModelID,
+            activeEmbeddingModelID: settings.activeEmbeddingModelID,
+            storedModels: storedModels
+        )
+    }
+
+    private static func resolveV0(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
         var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
         let textModels = storedModels.filter { $0.modelRole == .chat }
-        let activeText = appState.activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
+        let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
         let fallbackText = activeText ?? preferredTextModel(from: textModels)
 
         for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
@@ -139,7 +155,7 @@ enum LumenModelFleetResolver {
         }
 
         let embedModels = storedModels.filter { $0.modelRole == .embedding }
-        let activeEmbed = appState.activeEmbeddingModelID.flatMap { id in
+        let activeEmbed = activeEmbeddingModelID.flatMap { id in
             embedModels.first { $0.id.uuidString == id }
         }
         let fallbackEmbed = activeEmbed

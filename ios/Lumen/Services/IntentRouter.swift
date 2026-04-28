@@ -61,6 +61,18 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
         }
 
+        if matchesAny(text, ["alarm", "set an alarm", "set alarm", "countdown", "timer", "snooze", "pause alarm", "resume alarm", "stop alarm", "cancel alarm", "alarm authorization"]) {
+            return IntentRoutingDecision(intent: .alarm, allowedToolIDs: alarmToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if matchesAny(text, ["schedule agent", "agent run", "background agent", "list triggers", "cancel trigger", "create trigger", "trigger"] ) {
+            return IntentRoutingDecision(intent: .trigger, allowedToolIDs: triggerToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if matchesAny(text, ["remind me", "reminder", "todo", "to do", "list reminders", "pending reminders"]) {
+            return IntentRoutingDecision(intent: .reminder, allowedToolIDs: reminderToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
         if matchesAny(text, ["weather", "forecast", "temperature", "what is it like outside", "weather here", "rain", "snow", "wind outside"]) {
             return IntentRoutingDecision(intent: .weather, allowedToolIDs: weatherToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
@@ -96,17 +108,13 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .messageDraft, allowedToolIDs: messageToolIDs, requiresClarification: clarification != nil, clarificationPrompt: clarification)
         }
 
-        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) {
-            let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
-            return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
-        }
-
         if matchesAny(text, ["contact", "address book", "find contact", "search contacts", "phone number for", "email address for"]) {
             return IntentRoutingDecision(intent: .contactSearch, allowedToolIDs: contactToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["remind me", "reminder", "todo", "to do", "list reminders", "pending reminders"]) {
-            return IntentRoutingDecision(intent: .reminder, allowedToolIDs: reminderToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) {
+            let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
+            return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
         }
 
         if matchesAny(text, ["schedule", "calendar", "create event", "meeting", "appointment", "at 5", "tomorrow at", "list events", "upcoming events"]) {
@@ -143,14 +151,6 @@ nonisolated enum IntentRouter {
 
         if matchesAny(text, ["search personal data", "search my files", "search local files", "reindex files", "index files", "reindex photos", "index photos", "rag search"]) {
             return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
-        }
-
-        if matchesAny(text, ["schedule agent", "agent run", "background agent", "list triggers", "cancel trigger", "trigger"] ) {
-            return IntentRoutingDecision(intent: .trigger, allowedToolIDs: triggerToolIDs, requiresClarification: false, clarificationPrompt: nil)
-        }
-
-        if matchesAny(text, ["alarm", "countdown", "timer", "snooze", "pause alarm", "resume alarm", "stop alarm", "cancel alarm", "alarm authorization"]) {
-            return IntentRoutingDecision(intent: .alarm, allowedToolIDs: alarmToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
         if matchesAny(text, ["note", "save this"]) {

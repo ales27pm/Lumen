@@ -19,6 +19,8 @@ fileprivate nonisolated enum UserSettingsKeys {
     static let maxAgentSteps = "maxAgentSteps"
     static let showThinkingByDefault = "showThinkingByDefault"
     static let agentModeEnabled = "agentModeEnabled"
+    static let autoDownloadFleetModels = "autoDownloadFleetModels"
+    static let confirmFleetDownloads = "confirmFleetDownloads"
 }
 
 /// Persistent user settings. Values are auto-persisted to UserDefaults whenever
@@ -52,6 +54,10 @@ final class UserSettings {
     var showThinkingByDefault: Bool { didSet { save() } }
     var agentModeEnabled: Bool { didSet { save() } }
 
+    // Fleet bootstrap
+    var autoDownloadFleetModels: Bool { didSet { save() } }
+    var confirmFleetDownloads: Bool { didSet { save() } }
+
     @ObservationIgnored
     private let defaults: UserDefaults
 
@@ -83,6 +89,8 @@ final class UserSettings {
         maxAgentSteps = defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6
         showThinkingByDefault = defaults.object(forKey: UserSettingsKeys.showThinkingByDefault) as? Bool ?? false
         agentModeEnabled = defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true
+        autoDownloadFleetModels = defaults.object(forKey: UserSettingsKeys.autoDownloadFleetModels) as? Bool ?? true
+        confirmFleetDownloads = defaults.object(forKey: UserSettingsKeys.confirmFleetDownloads) as? Bool ?? false
     }
 
     private func save() {
@@ -103,6 +111,8 @@ final class UserSettings {
         defaults.set(maxAgentSteps, forKey: UserSettingsKeys.maxAgentSteps)
         defaults.set(showThinkingByDefault, forKey: UserSettingsKeys.showThinkingByDefault)
         defaults.set(agentModeEnabled, forKey: UserSettingsKeys.agentModeEnabled)
+        defaults.set(autoDownloadFleetModels, forKey: UserSettingsKeys.autoDownloadFleetModels)
+        defaults.set(confirmFleetDownloads, forKey: UserSettingsKeys.confirmFleetDownloads)
     }
 
     func toggleTool(_ id: String) {
@@ -136,7 +146,9 @@ final class UserSettings {
             speakingRate: speakingRate,
             handsFree: handsFree,
             maxAgentSteps: maxAgentSteps,
-            agentModeEnabled: agentModeEnabled
+            agentModeEnabled: agentModeEnabled,
+            autoDownloadFleetModels: autoDownloadFleetModels,
+            confirmFleetDownloads: confirmFleetDownloads
         )
     }
 }
@@ -159,6 +171,8 @@ nonisolated struct SettingsSnapshot: Sendable {
     let handsFree: Bool
     let maxAgentSteps: Int
     let agentModeEnabled: Bool
+    let autoDownloadFleetModels: Bool
+    let confirmFleetDownloads: Bool
 
     /// Loads a snapshot directly from UserDefaults without touching the
     /// in-memory `UserSettings` instance. Used by background tasks that may
@@ -185,7 +199,9 @@ nonisolated struct SettingsSnapshot: Sendable {
             speakingRate: defaults.object(forKey: UserSettingsKeys.speakingRate) as? Double ?? 0.5,
             handsFree: defaults.object(forKey: UserSettingsKeys.handsFree) as? Bool ?? false,
             maxAgentSteps: defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6,
-            agentModeEnabled: defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true
+            agentModeEnabled: defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true,
+            autoDownloadFleetModels: defaults.object(forKey: UserSettingsKeys.autoDownloadFleetModels) as? Bool ?? true,
+            confirmFleetDownloads: defaults.object(forKey: UserSettingsKeys.confirmFleetDownloads) as? Bool ?? false
         )
     }
 }

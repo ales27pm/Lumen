@@ -86,7 +86,14 @@ enum AgentRunner {
         let assignments = LumenModelSlot.allCases
             .map { slot -> String in
                 if let assignment = fleetSnapshot.assignment(for: slot) {
-                    let residency = fleetSnapshot.residentSlots.contains(slot) ? "resident target" : "not resident"
+                    let residency: String
+                    if fleetSnapshot.runtimeResidentSlots.contains(slot) {
+                        residency = "runtime resident"
+                    } else if fleetSnapshot.targetResidentSlots.contains(slot) {
+                        residency = "target resident · runtime pending"
+                    } else {
+                        residency = "not resident"
+                    }
                     return "- \(slot.displayName): \(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization) · \(residency)"
                 }
                 return "- \(slot.displayName): missing"
@@ -99,11 +106,11 @@ enum AgentRunner {
 
         let runtimeMode = """
         Fleet runtime mode: \(fleetSnapshot.mode.displayName).
-        v1 target: each logical slot may keep its own resident model when hardware allows. Runtime should monitor memory pressure and degrade gracefully only when necessary.
+        v1 target: each logical slot may eventually keep its own resident model. Current runtime status is explicit in the assignment list; slots marked runtime pending are planned assignments, not loaded contexts yet.
         """
 
         let fleetPrompt = """
-        Lumen model fleet v1 is enabled. Logical slots may resolve to different installed models and are allowed to be resident independently:
+        Lumen model fleet v1 is enabled as a slot-assignment and routing plan. Do not claim a model is loaded unless it is marked runtime resident:
         \(contracts)
 
         \(runtimeMode)

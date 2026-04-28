@@ -127,7 +127,7 @@ extension Array where Element == AgentJSONValue {
 }
 
 private extension AgentJSONValue {
-    var foundationObject: Any {
+    nonisolated var foundationObject: Any {
         switch self {
         case .string(let value):
             return value

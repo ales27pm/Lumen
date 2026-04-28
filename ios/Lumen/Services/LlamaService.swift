@@ -52,6 +52,7 @@ nonisolated enum GenerationToken: Sendable {
 
 nonisolated enum LlamaError: Error, Sendable {
     case noModelLoaded
+    case slotModelNotLoaded(String)
     case modelFileNotFound(String)
     case failedToInitializeContext(String)
     case embeddingModelNotLoaded
@@ -63,6 +64,8 @@ extension LlamaError: LocalizedError {
         switch self {
         case .noModelLoaded:
             return "No chat model is currently loaded."
+        case .slotModelNotLoaded(let slot):
+            return "No chat model is currently loaded for slot \(slot)."
         case .modelFileNotFound(let path):
             return "Model file not found at \(path)."
         case .failedToInitializeContext(let details):
@@ -75,12 +78,18 @@ extension LlamaError: LocalizedError {
     }
 }
 
+private struct ChatRuntime {
+    var service: SwiftLlama.LlamaService
+    var modelPath: String
+    var contextSize: Int
+    var batchSize: UInt32
+}
+
 final actor AppLlamaService {
     static let shared = AppLlamaService()
 
-    private var chatService: SwiftLlama.LlamaService?
-    private var chatModelPath: String?
-    private var chatContextSize: Int = 2048
+    private var chatRuntimes: [LumenModelSlot: ChatRuntime] = [:]
+    private var primaryChatSlot: LumenModelSlot = .cortex
 
     private var embeddingModelPath: String?
     private var embeddingModel: LlamaModel?
@@ -91,21 +100,53 @@ final actor AppLlamaService {
 
     private init() {}
 
-    var isChatLoaded: Bool { chatService != nil }
+    var isChatLoaded: Bool { chatRuntimes[primaryChatSlot] != nil || !chatRuntimes.isEmpty }
     var isEmbedLoaded: Bool { embeddingContext != nil }
     var hasSemanticEmbeddingRuntime: Bool { embeddingContext != nil }
-    var loadedChatPath: String? { chatModelPath }
+    var loadedChatPath: String? { chatRuntimes[primaryChatSlot]?.modelPath ?? chatRuntimes.values.first?.modelPath }
     var loadedEmbedPath: String? { embeddingModelPath }
+
+    var loadedChatPathsBySlot: [LumenModelSlot: String] {
+        Dictionary(uniqueKeysWithValues: chatRuntimes.map { ($0.key, $0.value.modelPath) })
+    }
+
+    func isChatLoaded(for slot: LumenModelSlot) -> Bool {
+        chatRuntimes[slot] != nil
+    }
+
+    func loadedChatPath(for slot: LumenModelSlot) -> String? {
+        chatRuntimes[slot]?.modelPath
+    }
 
     func loadModel(named name: String, contextSize: UInt32 = 2048, batchSize: UInt32 = 256) throws {
         guard let url = Bundle.main.url(forResource: name, withExtension: "gguf") else {
             throw LlamaError.modelFileNotFound("Bundle resource: \(name).gguf")
         }
-        try loadChatModelSync(path: url.path, contextSize: Int(contextSize), batchSize: batchSize)
+        try loadChatModelSync(path: url.path, slot: primaryChatSlot, contextSize: Int(contextSize), batchSize: batchSize)
     }
 
     func loadChatModel(path: String, contextSize: Int = 2048) async throws {
-        try loadChatModelSync(path: path, contextSize: contextSize, batchSize: 256)
+        try loadChatModelSync(path: path, slot: primaryChatSlot, contextSize: contextSize, batchSize: 256)
+    }
+
+    func loadChatModel(path: String, for slot: LumenModelSlot, contextSize: Int = 2048) async throws {
+        try loadChatModelSync(path: path, slot: slot, contextSize: contextSize, batchSize: 256)
+        if primaryChatSlot == .cortex || chatRuntimes[primaryChatSlot] == nil {
+            primaryChatSlot = slot
+        }
+    }
+
+    func loadFleetChatModels(assignments: [LumenModelSlot: LumenModelAssignment], contextSize: Int = 2048) async -> [LumenModelSlot: String] {
+        var failures: [LumenModelSlot: String] = [:]
+        for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
+            guard let assignment = assignments[slot] else { continue }
+            do {
+                try await loadChatModel(path: assignment.localPath, for: slot, contextSize: contextSize)
+            } catch {
+                failures[slot] = error.localizedDescription
+            }
+        }
+        return failures
     }
 
     func loadEmbeddingModel(path: String) async throws {
@@ -133,8 +174,22 @@ final actor AppLlamaService {
     }
 
     func unloadChat() async {
-        chatService = nil
-        chatModelPath = nil
+        chatRuntimes.removeValue(forKey: primaryChatSlot)
+        if let first = chatRuntimes.keys.first {
+            primaryChatSlot = first
+        }
+    }
+
+    func unloadChat(for slot: LumenModelSlot) async {
+        chatRuntimes.removeValue(forKey: slot)
+        if primaryChatSlot == slot, let first = chatRuntimes.keys.first {
+            primaryChatSlot = first
+        }
+    }
+
+    func unloadAllChat() async {
+        chatRuntimes.removeAll()
+        primaryChatSlot = .cortex
     }
 
     func unloadEmbed() async {
@@ -144,8 +199,13 @@ final actor AppLlamaService {
     }
 
     func reloadChat(contextSize: Int = 2048) async throws {
-        guard let chatModelPath else { throw LlamaError.noModelLoaded }
-        try loadChatModelSync(path: chatModelPath, contextSize: contextSize, batchSize: 256)
+        guard let runtime = chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first else { throw LlamaError.noModelLoaded }
+        try loadChatModelSync(path: runtime.modelPath, slot: primaryChatSlot, contextSize: contextSize, batchSize: runtime.batchSize)
+    }
+
+    func reloadChat(for slot: LumenModelSlot, contextSize: Int = 2048) async throws {
+        guard let runtime = chatRuntimes[slot] else { throw LlamaError.slotModelNotLoaded(slot.rawValue) }
+        try loadChatModelSync(path: runtime.modelPath, slot: slot, contextSize: contextSize, batchSize: runtime.batchSize)
     }
 
     func reloadEmbed() async throws {
@@ -161,7 +221,29 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let chatService else { throw LlamaError.noModelLoaded }
+        try await streamResponse(
+            slot: primaryChatSlot,
+            messages: messages,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            seed: seed
+        )
+    }
+
+    func streamResponse(
+        slot: LumenModelSlot,
+        messages: [LlamaChatMessage],
+        temperature: Float = 0.8,
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
+    ) async throws -> AsyncThrowingStream<String, Error> {
+        guard let runtime = chatRuntimes[slot] ?? chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first else {
+            throw LlamaError.slotModelNotLoaded(slot.rawValue)
+        }
 
         let resolvedSeed = seed ?? makeRandomSeed()
         let sampling = LlamaSamplingConfig(
@@ -170,7 +252,7 @@ final actor AppLlamaService {
             topP: topP,
             repetitionPenaltyConfig: LlamaRepetitionPenaltyConfig(repeatPenalty: repetitionPenalty)
         )
-        let rawStream = try await chatService.streamCompletion(of: messages, samplingConfig: sampling)
+        let rawStream = try await runtime.service.streamCompletion(of: messages, samplingConfig: sampling)
         guard let maxTokens else { return rawStream }
 
         return AsyncThrowingStream { continuation in
@@ -181,7 +263,7 @@ final actor AppLlamaService {
                     return
                 }
                 if cap == 0 {
-                    await self.stopActiveCompletion()
+                    await self.stopCompletion(for: slot)
                     continuation.finish()
                     return
                 }
@@ -192,7 +274,7 @@ final actor AppLlamaService {
                         continuation.yield(chunk)
                         emitted += 1
                         if emitted >= cap {
-                            await self.stopActiveCompletion()
+                            await self.stopCompletion(for: slot)
                             break
                         }
                     }
@@ -215,8 +297,28 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> String {
-        guard chatService != nil else { throw LlamaError.noModelLoaded }
+        try await respond(
+            slot: primaryChatSlot,
+            messages: messages,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            seed: seed
+        )
+    }
+
+    func respond(
+        slot: LumenModelSlot,
+        messages: [LlamaChatMessage],
+        temperature: Float = 0.8,
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.1,
+        maxTokens: Int? = nil,
+        seed: UInt32? = nil
+    ) async throws -> String {
         let stream = try await streamResponse(
+            slot: slot,
             messages: messages,
             temperature: temperature,
             topP: topP,
@@ -232,17 +334,31 @@ final actor AppLlamaService {
     }
 
     func resetKVCache() async {
-        guard let currentChatModelPath = chatModelPath else { return }
+        let runtimes = chatRuntimes
+        for (slot, runtime) in runtimes {
+            do {
+                try loadChatModelSync(path: runtime.modelPath, slot: slot, contextSize: runtime.contextSize, batchSize: runtime.batchSize)
+            } catch {
+                chatRuntimes.removeValue(forKey: slot)
+            }
+        }
+    }
+
+    func resetKVCache(for slot: LumenModelSlot) async {
+        guard let runtime = chatRuntimes[slot] else { return }
         do {
-            try loadChatModelSync(path: currentChatModelPath, contextSize: chatContextSize, batchSize: 256)
+            try loadChatModelSync(path: runtime.modelPath, slot: slot, contextSize: runtime.contextSize, batchSize: runtime.batchSize)
         } catch {
-            chatService = nil
-            chatModelPath = nil
+            chatRuntimes.removeValue(forKey: slot)
         }
     }
 
     func stream(_ req: GenerateRequest) -> AsyncStream<GenerationToken> {
-        let messages = buildMessages(req: req)
+        stream(req, slot: primaryChatSlot)
+    }
+
+    func stream(_ req: GenerateRequest, slot: LumenModelSlot) -> AsyncStream<GenerationToken> {
+        let messages = buildMessages(req: req, contextSize: chatRuntimes[slot]?.contextSize ?? chatRuntimes[primaryChatSlot]?.contextSize ?? 2048)
 
         return AsyncStream { continuation in
             let generationTask = Task { [weak self] in
@@ -260,6 +376,7 @@ final actor AppLlamaService {
                     }
 
                     let stream = try await self.streamResponse(
+                        slot: slot,
                         messages: messages,
                         temperature: Float(req.temperature),
                         topP: Float(req.topP),
@@ -294,9 +411,6 @@ final actor AppLlamaService {
             throw LlamaError.failedToInitializeContext("Unable to reset embedding context")
         }
 
-        // Reset per-request embedding sequence state by recreating the context.
-        // This avoids stale sequence-0 KV state contaminating pooled embeddings
-        // across calls in long-lived app sessions.
         self.embeddingContext = embeddingContext
 
         let tokens = embeddingModel.tokenize(text: trimmed, addBos: embeddingModel.shouldAddBos(), special: false)
@@ -337,7 +451,10 @@ final actor AppLlamaService {
         }
     }
 
-    private func loadChatModelSync(path: String, contextSize: Int, batchSize: UInt32) throws {
+    private func loadChatModelSync(path: String, slot: LumenModelSlot, contextSize: Int, batchSize: UInt32) throws {
+        guard slot != .embedding else {
+            throw LlamaError.failedToInitializeContext("Embedding slot cannot be loaded as chat")
+        }
         guard FileManager.default.fileExists(atPath: path) else {
             throw LlamaError.modelFileNotFound(path)
         }
@@ -350,9 +467,13 @@ final actor AppLlamaService {
             maxTokenCount: UInt32(max(1, contextSize)),
             useGPU: false
         )
-        chatService = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
-        chatModelPath = path
-        chatContextSize = contextSize
+        let service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
+        chatRuntimes[slot] = ChatRuntime(
+            service: service,
+            modelPath: path,
+            contextSize: contextSize,
+            batchSize: batchSize
+        )
     }
 
     private func makeEmbeddingContext(for model: LlamaModel) -> LlamaContext? {
@@ -366,8 +487,8 @@ final actor AppLlamaService {
         return LlamaContext(model: model, parameters: contextParams)
     }
 
-    private func stopActiveCompletion() async {
-        await chatService?.stopCompletion()
+    private func stopCompletion(for slot: LumenModelSlot) async {
+        await (chatRuntimes[slot] ?? chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first)?.service.stopCompletion()
     }
 
     private func normalize(_ vector: [Double]) -> [Double] {
@@ -380,9 +501,9 @@ final actor AppLlamaService {
         UInt32.random(in: UInt32.min...UInt32.max)
     }
 
-    private func buildMessages(req: GenerateRequest) -> [LlamaChatMessage] {
+    private func buildMessages(req: GenerateRequest, contextSize: Int? = nil) -> [LlamaChatMessage] {
         let budget = PromptBudget.make(
-            contextSize: chatContextSize,
+            contextSize: contextSize ?? 2048,
             maxTokens: req.maxTokens,
             systemPromptChars: req.systemPrompt.count,
             userMessageChars: req.userMessage.count,

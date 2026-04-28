@@ -7,4 +7,10 @@ class LumenAppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         true
     }
+
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        Task { @MainActor in
+            FleetRuntimeCleanup.unloadOptionalChatSlots()
+        }
+    }
 }

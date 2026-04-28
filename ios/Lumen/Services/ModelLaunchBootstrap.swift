@@ -3,16 +3,42 @@ import SwiftData
 
 @MainActor
 enum ModelLaunchBootstrap {
+    private static let storageSafetyBufferBytes: Int64 = 500_000_000
+
     static func ensureV0FleetDownloaded(appState: AppState, context: ModelContext) async {
+        guard appState.autoDownloadFleetModels else {
+            appState.runtime.updateBootStep(id: "models", detail: "Fleet auto-download disabled", state: .warning)
+            linkExistingFleetFiles(appState: appState, context: context)
+            return
+        }
+        await repairV0Fleet(appState: appState, context: context, source: .launch)
+    }
+
+    static func repairV0Fleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
         let models = uniqueByArtifact(LumenModelFleetCatalog.v0Recommended)
         guard !models.isEmpty else {
             appState.runtime.updateBootStep(id: "models", detail: "No bundled fleet catalog entries", state: .warning)
             return
         }
 
+        let missing = missingModels(from: models, context: context)
+        let missingBytes = missing.reduce(Int64(0)) { $0 + $1.sizeBytes }
+        let requiredBytes = max(0, missingBytes + (missing.isEmpty ? 0 : storageSafetyBufferBytes))
+        let availableBytes = availableStorageBytes()
+
+        if requiredBytes > 0, availableBytes < requiredBytes {
+            appState.runtime.updateBootStep(
+                id: "models",
+                detail: "Need \(formatBytesForBoot(requiredBytes)); only \(formatBytesForBoot(availableBytes)) free",
+                state: .warning
+            )
+            linkExistingFleetFiles(appState: appState, context: context)
+            return
+        }
+
         appState.runtime.updateBootStep(
             id: "models",
-            detail: "Checking \(models.count) fleet model artifacts",
+            detail: source == .launch ? "Checking \(models.count) fleet model artifacts" : "Repairing \(models.count) fleet model artifacts",
             state: .running
         )
 
@@ -40,6 +66,11 @@ enum ModelLaunchBootstrap {
 
         let detail = fragments.isEmpty ? "Fleet model check complete" : fragments.joined(separator: " · ")
         appState.runtime.updateBootStep(id: "models", detail: detail, state: startedDownloads > 0 ? .running : .complete)
+    }
+
+    enum RepairSource: Sendable {
+        case launch
+        case manual
     }
 
     private enum EnsureResult {
@@ -106,6 +137,24 @@ enum ModelLaunchBootstrap {
         return .startedDownload
     }
 
+    private static func linkExistingFleetFiles(appState: AppState, context: ModelContext) {
+        for model in uniqueByArtifact(LumenModelFleetCatalog.v0Recommended) {
+            let localURL = ModelDownloader.shared.localURL(for: model)
+            guard FileManager.default.fileExists(atPath: localURL.path) else { continue }
+            if storedModel(for: model, context: context) == nil {
+                _ = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+            }
+        }
+    }
+
+    private static func missingModels(from models: [CatalogModel], context: ModelContext) -> [CatalogModel] {
+        models.filter { model in
+            let localURL = ModelDownloader.shared.localURL(for: model)
+            if FileManager.default.fileExists(atPath: localURL.path) { return false }
+            return storedModel(for: model, context: context) == nil
+        }
+    }
+
     private static func loadIfSelected(_ stored: StoredModel, appState: AppState, context: ModelContext) async {
         let allStored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
         switch stored.modelRole {
@@ -132,7 +181,9 @@ enum ModelLaunchBootstrap {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
         let installedKeys = Set(stored.map { artifactKey(repoId: $0.repoId, fileName: $0.fileName) })
         return uniqueByArtifact(LumenModelFleetCatalog.v0Recommended).reduce(0) { count, model in
-            installedKeys.contains(artifactKey(repoId: model.repoId, fileName: model.fileName)) ? count + 1 : count
+            let localReady = FileManager.default.fileExists(atPath: ModelDownloader.shared.localURL(for: model).path)
+            let storedReady = installedKeys.contains(artifactKey(repoId: model.repoId, fileName: model.fileName))
+            return localReady || storedReady ? count + 1 : count
         }
     }
 
@@ -186,6 +237,23 @@ enum ModelLaunchBootstrap {
         }
 
         return unique
+    }
+
+    private static func availableStorageBytes(fileManager: FileManager = .default) -> Int64 {
+        let url = ModelStorage.modelsDirectoryURL(fileManager: fileManager)
+        if let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+           let important = values.volumeAvailableCapacityForImportantUsage {
+            return important
+        }
+        if let attrs = try? fileManager.attributesOfFileSystem(forPath: url.path),
+           let free = attrs[.systemFreeSize] as? NSNumber {
+            return free.int64Value
+        }
+        return 0
+    }
+
+    private static func formatBytesForBoot(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     private static func artifactKey(repoId: String, fileName: String) -> String {

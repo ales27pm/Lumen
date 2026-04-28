@@ -5,6 +5,10 @@ nonisolated enum AssistantOutputSanitizer {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
 
+        if isPrivacyPlaceholderArtifact(trimmed) {
+            return neutralFallback(for: lastUserMessage)
+        }
+
         if isFalseToolClaim(trimmed, lastUserMessage: lastUserMessage) {
             return neutralFallback(for: lastUserMessage)
         }
@@ -35,8 +39,14 @@ nonisolated enum AssistantOutputSanitizer {
         return mentionsGreetingEvent || isPureConversation(lastUserMessage)
     }
 
+    static func isPrivacyPlaceholderArtifact(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard normalized.hasPrefix("<") && normalized.hasSuffix(">") else { return false }
+        return normalized.contains("PRESIDIO_ANONYMIZED_") || normalized.contains("ANONYMIZED_PERSON")
+    }
+
     static func neutralFallback(for lastUserMessage: String?) -> String {
-        guard let lastUserMessage else { return "Hi." }
+        guard let lastUserMessage else { return "I couldn't complete that cleanly. Try again, or give me one more detail." }
         let compact = compacted(lastUserMessage)
         switch compact {
         case "hi", "hello", "hey", "yo", "sup", "bonjour", "salut", "allo":
@@ -46,7 +56,7 @@ nonisolated enum AssistantOutputSanitizer {
         case "ok", "okay":
             return "OK."
         default:
-            return "I understand."
+            return "I couldn't complete that cleanly. Try again, or give me one more detail."
         }
     }
 

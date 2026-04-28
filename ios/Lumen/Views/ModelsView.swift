@@ -16,7 +16,12 @@ struct ModelsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         activeRow
-                        FleetStatusCard(snapshot: fleetSnapshot, progresses: downloader.progresses)
+                        FleetStatusCard(
+                            snapshot: fleetSnapshot,
+                            progresses: downloader.progresses,
+                            loadedPaths: loadedPaths,
+                            onRepair: repairFleet
+                        )
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Featured")
@@ -109,6 +114,14 @@ struct ModelsView: View {
         storedModels.first { stored in
             stored.repoId.caseInsensitiveCompare(catalog.repoId) == .orderedSame
             && stored.fileName.caseInsensitiveCompare(catalog.fileName) == .orderedSame
+        }
+    }
+
+    private func repairFleet() {
+        Task {
+            await ModelLaunchBootstrap.repairV0Fleet(appState: appState, context: modelContext, source: .manual)
+            await refreshLoaded()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 

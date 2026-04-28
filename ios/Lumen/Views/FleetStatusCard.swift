@@ -9,10 +9,10 @@ struct FleetStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: snapshot.isRunnableV0 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(snapshot.isRunnableV0 ? Theme.accent : .orange)
+                Image(systemName: snapshot.isRunnableV1 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(snapshot.isRunnableV1 ? Theme.accent : .orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Fleet v0")
+                    Text("Fleet v1")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
                     Text(summaryText)
@@ -94,22 +94,25 @@ struct FleetStatusCard: View {
     }
 
     private var summaryText: String {
-        if snapshot.missingSlots.isEmpty { return "All logical slots are assigned." }
-        return "Missing: \(snapshot.missingSlots.map(\.displayName).joined(separator: ", "))"
+        let mode = snapshot.mode.displayName
+        if snapshot.missingSlots.isEmpty { return "All logical slots assigned · \(mode)." }
+        return "Missing: \(snapshot.missingSlots.map(\.displayName).joined(separator: ", ")) · \(mode)"
     }
 
     private func statusText(for assignment: LumenModelAssignment) -> String {
-        if loadedPaths.contains(assignment.localPath) { return "loaded" }
-        if assignment.slot.shouldRunOnlyWhenIdle { return "downloaded · idle-only" }
-        return "downloaded"
+        if loadedPaths.contains(assignment.localPath) { return "resident · loaded" }
+        if snapshot.residentSlots.contains(assignment.slot) { return "resident · not loaded" }
+        if assignment.slot.shouldRunOnlyWhenIdle { return "planned hot-swap · idle-only" }
+        return "planned hot-swap"
     }
 
     private func statusColor(for assignment: LumenModelAssignment) -> Color {
-        loadedPaths.contains(assignment.localPath) ? Theme.accent : Theme.textSecondary
+        if loadedPaths.contains(assignment.localPath) { return Theme.accent }
+        return snapshot.residentSlots.contains(assignment.slot) ? .orange : Theme.textSecondary
     }
 
     private var activeDownloads: [(id: String, name: String, progress: DownloadProgress, label: String, isFailed: Bool)] {
-        LumenModelFleetCatalog.v0Recommended.compactMap { model in
+        LumenModelFleetCatalog.allFleetModels.compactMap { model in
             guard let progress = progresses[model.id] else { return nil }
             switch progress.state {
             case .downloading:

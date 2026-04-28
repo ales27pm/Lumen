@@ -45,7 +45,12 @@ nonisolated enum AgentJSONValue: Sendable, Hashable {
         case .array(let values):
             return values.jsonRenderedString ?? "[" + values.map(\.stringValue).joined(separator: ",") + "]"
         case .object(let values):
-            return values.jsonRenderedString ?? "{}"
+            if let rendered = values.jsonRenderedString { return rendered }
+            let fallback = values.keys.sorted().map { key in
+                let value = values[key]?.stringValue ?? "null"
+                return "\"\(key)\":\(value)"
+            }.joined(separator: ",")
+            return "{\(fallback)}"
         case .null:
             return "null"
         }

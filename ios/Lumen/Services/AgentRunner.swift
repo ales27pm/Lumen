@@ -37,7 +37,8 @@ enum AgentRunner {
         maxSteps: Int?,
         fleetSnapshot: LumenModelFleetSnapshot
     ) async -> (text: String, steps: [AgentStep]) {
-        let memories = await MemoryStore.recall(query: prompt, context: context).map(\.content)
+        let cascade = await MemoryCascade.recall(query: prompt, [], context: context)
+        let memories = cascade.promptFragments
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
         let mimicry = MimicryProfiler.profile(userMessage: prompt, settings: settings)
         let req = AgentRequest(

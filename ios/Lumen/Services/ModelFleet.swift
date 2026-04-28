@@ -33,12 +33,12 @@ nonisolated enum LumenModelSlot: String, Codable, CaseIterable, Sendable, Identi
 
 nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
     case v0SingleRuntime
-    case v1PlannedHotSwap
+    case v1MultiResident
 
     var displayName: String {
         switch self {
         case .v0SingleRuntime: return "v0 single runtime"
-        case .v1PlannedHotSwap: return "v1 planned hot-swap"
+        case .v1MultiResident: return "v1 multi-resident"
         }
     }
 }
@@ -181,9 +181,6 @@ enum LumenModelFleetResolver {
         let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
         let runtimeText = activeText ?? preferredTextModel(from: textModels)
 
-        // v0 is intentionally a two-runtime design: one chat model plus one embedding model.
-        // Cortex, Executor, Mouth, Mimicry and REM are behavioral contracts layered over the
-        // currently active chat runtime, not separate simultaneously loaded models.
         if let runtimeText {
             for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
                 assignments[slot] = assignment(slot: slot, model: runtimeText)
@@ -199,7 +196,7 @@ enum LumenModelFleetResolver {
             mode: .v0SingleRuntime,
             assignments: assignments,
             missingSlots: missing,
-            residentSlots: Set(assignments.keys.filter { $0 == .cortex || $0 == .embedding })
+            residentSlots: Set(assignments.keys)
         )
     }
 
@@ -236,12 +233,11 @@ enum LumenModelFleetResolver {
         }
 
         let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
-        let resident = Set([LumenModelSlot.cortex, .embedding].filter { assignments[$0] != nil })
         return LumenModelFleetSnapshot(
-            mode: .v1PlannedHotSwap,
+            mode: .v1MultiResident,
             assignments: assignments,
             missingSlots: missing,
-            residentSlots: resident
+            residentSlots: Set(assignments.keys)
         )
     }
 

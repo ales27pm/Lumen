@@ -13,10 +13,33 @@ final class SlotAgentService {
                 var observations: [String] = []
                 var finalText = ""
 
+                let routing = IntentRouter.classify(req.userMessage)
+                let scopedTools = req.availableTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
+
+                if routing.requiresClarification {
+                    let clarification = routing.clarificationPrompt ?? "Could you clarify what you want me to do?"
+                    for chunk in chunk(clarification) {
+                        continuation.yield(.finalDelta(chunk))
+                    }
+                    continuation.yield(.done(finalText: clarification, steps: steps))
+                    continuation.finish()
+                    return
+                }
+
+                if IntentRouter.intentRequiresTool(routing) && scopedTools.isEmpty {
+                    let unavailable = IntentRouter.unavailableMessage(for: routing)
+                    for chunk in chunk(unavailable) {
+                        continuation.yield(.finalDelta(chunk))
+                    }
+                    continuation.yield(.done(finalText: unavailable, steps: steps))
+                    continuation.finish()
+                    return
+                }
+
                 let maxSteps = max(1, req.maxSteps)
                 for stepIndex in 0..<maxSteps {
                     let slot: LumenModelSlot = stepIndex == 0 ? .cortex : .executor
-                    let turnPrompt = makeStructuredTurnPrompt(req: req, observations: observations, stepIndex: stepIndex)
+                    let turnPrompt = makeStructuredTurnPrompt(req: req, observations: observations, stepIndex: stepIndex, scopedTools: scopedTools)
                     let turnOutput = await generateText(
                         slot: slot,
                         req: req,
@@ -85,6 +108,28 @@ final class SlotAgentService {
                     )
                     steps.append(actionStep)
                     continuation.yield(.step(actionStep))
+
+                    guard SlotAgentService.isActionAllowed(action.tool, routing: routing) else {
+                        SlotAgentDiagnosticsRecorder.record(
+                            SlotAgentTrace(
+                                id: UUID(),
+                                createdAt: Date(),
+                                slot: slot.rawValue,
+                                stage: "tool-execution",
+                                stepIndex: stepIndex,
+                                error: "tool_not_allowed_for_intent",
+                                rawOutputPrefix: String(action.displayContent.prefix(2_000)),
+                                userPromptPrefix: String(req.userMessage.prefix(2_000))
+                            )
+                        )
+                        finalText = IntentRouter.blockedToolMessage(for: routing)
+                        for chunk in chunk(finalText) {
+                            continuation.yield(.finalDelta(chunk))
+                        }
+                        continuation.yield(.done(finalText: finalText, steps: steps))
+                        continuation.finish()
+                        return
+                    }
 
                     let observation = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
                     observations.append("\(action.tool): \(observation)")
@@ -174,8 +219,8 @@ final class SlotAgentService {
         return output
     }
 
-    private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int) -> String {
-        let tools = req.availableTools.map { tool in
+    private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition]) -> String {
+        let tools = scopedTools.map { tool in
             "- \(tool.id): \(tool.description)"
         }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
@@ -201,6 +246,7 @@ final class SlotAgentService {
         Rules:
         - Use a tool only when live device data or an action is needed.
         - If enough information is available, return final.
+        - You may only call one of the listed tools. If no listed tool fits, return final asking for clarification or explaining the limitation.
         - Do not include prose outside JSON.
         """
     }
@@ -222,6 +268,11 @@ final class SlotAgentService {
 
         Keep it concise, accurate, and do not claim actions that did not happen.
         """
+    }
+
+
+    nonisolated static func isActionAllowed(_ toolID: String, routing: IntentRoutingDecision) -> Bool {
+        IntentRouter.isToolAllowed(toolID, for: routing)
     }
 
     private func chunk(_ text: String, size: Int = 48) -> [String] {

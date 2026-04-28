@@ -221,8 +221,12 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
-        try await streamResponse(
-            slot: primaryChatSlot,
+        guard let runtime = chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first else {
+            throw LlamaError.noModelLoaded
+        }
+        return try await streamResponse(
+            runtime: runtime,
+            stopSlot: primaryChatSlot,
             messages: messages,
             temperature: temperature,
             topP: topP,
@@ -241,10 +245,31 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let runtime = chatRuntimes[slot] ?? chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first else {
+        guard let runtime = chatRuntimes[slot] else {
             throw LlamaError.slotModelNotLoaded(slot.rawValue)
         }
+        return try await streamResponse(
+            runtime: runtime,
+            stopSlot: slot,
+            messages: messages,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            seed: seed
+        )
+    }
 
+    private func streamResponse(
+        runtime: ChatRuntime,
+        stopSlot: LumenModelSlot,
+        messages: [LlamaChatMessage],
+        temperature: Float,
+        topP: Float,
+        repetitionPenalty: Float,
+        maxTokens: Int?,
+        seed: UInt32?
+    ) async throws -> AsyncThrowingStream<String, Error> {
         let resolvedSeed = seed ?? makeRandomSeed()
         let sampling = LlamaSamplingConfig(
             temperature: temperature,
@@ -263,7 +288,7 @@ final actor AppLlamaService {
                     return
                 }
                 if cap == 0 {
-                    await self.stopCompletion(for: slot)
+                    await self.stopCompletion(for: stopSlot)
                     continuation.finish()
                     return
                 }
@@ -274,7 +299,7 @@ final actor AppLlamaService {
                         continuation.yield(chunk)
                         emitted += 1
                         if emitted >= cap {
-                            await self.stopCompletion(for: slot)
+                            await self.stopCompletion(for: stopSlot)
                             break
                         }
                     }
@@ -297,8 +322,7 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> String {
-        try await respond(
-            slot: primaryChatSlot,
+        let stream = try await streamResponse(
             messages: messages,
             temperature: temperature,
             topP: topP,
@@ -306,6 +330,11 @@ final actor AppLlamaService {
             maxTokens: maxTokens,
             seed: seed
         )
+        var output = ""
+        for try await chunk in stream {
+            output += chunk
+        }
+        return output
     }
 
     func respond(
@@ -358,7 +387,7 @@ final actor AppLlamaService {
     }
 
     func stream(_ req: GenerateRequest, slot: LumenModelSlot) -> AsyncStream<GenerationToken> {
-        let messages = buildMessages(req: req, contextSize: chatRuntimes[slot]?.contextSize ?? chatRuntimes[primaryChatSlot]?.contextSize ?? 2048)
+        let messages = buildMessages(req: req, contextSize: chatRuntimes[slot]?.contextSize ?? 2048)
 
         return AsyncStream { continuation in
             let generationTask = Task { [weak self] in
@@ -488,7 +517,7 @@ final actor AppLlamaService {
     }
 
     private func stopCompletion(for slot: LumenModelSlot) async {
-        await (chatRuntimes[slot] ?? chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first)?.service.stopCompletion()
+        await chatRuntimes[slot]?.service.stopCompletion()
     }
 
     private func normalize(_ vector: [Double]) -> [Double] {

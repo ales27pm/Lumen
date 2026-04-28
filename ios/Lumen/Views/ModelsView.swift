@@ -107,7 +107,7 @@ struct ModelsView: View {
     }
 
     private var fleetSnapshot: LumenModelFleetSnapshot {
-        LumenModelFleetResolver.resolveV0(appState: appState, storedModels: storedModels)
+        LumenModelFleetResolver.resolveV1(appState: appState, storedModels: storedModels)
     }
 
     private func storedModel(for catalog: CatalogModel) -> StoredModel? {
@@ -119,7 +119,7 @@ struct ModelsView: View {
 
     private func repairFleet() {
         Task {
-            await ModelLaunchBootstrap.repairV0Fleet(appState: appState, context: modelContext, source: .manual)
+            await ModelLaunchBootstrap.repairFleet(appState: appState, context: modelContext, source: .manual)
             await refreshLoaded()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }

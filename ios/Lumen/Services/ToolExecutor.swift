@@ -17,7 +17,7 @@ final class ToolExecutor {
         approval: ToolExecutionApproval = .autonomous
     ) async -> String {
         let id = ToolRouteGuard.canonicalToolID(toolID)
-        let stringArguments = arguments.stringCoerced
+        let stringArguments = ToolRouteGuard.normalizedArguments(for: id, rawToolID: toolID, arguments: arguments.stringCoerced)
 
         guard ToolRouteGuard.canExecuteTool(id, arguments: stringArguments, approval: approval) else {
             return ToolRouteGuard.approvalRequiredMessage(for: id)
@@ -48,9 +48,9 @@ final class ToolExecutor {
         case "weather":
             return await WeatherTools.currentWeather(location: stringArguments["location"] ?? stringArguments["city"] ?? stringArguments["query"])
         case "maps.directions":
-            return LocationTools.openDirections(destination: stringArguments["destination"] ?? "")
+            return LocationTools.openDirections(destination: stringArguments["destination"] ?? stringArguments["query"] ?? "")
         case "maps.search":
-            let query = stringArguments["query"] ?? ""
+            let query = stringArguments["query"] ?? stringArguments["location"] ?? stringArguments["destination"] ?? ""
             if ToolRouteGuard.shouldUseWebSearchInsteadOfNearbySearch(query: query) {
                 return await WebTools.webSearch(query: query)
             }
@@ -106,7 +106,7 @@ final class ToolExecutor {
         case "alarm.cancel":
             return await AlarmTools.cancel(id: stringArguments["id"] ?? stringArguments["title"] ?? "")
         default:
-            return "Unknown tool: \(toolID). Available weather/search tools are: weather, web.search, maps.search, location.current."
+            return "Unknown tool: \(toolID). Available weather/search/map tools are: weather, web.search, maps.search, maps.directions, location.current."
         }
     }
 
@@ -124,18 +124,83 @@ final class ToolExecutor {
 nonisolated enum ToolRouteGuard {
     static func canonicalToolID(_ raw: String) -> String {
         let id = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .replacingOccurrences(of: "_", with: ".")
+            .replacingOccurrences(of: "-", with: ".")
+            .replacingOccurrences(of: " ", with: ".")
         switch id {
-        case "weather", "weather.current", "current.weather", "forecast.current", "weather.get", "get_weather":
+        case "weather", "weather.current", "current.weather", "forecast.current", "weather.get", "get.weather", "getweather", "currentweather":
             return "weather"
-        case "search", "internet.search", "web", "web_search", "browser.search":
+        case "search", "internet.search", "web", "web.search", "websearch", "browser.search", "google.search", "google", "search.web", "searchweb":
             return "web.search"
-        case "maps", "map.search", "nearby.search", "local.search", "places.search":
+        case "fetch", "web.fetch", "browser.fetch", "url.fetch", "fetch.url", "open.url", "read.url", "read.website":
+            return "web.fetch"
+        case "maps", "map", "map.search", "maps.search", "nearby.search", "local.search", "places.search", "place.search", "google.maps", "google.maps.api", "googlemaps", "googlemapsapi", "maps.api", "mapsapi", "nearest.place", "find.nearby":
             return "maps.search"
-        case "location", "gps", "current.location", "location.get":
+        case "maps.directions", "map.directions", "directions", "navigation", "navigate", "route", "route.to", "open.maps":
+            return "maps.directions"
+        case "location", "gps", "current.location", "location.get", "get.location", "currentlocation":
             return "location.current"
+        case "calendar", "calendar.create", "create.event", "event.create", "schedule.event":
+            return "calendar.create"
+        case "calendar.list", "list.events", "events.list":
+            return "calendar.list"
+        case "reminder", "reminders.create", "reminder.create", "create.reminder":
+            return "reminders.create"
+        case "reminders.list", "reminder.list", "list.reminders":
+            return "reminders.list"
+        case "mail", "email", "email.draft", "mail.draft", "compose.email":
+            return "mail.draft"
+        case "message", "messages.draft", "sms", "sms.draft", "compose.message", "imessage":
+            return "messages.draft"
+        case "phone", "phone.call", "call", "dial":
+            return "phone.call"
+        case "contacts", "contacts.search", "contact.search", "search.contacts":
+            return "contacts.search"
         default:
             return id
         }
+    }
+
+    static func normalizedArguments(for canonicalToolID: String, rawToolID: String, arguments: [String: String]) -> [String: String] {
+        var out = arguments
+        let loweredValues = arguments.mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+
+        switch canonicalToolID {
+        case "maps.search":
+            if out["query"] == nil {
+                out["query"] = arguments["location"] ?? arguments["destination"] ?? arguments["place"] ?? arguments["nearby"]
+            }
+            let q = (out["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if q.isEmpty || q == "current location" || q == "current" || q == "here" || q == "near me" {
+                out["query"] = "nearest place near me"
+            }
+            if q.contains("airport") && !q.contains("near") {
+                out["query"] = "nearest airport near me"
+            }
+        case "maps.directions":
+            if out["destination"] == nil {
+                out["destination"] = arguments["query"] ?? arguments["location"] ?? arguments["place"]
+            }
+        case "weather":
+            if out["location"] == nil {
+                out["location"] = arguments["query"] ?? arguments["city"]
+            }
+        case "web.search":
+            if out["query"] == nil {
+                out["query"] = arguments["q"] ?? arguments["term"] ?? arguments["search"]
+            }
+        case "web.fetch":
+            if out["url"] == nil {
+                out["url"] = arguments["uri"] ?? arguments["link"] ?? arguments["query"]
+            }
+        default:
+            break
+        }
+
+        if canonicalToolID == "maps.search", loweredValues["location"] == "current location", out["query"]?.lowercased().contains("airport") != true {
+            out["query"] = "nearest airport near me"
+        }
+        return out
     }
 
     static func canExecuteTool(_ canonicalToolID: String, arguments: [String: String], approval: ToolExecutionApproval) -> Bool {
@@ -179,7 +244,7 @@ nonisolated enum ToolRouteGuard {
         let localIntentMarkers = [
             "near me", "nearby", "closest", "around me", "around here", "in my area",
             "directions", "route to", "open maps", "address of", "store near",
-            "restaurant near", "coffee near", "gas station", "pharmacy near"
+            "restaurant near", "coffee near", "gas station", "pharmacy near", "airport near", "nearest airport", "nearest"
         ]
         if localIntentMarkers.contains(where: { normalized.contains($0) }) {
             return false

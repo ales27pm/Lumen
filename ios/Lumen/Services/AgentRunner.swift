@@ -39,8 +39,9 @@ enum AgentRunner {
     ) async -> (text: String, steps: [AgentStep]) {
         let memories = await MemoryStore.recall(query: prompt, context: context).map(\.content)
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
+        let mimicry = MimicryProfiler.profile(userMessage: prompt, settings: settings)
         let req = AgentRequest(
-            systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt, fleetSnapshot: fleetSnapshot),
+            systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt, fleetSnapshot: fleetSnapshot, mimicry: mimicry),
             history: [],
             userMessage: prompt,
             temperature: settings.temperature,
@@ -73,7 +74,7 @@ enum AgentRunner {
         return (final.trimmingCharacters(in: .whitespacesAndNewlines), steps)
     }
 
-    private static func composedSystemPrompt(basePrompt: String, fleetSnapshot: LumenModelFleetSnapshot) -> String {
+    private static func composedSystemPrompt(basePrompt: String, fleetSnapshot: LumenModelFleetSnapshot, mimicry: MimicryProfile) -> String {
         let trimmedBasePrompt = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let contracts = LumenModelSlotContract.all
             .filter { $0.slot != .embedding }
@@ -95,14 +96,24 @@ enum AgentRunner {
             ? "none"
             : fleetSnapshot.missingSlots.map(\.displayName).joined(separator: ", ")
 
+        let runtimeMode = """
+        Fleet runtime mode: v0-single-runtime.
+        Dedicated per-slot model execution is not available in v0. Slot contracts are behavioral routing contracts applied inside the current single local runtime.
+        """
+
         let fleetPrompt = """
         Lumen model fleet v0 is enabled. The runtime may map several logical slots to the same small local model, but each slot has a strict behavioral contract:
         \(contracts)
+
+        \(runtimeMode)
 
         Current v0 slot assignments:
         \(assignments)
 
         Missing slots: \(missingText).
+
+        \(mimicry.promptFragment)
+
         When acting as the agent, keep decisions separate from final user-facing wording. Prefer compact structured turns when a native capability is needed.
         """
 

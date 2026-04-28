@@ -22,6 +22,7 @@ nonisolated enum FinalIntentValidator {
 
     private static func isValid(_ text: String, lower: String, for routing: IntentRoutingDecision) -> Bool {
         guard !text.isEmpty else { return false }
+        guard !AssistantOutputSanitizer.isLeakedToolJSONArtifact(text) else { return false }
         guard !looksLikeCalendarLeak(lower, unless: routing.intent == .calendar) else { return false }
         guard !looksLikeWeatherLeak(lower, unless: routing.intent == .weather) else { return false }
         guard !looksLikeEmailLeak(lower, unless: routing.intent == .emailDraft) else { return false }
@@ -31,7 +32,7 @@ nonisolated enum FinalIntentValidator {
         case .weather:
             return containsAny(lower, ["weather", "temperature", "humidity", "wind", "feels like", "°c", "rain", "snow", "cloud"])
         case .webSearch:
-            return containsAny(lower, ["web", "search", "result", "http", "source", "found", "not available"])
+            return containsAny(lower, ["web", "search", "result", "http", "source", "found", "not available", "no direct answer", "try a different phrasing"])
         case .emailDraft:
             if lower.contains("i will be in touch soon") { return false }
             return !looksLikeCalendarLeak(lower, unless: false) && !looksLikeWeatherLeak(lower, unless: false)
@@ -77,7 +78,7 @@ nonisolated enum FinalIntentValidator {
         case .weather:
             return "I couldn’t safely complete the current weather request. Please enable location/weather access or tell me the city."
         case .webSearch:
-            return "I couldn’t safely complete the web search request. I did not create a calendar event."
+            return "No direct answer from web search. Try a different phrasing, or provide a URL to fetch directly."
         case .emailDraft:
             return routing.clarificationPrompt ?? "Who should I send it to, and what should it say?"
         case .messageDraft:

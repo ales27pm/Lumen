@@ -65,8 +65,8 @@ enum AgentRunner {
         Tool-call compatibility rules:
         - If you call a tool, emit exactly one JSON object and no prose around it.
         - Use either {"tool":"tool.id","args":{...}} or {"action":{"tool":"tool.id","args":{...}}}.
-        - Every value inside args must be a JSON string. Convert numbers, booleans, arrays, dates, and nested objects to strings before emitting them.
-        - Do not emit privacy/anonymizer placeholders such as <PRESIDIO_ANONYMIZED_PERSON>. Use the information available in the user's message or ask a concise follow-up.
+        - Args may contain normal JSON values: strings, numbers, booleans, arrays, objects, or null.
+        - Do not emit privacy/anonymizer placeholder tokens. Use the information available in the user's message or ask a concise follow-up.
         """
 
         guard !trimmedBasePrompt.isEmpty else {

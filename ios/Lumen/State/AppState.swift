@@ -85,6 +85,14 @@ final class AppState {
         get { settings.agentModeEnabled }
         set { settings.agentModeEnabled = newValue }
     }
+    var autoDownloadFleetModels: Bool {
+        get { settings.autoDownloadFleetModels }
+        set { settings.autoDownloadFleetModels = newValue }
+    }
+    var confirmFleetDownloads: Bool {
+        get { settings.confirmFleetDownloads }
+        set { settings.confirmFleetDownloads = newValue }
+    }
     // MARK: - Forwarded runtime state
 
     var isGenerating: Bool {

@@ -1,0 +1,107 @@
+import Testing
+@testable import Lumen
+
+struct LumenFleetTests {
+    @Test @MainActor func fleetResolverAssignsAllTextSlotsFromSingleSmallChatModel() async throws {
+        let chat = StoredModel(
+            name: "Qwen2.5 Coder Fleet",
+            repoId: "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+            fileName: "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+            sizeBytes: 450_000_000,
+            quantization: "Q4_K_M",
+            parameters: "0.5B",
+            role: .chat,
+            localPath: "/tmp/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+        )
+        let embedding = StoredModel(
+            name: "Nomic Embed",
+            repoId: "nomic-ai/nomic-embed-text-v1.5-GGUF",
+            fileName: "nomic-embed-text-v1.5.Q4_K_M.gguf",
+            sizeBytes: 85_000_000,
+            quantization: "Q4_K_M",
+            parameters: "137M",
+            role: .embedding,
+            localPath: "/tmp/nomic-embed-text-v1.5.Q4_K_M.gguf"
+        )
+
+        let snapshot = LumenModelFleetResolver.resolveV0(
+            activeChatModelID: chat.id.uuidString,
+            activeEmbeddingModelID: embedding.id.uuidString,
+            storedModels: [chat, embedding]
+        )
+
+        #expect(snapshot.isRunnableV0)
+        #expect(snapshot.missingSlots.isEmpty)
+        #expect(snapshot.assignment(for: .cortex)?.modelID == chat.id)
+        #expect(snapshot.assignment(for: .executor)?.modelID == chat.id)
+        #expect(snapshot.assignment(for: .mouth)?.modelID == chat.id)
+        #expect(snapshot.assignment(for: .mimicry)?.modelID == chat.id)
+        #expect(snapshot.assignment(for: .rem)?.modelID == chat.id)
+        #expect(snapshot.assignment(for: .embedding)?.modelID == embedding.id)
+    }
+
+    @Test @MainActor func fleetResolverKeepsEmbeddingAssignmentWhenHintsDoNotMatch() async throws {
+        let chat = StoredModel(
+            name: "Local Chat",
+            repoId: "local/chat",
+            fileName: "local-chat.gguf",
+            sizeBytes: 1,
+            quantization: "local",
+            parameters: "local",
+            role: .chat,
+            localPath: "/tmp/local-chat.gguf"
+        )
+        let customEmbedding = StoredModel(
+            name: "Vector Store Model",
+            repoId: "local/vector-store-model",
+            fileName: "vectors.gguf",
+            sizeBytes: 1,
+            quantization: "local",
+            parameters: "local",
+            role: .embedding,
+            localPath: "/tmp/vectors.gguf"
+        )
+
+        let snapshot = LumenModelFleetResolver.resolveV0(
+            activeChatModelID: chat.id.uuidString,
+            activeEmbeddingModelID: nil,
+            storedModels: [chat, customEmbedding]
+        )
+
+        #expect(snapshot.assignment(for: .embedding)?.modelID == customEmbedding.id)
+        #expect(!snapshot.missingSlots.contains(.embedding))
+    }
+
+    @Test @MainActor func fleetResolverPrefersRoleSpecificModelWhenAvailable() async throws {
+        let general = StoredModel(
+            name: "General Mouth Model",
+            repoId: "HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
+            fileName: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+            sizeBytes: 1,
+            quantization: "Q4_K_M",
+            parameters: "1.7B",
+            role: .chat,
+            localPath: "/tmp/smollm.gguf"
+        )
+        let coder = StoredModel(
+            name: "Qwen Coder Model",
+            repoId: "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+            fileName: "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+            sizeBytes: 1,
+            quantization: "Q4_K_M",
+            parameters: "0.5B",
+            role: .chat,
+            localPath: "/tmp/coder.gguf"
+        )
+
+        let snapshot = LumenModelFleetResolver.resolveV0(
+            activeChatModelID: general.id.uuidString,
+            activeEmbeddingModelID: nil,
+            storedModels: [general, coder]
+        )
+
+        #expect(snapshot.assignment(for: .cortex)?.modelID == coder.id)
+        #expect(snapshot.assignment(for: .executor)?.modelID == coder.id)
+        #expect(snapshot.assignment(for: .rem)?.modelID == general.id)
+    }
+}

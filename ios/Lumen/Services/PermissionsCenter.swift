@@ -115,33 +115,19 @@ nonisolated enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
 
     init?(usageDescriptionKey: String) {
         switch usageDescriptionKey {
-        case "NSCalendarsFullAccessUsageDescription":
-            self = .calendar
-        case "NSRemindersFullAccessUsageDescription":
-            self = .reminders
-        case "NSContactsUsageDescription":
-            self = .contacts
-        case "NSLocationWhenInUseUsageDescription":
-            self = .location
-        case "NSLocationAlwaysAndWhenInUseUsageDescription",
-            "NSLocationAlwaysUsageDescription":
-            self = .location
-        case "NSMicrophoneUsageDescription":
-            self = .microphone
-        case "NSSpeechRecognitionUsageDescription":
-            self = .speech
-        case "NSCameraUsageDescription":
-            self = .camera
-        case "NSPhotoLibraryUsageDescription":
-            self = .photos
-        case "NSMotionUsageDescription":
-            self = .motion
-        case "NSHealthShareUsageDescription":
-            self = .health
-        case "NSAlarmKitUsageDescription":
-            self = .alarms
-        default:
-            return nil
+        case "NSCalendarsFullAccessUsageDescription": self = .calendar
+        case "NSRemindersFullAccessUsageDescription": self = .reminders
+        case "NSContactsUsageDescription": self = .contacts
+        case "NSLocationWhenInUseUsageDescription": self = .location
+        case "NSLocationAlwaysAndWhenInUseUsageDescription", "NSLocationAlwaysUsageDescription": self = .location
+        case "NSMicrophoneUsageDescription": self = .microphone
+        case "NSSpeechRecognitionUsageDescription": self = .speech
+        case "NSCameraUsageDescription": self = .camera
+        case "NSPhotoLibraryUsageDescription": self = .photos
+        case "NSMotionUsageDescription": self = .motion
+        case "NSHealthShareUsageDescription": self = .health
+        case "NSAlarmKitUsageDescription": self = .alarms
+        default: return nil
         }
     }
 }
@@ -152,6 +138,7 @@ final class PermissionsCenter {
     static let shared = PermissionsCenter()
 
     private(set) var states: [PermissionKind: PermissionState] = [:]
+    private(set) var lastRequestMessages: [PermissionKind: String] = [:]
 
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private let motionActivity = CMMotionActivityManager()
@@ -160,46 +147,27 @@ final class PermissionsCenter {
 
     private init() {
         let center = NotificationCenter.default
-        foregroundObserver = center.addObserver(
-            forName: UIApplication.willEnterForegroundNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        foregroundObserver = center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in
-                self.refreshAlarmState()
-            }
+            Task { @MainActor in self.refreshAlarmState() }
         }
-        activeObserver = center.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        activeObserver = center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in
-                self.refreshAlarmState()
-            }
+            Task { @MainActor in self.refreshAlarmState() }
         }
         refreshAll()
     }
 
     deinit {
-        if let foregroundObserver {
-            NotificationCenter.default.removeObserver(foregroundObserver)
-        }
-        if let activeObserver {
-            NotificationCenter.default.removeObserver(activeObserver)
-        }
+        if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
+        if let activeObserver { NotificationCenter.default.removeObserver(activeObserver) }
     }
 
-    func state(_ kind: PermissionKind) -> PermissionState {
-        states[kind] ?? .notDetermined
-    }
+    func state(_ kind: PermissionKind) -> PermissionState { states[kind] ?? .notDetermined }
+    func lastRequestMessage(_ kind: PermissionKind) -> String? { lastRequestMessages[kind] }
 
     func refreshAll() {
-        for kind in PermissionKind.allCases {
-            states[kind] = readCurrentState(kind)
-        }
+        for kind in PermissionKind.allCases { states[kind] = readCurrentState(kind) }
         Task { @MainActor in
             let n = await currentNotificationsState()
             states[.notifications] = n
@@ -208,36 +176,25 @@ final class PermissionsCenter {
 
     private func readCurrentState(_ kind: PermissionKind) -> PermissionState {
         switch kind {
-        case .calendar:
-            return mapEKStatus(EKEventStore.authorizationStatus(for: .event), isFullAccess: true)
-        case .reminders:
-            return mapEKStatus(EKEventStore.authorizationStatus(for: .reminder), isFullAccess: true)
-        case .contacts:
-            return mapCNStatus(CNContactStore.authorizationStatus(for: .contacts))
+        case .calendar: return mapEKStatus(EKEventStore.authorizationStatus(for: .event), isFullAccess: true)
+        case .reminders: return mapEKStatus(EKEventStore.authorizationStatus(for: .reminder), isFullAccess: true)
+        case .contacts: return mapCNStatus(CNContactStore.authorizationStatus(for: .contacts))
         case .location:
             let mgr = CLLocationManager()
             return mapCLStatus(mgr.authorizationStatus)
-        case .microphone:
-            return mapMicStatus(AVAudioApplication.shared.recordPermission)
-        case .speech:
-            return mapSpeechStatus(SFSpeechRecognizer.authorizationStatus())
-        case .camera:
-            return mapCameraStatus(AVCaptureDevice.authorizationStatus(for: .video))
-        case .photos:
-            return mapPhotosStatus(PHPhotoLibrary.authorizationStatus(for: .readWrite))
+        case .microphone: return mapMicStatus(AVAudioApplication.shared.recordPermission)
+        case .speech: return mapSpeechStatus(SFSpeechRecognizer.authorizationStatus())
+        case .camera: return mapCameraStatus(AVCaptureDevice.authorizationStatus(for: .video))
+        case .photos: return mapPhotosStatus(PHPhotoLibrary.authorizationStatus(for: .readWrite))
         case .motion:
             guard CMMotionActivityManager.isActivityAvailable() else { return .unavailable }
             return mapMotionStatus(CMMotionActivityManager.authorizationStatus())
         case .health:
             guard HKHealthStore.isHealthDataAvailable() else { return .unavailable }
-            // HealthKit intentionally doesn't expose read-permission status for privacy.
-            // Treat as notDetermined unless the user has explicitly been asked (tracked separately).
             let asked = UserDefaults.standard.bool(forKey: "perm.health.asked")
             return asked ? .granted : .notDetermined
-        case .notifications:
-            return states[.notifications] ?? .notDetermined
-        case .alarms:
-            return currentAlarmState()
+        case .notifications: return states[.notifications] ?? .notDetermined
+        case .alarms: return currentAlarmState()
         }
     }
 
@@ -252,63 +209,63 @@ final class PermissionsCenter {
         }
     }
 
-    // MARK: - Requests
-
     func request(_ kind: PermissionKind) async {
+        lastRequestMessages[kind] = nil
         let current = state(kind)
         if current.needsSystemSettings {
+            lastRequestMessages[kind] = "This permission must be changed in iOS Settings."
             openSystemSettings()
             return
         }
 
         switch kind {
         case .calendar:
-            _ = try? await EKEventStore().requestFullAccessToEvents()
+            let ok = (try? await EKEventStore().requestFullAccessToEvents()) ?? false
+            lastRequestMessages[kind] = ok ? "Calendar access granted." : "Calendar access was not granted."
         case .reminders:
-            _ = try? await EKEventStore().requestFullAccessToReminders()
+            let ok = (try? await EKEventStore().requestFullAccessToReminders()) ?? false
+            lastRequestMessages[kind] = ok ? "Reminder access granted." : "Reminder access was not granted."
         case .contacts:
-            _ = try? await CNContactStore().requestAccess(for: .contacts)
+            let ok = (try? await CNContactStore().requestAccess(for: .contacts)) ?? false
+            lastRequestMessages[kind] = ok ? "Contacts access granted." : "Contacts access was not granted."
         case .location:
             await requestLocation()
         case .microphone:
-            _ = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-                AVAudioApplication.requestRecordPermission { cont.resume(returning: $0) }
-            }
+            let ok = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in AVAudioApplication.requestRecordPermission { cont.resume(returning: $0) } }
+            lastRequestMessages[kind] = ok ? "Microphone access granted." : "Microphone access was not granted."
         case .speech:
-            _ = await withCheckedContinuation { (cont: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
-                SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0) }
-            }
+            let status = await withCheckedContinuation { (cont: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0) } }
+            lastRequestMessages[kind] = "Speech recognition result: \(status)."
         case .camera:
-            _ = await AVCaptureDevice.requestAccess(for: .video)
+            let ok = await AVCaptureDevice.requestAccess(for: .video)
+            lastRequestMessages[kind] = ok ? "Camera access granted." : "Camera access was not granted."
         case .photos:
-            _ = await withCheckedContinuation { (cont: CheckedContinuation<PHAuthorizationStatus, Never>) in
-                PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
-            }
+            let status = await withCheckedContinuation { (cont: CheckedContinuation<PHAuthorizationStatus, Never>) in PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) } }
+            lastRequestMessages[kind] = "Photo library result: \(status)."
         case .motion:
             await requestMotion()
         case .health:
             await requestHealth()
         case .notifications:
-            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-            if let granted = states[.notifications] {
-                TriggerScheduler.shared.lastPermissionGranted = (granted == .granted)
-            }
+            let ok = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            lastRequestMessages[kind] = ok ? "Notifications granted." : "Notifications were not granted."
+            TriggerScheduler.shared.lastPermissionGranted = ok
         case .alarms:
-            _ = await AlarmTools.requestAuthorization()
+            let message = await AlarmTools.requestAuthorization()
+            lastRequestMessages[kind] = message
             await refreshAlarmStateAfterAuthorization()
         }
 
         refreshAll()
     }
 
-    private func refreshAlarmState() {
-        states[.alarms] = currentAlarmState()
-    }
+    private func refreshAlarmState() { states[.alarms] = currentAlarmState() }
 
     private func refreshAlarmStateAfterAuthorization() async {
         refreshAlarmState()
-        try? await Task.sleep(for: .milliseconds(200))
+        try? await Task.sleep(for: .milliseconds(350))
         refreshAlarmState()
+        lastRequestMessages[.alarms] = [lastRequestMessages[.alarms], "Current AlarmKit state: \(state(.alarms).label)."].compactMap { $0 }.joined(separator: "\n")
     }
 
     private func requestLocation() async {
@@ -326,47 +283,45 @@ final class PermissionsCenter {
                 _ = holder
             }
             _ = mgr
+            lastRequestMessages[.location] = "Location request completed."
         } else {
+            lastRequestMessages[.location] = "Location permission must be changed in iOS Settings."
             openSystemSettings()
         }
     }
 
     private func requestMotion() async {
-        guard CMMotionActivityManager.isActivityAvailable() else { return }
+        guard CMMotionActivityManager.isActivityAvailable() else {
+            lastRequestMessages[.motion] = "Motion activity is unavailable on this device."
+            return
+        }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             let end = Date()
             let start = end.addingTimeInterval(-60)
-            motionActivity.queryActivityStarting(from: start, to: end, to: .main) { _, _ in
-                cont.resume()
-            }
+            motionActivity.queryActivityStarting(from: start, to: end, to: .main) { _, _ in cont.resume() }
         }
+        lastRequestMessages[.motion] = "Motion permission request completed."
     }
 
     private func requestHealth() async {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let readTypes: Set<HKObjectType> = [
-            HKQuantityType(.stepCount),
-            HKQuantityType(.heartRate),
-            HKQuantityType(.activeEnergyBurned),
-            HKQuantityType(.distanceWalkingRunning),
-            HKCategoryType(.sleepAnalysis),
-        ]
+        guard HKHealthStore.isHealthDataAvailable() else {
+            lastRequestMessages[.health] = "Health data is unavailable on this device."
+            return
+        }
+        let readTypes: Set<HKObjectType> = [HKQuantityType(.stepCount), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceWalkingRunning), HKCategoryType(.sleepAnalysis)]
         do {
             try await healthStore.requestAuthorization(toShare: [], read: readTypes)
             UserDefaults.standard.set(true, forKey: "perm.health.asked")
+            lastRequestMessages[.health] = "Health authorization request completed."
         } catch {
-            // Leave as notDetermined on failure.
+            lastRequestMessages[.health] = "Health authorization failed: \(error.localizedDescription)"
         }
     }
 
     func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        Task { @MainActor in
-            _ = await UIApplication.shared.open(url)
-        }
+        Task { @MainActor in _ = await UIApplication.shared.open(url) }
     }
-
-    // MARK: - Mappers
 
     private func mapEKStatus(_ status: EKAuthorizationStatus, isFullAccess: Bool) -> PermissionState {
         switch status {
@@ -455,14 +410,10 @@ final class PermissionsCenter {
 #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
             switch AlarmManager.shared.authorizationState {
-            case .notDetermined:
-                return .notDetermined
-            case .authorized:
-                return .granted
-            case .denied:
-                return .denied
-            @unknown default:
-                return .unavailable
+            case .notDetermined: return .notDetermined
+            case .authorized: return .granted
+            case .denied: return .denied
+            @unknown default: return .unavailable
             }
         }
 #endif
@@ -486,8 +437,6 @@ nonisolated final class LocationAuthWaiter: NSObject, CLLocationManagerDelegate,
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus != .notDetermined {
-            finishOnce()
-        }
+        if manager.authorizationStatus != .notDetermined { finishOnce() }
     }
 }

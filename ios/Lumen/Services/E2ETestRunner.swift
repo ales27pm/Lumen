@@ -14,78 +14,105 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
     let kind: E2ETestKind
     let prompt: String
     let expectedIntent: UserIntent
+    let requiredAllowedToolIDs: [String]
     let forbiddenToolIDs: [String]
     let requiredTextHints: [String]
     let forbiddenTextHints: [String]
     let requiresAgentRun: Bool
 
-    static let standard: [E2ETestScenario] = [
-        E2ETestScenario(
-            id: "weather-here-no-calendar",
-            title: "Weather here must not create events",
-            kind: .regression,
-            prompt: "What is the weather here?",
-            expectedIntent: .weather,
-            forbiddenToolIDs: ["calendar.create", "calendar.list", "reminders.create", "web.search"],
-            requiredTextHints: [],
-            forbiddenTextHints: ["created a new event", "calendar event", "will start in", "search web for diy underground shelter"],
-            requiresAgentRun: true
-        ),
-        E2ETestScenario(
-            id: "web-search-no-calendar",
-            title: "Web search must not create calendar event",
-            kind: .regression,
-            prompt: "Search web for diy underground shelter",
-            expectedIntent: .webSearch,
-            forbiddenToolIDs: ["calendar.create", "calendar.list", "reminders.create", "maps.search"],
-            requiredTextHints: [],
-            forbiddenTextHints: ["created a new event", "calendar event", "will start in"],
-            requiresAgentRun: true
-        ),
-        E2ETestScenario(
-            id: "vague-email-clarifies",
-            title: "Vague email draft asks clarification",
-            kind: .routing,
-            prompt: "Draft a email",
-            expectedIntent: .emailDraft,
-            forbiddenToolIDs: ["calendar.create", "weather", "web.search", "reminders.create"],
-            requiredTextHints: ["who should", "what should"],
-            forbiddenTextHints: ["i will be in touch soon", "created a new event"],
-            requiresAgentRun: true
-        ),
-        E2ETestScenario(
-            id: "calendar-only-calendar-tools",
-            title: "Calendar intent scopes tools",
-            kind: .toolGuard,
-            prompt: "Create an event tomorrow at 5 called test appointment",
-            expectedIntent: .calendar,
-            forbiddenToolIDs: ["weather", "web.search", "mail.draft", "maps.search"],
-            requiredTextHints: [],
-            forbiddenTextHints: ["weather for", "web search"],
-            requiresAgentRun: false
-        ),
-        E2ETestScenario(
-            id: "reminder-only-reminder-tools",
-            title: "Reminder intent scopes tools",
-            kind: .toolGuard,
-            prompt: "Remind me to call Alex tomorrow",
-            expectedIntent: .reminder,
-            forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"],
-            requiredTextHints: [],
-            forbiddenTextHints: ["calendar event", "weather for"],
-            requiresAgentRun: false
-        ),
-        E2ETestScenario(
-            id: "normal-chat-no-forced-tool",
-            title: "Normal chat does not force tools",
-            kind: .chat,
-            prompt: "Explain why a sharp chisel is safer than a dull one.",
-            expectedIntent: .chat,
-            forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"],
-            requiredTextHints: [],
-            forbiddenTextHints: ["created a new event", "weather for"],
-            requiresAgentRun: true
-        )
+    init(
+        id: String,
+        title: String,
+        kind: E2ETestKind,
+        prompt: String,
+        expectedIntent: UserIntent,
+        requiredAllowedToolIDs: [String] = [],
+        forbiddenToolIDs: [String],
+        requiredTextHints: [String],
+        forbiddenTextHints: [String],
+        requiresAgentRun: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.kind = kind
+        self.prompt = prompt
+        self.expectedIntent = expectedIntent
+        self.requiredAllowedToolIDs = requiredAllowedToolIDs
+        self.forbiddenToolIDs = forbiddenToolIDs
+        self.requiredTextHints = requiredTextHints
+        self.forbiddenTextHints = forbiddenTextHints
+        self.requiresAgentRun = requiresAgentRun
+    }
+
+    static let standard: [E2ETestScenario] = regression + allToolCoverage + chatCoverage
+
+    static let regression: [E2ETestScenario] = [
+        E2ETestScenario(id: "weather-here-no-calendar", title: "Weather here must not create events", kind: .regression, prompt: "What is the weather here?", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "calendar.list", "reminders.create", "web.search"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "calendar event", "will start in", "search web for diy underground shelter"], requiresAgentRun: true),
+        E2ETestScenario(id: "web-search-no-calendar", title: "Web search must not create calendar event", kind: .regression, prompt: "Search web for diy underground shelter", expectedIntent: .webSearch, requiredAllowedToolIDs: ["web.search"], forbiddenToolIDs: ["calendar.create", "calendar.list", "reminders.create", "maps.search"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "calendar event", "will start in"], requiresAgentRun: true),
+        E2ETestScenario(id: "vague-email-clarifies", title: "Vague email draft asks clarification", kind: .routing, prompt: "Draft a email", expectedIntent: .emailDraft, requiredAllowedToolIDs: ["mail.draft", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "reminders.create"], requiredTextHints: ["who should", "what should"], forbiddenTextHints: ["i will be in touch soon", "created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "normal-chat-no-forced-tool", title: "Normal chat does not force tools", kind: .chat, prompt: "Explain why a sharp chisel is safer than a dull one.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
+    ]
+
+    static let allToolCoverage: [E2ETestScenario] = [
+        // Calendar
+        E2ETestScenario(id: "tool-calendar-create", title: "calendar.create scoped", kind: .toolGuard, prompt: "Create an event tomorrow at 5 called test appointment", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "mail.draft", "maps.search"], requiredTextHints: [], forbiddenTextHints: ["weather for", "web search"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-calendar-list", title: "calendar.list scoped", kind: .toolGuard, prompt: "List my upcoming calendar events", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "reminders.create", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["weather for"], requiresAgentRun: false),
+
+        // Reminders
+        E2ETestScenario(id: "tool-reminders-create", title: "reminders.create scoped", kind: .toolGuard, prompt: "Remind me to call Alex tomorrow", expectedIntent: .reminder, requiredAllowedToolIDs: ["reminders.create", "reminders.list"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event", "weather for"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-reminders-list", title: "reminders.list scoped", kind: .toolGuard, prompt: "List my pending reminders", expectedIntent: .reminder, requiredAllowedToolIDs: ["reminders.create", "reminders.list"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event", "weather for"], requiresAgentRun: false),
+
+        // Communication
+        E2ETestScenario(id: "tool-contacts-search", title: "contacts.search scoped", kind: .toolGuard, prompt: "Search contacts for Alex", expectedIntent: .contactSearch, requiredAllowedToolIDs: ["contacts.search"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "maps.search"], requiredTextHints: [], forbiddenTextHints: ["calendar event", "weather for"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-messages-draft", title: "messages.draft scoped", kind: .toolGuard, prompt: "Draft a text message to Alex saying I am running late", expectedIntent: .messageDraft, requiredAllowedToolIDs: ["messages.draft", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event", "weather for"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-mail-draft", title: "mail.draft scoped", kind: .toolGuard, prompt: "Write an email to alex@example.com saying the plans are ready", expectedIntent: .emailDraft, requiredAllowedToolIDs: ["mail.draft", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "messages.draft"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-phone-call", title: "phone.call scoped", kind: .toolGuard, prompt: "Call 5145551234", expectedIntent: .phoneCall, requiredAllowedToolIDs: ["phone.call", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event", "weather for"], requiresAgentRun: false),
+
+        // Location / Weather / Maps
+        E2ETestScenario(id: "tool-location-current", title: "location.current scoped through local weather", kind: .toolGuard, prompt: "Use my current location for the weather here", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-weather", title: "weather scoped", kind: .toolGuard, prompt: "What is the temperature outside right now?", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-maps-directions", title: "maps.directions scoped", kind: .toolGuard, prompt: "Get directions to 123 Main Street", expectedIntent: .maps, requiredAllowedToolIDs: ["maps.directions", "maps.search", "location.current"], forbiddenToolIDs: ["calendar.create", "web.search", "mail.draft", "weather"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-maps-search", title: "maps.search scoped", kind: .toolGuard, prompt: "Find the closest hardware store near me", expectedIntent: .maps, requiredAllowedToolIDs: ["maps.search", "maps.directions", "location.current"], forbiddenToolIDs: ["calendar.create", "web.search", "mail.draft", "weather"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+
+        // Media
+        E2ETestScenario(id: "tool-photos-search", title: "photos.search scoped", kind: .toolGuard, prompt: "Search photos from last month", expectedIntent: .photos, requiredAllowedToolIDs: ["photos.search"], forbiddenToolIDs: ["web.search", "calendar.create", "camera.capture", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-camera-capture", title: "camera.capture scoped", kind: .toolGuard, prompt: "Take a photo with the camera", expectedIntent: .camera, requiredAllowedToolIDs: ["camera.capture"], forbiddenToolIDs: ["photos.search", "web.search", "calendar.create", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+
+        // Health / Motion
+        E2ETestScenario(id: "tool-health-summary", title: "health.summary scoped", kind: .toolGuard, prompt: "Show my health summary and steps", expectedIntent: .health, requiredAllowedToolIDs: ["health.summary"], forbiddenToolIDs: ["calendar.create", "web.search", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-motion-activity", title: "motion.activity scoped", kind: .toolGuard, prompt: "Detect my recent motion activity", expectedIntent: .motion, requiredAllowedToolIDs: ["motion.activity"], forbiddenToolIDs: ["calendar.create", "web.search", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+
+        // Web / Files / Memory / RAG
+        E2ETestScenario(id: "tool-web-search", title: "web.search scoped", kind: .toolGuard, prompt: "Search the web for latest SwiftData tips", expectedIntent: .webSearch, requiredAllowedToolIDs: ["web.search", "web.fetch"], forbiddenToolIDs: ["calendar.create", "maps.search", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-web-fetch", title: "web.fetch scoped", kind: .toolGuard, prompt: "Read this URL https://example.com", expectedIntent: .webSearch, requiredAllowedToolIDs: ["web.search", "web.fetch"], forbiddenToolIDs: ["calendar.create", "maps.search", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-files-read", title: "files.read scoped", kind: .toolGuard, prompt: "Read file project-notes.md", expectedIntent: .files, requiredAllowedToolIDs: ["files.read"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-memory-save", title: "memory.save scoped", kind: .toolGuard, prompt: "Remember this: I prefer concise answers", expectedIntent: .memory, requiredAllowedToolIDs: ["memory.save", "memory.recall"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-memory-recall", title: "memory.recall scoped", kind: .toolGuard, prompt: "What do you remember about my preferences?", expectedIntent: .memory, requiredAllowedToolIDs: ["memory.save", "memory.recall"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-rag-search", title: "rag.search scoped", kind: .toolGuard, prompt: "Search my files for the Lumen architecture notes", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.search", "files.read"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-rag-index-files", title: "rag.index_files scoped", kind: .toolGuard, prompt: "Reindex files", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.index_files", "rag.search"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-rag-index-photos", title: "rag.index_photos scoped", kind: .toolGuard, prompt: "Reindex photos", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.index_photos", "photos.search"], forbiddenToolIDs: ["web.search", "calendar.create", "weather", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+
+        // Triggers
+        E2ETestScenario(id: "tool-trigger-create", title: "trigger.create scoped", kind: .toolGuard, prompt: "Schedule agent run in 10 minutes to summarize reminders", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.create", "trigger.list", "trigger.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-trigger-list", title: "trigger.list scoped", kind: .toolGuard, prompt: "List triggers", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.create", "trigger.list", "trigger.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-trigger-cancel", title: "trigger.cancel scoped", kind: .toolGuard, prompt: "Cancel trigger named morning summary", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.create", "trigger.list", "trigger.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+
+        // Alarms
+        E2ETestScenario(id: "tool-alarm-auth-status", title: "alarm.authorization_status scoped", kind: .toolGuard, prompt: "Check alarm authorization status", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.authorization_status"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-request-auth", title: "alarm.request_authorization scoped", kind: .toolGuard, prompt: "Request alarm authorization", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.request_authorization"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-schedule", title: "alarm.schedule scoped", kind: .toolGuard, prompt: "Set an alarm for tomorrow at 7", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.schedule", "alarm.list"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-countdown", title: "alarm.countdown scoped", kind: .toolGuard, prompt: "Start a countdown timer for 10 minutes", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.countdown", "alarm.list"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-list", title: "alarm.list scoped", kind: .toolGuard, prompt: "List alarms", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.list"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-pause", title: "alarm.pause scoped", kind: .toolGuard, prompt: "Pause alarm 00000000-0000-0000-0000-000000000000", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.pause"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-resume", title: "alarm.resume scoped", kind: .toolGuard, prompt: "Resume alarm 00000000-0000-0000-0000-000000000000", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.resume"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-stop", title: "alarm.stop scoped", kind: .toolGuard, prompt: "Stop alarm 00000000-0000-0000-0000-000000000000", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.stop"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-snooze", title: "alarm.snooze scoped", kind: .toolGuard, prompt: "Snooze alarm 00000000-0000-0000-0000-000000000000", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.snooze"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false),
+        E2ETestScenario(id: "tool-alarm-cancel", title: "alarm.cancel scoped", kind: .toolGuard, prompt: "Cancel alarm named morning wakeup", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false)
+    ]
+
+    static let chatCoverage: [E2ETestScenario] = [
+        E2ETestScenario(id: "chat-carpentry-advice", title: "Carpentry chat stays direct", kind: .chat, prompt: "Give me three tips for fitting a door hinge cleanly.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true),
+        E2ETestScenario(id: "chat-code-explanation", title: "Code explanation stays chat", kind: .chat, prompt: "Explain actor isolation in Swift in simple terms.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
     ]
 }
 
@@ -157,14 +184,7 @@ enum E2ETestRunner {
             E2ETestLogStore.append(result)
         }
         let passed = results.filter(\.passed).count
-        let report = E2ETestReport(
-            id: UUID(),
-            startedAt: started,
-            finishedAt: Date(),
-            passed: passed,
-            failed: results.count - passed,
-            results: results
-        )
+        let report = E2ETestReport(id: UUID(), startedAt: started, finishedAt: Date(), passed: passed, failed: results.count - passed, results: results)
         E2ETestLogStore.writeLatest(report)
         return report
     }
@@ -184,6 +204,10 @@ enum E2ETestRunner {
         event("intent", "actual=\(routing.intent.rawValue), expected=\(scenario.expectedIntent.rawValue)")
         if routing.intent != scenario.expectedIntent {
             failures.append("Intent mismatch: \(routing.intent.rawValue) != \(scenario.expectedIntent.rawValue)")
+        }
+
+        for toolID in scenario.requiredAllowedToolIDs where !IntentRouter.isToolAllowed(toolID, for: routing) {
+            failures.append("Required tool not allowed: \(toolID)")
         }
 
         for toolID in scenario.forbiddenToolIDs where IntentRouter.isToolAllowed(toolID, for: routing) {
@@ -244,20 +268,7 @@ enum E2ETestRunner {
             failures.append("Forbidden final hint present: \(hint)")
         }
 
-        return E2ETestResult(
-            id: UUID(),
-            scenarioID: scenario.id,
-            title: scenario.title,
-            prompt: scenario.prompt,
-            expectedIntent: scenario.expectedIntent.rawValue,
-            actualIntent: routing.intent.rawValue,
-            passed: failures.isEmpty,
-            failures: failures,
-            finalText: finalText,
-            events: events,
-            startedAt: started,
-            finishedAt: Date()
-        )
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, events: events, startedAt: started, finishedAt: Date())
     }
 }
 
@@ -279,9 +290,7 @@ nonisolated enum E2ETestLogStore {
             } else {
                 try line.write(to: url, options: [.atomic])
             }
-        } catch {
-            // Test logging must never crash diagnostics.
-        }
+        } catch {}
     }
 
     static func writeLatest(_ report: E2ETestReport) {
@@ -293,24 +302,18 @@ nonisolated enum E2ETestLogStore {
             let json = try encoder.encode(report)
             try json.write(to: directory.appendingPathComponent("latest-e2e-report.json"), options: [.atomic])
             try report.summaryText.write(to: directory.appendingPathComponent("latest-e2e-report.txt"), atomically: true, encoding: .utf8)
-        } catch {
-            // Test logging must never crash diagnostics.
-        }
+        } catch {}
     }
 
     static func latestText() -> String {
         let url = (try? reportsDirectory().appendingPathComponent("latest-e2e-report.txt"))
-        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else {
-            return "No E2E report yet."
-        }
+        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return "No E2E report yet." }
         return text
     }
 
     static func reportsDirectory() throws -> URL {
         let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-        let directory = base
-            .appendingPathComponent("Diagnostics", isDirectory: true)
-            .appendingPathComponent("E2E", isDirectory: true)
+        let directory = base.appendingPathComponent("Diagnostics", isDirectory: true).appendingPathComponent("E2E", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }

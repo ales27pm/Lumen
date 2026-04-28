@@ -115,9 +115,7 @@ final class ToolExecutor {
         arguments: [String: String],
         approval: ToolExecutionApproval = .autonomous
     ) async -> String {
-        let typedArguments = arguments.reduce(into: AgentJSONArguments()) { partialResult, element in
-            partialResult[element.key] = .string(element.value)
-        }
+        let typedArguments = AgentJSONArguments(stringDictionary: arguments)
         return await execute(toolID, arguments: typedArguments, approval: approval)
     }
 

@@ -38,19 +38,14 @@ nonisolated enum AgentJSONValue: Sendable, Hashable {
         case .string(let value):
             return value
         case .number(let value):
-            let isWhole = value.rounded(.towardZero) == value
-            if isWhole { return String(Int(value)) }
+            if let intValue = Int(exactly: value) { return String(intValue) }
             return String(value)
         case .bool(let value):
             return value ? "true" : "false"
         case .array(let values):
-            return "[" + values.map(\.stringValue).joined(separator: ",") + "]"
+            return values.jsonRenderedString ?? "[" + values.map(\.stringValue).joined(separator: ",") + "]"
         case .object(let values):
-            let body = values.keys.sorted().map { key in
-                let value = values[key]?.stringValue ?? ""
-                return "\(key):\(value)"
-            }.joined(separator: ",")
-            return "{" + body + "}"
+            return values.jsonRenderedString ?? "{}"
         case .null:
             return "null"
         }
@@ -59,8 +54,7 @@ nonisolated enum AgentJSONValue: Sendable, Hashable {
     var intValue: Int? {
         switch self {
         case .number(let value):
-            if value.rounded(.towardZero) == value { return Int(value) }
-            return nil
+            return Int(exactly: value)
         case .string(let value):
             return Int(value)
         case .bool(let value):
@@ -90,9 +84,60 @@ nonisolated enum AgentJSONValue: Sendable, Hashable {
 typealias AgentJSONArguments = [String: AgentJSONValue]
 
 extension Dictionary where Key == String, Value == AgentJSONValue {
+    init(stringDictionary: [String: String]) {
+        self = stringDictionary.reduce(into: [:]) { partialResult, element in
+            partialResult[element.key] = .string(element.value)
+        }
+    }
+
     var stringCoerced: [String: String] {
         reduce(into: [String: String]()) { partialResult, element in
             partialResult[element.key] = element.value.stringValue
+        }
+    }
+
+    fileprivate var jsonRenderedString: String? {
+        let foundationObject = reduce(into: [String: Any]()) { partialResult, element in
+            partialResult[element.key] = element.value.foundationObject
+        }
+        guard JSONSerialization.isValidJSONObject(foundationObject),
+              let data = try? JSONSerialization.data(withJSONObject: foundationObject, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
+    }
+}
+
+extension Array where Element == AgentJSONValue {
+    fileprivate var jsonRenderedString: String? {
+        let foundationObject = map(\.foundationObject)
+        guard JSONSerialization.isValidJSONObject(foundationObject),
+              let data = try? JSONSerialization.data(withJSONObject: foundationObject, options: []),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
+    }
+}
+
+private extension AgentJSONValue {
+    var foundationObject: Any {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return NSNumber(value: value)
+        case .bool(let value):
+            return NSNumber(value: value)
+        case .array(let values):
+            return values.map(\.foundationObject)
+        case .object(let value):
+            return value.reduce(into: [String: Any]()) { partialResult, element in
+                partialResult[element.key] = element.value.foundationObject
+            }
+        case .null:
+            return NSNull()
         }
     }
 }

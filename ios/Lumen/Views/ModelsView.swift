@@ -17,7 +17,7 @@ struct ModelsView: View {
                     VStack(spacing: 24) {
                         activeRow
                         FleetStatusCard(
-                            snapshot: fleetSnapshot,
+                            snapshot: runtimeAwareFleetSnapshot,
                             progresses: downloader.progresses,
                             loadedPaths: loadedPaths,
                             onRepair: repairFleet
@@ -106,6 +106,10 @@ struct ModelsView: View {
         }
     }
 
+    private var runtimeAwareFleetSnapshot: LumenModelFleetSnapshot {
+        fleetSnapshot.withRuntimeResidentPaths(loadedPaths)
+    }
+
     private var fleetSnapshot: LumenModelFleetSnapshot {
         LumenModelFleetResolver.resolveV1(appState: appState, storedModels: storedModels)
     }
@@ -120,6 +124,7 @@ struct ModelsView: View {
     private func repairFleet() {
         Task {
             await ModelLaunchBootstrap.repairFleet(appState: appState, context: modelContext, source: .manual)
+            await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
             await refreshLoaded()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
@@ -145,6 +150,12 @@ struct ModelsView: View {
                 if model.role == .embedding && appState.activeEmbeddingModelID == nil {
                     appState.activeEmbeddingModelID = stored.id.uuidString
                 }
+                if model.role == .chat {
+                    await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels + [stored])
+                } else {
+                    _ = await ModelLoader.ensureEmbedLoaded(appState: appState, stored: storedModels + [stored])
+                }
+                await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
@@ -173,9 +184,10 @@ struct ModelsView: View {
 
     private func refreshLoaded() async {
         var set: Set<String> = []
-        if let p = await AppLlamaService.shared.loadedChatPath {
-            let fileName = URL(fileURLWithPath: p).lastPathComponent
-            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
+        let chatPaths = await AppLlamaService.shared.loadedChatPathsBySlot
+        for path in chatPaths.values {
+            let fileName = URL(fileURLWithPath: path).lastPathComponent
+            set.insert(ModelStorage.resolvedModelURL(from: path, fileName: fileName).path)
         }
         if let p = await AppLlamaService.shared.loadedEmbedPath {
             if await AppLlamaService.shared.hasSemanticEmbeddingRuntime {
@@ -191,7 +203,16 @@ struct ModelsView: View {
             do {
                 if sm.modelRole == .chat {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
+                    let slots = fleetSnapshot.assignments
+                        .filter { $0.value.localPath == resolvedPath && $0.key != .embedding }
+                        .map(\.key)
+                    if slots.isEmpty {
+                        try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
+                    } else {
+                        for slot in slots {
+                            try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: appState.contextSize)
+                        }
+                    }
                 } else {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
                     try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
@@ -207,7 +228,13 @@ struct ModelsView: View {
     private func unload(_ sm: StoredModel) {
         Task {
             if sm.modelRole == .chat {
-                await AppLlamaService.shared.unloadChat()
+                let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
+                let slots = await AppLlamaService.shared.loadedChatPathsBySlot
+                    .filter { $0.value == resolvedPath }
+                    .map(\.key)
+                for slot in slots {
+                    await AppLlamaService.shared.unloadChat(for: slot)
+                }
             } else {
                 await AppLlamaService.shared.unloadEmbed()
             }
@@ -220,7 +247,17 @@ struct ModelsView: View {
         Task {
             do {
                 if sm.modelRole == .chat {
-                    try await AppLlamaService.shared.reloadChat(contextSize: appState.contextSize)
+                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
+                    let slots = await AppLlamaService.shared.loadedChatPathsBySlot
+                        .filter { $0.value == resolvedPath }
+                        .map(\.key)
+                    if slots.isEmpty {
+                        try await AppLlamaService.shared.reloadChat(contextSize: appState.contextSize)
+                    } else {
+                        for slot in slots {
+                            try await AppLlamaService.shared.reloadChat(for: slot, contextSize: appState.contextSize)
+                        }
+                    }
                 } else {
                     try await AppLlamaService.shared.reloadEmbed()
                 }
@@ -235,6 +272,18 @@ struct ModelsView: View {
     private func deleteStoredModel(_ sm: StoredModel) {
         let fm = FileManager.default
         let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName, fileManager: fm).path
+        Task { @MainActor in
+            if sm.modelRole == .chat {
+                let slots = await AppLlamaService.shared.loadedChatPathsBySlot
+                    .filter { $0.value == resolvedPath }
+                    .map(\.key)
+                for slot in slots {
+                    await AppLlamaService.shared.unloadChat(for: slot)
+                }
+            } else {
+                await AppLlamaService.shared.unloadEmbed()
+            }
+        }
         try? fm.removeItem(atPath: sm.localPath)
         if resolvedPath != sm.localPath {
             try? fm.removeItem(atPath: resolvedPath)
@@ -243,6 +292,21 @@ struct ModelsView: View {
         if sm.id.uuidString == appState.activeEmbeddingModelID { appState.activeEmbeddingModelID = nil }
         modelContext.delete(sm)
         try? modelContext.save()
+    }
+}
+
+private extension LumenModelFleetSnapshot {
+    func withRuntimeResidentPaths(_ loadedPaths: Set<String>) -> LumenModelFleetSnapshot {
+        let runtimeSlots = Set(assignments.compactMap { slot, assignment in
+            loadedPaths.contains(assignment.localPath) ? slot : nil
+        })
+        return LumenModelFleetSnapshot(
+            mode: mode,
+            assignments: assignments,
+            missingSlots: missingSlots,
+            targetResidentSlots: targetResidentSlots,
+            runtimeResidentSlots: runtimeSlots
+        )
     }
 }
 

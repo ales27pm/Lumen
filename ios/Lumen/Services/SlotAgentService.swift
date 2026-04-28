@@ -18,21 +18,13 @@ final class SlotAgentService {
 
                 if routing.requiresClarification {
                     let clarification = routing.clarificationPrompt ?? "Could you clarify what you want me to do?"
-                    for chunk in chunk(clarification) {
-                        continuation.yield(.finalDelta(chunk))
-                    }
-                    continuation.yield(.done(finalText: clarification, steps: steps))
-                    continuation.finish()
+                    yieldFinal(clarification, steps: steps, continuation: continuation)
                     return
                 }
 
                 if IntentRouter.intentRequiresTool(routing) && scopedTools.isEmpty {
                     let unavailable = IntentRouter.unavailableMessage(for: routing)
-                    for chunk in chunk(unavailable) {
-                        continuation.yield(.finalDelta(chunk))
-                    }
-                    continuation.yield(.done(finalText: unavailable, steps: steps))
-                    continuation.finish()
+                    yieldFinal(unavailable, steps: steps, continuation: continuation)
                     return
                 }
 
@@ -52,18 +44,7 @@ final class SlotAgentService {
 
                     let parsed = AgentTurnParser.parse(turnOutput)
                     if let error = parsed.parseError {
-                        SlotAgentDiagnosticsRecorder.record(
-                            SlotAgentTrace(
-                                id: UUID(),
-                                createdAt: Date(),
-                                slot: slot.rawValue,
-                                stage: "structured-turn",
-                                stepIndex: stepIndex,
-                                error: error.rawValue,
-                                rawOutputPrefix: String(turnOutput.prefix(2_000)),
-                                userPromptPrefix: String(req.userMessage.prefix(2_000))
-                            )
-                        )
+                        recordTrace(slot: slot, stage: "structured-turn", stepIndex: stepIndex, error: error.rawValue, raw: turnOutput, prompt: req.userMessage)
                     }
 
                     if let thought = parsed.thought, !thought.isEmpty {
@@ -73,12 +54,8 @@ final class SlotAgentService {
                     }
 
                     if let final = parsed.final, !final.isEmpty {
-                        finalText = await generateFinal(req: req, observations: observations, draft: final)
-                        for chunk in chunk(finalText) {
-                            continuation.yield(.finalDelta(chunk))
-                        }
-                        continuation.yield(.done(finalText: finalText, steps: steps))
-                        continuation.finish()
+                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: final)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
 
@@ -91,43 +68,19 @@ final class SlotAgentService {
                         )
                         steps.append(repairStep)
                         continuation.yield(.step(repairStep))
-                        finalText = await generateFinal(req: req, observations: observations, draft: turnOutput)
-                        for chunk in chunk(finalText) {
-                            continuation.yield(.finalDelta(chunk))
-                        }
-                        continuation.yield(.done(finalText: finalText, steps: steps))
-                        continuation.finish()
+                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: turnOutput)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
 
-                    let actionStep = AgentStep(
-                        kind: .action,
-                        content: action.displayContent,
-                        toolID: action.tool,
-                        toolArgs: action.args.stringCoerced
-                    )
+                    let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: action.tool, toolArgs: action.args.stringCoerced)
                     steps.append(actionStep)
                     continuation.yield(.step(actionStep))
 
                     guard SlotAgentService.isActionAllowed(action.tool, routing: routing) else {
-                        SlotAgentDiagnosticsRecorder.record(
-                            SlotAgentTrace(
-                                id: UUID(),
-                                createdAt: Date(),
-                                slot: slot.rawValue,
-                                stage: "tool-execution",
-                                stepIndex: stepIndex,
-                                error: "tool_not_allowed_for_intent",
-                                rawOutputPrefix: String(action.displayContent.prefix(2_000)),
-                                userPromptPrefix: String(req.userMessage.prefix(2_000))
-                            )
-                        )
+                        recordTrace(slot: slot, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
                         finalText = IntentRouter.blockedToolMessage(for: routing)
-                        for chunk in chunk(finalText) {
-                            continuation.yield(.finalDelta(chunk))
-                        }
-                        continuation.yield(.done(finalText: finalText, steps: steps))
-                        continuation.finish()
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
 
@@ -138,12 +91,8 @@ final class SlotAgentService {
                     continuation.yield(.step(observationStep))
                 }
 
-                finalText = await generateFinal(req: req, observations: observations, draft: nil)
-                for chunk in chunk(finalText) {
-                    continuation.yield(.finalDelta(chunk))
-                }
-                continuation.yield(.done(finalText: finalText, steps: steps))
-                continuation.finish()
+                finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: nil)
+                yieldFinal(finalText, steps: steps, continuation: continuation)
             }
 
             continuation.onTermination = { @Sendable _ in
@@ -152,7 +101,7 @@ final class SlotAgentService {
         }
     }
 
-    private func generateFinal(req: AgentRequest, observations: [String], draft: String?) async -> String {
+    private func generateFinal(req: AgentRequest, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
         let prompt = makeMouthPrompt(req: req, observations: observations, draft: draft)
         let text = await generateText(
             slot: .mouth,
@@ -163,11 +112,15 @@ final class SlotAgentService {
             maxTokens: req.maxTokens,
             modelName: "mouth-final"
         )
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate: String
         if trimmed.isEmpty, let draft, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            candidate = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            candidate = trimmed
         }
-        return trimmed
+        return FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
     }
 
     private func generateText(
@@ -179,9 +132,11 @@ final class SlotAgentService {
         maxTokens: Int,
         modelName: String
     ) async -> String {
+        await AppLlamaService.shared.resetKVCache(for: slot)
+
         let generation = GenerateRequest(
             systemPrompt: req.systemPrompt,
-            history: req.history,
+            history: [],
             userMessage: userMessage,
             temperature: temperature,
             topP: topP,
@@ -203,26 +158,13 @@ final class SlotAgentService {
             }
         }
         if output.lowercased().contains("generation error:") {
-            SlotAgentDiagnosticsRecorder.record(
-                SlotAgentTrace(
-                    id: UUID(),
-                    createdAt: Date(),
-                    slot: slot.rawValue,
-                    stage: modelName,
-                    stepIndex: -1,
-                    error: "generation_error",
-                    rawOutputPrefix: String(output.prefix(2_000)),
-                    userPromptPrefix: String(userMessage.prefix(2_000))
-                )
-            )
+            recordTrace(slot: slot, stage: modelName, stepIndex: -1, error: "generation_error", raw: output, prompt: userMessage)
         }
         return output
     }
 
     private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition]) -> String {
-        let tools = scopedTools.map { tool in
-            "- \(tool.id): \(tool.description)"
-        }.joined(separator: "\n")
+        let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
 
         return """
@@ -231,7 +173,7 @@ final class SlotAgentService {
         User request:
         \(req.userMessage)
 
-        Previous observations:
+        Previous observations for this request only:
         \(observationBlock)
 
         Available tools:
@@ -244,6 +186,8 @@ final class SlotAgentService {
         {"thought":"short private routing note","final":"answer shown to the user"}
 
         Rules:
+        - Use only information from this prompt and this request's observations.
+        - Never reuse a previous request's tool result.
         - Use a tool only when live device data or an action is needed.
         - If enough information is available, return final.
         - You may only call one of the listed tools. If no listed tool fits, return final asking for clarification or explaining the limitation.
@@ -255,24 +199,49 @@ final class SlotAgentService {
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
         let draftBlock = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
         return """
-        Write the final user-facing answer. Do not output JSON.
+        Write the final user-facing answer for the current user request only. Do not output JSON.
 
-        User request:
+        Current user request:
         \(req.userMessage)
 
-        Tool observations:
+        Current request tool observations:
         \(observationBlock)
 
-        Draft final from Cortex/Executor:
+        Draft final from the current request:
         \(draftBlock)
 
-        Keep it concise, accurate, and do not claim actions that did not happen.
+        Rules:
+        - Never reuse a result from a previous user request.
+        - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
+        - Keep it concise, accurate, and do not claim actions that did not happen.
         """
     }
 
-
     nonisolated static func isActionAllowed(_ toolID: String, routing: IntentRoutingDecision) -> Bool {
         IntentRouter.isToolAllowed(toolID, for: routing)
+    }
+
+    private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
+        for chunk in chunk(text) {
+            continuation.yield(.finalDelta(chunk))
+        }
+        continuation.yield(.done(finalText: text, steps: steps))
+        continuation.finish()
+    }
+
+    private func recordTrace(slot: LumenModelSlot, stage: String, stepIndex: Int, error: String, raw: String, prompt: String) {
+        SlotAgentDiagnosticsRecorder.record(
+            SlotAgentTrace(
+                id: UUID(),
+                createdAt: Date(),
+                slot: slot.rawValue,
+                stage: stage,
+                stepIndex: stepIndex,
+                error: error,
+                rawOutputPrefix: String(raw.prefix(2_000)),
+                userPromptPrefix: String(prompt.prefix(2_000))
+            )
+        )
     }
 
     private func chunk(_ text: String, size: Int = 48) -> [String] {
@@ -324,11 +293,8 @@ nonisolated enum SlotAgentDiagnosticsRecorder {
     }
 
     static func diagnosticsDirectory() throws -> URL {
-        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let directory = base
-            .appendingPathComponent("Diagnostics", isDirectory: true)
-            .appendingPathComponent("SlotAgent", isDirectory: true)
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+        let directory = base.appendingPathComponent("Diagnostics", isDirectory: true).appendingPathComponent("SlotAgent", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }

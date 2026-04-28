@@ -24,6 +24,38 @@ struct AppStartupCoordinatorTests {
         #expect(!context.domain.isEmpty)
     }
 
+    @Test func startupBootstrapFailureTracksBootstrapStage() async throws {
+        var coordinator = AppStartupCoordinator()
+        let appState = AppState()
+
+        let schema = Schema([
+            Conversation.self,
+            ChatMessage.self,
+            MemoryItem.self,
+            StoredModel.self,
+            RAGChunk.self,
+            Trigger.self,
+        ])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+
+        await coordinator.initialize(
+            appState: appState,
+            createContainer: {
+                try ModelContainer(for: schema, configurations: [config])
+            },
+            bootstrap: { _, _ in
+                throw AppStartupCoordinator.StartupError(stage: .bootstrap, underlying: TestError.failed)
+            }
+        )
+
+        guard case .failed(let context) = coordinator.state else {
+            Issue.record("Expected failed state")
+            return
+        }
+        #expect(context.stage == .bootstrap)
+        #expect(!context.domain.isEmpty)
+    }
+
     @Test func retryAfterFailureTransitionsToReady() async throws {
         var coordinator = AppStartupCoordinator()
         let appState = AppState()

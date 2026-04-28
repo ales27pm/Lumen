@@ -56,7 +56,7 @@ struct AppStartupCoordinator {
     }
 
     private func emitFailureTelemetry(_ failure: FailureContext) {
-        logger.error("startup_failed stage=\(failure.stage.rawValue, privacy: .public) domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public) message=\(failure.message, privacy: .public)")
+        logger.error("startup_failed stage=\(failure.stage.rawValue, privacy: .public) domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public) message=\(failure.message, privacy: .private)")
     }
 
     private static func failureContext(stage: Stage, from error: Error) -> FailureContext {
@@ -204,6 +204,7 @@ private struct StartupFailureView: View {
     let failure: AppStartupCoordinator.FailureContext
     let retryAction: () async -> Void
     let safeModeAction: () -> Void
+    @State private var isRetrying = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -222,9 +223,15 @@ private struct StartupFailureView: View {
                 .foregroundStyle(.secondary)
 
             Button("Retry") {
-                Task { await retryAction() }
+                guard !isRetrying else { return }
+                isRetrying = true
+                Task {
+                    defer { isRetrying = false }
+                    await retryAction()
+                }
             }
             .buttonStyle(.borderedProminent)
+            .disabled(isRetrying)
 
             Button("Continue in Limited Mode", action: safeModeAction)
                 .buttonStyle(.bordered)

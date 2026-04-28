@@ -51,6 +51,7 @@ struct LumenApp: App {
                     await TriggerScheduler.shared.requestPermission()
                     appState.runtime.updateBootStep(id: "triggers", detail: "Background tasks ready", state: .complete)
 
+                    await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "launch")
                     appState.runtime.completeBootCore()
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -58,6 +59,7 @@ struct LumenApp: App {
                         Task { @MainActor in
                             let ctx = ModelContext(sharedModelContainer)
                             await TriggerScheduler.shared.fireDueTriggers(context: ctx, appState: appState)
+                            await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "scene-active")
                         }
                     }
                 }

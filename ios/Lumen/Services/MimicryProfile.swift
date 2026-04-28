@@ -48,7 +48,7 @@ nonisolated enum MimicryProfiler {
         if containsAny(lower, ["detail", "exhaustive", "full", "complete", "blueprint"]) {
             return "structured-detailed"
         }
-        if settings.selectedPresetHint == "coder" {
+        if selectedPresetHint(from: settings) == "coder" {
             return "technical-precise"
         }
         return "calm-direct"
@@ -80,15 +80,14 @@ nonisolated enum MimicryProfiler {
         return rules
     }
 
+    private static func selectedPresetHint(from settings: SettingsSnapshot) -> String {
+        let prompt = settings.systemPrompt.lowercased()
+        if prompt.contains("coder mode") { return "coder" }
+        if prompt.contains("researcher mode") { return "researcher" }
+        return "general"
+    }
+
     private static func containsAny(_ value: String, _ needles: [String]) -> Bool {
         needles.contains { value.contains($0) }
-    }
-}
-
-private extension SettingsSnapshot {
-    var selectedPresetHint: String {
-        if systemPrompt.lowercased().contains("coder mode") { return "coder" }
-        if systemPrompt.lowercased().contains("researcher mode") { return "researcher" }
-        return "general"
     }
 }

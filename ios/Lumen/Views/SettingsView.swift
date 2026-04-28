@@ -41,6 +41,13 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Fleet") {
+                    Toggle("Auto-download v0 fleet", isOn: Binding(get: { state.autoDownloadFleetModels }, set: { state.autoDownloadFleetModels = $0 }))
+                    Toggle("Ask before fleet downloads", isOn: Binding(get: { state.confirmFleetDownloads }, set: { state.confirmFleetDownloads = $0 }))
+                } footer: {
+                    Text("Auto-download installs the small recommended v0 model fleet on launch when artifacts are missing and storage is available.")
+                }
+
                 Section("Voice") {
                     Toggle("Hands-free", isOn: Binding(get: { state.handsFree }, set: { state.handsFree = $0 }))
                     HStack {
@@ -201,6 +208,10 @@ struct SettingsView: View {
         • agentModeEnabled: \(appState.agentModeEnabled ? "true" : "false")
         • showThinkingByDefault: \(appState.showThinkingByDefault ? "true" : "false")
         • maxAgentSteps: \(appState.maxAgentSteps)
+
+        Fleet:
+        • autoDownloadFleetModels: \(appState.autoDownloadFleetModels ? "true" : "false")
+        • confirmFleetDownloads: \(appState.confirmFleetDownloads ? "true" : "false")
 
         Generation:
         • temperature: \(String(format: "%.2f", appState.temperature))

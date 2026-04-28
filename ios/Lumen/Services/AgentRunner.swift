@@ -55,7 +55,7 @@ enum AgentRunner {
 
         var final = ""
         var steps: [AgentStep] = []
-        for await event in AgentService.shared.run(req) {
+        for await event in SlotAgentService.shared.run(req) {
             switch event {
             case .step(let s):
                 if let idx = steps.firstIndex(where: { $0.id == s.id }) { steps[idx] = s }

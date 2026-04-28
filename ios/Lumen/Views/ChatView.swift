@@ -66,6 +66,7 @@ struct ChatView: View {
     @State private var streamingText: String = ""
     @State private var streamingSteps: [AgentStep] = []
     @State private var streamingTask: Task<Void, Never>?
+    @State private var activeTurnID: UUID?
     @State private var showVoiceMode = false
     @State private var showFilePicker = false
     @State private var attachments: [ChatAttachment] = []
@@ -198,34 +199,35 @@ struct ChatView: View {
         appState.isGenerating = true
         streamingText = ""
         streamingSteps = []
+        let turnID = UUID()
+        activeTurnID = turnID
 
         streamingTask = Task {
             if !(await ensureChatModelLoaded()) {
+                guard activeTurnID == turnID else { return }
                 let msg = ChatMessage(role: .assistant, content: "No chat model is loaded. Open the Models tab, download a chat model, and tap Use to activate it.")
                 conversation.messages.append(msg)
                 try? modelContext.save()
                 appState.isGenerating = false
                 return
             }
-            let memories = await MemoryStore.recall(query: text, context: modelContext).map(\.content)
+            let routing = IntentRouter.classify(text)
+            let memories = await safeRecalledMemories(query: text, routing: routing)
             if appState.agentModeEnabled {
-                await runAgent(text: text, memories: memories, attachments: turnAttachments)
+                await runAgent(turnID: turnID, text: text, routing: routing, memories: memories, attachments: turnAttachments)
             } else {
-                await runPlain(text: text, memories: memories, attachments: turnAttachments)
+                await runPlain(turnID: turnID, text: text, memories: memories, attachments: turnAttachments)
             }
         }
     }
 
-    private func runAgent(text: String, memories: [String], attachments: [ChatAttachment]) async {
-        let history = conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) }
+    private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment]) async {
         let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
-        let routingDecision = AgentIntentRouter.decide(userMessage: text, attachments: attachments)
-        let routedTools = enabledTools.filter { routingDecision.allowedToolIDs.contains($0.id) }
+        let routedTools = enabledTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
         let baseSystemPrompt = conversation.systemPrompt ?? appState.systemPrompt
-        let routedSystemPrompt = baseSystemPrompt + AgentIntentRouter.routingSystemNote(for: routingDecision)
         let req = AgentRequest(
-            systemPrompt: routedSystemPrompt,
-            history: Array(history),
+            systemPrompt: baseSystemPrompt,
+            history: [],
             userMessage: text,
             temperature: appState.temperature,
             topP: appState.topP,
@@ -240,8 +242,8 @@ struct ChatView: View {
         var steps: [AgentStep] = []
         var finalText = ""
 
-        for await event in AgentService.shared.run(req) {
-            if Task.isCancelled { break }
+        for await event in SlotAgentService.shared.run(req) {
+            if Task.isCancelled || activeTurnID != turnID { break }
             switch event {
             case .step(let step):
                 if let idx = steps.firstIndex(where: { $0.id == step.id }) { steps[idx] = step } else { steps.append(step) }
@@ -264,16 +266,19 @@ struct ChatView: View {
             }
         }
 
-        finalText = await repairSchemaPlaceholderFinalIfNeeded(finalText, userText: text, memories: memories, attachments: attachments)
+        guard !Task.isCancelled, activeTurnID == turnID else { return }
+        finalText = await repairSchemaPlaceholderFinalIfNeeded(finalText, userText: text, routing: routing, memories: memories, attachments: attachments)
         finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
+        finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
         let sanitizedSteps = AgentVisibleContentSanitizer.sanitizedSteps(steps)
 
         let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
         streamingText = ""
         streamingSteps = []
+        activeTurnID = nil
 
-        if appState.autoMemory, finalText.count > 60 {
+        if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
             await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
             await MemoryStore.extractAndStore(userText: text, assistantText: finalText, context: modelContext)
         }
@@ -283,11 +288,11 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func runPlain(text: String, memories: [String], attachments: [ChatAttachment]) async {
+    private func runPlain(turnID: UUID, text: String, memories: [String], attachments: [ChatAttachment]) async {
         let request = GenerateRequest(
             sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
-            history: conversation.sortedMessages.dropLast().map { ($0.messageRole, $0.content) },
+            history: conversation.sortedMessages.dropLast().suffix(8).map { ($0.messageRole, $0.content) },
             userMessage: text,
             temperature: appState.temperature,
             topP: appState.topP,
@@ -300,6 +305,7 @@ struct ChatView: View {
 
         var accumulated = ""
         for await token in await AppLlamaService.shared.stream(request) {
+            if Task.isCancelled || activeTurnID != turnID { break }
             switch token {
             case .text(let s):
                 accumulated += s
@@ -309,10 +315,12 @@ struct ChatView: View {
             }
         }
 
+        guard !Task.isCancelled, activeTurnID == turnID else { return }
         let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
         let assistantMsg = ChatMessage(role: .assistant, content: sanitized)
         conversation.messages.append(assistantMsg)
         streamingText = ""
+        activeTurnID = nil
 
         if appState.autoMemory, sanitized.count > 60 {
             await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
@@ -323,39 +331,28 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func repairSchemaPlaceholderFinalIfNeeded(_ finalText: String, userText: String, memories: [String], attachments: [ChatAttachment]) async -> String {
+    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [String] {
+        let raw = await MemoryStore.recall(query: query, context: modelContext, limit: 8).map(\.content)
+        return raw.filter { memory in
+            FinalIntentValidator.validate(memory, routing: routing, fallback: nil) == memory.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private func isSafeToStoreMemory(userText: String, assistantText: String, routing: IntentRoutingDecision) -> Bool {
+        FinalIntentValidator.validate(assistantText, routing: routing, fallback: nil) == assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func repairSchemaPlaceholderFinalIfNeeded(_ finalText: String, userText: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment]) async -> String {
         let trimmed = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SchemaPlaceholderDetector.isPlaceholderFinal(trimmed) else { return finalText }
 
-        if appState.enabledToolIDs.contains("web.search"), shouldUseWebRepair(for: userText) {
+        if appState.enabledToolIDs.contains("web.search"), routing.intent == .webSearch, shouldUseWebRepair(for: userText) {
             let query = cleanedSearchQuery(userText)
             let result = await WebTools.webSearch(query: query)
             if !isWeakSearchResult(result) { return result }
         }
 
-        let request = GenerateRequest(
-            sessionID: conversation.id.uuidString,
-            systemPrompt: "Answer the user's request directly in plain language. Do not output JSON. Do not copy schema examples. Do not emit placeholder tokens literally.",
-            history: conversation.sortedMessages.dropLast().suffix(4).map { ($0.messageRole, $0.content) },
-            userMessage: userText,
-            temperature: min(appState.temperature, 0.35),
-            topP: min(appState.topP, 0.85),
-            repetitionPenalty: appState.repetitionPenalty,
-            maxTokens: min(max(appState.maxTokens, 128), 512),
-            modelName: conversation.modelName ?? "agent-placeholder-repair",
-            relevantMemories: memories,
-            attachments: attachments
-        )
-
-        var repaired = ""
-        for await token in await AppLlamaService.shared.stream(request) {
-            if Task.isCancelled { break }
-            switch token {
-            case .text(let s): repaired += s
-            case .done: break
-            }
-        }
-        return SchemaPlaceholderDetector.repairOrFallback(repaired)
+        return FinalIntentValidator.validate(trimmed, routing: routing, fallback: nil)
     }
 
     private func shouldUseWebRepair(for userText: String) -> Bool {
@@ -386,6 +383,8 @@ struct ChatView: View {
     private func stop() {
         let task = streamingTask
         streamingTask = nil
+        let stoppedTurnID = activeTurnID
+        activeTurnID = nil
         task?.cancel()
         let captured = AssistantOutputSanitizer.sanitize(streamingText)
         let capturedSteps = AgentVisibleContentSanitizer.sanitizedSteps(streamingSteps)
@@ -395,7 +394,7 @@ struct ChatView: View {
             _ = await task?.value
             await MainActor.run {
                 appState.isGenerating = false
-                if !captured.isEmpty {
+                if stoppedTurnID != nil, !captured.isEmpty {
                     let msg = ChatMessage(role: .assistant, content: captured, agentSteps: capturedSteps, wasStopped: true)
                     conversation.messages.append(msg)
                     conversation.updatedAt = Date()

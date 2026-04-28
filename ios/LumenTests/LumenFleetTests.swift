@@ -2,7 +2,7 @@ import Testing
 @testable import Lumen
 
 struct LumenFleetTests {
-    @Test @MainActor func fleetResolverAssignsAllTextSlotsFromSingleSmallChatModel() async throws {
+    @Test @MainActor func v0ResolverAssignsAllTextSlotsFromSingleSmallChatModel() async throws {
         let chat = StoredModel(
             name: "Qwen2.5 Coder Fleet",
             repoId: "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
@@ -30,6 +30,7 @@ struct LumenFleetTests {
             storedModels: [chat, embedding]
         )
 
+        #expect(snapshot.mode == .v0SingleRuntime)
         #expect(snapshot.isRunnableV0)
         #expect(snapshot.missingSlots.isEmpty)
         #expect(snapshot.assignment(for: .cortex)?.modelID == chat.id)
@@ -38,6 +39,8 @@ struct LumenFleetTests {
         #expect(snapshot.assignment(for: .mimicry)?.modelID == chat.id)
         #expect(snapshot.assignment(for: .rem)?.modelID == chat.id)
         #expect(snapshot.assignment(for: .embedding)?.modelID == embedding.id)
+        #expect(snapshot.runtimeResidentSlots == Set(LumenModelSlot.allCases))
+        #expect(snapshot.targetResidentSlots == Set(LumenModelSlot.allCases))
     }
 
     @Test @MainActor func fleetResolverKeepsEmbeddingAssignmentWhenHintsDoNotMatch() async throws {
@@ -62,7 +65,7 @@ struct LumenFleetTests {
             localPath: "/tmp/vectors.gguf"
         )
 
-        let snapshot = LumenModelFleetResolver.resolveV0(
+        let snapshot = LumenModelFleetResolver.resolveV1(
             activeChatModelID: chat.id.uuidString,
             activeEmbeddingModelID: nil,
             storedModels: [chat, customEmbedding]
@@ -72,7 +75,7 @@ struct LumenFleetTests {
         #expect(!snapshot.missingSlots.contains(.embedding))
     }
 
-    @Test @MainActor func fleetResolverPrefersRoleSpecificModelWhenAvailable() async throws {
+    @Test @MainActor func v1ResolverPrefersRoleSpecificModelWhenAvailableButMarksPendingRuntimeSeparately() async throws {
         let general = StoredModel(
             name: "General Mouth Model",
             repoId: "HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
@@ -93,15 +96,30 @@ struct LumenFleetTests {
             role: .chat,
             localPath: "/tmp/coder.gguf"
         )
-
-        let snapshot = LumenModelFleetResolver.resolveV0(
-            activeChatModelID: general.id.uuidString,
-            activeEmbeddingModelID: nil,
-            storedModels: [general, coder]
+        let cortex = StoredModel(
+            name: "Fleet v1 Cortex — Qwen Coder 1.5B",
+            repoId: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+            fileName: "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+            sizeBytes: 1,
+            quantization: "Q4_K_M",
+            parameters: "1.5B",
+            role: .chat,
+            localPath: "/tmp/cortex.gguf"
         )
 
-        #expect(snapshot.assignment(for: .cortex)?.modelID == coder.id)
+        let snapshot = LumenModelFleetResolver.resolveV1(
+            activeChatModelID: general.id.uuidString,
+            activeEmbeddingModelID: nil,
+            storedModels: [general, coder, cortex]
+        )
+
+        #expect(snapshot.mode == .v1MultiResidentPlanned)
+        #expect(snapshot.assignment(for: .cortex)?.modelID == cortex.id)
         #expect(snapshot.assignment(for: .executor)?.modelID == coder.id)
         #expect(snapshot.assignment(for: .rem)?.modelID == general.id)
+        #expect(snapshot.targetResidentSlots.contains(.cortex))
+        #expect(snapshot.targetResidentSlots.contains(.executor))
+        #expect(snapshot.runtimeResidentSlots.contains(.cortex))
+        #expect(!snapshot.runtimeResidentSlots.contains(.executor))
     }
 }

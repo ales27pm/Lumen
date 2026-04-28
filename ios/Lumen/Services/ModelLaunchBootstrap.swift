@@ -21,7 +21,7 @@ enum ModelLaunchBootstrap {
         var linkedLocalFiles = 0
 
         for model in models {
-            let result = ensureModelPresent(model, appState: appState, context: context)
+            let result = ensureModelPresent(model, expectedFleetCount: models.count, appState: appState, context: context)
             switch result {
             case .alreadyStored, .alreadyDownloading:
                 alreadyPresent += 1
@@ -49,16 +49,29 @@ enum ModelLaunchBootstrap {
         case startedDownload
     }
 
-    private static func ensureModelPresent(_ model: CatalogModel, appState: AppState, context: ModelContext) -> EnsureResult {
+    private static func ensureModelPresent(
+        _ model: CatalogModel,
+        expectedFleetCount: Int,
+        appState: AppState,
+        context: ModelContext
+    ) -> EnsureResult {
         let existingStored = storedModel(for: model, context: context)
         let localURL = ModelDownloader.shared.localURL(for: model)
 
         if FileManager.default.fileExists(atPath: localURL.path) {
             if existingStored == nil {
-                insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                let stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                Task { @MainActor in
+                    await loadIfSelected(stored, appState: appState, context: context)
+                    updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
+                }
                 return .linkedLocalFile
             } else if let existingStored {
                 activateIfNeeded(existingStored, appState: appState)
+                Task { @MainActor in
+                    await loadIfSelected(existingStored, appState: appState, context: context)
+                    updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
+                }
             }
             return .alreadyStored
         }
@@ -66,6 +79,10 @@ enum ModelLaunchBootstrap {
         guard existingStored == nil || !FileManager.default.fileExists(atPath: existingStored?.localPath ?? "") else {
             if let existingStored {
                 activateIfNeeded(existingStored, appState: appState)
+                Task { @MainActor in
+                    await loadIfSelected(existingStored, appState: appState, context: context)
+                    updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
+                }
             }
             return .alreadyStored
         }
@@ -74,14 +91,49 @@ enum ModelLaunchBootstrap {
 
         ModelDownloader.shared.start(model) { localURL in
             Task { @MainActor in
+                let stored: StoredModel
                 if let existing = storedModel(for: model, context: context) {
                     activateIfNeeded(existing, appState: appState)
-                    return
+                    stored = existing
+                } else {
+                    stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
                 }
-                insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+
+                await loadIfSelected(stored, appState: appState, context: context)
+                updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
             }
         }
         return .startedDownload
+    }
+
+    private static func loadIfSelected(_ stored: StoredModel, appState: AppState, context: ModelContext) async {
+        let allStored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
+        switch stored.modelRole {
+        case .chat:
+            guard appState.activeChatModelID == stored.id.uuidString else { return }
+            _ = await ModelLoader.ensureChatLoaded(appState: appState, stored: allStored)
+        case .embedding:
+            guard appState.activeEmbeddingModelID == stored.id.uuidString else { return }
+            _ = await ModelLoader.ensureEmbedLoaded(appState: appState, stored: allStored)
+        }
+    }
+
+    private static func updateFleetBootProgress(expectedCount: Int, appState: AppState, context: ModelContext) {
+        let readyCount = readyFleetArtifactCount(context: context)
+        let state: BootStepState = readyCount >= expectedCount ? .complete : .running
+        appState.runtime.updateBootStep(
+            id: "models",
+            detail: "\(min(readyCount, expectedCount)) / \(expectedCount) fleet model artifacts ready",
+            state: state
+        )
+    }
+
+    private static func readyFleetArtifactCount(context: ModelContext) -> Int {
+        let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
+        let installedKeys = Set(stored.map { artifactKey(repoId: $0.repoId, fileName: $0.fileName) })
+        return uniqueByArtifact(LumenModelFleetCatalog.v0Recommended).reduce(0) { count, model in
+            installedKeys.contains(artifactKey(repoId: model.repoId, fileName: model.fileName)) ? count + 1 : count
+        }
     }
 
     private static func storedModel(for catalog: CatalogModel, context: ModelContext) -> StoredModel? {

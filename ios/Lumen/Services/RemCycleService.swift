@@ -40,6 +40,12 @@ enum RemCycleService {
         )
 
         write(report)
+
+        do {
+            try await MemoryCascade.condenseIfNeeded(context: context)
+        } catch {
+            // REM diagnostics are opportunistic and must never block runtime.
+        }
     }
 
     private static func write(_ report: RemCycleReport) {

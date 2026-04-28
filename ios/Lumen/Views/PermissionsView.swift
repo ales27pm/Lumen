@@ -11,7 +11,7 @@ struct PermissionsView: View {
                     row(for: kind)
                 }
             } footer: {
-                Text("Lumen requests permissions on demand when you use a feature. You can also pre-grant them here. Denied permissions must be changed in the iOS Settings app.")
+                Text("Lumen requests permissions on demand when you use a feature. You can also pre-grant them here. Denied permissions must be changed in the iOS Settings app. AlarmKit also requires the AlarmKit entitlement in the signed provisioning profile.")
             }
 
             Section {
@@ -41,7 +41,7 @@ struct PermissionsView: View {
                     .foregroundStyle(Color(state.tint))
                     .frame(width: 28)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(kind.title)
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -49,6 +49,13 @@ struct PermissionsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                    if let message = center.lastRequestMessage(kind), !message.isEmpty {
+                        Text(message)
+                            .font(.caption2)
+                            .foregroundStyle(message.lowercased().contains("failed") || message.lowercased().contains("not granted") ? .orange : .secondary)
+                            .lineLimit(4)
+                            .textSelection(.enabled)
+                    }
                 }
 
                 Spacer(minLength: 8)

@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var showDeveloperAlert = false
     @State private var developerAlertMessage = ""
     @State private var parseFailureSummary = "• Parse-failure traces: loading…"
@@ -106,10 +108,17 @@ struct SettingsView: View {
                 }
 
                 Section("Developer") {
+                    NavigationLink {
+                        E2ETestRunnerView()
+                    } label: {
+                        Label("End-to-end tests", systemImage: "testtube.2")
+                    }
+                    .accessibilityIdentifier("settings.developer.e2eTests")
+
                     Button {
                         runDeveloperChecks()
                     } label: {
-                        Label("Run tests", systemImage: "checkmark.circle")
+                        Label("Run storage checks", systemImage: "checkmark.circle")
                     }
                     .accessibilityIdentifier("settings.developer.runTests")
 
@@ -161,7 +170,7 @@ struct SettingsView: View {
             .task {
                 await refreshParseFailureSummary()
             }
-            .alert("Run tests", isPresented: $showDeveloperAlert) {
+            .alert("Run checks", isPresented: $showDeveloperAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(developerAlertMessage)
@@ -234,6 +243,9 @@ struct SettingsView: View {
 
         Recoverable noise signatures:
         \(parseNoiseSummary)
+
+        Latest E2E:
+        \(E2ETestLogStore.latestText())
         """
     }
 
@@ -245,12 +257,15 @@ struct SettingsView: View {
         let importsDirectory = FileStore.importsDirectory
         let canReadImports = fm.isReadableFile(atPath: importsDirectory.path)
         let canWriteImports = fm.isWritableFile(atPath: importsDirectory.path)
+        let e2eDirectory = try? E2ETestLogStore.reportsDirectory()
+        let canWriteE2E = e2eDirectory.map { fm.isWritableFile(atPath: $0.path) } ?? false
 
         let checks: [(String, Bool)] = [
             ("Models folder readable", canReadModels),
             ("Models folder writable", canWriteModels),
             ("Imports folder readable", canReadImports),
             ("Imports folder writable", canWriteImports),
+            ("E2E folder writable", canWriteE2E),
         ]
 
         let passed = checks.filter(\.1).count
@@ -286,5 +301,72 @@ private struct DeveloperTextView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct E2ETestRunnerView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @State private var isRunning = false
+    @State private var reportText = E2ETestLogStore.latestText()
+
+    var body: some View {
+        List {
+            Section {
+                Button {
+                    run()
+                } label: {
+                    HStack {
+                        Label(isRunning ? "Running…" : "Run full E2E suite", systemImage: "play.circle")
+                        Spacer()
+                        if isRunning { ProgressView() }
+                    }
+                }
+                .disabled(isRunning)
+
+                Button {
+                    reportText = E2ETestLogStore.latestText()
+                } label: {
+                    Label("Reload latest report", systemImage: "arrow.clockwise")
+                }
+            } footer: {
+                Text("Runs deterministic routing checks plus live agent scenarios for tool boundaries, chat quality, stale-context regressions, and final-answer validation.")
+            }
+
+            Section("Scenarios") {
+                ForEach(E2ETestScenario.standard) { scenario in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(scenario.title)
+                            .font(.subheadline.weight(.medium))
+                        Text(scenario.prompt)
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("Intent: \(scenario.expectedIntent.rawValue) · \(scenario.kind.rawValue)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            Section("Latest Report") {
+                Text(reportText)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+            }
+        }
+        .navigationTitle("E2E Tests")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func run() {
+        guard !isRunning else { return }
+        isRunning = true
+        reportText = "Running E2E suite…"
+        Task { @MainActor in
+            let report = await E2ETestRunner.runStandard(appState: appState, context: modelContext)
+            reportText = report.summaryText
+            isRunning = false
+        }
     }
 }

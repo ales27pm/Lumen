@@ -5,16 +5,42 @@ import SwiftData
 enum AgentRunner {
     /// Foreground entry point. Uses the live `AppState` (reads its current snapshot).
     static func runHeadless(prompt: String, appState: AppState, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
-        await runHeadless(prompt: prompt, settings: appState.snapshot, context: context, maxSteps: maxSteps)
+        let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
+        let fleet = LumenModelFleetResolver.resolveV0(appState: appState, storedModels: stored)
+        return await runHeadless(
+            prompt: prompt,
+            settings: appState.snapshot,
+            context: context,
+            maxSteps: maxSteps,
+            fleetSnapshot: fleet
+        )
     }
 
     /// Background-safe entry point. Takes a Sendable settings snapshot so background
     /// tasks never depend on live in-memory mutable state.
     static func runHeadless(prompt: String, settings: SettingsSnapshot, context: ModelContext, maxSteps: Int? = nil) async -> (text: String, steps: [AgentStep]) {
+        let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
+        let fleet = LumenModelFleetResolver.resolveV0(settings: settings, storedModels: stored)
+        return await runHeadless(
+            prompt: prompt,
+            settings: settings,
+            context: context,
+            maxSteps: maxSteps,
+            fleetSnapshot: fleet
+        )
+    }
+
+    private static func runHeadless(
+        prompt: String,
+        settings: SettingsSnapshot,
+        context: ModelContext,
+        maxSteps: Int?,
+        fleetSnapshot: LumenModelFleetSnapshot
+    ) async -> (text: String, steps: [AgentStep]) {
         let memories = await MemoryStore.recall(query: prompt, context: context).map(\.content)
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
         let req = AgentRequest(
-            systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt),
+            systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt, fleetSnapshot: fleetSnapshot),
             history: [],
             userMessage: prompt,
             temperature: settings.temperature,
@@ -47,7 +73,7 @@ enum AgentRunner {
         return (final.trimmingCharacters(in: .whitespacesAndNewlines), steps)
     }
 
-    private static func composedSystemPrompt(basePrompt: String) -> String {
+    private static func composedSystemPrompt(basePrompt: String, fleetSnapshot: LumenModelFleetSnapshot) -> String {
         let trimmedBasePrompt = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let contracts = LumenModelSlotContract.all
             .filter { $0.slot != .embedding }
@@ -56,10 +82,27 @@ enum AgentRunner {
             }
             .joined(separator: "\n")
 
+        let assignments = LumenModelSlot.allCases
+            .map { slot -> String in
+                if let assignment = fleetSnapshot.assignment(for: slot) {
+                    return "- \(slot.displayName): \(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization)"
+                }
+                return "- \(slot.displayName): missing"
+            }
+            .joined(separator: "\n")
+
+        let missingText = fleetSnapshot.missingSlots.isEmpty
+            ? "none"
+            : fleetSnapshot.missingSlots.map(\.displayName).joined(separator: ", ")
+
         let fleetPrompt = """
         Lumen model fleet v0 is enabled. The runtime may map several logical slots to the same small local model, but each slot has a strict behavioral contract:
         \(contracts)
 
+        Current v0 slot assignments:
+        \(assignments)
+
+        Missing slots: \(missingText).
         When acting as the agent, keep decisions separate from final user-facing wording. Prefer compact structured turns when a native capability is needed.
         """
 

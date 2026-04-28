@@ -101,7 +101,7 @@ extension Dictionary where Key == String, Value == AgentJSONValue {
         }
     }
 
-    fileprivate var jsonRenderedString: String? {
+    nonisolated fileprivate var jsonRenderedString: String? {
         let foundationObject = reduce(into: [String: Any]()) { partialResult, element in
             partialResult[element.key] = element.value.foundationObject
         }
@@ -115,7 +115,7 @@ extension Dictionary where Key == String, Value == AgentJSONValue {
 }
 
 extension Array where Element == AgentJSONValue {
-    fileprivate var jsonRenderedString: String? {
+    nonisolated fileprivate var jsonRenderedString: String? {
         let foundationObject = map(\.foundationObject)
         guard JSONSerialization.isValidJSONObject(foundationObject),
               let data = try? JSONSerialization.data(withJSONObject: foundationObject, options: []),

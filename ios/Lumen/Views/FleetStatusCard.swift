@@ -100,15 +100,18 @@ struct FleetStatusCard: View {
     }
 
     private func statusText(for assignment: LumenModelAssignment) -> String {
-        if loadedPaths.contains(assignment.localPath) { return "resident · loaded" }
-        if snapshot.residentSlots.contains(assignment.slot) { return "resident · not loaded" }
-        if assignment.slot.shouldRunOnlyWhenIdle { return "planned hot-swap · idle-only" }
-        return "planned hot-swap"
+        if loadedPaths.contains(assignment.localPath) { return "runtime resident · loaded" }
+        if snapshot.runtimeResidentSlots.contains(assignment.slot) { return "runtime resident · not loaded" }
+        if snapshot.targetResidentSlots.contains(assignment.slot) {
+            return assignment.slot.shouldRunOnlyWhenIdle ? "target resident · idle-only · pending" : "target resident · pending"
+        }
+        return "not resident"
     }
 
     private func statusColor(for assignment: LumenModelAssignment) -> Color {
         if loadedPaths.contains(assignment.localPath) { return Theme.accent }
-        return snapshot.residentSlots.contains(assignment.slot) ? .orange : Theme.textSecondary
+        if snapshot.runtimeResidentSlots.contains(assignment.slot) { return .orange }
+        return snapshot.targetResidentSlots.contains(assignment.slot) ? Theme.textSecondary : Theme.textTertiary
     }
 
     private var activeDownloads: [(id: String, name: String, progress: DownloadProgress, label: String, isFailed: Bool)] {

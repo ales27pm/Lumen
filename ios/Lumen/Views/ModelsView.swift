@@ -16,6 +16,7 @@ struct ModelsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         activeRow
+                        FleetStatusCard(snapshot: fleetSnapshot, progresses: downloader.progresses)
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Featured")
@@ -100,13 +101,24 @@ struct ModelsView: View {
         }
     }
 
+    private var fleetSnapshot: LumenModelFleetSnapshot {
+        LumenModelFleetResolver.resolveV0(appState: appState, storedModels: storedModels)
+    }
+
     private func storedModel(for catalog: CatalogModel) -> StoredModel? {
-        storedModels.first { $0.fileName == catalog.fileName }
+        storedModels.first { stored in
+            stored.repoId.caseInsensitiveCompare(catalog.repoId) == .orderedSame
+            && stored.fileName.caseInsensitiveCompare(catalog.fileName) == .orderedSame
+        }
     }
 
     private func download(_ model: CatalogModel) {
         downloader.start(model) { localURL in
             Task { @MainActor in
+                if let existing = storedModel(for: model) {
+                    activate(stored: existing)
+                    return
+                }
                 let stored = StoredModel(
                     name: model.name, repoId: model.repoId, fileName: model.fileName,
                     sizeBytes: model.sizeBytes, quantization: model.quantization,

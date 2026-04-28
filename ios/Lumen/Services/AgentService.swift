@@ -53,11 +53,11 @@ nonisolated enum AgentEvent: Sendable {
 
 nonisolated struct AgentAction: Sendable, Hashable {
     let tool: String
-    let args: [String: String]
+    let args: AgentJSONArguments
 
     var dedupeKey: String {
         let argsStr = args.keys.sorted()
-            .map { "\($0)=\(args[$0] ?? "")" }
+            .map { "\($0)=\(args[$0]?.stringValue ?? "")" }
             .joined(separator: "&")
         return tool + "|" + argsStr
     }
@@ -65,7 +65,7 @@ nonisolated struct AgentAction: Sendable, Hashable {
     var displayContent: String {
         if args.isEmpty { return "\(tool)()" }
         let argsStr = args.keys.sorted()
-            .map { "\($0)=\(args[$0] ?? "")" }
+            .map { "\($0)=\(args[$0]?.stringValue ?? "")" }
             .joined(separator: ", ")
         return "\(tool)(\(argsStr))"
     }
@@ -380,7 +380,7 @@ nonisolated enum AgentTurnParser {
         return .success(AgentAction(tool: trimmed, args: args))
     }
 
-    private static func parseArgs(from obj: [String: Any]) -> [String: String]? {
+    private static func parseArgs(from obj: [String: Any]) -> AgentJSONArguments? {
         let argsValue = obj["args"] ?? obj["arguments"] ?? obj["input"]
         guard let argsValue else { return [:] }
         if let rawArgs = argsValue as? [String: Any] {
@@ -394,22 +394,18 @@ nonisolated enum AgentTurnParser {
                let rawArgs = json as? [String: Any] {
                 return normalizeArgs(rawArgs)
             }
-            return ["query": trimmed]
+            return ["query": .string(trimmed)]
         }
         return nil
     }
 
-    private static func normalizeArgs(_ rawArgs: [String: Any]) -> [String: String]? {
-        var args: [String: String] = [:]
-        for (k, v) in rawArgs {
-            guard let normalized = stringifyArgValue(v) else { return nil }
-            args[k] = normalized
+    private static func normalizeArgs(_ rawArgs: [String: Any]) -> AgentJSONArguments? {
+        var args: AgentJSONArguments = [:]
+        for (key, value) in rawArgs {
+            guard let parsed = AgentJSONValue.parse(value) else { return nil }
+            args[key] = parsed
         }
         return args
-    }
-
-    private static func stringifyArgValue(_ value: Any) -> String? {
-        value as? String
     }
 
     private static func extractSingleJSONObject(from text: String) -> Result<ExtractedJSONObject, AgentTurnParseError> {
@@ -1406,7 +1402,7 @@ final class AgentService {
                 }
                 executedActionKeys.insert(action.dedupeKey)
 
-                let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: action.tool, toolArgs: action.args)
+                let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: action.tool, toolArgs: action.args.stringCoerced)
                 steps.append(actionStep)
                 continuation.yield(.step(actionStep))
 
@@ -1525,7 +1521,7 @@ final class AgentService {
         JSON rules:
         - Use double quotes for every key and string.
         - Escape newlines as \\n inside string values.
-        - `args` values must all be strings. Use {} when no arguments are needed.
+        - Args may contain normal JSON values: strings, numbers, booleans, arrays, objects, or null. Use {} when no arguments are needed.
         - Do not emit placeholder tokens literally.
         - Never include both `action` and `final` in the same object.
         - Never repeat an action with the same arguments.

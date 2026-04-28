@@ -69,6 +69,78 @@ enum MemoryCascade {
         )
     }
 
+
+    static func condenseIfNeeded(context: ModelContext, minimumCount: Int = 24) async throws {
+        let descriptor = FetchDescriptor<MemoryItem>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        let allItems = try context.fetch(descriptor)
+
+        let candidates = allItems.filter { item in
+            guard item.source != "rem-condensed" else { return false }
+            guard item.isPinned == false else { return false }
+            return !item.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        guard candidates.count >= minimumCount else { return }
+
+        let grouped = Dictionary(grouping: candidates) { item -> String in
+            let topic = item.topic?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !topic.isEmpty {
+                return topic
+            }
+            return "kind:\(item.kind)"
+        }
+
+        for groupKey in grouped.keys.sorted() {
+            guard let groupItems = grouped[groupKey], groupItems.count >= 6 else { continue }
+
+            let sortedItems = groupItems.sorted { lhs, rhs in
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+                if lhs.content != rhs.content { return lhs.content < rhs.content }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            let newestItems = Array(sortedItems.suffix(12))
+            let newestSourceDate = newestItems.last?.createdAt ?? .distantPast
+            let cascadeTopic = "cascade:\(groupKey)"
+
+            let existingDescriptor = FetchDescriptor<MemoryItem>(
+                predicate: #Predicate<MemoryItem> {
+                    $0.source == "rem-condensed" && $0.topic == cascadeTopic
+                },
+                sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            )
+            if let newestCondensed = try context.fetch(existingDescriptor).first,
+               newestCondensed.createdAt > newestSourceDate {
+                continue
+            }
+
+            var seenLines: Set<String> = []
+            let extracts = newestItems.compactMap { item -> String? in
+                let compact = compactAndTrim(item.content, maxLength: 140)
+                guard !compact.isEmpty else { return nil }
+                let dedupeKey = compact.lowercased()
+                guard !seenLines.contains(dedupeKey) else { return nil }
+                seenLines.insert(dedupeKey)
+                return compact
+            }
+
+            guard !extracts.isEmpty else { continue }
+            let summaryBody = extracts.enumerated().map { index, line in
+                "\(index + 1). \(line)"
+            }.joined(separator: " ")
+            let summary = "Condensed \(groupKey): \(summaryBody)"
+
+            await MemoryStore.remember(
+                summary,
+                kind: .conversation,
+                source: "rem-condensed",
+                topic: cascadeTopic,
+                context: context
+            )
+        }
+    }
+
     private static func compactAndTrim(_ text: String, maxLength: Int) -> String {
         let normalized = text
             .replacingOccurrences(of: "\n", with: " ")

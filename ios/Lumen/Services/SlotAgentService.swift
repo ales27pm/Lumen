@@ -15,9 +15,10 @@ final class SlotAgentService {
 
                 let maxSteps = max(1, req.maxSteps)
                 for stepIndex in 0..<maxSteps {
+                    let slot: LumenModelSlot = stepIndex == 0 ? .cortex : .executor
                     let turnPrompt = makeStructuredTurnPrompt(req: req, observations: observations, stepIndex: stepIndex)
                     let turnOutput = await generateText(
-                        slot: stepIndex == 0 ? .cortex : .executor,
+                        slot: slot,
                         req: req,
                         userMessage: turnPrompt,
                         temperature: stepIndex == 0 ? 0.15 : 0.0,
@@ -27,6 +28,21 @@ final class SlotAgentService {
                     )
 
                     let parsed = AgentTurnParser.parse(turnOutput)
+                    if let error = parsed.parseError {
+                        SlotAgentDiagnosticsRecorder.record(
+                            SlotAgentTrace(
+                                id: UUID(),
+                                createdAt: Date(),
+                                slot: slot.rawValue,
+                                stage: "structured-turn",
+                                stepIndex: stepIndex,
+                                error: error.rawValue,
+                                rawOutputPrefix: String(turnOutput.prefix(2_000)),
+                                userPromptPrefix: String(req.userMessage.prefix(2_000))
+                            )
+                        )
+                    }
+
                     if let thought = parsed.thought, !thought.isEmpty {
                         let thoughtStep = AgentStep(kind: .thought, content: thought, toolID: nil, toolArgs: nil)
                         steps.append(thoughtStep)
@@ -132,13 +148,28 @@ final class SlotAgentService {
         )
 
         var output = ""
-        for await token in AppLlamaService.shared.stream(generation, slot: slot) {
+        let stream = await AppLlamaService.shared.stream(generation, slot: slot)
+        for await token in stream {
             switch token {
             case .text(let text):
                 output += text
             case .done:
                 break
             }
+        }
+        if output.lowercased().contains("generation error:") {
+            SlotAgentDiagnosticsRecorder.record(
+                SlotAgentTrace(
+                    id: UUID(),
+                    createdAt: Date(),
+                    slot: slot.rawValue,
+                    stage: modelName,
+                    stepIndex: -1,
+                    error: "generation_error",
+                    rawOutputPrefix: String(output.prefix(2_000)),
+                    userPromptPrefix: String(userMessage.prefix(2_000))
+                )
+            )
         }
         return output
     }
@@ -203,5 +234,51 @@ final class SlotAgentService {
             index = next
         }
         return chunks
+    }
+}
+
+nonisolated struct SlotAgentTrace: Codable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let slot: String
+    let stage: String
+    let stepIndex: Int
+    let error: String
+    let rawOutputPrefix: String
+    let userPromptPrefix: String
+}
+
+nonisolated enum SlotAgentDiagnosticsRecorder {
+    static func record(_ trace: SlotAgentTrace) {
+        do {
+            let directory = try diagnosticsDirectory()
+            let url = directory.appendingPathComponent("slot-agent-traces.jsonl", isDirectory: false)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(trace)
+            var line = data
+            line.append(0x0A)
+
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } else {
+                try line.write(to: url, options: [.atomic])
+            }
+        } catch {
+            // Diagnostics must never break generation.
+        }
+    }
+
+    static func diagnosticsDirectory() throws -> URL {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directory = base
+            .appendingPathComponent("Diagnostics", isDirectory: true)
+            .appendingPathComponent("SlotAgent", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 }

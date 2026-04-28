@@ -86,7 +86,7 @@ enum AgentRunner {
         let assignments = LumenModelSlot.allCases
             .map { slot -> String in
                 if let assignment = fleetSnapshot.assignment(for: slot) {
-                    let residency = fleetSnapshot.residentSlots.contains(slot) ? "resident" : "planned hot-swap"
+                    let residency = fleetSnapshot.residentSlots.contains(slot) ? "resident target" : "not resident"
                     return "- \(slot.displayName): \(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization) · \(residency)"
                 }
                 return "- \(slot.displayName): missing"
@@ -99,11 +99,11 @@ enum AgentRunner {
 
         let runtimeMode = """
         Fleet runtime mode: \(fleetSnapshot.mode.displayName).
-        iPhone memory cap: only one chat GGUF and one embedding GGUF may be loaded at the same time. Dedicated v1 slot models are assignment plans; non-resident chat slots require explicit unload/load hot-swap before execution.
+        v1 target: each logical slot may keep its own resident model when hardware allows. Runtime should monitor memory pressure and degrade gracefully only when necessary.
         """
 
         let fleetPrompt = """
-        Lumen model fleet v1 planning is enabled. Logical slots may resolve to different installed models, but runtime residency is capped:
+        Lumen model fleet v1 is enabled. Logical slots may resolve to different installed models and are allowed to be resident independently:
         \(contracts)
 
         \(runtimeMode)

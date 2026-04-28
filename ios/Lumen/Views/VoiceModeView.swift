@@ -16,6 +16,7 @@ struct VoiceModeView: View {
     @State private var spokenPrefix: Int = 0
     @State private var finishedStreaming = false
     @State private var stepsBuffer: [AgentStep] = []
+    @State private var activeVoiceTurnID: UUID?
 
     enum Phase { case idle, listening, thinking, speaking }
 
@@ -177,6 +178,7 @@ struct VoiceModeView: View {
     private func startListening() {
         voice.stopSpeaking()
         responseText = ""
+        activeVoiceTurnID = nil
         phase = .listening
         Task {
             await voice.startListening { text in
@@ -204,6 +206,8 @@ struct VoiceModeView: View {
         spokenPrefix = 0
         finishedStreaming = false
         stepsBuffer = []
+        let turnID = UUID()
+        activeVoiceTurnID = turnID
 
         responseTask = Task {
             let convo = conversations.first ?? {
@@ -214,12 +218,17 @@ struct VoiceModeView: View {
             let userMsg = ChatMessage(role: .user, content: text)
             convo.messages.append(userMsg)
 
-            let memories = await MemoryStore.recall(query: text, context: modelContext).map(\.content)
-            let tools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
-            let history = convo.sortedMessages.dropLast().map { ($0.messageRole, $0.content) }
+            _ = await ModelLoader.ensureChatLoaded(appState: appState, stored: [])
+
+            let routing = IntentRouter.classify(text)
+            let memories = await safeRecalledMemories(query: text, routing: routing)
+            let tools = ToolRegistry.all
+                .filter { appState.enabledToolIDs.contains($0.id) }
+                .filter { IntentRouter.isToolAllowed($0.id, for: routing) }
+
             let req = AgentRequest(
                 systemPrompt: appState.systemPrompt,
-                history: Array(history),
+                history: [],
                 userMessage: text,
                 temperature: appState.temperature,
                 topP: appState.topP,
@@ -231,14 +240,15 @@ struct VoiceModeView: View {
             )
 
             var finalText = ""
-            for await event in AgentService.shared.run(req) {
-                if Task.isCancelled { break }
+            for await event in SlotAgentService.shared.run(req) {
+                if Task.isCancelled || activeVoiceTurnID != turnID { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)
                 case .stepDelta: break
                 case .finalDelta(let chunk):
                     finalText += chunk
-                    responseText = finalText
+                    let sanitized = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
+                    responseText = FinalIntentValidator.validate(sanitized, routing: routing, fallback: nil)
                     if phase != .speaking { phase = .speaking }
                     speakPending()
                 case .done(let f, let all):
@@ -246,11 +256,14 @@ struct VoiceModeView: View {
                     stepsBuffer = all
                 case .error(let msg):
                     finalText = msg
-                    responseText = msg
+                    responseText = FinalIntentValidator.validate(msg, routing: routing, fallback: nil)
                 }
             }
 
+            guard !Task.isCancelled, activeVoiceTurnID == turnID else { return }
             finishedStreaming = true
+            finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
+            finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
             responseText = finalText
             speakPending()
 
@@ -259,14 +272,27 @@ struct VoiceModeView: View {
             convo.updatedAt = Date()
             try? modelContext.save()
 
-            if appState.autoMemory, finalText.count > 60 {
+            if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
                 await MemoryStore.remember(
                     "User asked: \(text). Assistant: \(String(finalText.prefix(160)))",
                     kind: .conversation, source: "voice", context: modelContext
                 )
                 await MemoryStore.extractAndStore(userText: text, assistantText: finalText, context: modelContext)
             }
+
+            activeVoiceTurnID = nil
         }
+    }
+
+    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [String] {
+        let raw = await MemoryStore.recall(query: query, context: modelContext, limit: 8).map(\.content)
+        return raw.filter { memory in
+            FinalIntentValidator.validate(memory, routing: routing, fallback: nil) == memory.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private func isSafeToStoreMemory(userText: String, assistantText: String, routing: IntentRoutingDecision) -> Bool {
+        FinalIntentValidator.validate(assistantText, routing: routing, fallback: nil) == assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func speakPending() {
@@ -318,11 +344,13 @@ struct VoiceModeView: View {
 
     private func interrupt() {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        let turnID = activeVoiceTurnID
+        activeVoiceTurnID = nil
         responseTask?.cancel()
         voice.stopSpeaking()
         voice.stopListening()
         phase = .idle
-        if appState.handsFree { startListening() }
+        if turnID != nil, appState.handsFree { startListening() }
     }
 
     private func toggleHandsFree() {
@@ -336,6 +364,7 @@ struct VoiceModeView: View {
     }
 
     private func cleanup() {
+        activeVoiceTurnID = nil
         responseTask?.cancel()
         voice.stopListening()
         voice.stopSpeaking()

@@ -115,11 +115,8 @@ final class ToolExecutor {
         arguments: [String: String],
         approval: ToolExecutionApproval = .autonomous
     ) async -> String {
-        await execute(
-            toolID,
-            arguments: arguments.mapValues { AgentJSONValue.string($0) },
-            approval: approval
-        )
+        let typedArguments = AgentJSONArguments(stringDictionary: arguments)
+        return await execute(toolID, arguments: typedArguments, approval: approval)
     }
 }
 
@@ -152,7 +149,8 @@ nonisolated enum ToolRouteGuard {
     }
 
     static func canExecuteTool(_ canonicalToolID: String, arguments: [String: String], approval: ToolExecutionApproval) -> Bool {
-        canExecuteTool(canonicalToolID, arguments: arguments.mapValues { AgentJSONValue.string($0) }, approval: approval)
+        let typedArguments = AgentJSONArguments(stringDictionary: arguments)
+        return canExecuteTool(canonicalToolID, arguments: typedArguments, approval: approval)
     }
 
     static func approvalRequiredMessage(for canonicalToolID: String) -> String {
@@ -170,7 +168,7 @@ nonisolated enum ToolRouteGuard {
         let title = arguments.string("title").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return false }
 
-        guard let startsInValue = arguments["startsInMinutes"], let startsIn = startsInValue.intValue, startsIn >= 0 else {
+        guard let startsIn = arguments["startsInMinutes"]?.intValue, startsIn >= 0 else {
             return false
         }
 
@@ -179,7 +177,8 @@ nonisolated enum ToolRouteGuard {
     }
 
     static func isExplicitCalendarCreateIntent(arguments: [String: String]) -> Bool {
-        isExplicitCalendarCreateIntent(arguments: arguments.mapValues { AgentJSONValue.string($0) })
+        let typedArguments = AgentJSONArguments(stringDictionary: arguments)
+        return isExplicitCalendarCreateIntent(arguments: typedArguments)
     }
 
     static func shouldUseWebSearchInsteadOfNearbySearch(query: String) -> Bool {

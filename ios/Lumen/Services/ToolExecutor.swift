@@ -13,10 +13,11 @@ final class ToolExecutor {
 
     func execute(
         _ toolID: String,
-        arguments: [String: String],
+        arguments: AgentJSONArguments,
         approval: ToolExecutionApproval = .autonomous
     ) async -> String {
         let id = ToolRouteGuard.canonicalToolID(toolID)
+        let stringArguments = arguments.stringCoerced
 
         guard ToolRouteGuard.canExecuteTool(id, arguments: arguments, approval: approval) else {
             return ToolRouteGuard.approvalRequiredMessage(for: id)
@@ -25,37 +26,37 @@ final class ToolExecutor {
         switch id {
         case "calendar.create":
             return await CalendarTools.createEvent(
-                title: arguments["title"] ?? "New Event",
-                startsInMinutes: Int(arguments["startsInMinutes"] ?? "60") ?? 60
+                title: arguments.string("title", default: "New Event"),
+                startsInMinutes: arguments.int("startsInMinutes", default: 60)
             )
         case "calendar.list":
             return await CalendarTools.listEvents()
         case "reminders.create":
-            return await CalendarTools.createReminder(title: arguments["title"] ?? "Reminder")
+            return await CalendarTools.createReminder(title: arguments.string("title", default: "Reminder"))
         case "reminders.list":
             return await CalendarTools.listReminders()
         case "contacts.search":
-            return await ContactsTools.searchContacts(query: arguments["query"] ?? "")
+            return await ContactsTools.searchContacts(query: arguments.string("query"))
         case "messages.draft":
-            return await ContactsTools.composeMessage(arguments: arguments)
+            return await ContactsTools.composeMessage(arguments: stringArguments)
         case "mail.draft":
-            return await ContactsTools.composeMail(arguments: arguments)
+            return await ContactsTools.composeMail(arguments: stringArguments)
         case "phone.call":
-            return await ContactsTools.call(number: arguments["number"] ?? "")
+            return await ContactsTools.call(number: arguments.string("number"))
         case "location.current":
             return await LocationTools.currentLocation()
         case "weather":
-            return await WeatherTools.currentWeather(location: arguments["location"] ?? arguments["city"] ?? arguments["query"])
+            return await WeatherTools.currentWeather(location: arguments.optionalString("location") ?? arguments.optionalString("city") ?? arguments.optionalString("query"))
         case "maps.directions":
-            return LocationTools.openDirections(destination: arguments["destination"] ?? "")
+            return LocationTools.openDirections(destination: arguments.string("destination"))
         case "maps.search":
-            let query = arguments["query"] ?? ""
+            let query = arguments.string("query")
             if ToolRouteGuard.shouldUseWebSearchInsteadOfNearbySearch(query: query) {
                 return await WebTools.webSearch(query: query)
             }
             return await LocationTools.searchNearby(query: query)
         case "photos.search":
-            return await PhotosTools.searchPhotos(query: arguments["query"] ?? "")
+            return await PhotosTools.searchPhotos(query: arguments.string("query"))
         case "camera.capture":
             return await PhotosTools.captureImage()
         case "health.summary":
@@ -63,50 +64,62 @@ final class ToolExecutor {
         case "motion.activity":
             return await MotionTools.shared.motionActivity()
         case "web.search":
-            return await WebTools.webSearch(query: arguments["query"] ?? "")
+            return await WebTools.webSearch(query: arguments.string("query"))
         case "web.fetch":
-            return await WebTools.webFetch(url: arguments["url"] ?? "")
+            return await WebTools.webFetch(url: arguments.string("url"))
         case "files.read":
-            return await FilesTools.readImportedFile(name: arguments["name"] ?? "")
+            return await FilesTools.readImportedFile(name: arguments.string("name"))
         case "memory.save":
-            return await MemoryTools.save(content: arguments["content"] ?? "", kind: arguments["kind"] ?? "fact")
+            return await MemoryTools.save(content: arguments.string("content"), kind: arguments.string("kind", default: "fact"))
         case "memory.recall":
-            return await MemoryTools.recall(query: arguments["query"] ?? "")
+            return await MemoryTools.recall(query: arguments.string("query"))
         case "rag.search":
-            return await MemoryTools.ragSearch(query: arguments["query"] ?? "", limit: Int(arguments["limit"] ?? "5") ?? 5)
+            return await MemoryTools.ragSearch(query: arguments.string("query"), limit: arguments.int("limit", default: 5))
         case "rag.index_files":
             return await MemoryTools.ragIndexFiles()
         case "rag.index_photos":
-            return await MemoryTools.ragIndexPhotos(months: Int(arguments["months"] ?? "6") ?? 6)
+            return await MemoryTools.ragIndexPhotos(months: arguments.int("months", default: 6))
         case "trigger.create":
-            return await TriggerTools.create(args: arguments)
+            return await TriggerTools.create(args: stringArguments)
         case "trigger.list":
             return await TriggerTools.list()
         case "trigger.cancel":
-            return await TriggerTools.cancel(title: arguments["title"] ?? arguments["id"] ?? "")
+            return await TriggerTools.cancel(title: arguments.optionalString("title") ?? arguments.optionalString("id") ?? "")
         case "alarm.authorization_status":
             return await AlarmTools.authorizationStatus()
         case "alarm.request_authorization":
             return await AlarmTools.requestAuthorization()
         case "alarm.schedule":
-            return await AlarmTools.schedule(args: arguments)
+            return await AlarmTools.schedule(args: stringArguments)
         case "alarm.countdown":
-            return await AlarmTools.countdown(args: arguments)
+            return await AlarmTools.countdown(args: stringArguments)
         case "alarm.list":
             return await AlarmTools.list()
         case "alarm.pause":
-            return await AlarmTools.pause(id: arguments["id"] ?? "")
+            return await AlarmTools.pause(id: arguments.string("id"))
         case "alarm.resume":
-            return await AlarmTools.resume(id: arguments["id"] ?? "")
+            return await AlarmTools.resume(id: arguments.string("id"))
         case "alarm.stop":
-            return await AlarmTools.stop(id: arguments["id"] ?? "")
+            return await AlarmTools.stop(id: arguments.string("id"))
         case "alarm.snooze":
-            return await AlarmTools.snooze(id: arguments["id"] ?? "")
+            return await AlarmTools.snooze(id: arguments.string("id"))
         case "alarm.cancel":
-            return await AlarmTools.cancel(id: arguments["id"] ?? arguments["title"] ?? "")
+            return await AlarmTools.cancel(id: arguments.optionalString("id") ?? arguments.optionalString("title") ?? "")
         default:
             return "Unknown tool: \(toolID). Available weather/search tools are: weather, web.search, maps.search, location.current."
         }
+    }
+
+    func execute(
+        _ toolID: String,
+        arguments: [String: String],
+        approval: ToolExecutionApproval = .autonomous
+    ) async -> String {
+        await execute(
+            toolID,
+            arguments: arguments.mapValues { AgentJSONValue.string($0) },
+            approval: approval
+        )
     }
 }
 
@@ -127,7 +140,7 @@ nonisolated enum ToolRouteGuard {
         }
     }
 
-    static func canExecuteTool(_ canonicalToolID: String, arguments: [String: String], approval: ToolExecutionApproval) -> Bool {
+    static func canExecuteTool(_ canonicalToolID: String, arguments: AgentJSONArguments, approval: ToolExecutionApproval) -> Bool {
         if requiresUserApproval(canonicalToolID), approval != .userApproved {
             return false
         }
@@ -136,6 +149,10 @@ nonisolated enum ToolRouteGuard {
             return isExplicitCalendarCreateIntent(arguments: arguments)
         }
         return true
+    }
+
+    static func canExecuteTool(_ canonicalToolID: String, arguments: [String: String], approval: ToolExecutionApproval) -> Bool {
+        canExecuteTool(canonicalToolID, arguments: arguments.mapValues { AgentJSONValue.string($0) }, approval: approval)
     }
 
     static func approvalRequiredMessage(for canonicalToolID: String) -> String {
@@ -149,16 +166,20 @@ nonisolated enum ToolRouteGuard {
         ToolRegistry.find(id: canonicalToolID)?.requiresApproval ?? false
     }
 
-    static func isExplicitCalendarCreateIntent(arguments: [String: String]) -> Bool {
-        let title = arguments["title"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    static func isExplicitCalendarCreateIntent(arguments: AgentJSONArguments) -> Bool {
+        let title = arguments.string("title").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return false }
 
-        let startsIn = arguments["startsInMinutes"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let hasValidStart = Int(startsIn).map { $0 >= 0 } ?? false
-        guard hasValidStart else { return false }
+        guard let startsInValue = arguments["startsInMinutes"], let startsIn = startsInValue.intValue, startsIn >= 0 else {
+            return false
+        }
 
         let suspiciousGreetingTitles = ["hi", "hello", "hey", "hi lumen", "hello lumen", "hey lumen"]
         return !suspiciousGreetingTitles.contains(title.lowercased())
+    }
+
+    static func isExplicitCalendarCreateIntent(arguments: [String: String]) -> Bool {
+        isExplicitCalendarCreateIntent(arguments: arguments.mapValues { AgentJSONValue.string($0) })
     }
 
     static func shouldUseWebSearchInsteadOfNearbySearch(query: String) -> Bool {

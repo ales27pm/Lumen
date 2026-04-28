@@ -15,7 +15,7 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "weather.current")
-        #expect(turn.action?.args["city"] == "Boston")
+        #expect(turn.action?.args["city"]?.stringValue == "Boston")
         #expect(turn.final == nil)
     }
 
@@ -24,7 +24,7 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "weather.current")
-        #expect(turn.action?.args["city"] == "Boston")
+        #expect(turn.action?.args["city"]?.stringValue == "Boston")
     }
 
     @Test func parserRejectsMixedTurn() async throws {
@@ -64,11 +64,13 @@ struct LumenTests {
         #expect(turn.parseError == .multipleJSONObjects)
     }
 
-    @Test func parserRejectsNonStringArgs() async throws {
+    @Test func parserAcceptsTypedNumberArgs() async throws {
         let raw = #"{"action":{"tool":"weather.current","args":{"days":3}}}"#
         let turn = AgentTurnParser.parse(raw)
-        #expect(turn.parseError == .invalidActionArgsType)
-        #expect(turn.action == nil)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "weather.current")
+        #expect(turn.action?.args["days"]?.intValue == 3)
+        #expect(turn.action?.args["days"]?.stringValue == "3")
     }
 
     @Test func parserRejectsMalformedEscapes() async throws {
@@ -158,7 +160,7 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "web.search")
-        #expect(turn.action?.args["query"] == "swift")
+        #expect(turn.action?.args["query"]?.stringValue == "swift")
         #expect(turn.hadNoise)
     }
 
@@ -191,7 +193,7 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "web.search")
-        #expect(turn.action?.args["query"] == "swift testing")
+        #expect(turn.action?.args["query"]?.stringValue == "swift testing")
     }
 
     @Test func parserAcceptsFlatActionUsingInputAlias() async throws {
@@ -199,15 +201,18 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "memory.save")
-        #expect(turn.action?.args["content"] == "remember this")
-        #expect(turn.action?.args["kind"] == "fact")
+        #expect(turn.action?.args["content"]?.stringValue == "remember this")
+        #expect(turn.action?.args["kind"]?.stringValue == "fact")
     }
 
-    @Test func parserRejectsInputAliasWithNonStringArgs() async throws {
-        let raw = #"{"tool":"memory.save","input":{"content":"remember this","priority":1}}"#
+    @Test func parserAcceptsInputAliasWithTypedArgs() async throws {
+        let raw = #"{"tool":"memory.save","input":{"content":"remember this","priority":1,"pinned":true}}"#
         let turn = AgentTurnParser.parse(raw)
-        #expect(turn.parseError == .invalidActionArgsType)
-        #expect(turn.action == nil)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "memory.save")
+        #expect(turn.action?.args["content"]?.stringValue == "remember this")
+        #expect(turn.action?.args["priority"]?.intValue == 1)
+        #expect(turn.action?.args["pinned"]?.boolValue == true)
     }
 
     @Test func parserAcceptsRawInputStringContainingJSONObject() async throws {
@@ -215,14 +220,17 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "web.search")
-        #expect(turn.action?.args["query"] == "swift testing")
+        #expect(turn.action?.args["query"]?.stringValue == "swift testing")
     }
 
-    @Test func parserRejectsRawInputStringContainingJSONObjectWithNonStringArgs() async throws {
-        let raw = #"{"tool":"web.search","input":"{\"query\":3}"}"#
+    @Test func parserAcceptsRawInputStringContainingJSONObjectWithTypedArgs() async throws {
+        let raw = #"{"tool":"web.search","input":"{\"query\":\"swift testing\",\"limit\":3,\"fresh\":true}"}"#
         let turn = AgentTurnParser.parse(raw)
-        #expect(turn.parseError == .invalidActionArgsType)
-        #expect(turn.action == nil)
+        #expect(turn.parseError == nil)
+        #expect(turn.action?.tool == "web.search")
+        #expect(turn.action?.args["query"]?.stringValue == "swift testing")
+        #expect(turn.action?.args["limit"]?.intValue == 3)
+        #expect(turn.action?.args["fresh"]?.boolValue == true)
     }
 
     @Test func parserAcceptsRawInputStringAsFreeTextQueryFallback() async throws {
@@ -230,7 +238,7 @@ struct LumenTests {
         let turn = AgentTurnParser.parse(raw)
         #expect(turn.parseError == nil)
         #expect(turn.action?.tool == "web.search")
-        #expect(turn.action?.args["query"] == "swift testing")
+        #expect(turn.action?.args["query"]?.stringValue == "swift testing")
     }
 
     @Test func parserRejectsNestedActionMissingToolName() async throws {
@@ -296,8 +304,8 @@ struct LumenTests {
     }
 
     @Test func agentActionDedupeKeyAndDisplayAreDeterministic() async throws {
-        let action1 = AgentAction(tool: "web.search", args: ["q": "swift", "city": "Boston"])
-        let action2 = AgentAction(tool: "web.search", args: ["city": "Boston", "q": "swift"])
+        let action1 = AgentAction(tool: "web.search", args: ["q": .string("swift"), "city": .string("Boston")])
+        let action2 = AgentAction(tool: "web.search", args: ["city": .string("Boston"), "q": .string("swift")])
         #expect(action1.dedupeKey == action2.dedupeKey)
         #expect(action1.displayContent == "web.search(city=Boston, q=swift)")
     }

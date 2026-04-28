@@ -1,6 +1,6 @@
 import Foundation
 
-enum ModelStorage {
+nonisolated enum ModelStorage {
     static func modelsDirectoryURL(fileManager: FileManager = .default) -> URL {
         let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         let directory = base.appendingPathComponent("Models", isDirectory: true)

@@ -31,6 +31,18 @@ nonisolated enum LumenModelSlot: String, Codable, CaseIterable, Sendable, Identi
     var shouldRunOnlyWhenIdle: Bool { self == .rem }
 }
 
+nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
+    case v0SingleRuntime
+    case v1PlannedHotSwap
+
+    var displayName: String {
+        switch self {
+        case .v0SingleRuntime: return "v0 single runtime"
+        case .v1PlannedHotSwap: return "v1 planned hot-swap"
+        }
+    }
+}
+
 nonisolated struct LumenModelSlotContract: Sendable, Hashable {
     let slot: LumenModelSlot
     let systemContract: String
@@ -112,8 +124,22 @@ nonisolated struct LumenModelAssignment: Sendable, Hashable {
 }
 
 nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
+    let mode: LumenFleetRuntimeMode
     let assignments: [LumenModelSlot: LumenModelAssignment]
     let missingSlots: [LumenModelSlot]
+    let residentSlots: Set<LumenModelSlot>
+
+    init(
+        mode: LumenFleetRuntimeMode = .v0SingleRuntime,
+        assignments: [LumenModelSlot: LumenModelAssignment],
+        missingSlots: [LumenModelSlot],
+        residentSlots: Set<LumenModelSlot> = []
+    ) {
+        self.mode = mode
+        self.assignments = assignments
+        self.missingSlots = missingSlots
+        self.residentSlots = residentSlots
+    }
 
     func assignment(for slot: LumenModelSlot) -> LumenModelAssignment? {
         assignments[slot]
@@ -121,6 +147,13 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
 
     var isRunnableV0: Bool {
         assignment(for: .cortex) != nil && assignment(for: .mouth) != nil
+    }
+
+    var isRunnableV1: Bool {
+        assignment(for: .cortex) != nil
+        && assignment(for: .executor) != nil
+        && assignment(for: .mouth) != nil
+        && assignment(for: .mimicry) != nil
     }
 }
 
@@ -146,6 +179,50 @@ enum LumenModelFleetResolver {
         var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
         let textModels = storedModels.filter { $0.modelRole == .chat }
         let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
+        let runtimeText = activeText ?? preferredTextModel(from: textModels)
+
+        // v0 is intentionally a two-runtime design: one chat model plus one embedding model.
+        // Cortex, Executor, Mouth, Mimicry and REM are behavioral contracts layered over the
+        // currently active chat runtime, not separate simultaneously loaded models.
+        if let runtimeText {
+            for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
+                assignments[slot] = assignment(slot: slot, model: runtimeText)
+            }
+        }
+
+        if let embed = preferredEmbedding(activeEmbeddingModelID: activeEmbeddingModelID, storedModels: storedModels) {
+            assignments[.embedding] = assignment(slot: .embedding, model: embed)
+        }
+
+        let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
+        return LumenModelFleetSnapshot(
+            mode: .v0SingleRuntime,
+            assignments: assignments,
+            missingSlots: missing,
+            residentSlots: Set(assignments.keys.filter { $0 == .cortex || $0 == .embedding })
+        )
+    }
+
+    static func resolveV1(appState: AppState, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+        resolveV1(
+            activeChatModelID: appState.activeChatModelID,
+            activeEmbeddingModelID: appState.activeEmbeddingModelID,
+            storedModels: storedModels
+        )
+    }
+
+    static func resolveV1(settings: SettingsSnapshot, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+        resolveV1(
+            activeChatModelID: settings.activeChatModelID,
+            activeEmbeddingModelID: settings.activeEmbeddingModelID,
+            storedModels: storedModels
+        )
+    }
+
+    static func resolveV1(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
+        var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
+        let textModels = storedModels.filter { $0.modelRole == .chat }
+        let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
         let fallbackText = activeText ?? preferredTextModel(from: textModels)
 
         for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
@@ -154,20 +231,28 @@ enum LumenModelFleetResolver {
             }
         }
 
-        let embedModels = storedModels.filter { $0.modelRole == .embedding }
-        let activeEmbed = activeEmbeddingModelID.flatMap { id in
-            embedModels.first { $0.id.uuidString == id }
-        }
-        let fallbackEmbed = activeEmbed
-            ?? preferredModel(for: .embedding, storedModels: embedModels)
-            ?? mostRecentModel(from: embedModels)
-
-        if let embed = fallbackEmbed {
+        if let embed = preferredEmbedding(activeEmbeddingModelID: activeEmbeddingModelID, storedModels: storedModels) {
             assignments[.embedding] = assignment(slot: .embedding, model: embed)
         }
 
         let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
-        return LumenModelFleetSnapshot(assignments: assignments, missingSlots: missing)
+        let resident = Set([LumenModelSlot.cortex, .embedding].filter { assignments[$0] != nil })
+        return LumenModelFleetSnapshot(
+            mode: .v1PlannedHotSwap,
+            assignments: assignments,
+            missingSlots: missing,
+            residentSlots: resident
+        )
+    }
+
+    private static func preferredEmbedding(activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> StoredModel? {
+        let embedModels = storedModels.filter { $0.modelRole == .embedding }
+        let activeEmbed = activeEmbeddingModelID.flatMap { id in
+            embedModels.first { $0.id.uuidString == id }
+        }
+        return activeEmbed
+            ?? preferredModel(for: .embedding, storedModels: embedModels)
+            ?? mostRecentModel(from: embedModels)
     }
 
     private static func preferredModel(for slot: LumenModelSlot, storedModels: [StoredModel]) -> StoredModel? {
@@ -196,15 +281,15 @@ enum LumenModelFleetResolver {
     private static func hintWeights(for slot: LumenModelSlot) -> [String: Int] {
         switch slot {
         case .cortex:
-            return ["coder": 50, "qwen": 35, "0.5b": 15, "1.5b": 12, "fleet": 10]
+            return ["1.5b": 70, "coder": 60, "qwen": 35, "cortex": 25, "0.5b": 10]
         case .executor:
-            return ["coder": 55, "qwen": 35, "0.5b": 20, "json": 10, "structured": 10]
+            return ["coder": 65, "qwen": 35, "0.5b": 25, "json": 15, "structured": 15]
         case .mouth:
-            return ["qwen": 35, "smollm": 30, "voice": 20, "mouth": 20, "0.5b": 10]
+            return ["qwen": 40, "voice": 25, "mouth": 25, "smollm": 15, "0.5b": 15]
         case .mimicry:
-            return ["qwen": 35, "mimicry": 25, "voice": 15, "0.5b": 15, "smollm": 10]
+            return ["qwen": 40, "mimicry": 30, "voice": 20, "0.5b": 20, "smollm": 10]
         case .rem:
-            return ["smollm": 45, "phi": 35, "rem": 25, "idle": 10, "1.7b": 10]
+            return ["phi": 60, "3.5": 35, "smollm": 35, "rem": 30, "idle": 15, "1.7b": 10]
         case .embedding:
             return ["nomic": 50, "embed": 40, "embedding": 30, "memory": 15]
         }

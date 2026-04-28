@@ -5,6 +5,10 @@ nonisolated enum AssistantOutputSanitizer {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
 
+        if isLeakedToolJSONArtifact(trimmed) {
+            return neutralFallback(for: lastUserMessage)
+        }
+
         if isPrivacyPlaceholderArtifact(trimmed) {
             return neutralFallback(for: lastUserMessage)
         }
@@ -37,6 +41,24 @@ nonisolated enum AssistantOutputSanitizer {
             normalized.contains("title: hi")
 
         return mentionsGreetingEvent || isPureConversation(lastUserMessage)
+    }
+
+    static func isLeakedToolJSONArtifact(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = normalized.lowercased()
+        let compact = compacted(normalized)
+
+        if lower.hasPrefix("```json") || lower.hasPrefix("```") {
+            if lower.contains("\"action\"") || lower.contains("\"tool\"") || lower.contains("\"args\"") || lower.contains("web.search") {
+                return true
+            }
+        }
+
+        if lower.hasPrefix("{") && lower.contains("\"thought\"") && (lower.contains("\"action\"") || lower.contains("\"final\"")) {
+            return true
+        }
+
+        return compact.contains("thought") && compact.contains("action") && compact.contains("tool") && compact.contains("args")
     }
 
     static func isPrivacyPlaceholderArtifact(_ text: String) -> Bool {

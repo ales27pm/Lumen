@@ -3,6 +3,8 @@ import SwiftUI
 struct FleetStatusCard: View {
     let snapshot: LumenModelFleetSnapshot
     let progresses: [String: DownloadProgress]
+    let loadedPaths: Set<String>
+    let onRepair: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -18,6 +20,9 @@ struct FleetStatusCard: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
+                Button("Repair") { onRepair() }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
             }
 
             VStack(spacing: 8) {
@@ -28,15 +33,20 @@ struct FleetStatusCard: View {
                             .foregroundStyle(Theme.textPrimary)
                             .frame(width: 76, alignment: .leading)
 
-                        if let assignment = snapshot.assignment(for: slot) {
-                            Text("\(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization)")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(Theme.textSecondary)
-                                .lineLimit(1)
-                        } else {
-                            Text("missing")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let assignment = snapshot.assignment(for: slot) {
+                                Text("\(assignment.displayName) · \(assignment.parameters) · \(assignment.quantization)")
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(1)
+                                Text(statusText(for: assignment))
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(statusColor(for: assignment))
+                            } else {
+                                Text("missing")
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.orange)
+                            }
                         }
                         Spacer()
                     }
@@ -60,12 +70,14 @@ struct FleetStatusCard: View {
                                     .foregroundStyle(Theme.textPrimary)
                                     .lineLimit(1)
                                 Spacer()
-                                Text("\(Int(item.progress.fractionCompleted * 100))%")
+                                Text(item.label)
                                     .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(Theme.textSecondary)
+                                    .foregroundStyle(item.isFailed ? .red : Theme.textSecondary)
                             }
-                            ProgressView(value: item.progress.fractionCompleted)
-                                .tint(Theme.accent)
+                            if !item.isFailed {
+                                ProgressView(value: item.progress.fractionCompleted)
+                                    .tint(Theme.accent)
+                            }
                         }
                     }
                 }
@@ -86,13 +98,27 @@ struct FleetStatusCard: View {
         return "Missing: \(snapshot.missingSlots.map(\.displayName).joined(separator: ", "))"
     }
 
-    private var activeDownloads: [(id: String, name: String, progress: DownloadProgress)] {
+    private func statusText(for assignment: LumenModelAssignment) -> String {
+        if loadedPaths.contains(assignment.localPath) { return "loaded" }
+        if assignment.slot.shouldRunOnlyWhenIdle { return "downloaded · idle-only" }
+        return "downloaded"
+    }
+
+    private func statusColor(for assignment: LumenModelAssignment) -> Color {
+        loadedPaths.contains(assignment.localPath) ? Theme.accent : Theme.textSecondary
+    }
+
+    private var activeDownloads: [(id: String, name: String, progress: DownloadProgress, label: String, isFailed: Bool)] {
         LumenModelFleetCatalog.v0Recommended.compactMap { model in
             guard let progress = progresses[model.id] else { return nil }
             switch progress.state {
-            case .downloading, .paused:
-                return (model.id, model.name, progress)
-            case .queued, .completed, .failed:
+            case .downloading:
+                return (model.id, model.name, progress, "\(Int(progress.fractionCompleted * 100))%", false)
+            case .paused:
+                return (model.id, model.name, progress, "paused", false)
+            case .failed(let message):
+                return (model.id, model.name, progress, "failed: \(message)", true)
+            case .queued, .completed:
                 return nil
             }
         }

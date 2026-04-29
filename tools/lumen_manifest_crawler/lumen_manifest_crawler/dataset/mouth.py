@@ -13,7 +13,7 @@ def generate_mouth_records(manifest: AgentBehaviorManifest) -> list[dict]:
                     {"role": "user", "content": f"Cortex says {tool.id} requires approval. Ask the user for confirmation."},
                     {"role": "assistant", "content": f"Do you want me to run {tool.displayName or tool.id}?"},
                 ],
-                "grounding": {"responseMode": "approval_request", "forbidden": manifest.sentinels.forbiddenInUserOutput},
+                "grounding": {"responseMode": "approval_request", "forbidden": list(manifest.sentinels.forbiddenInUserOutput)},
             })
         else:
             records.append({

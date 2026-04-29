@@ -226,6 +226,7 @@ struct VoiceModeView: View {
                 .filter { appState.enabledToolIDs.contains($0.id) }
                 .filter { IntentRouter.isToolAllowed($0.id, for: routing) }
 
+            let gatedMemories = MemoryGate.filter(intent: routing.intent, items: memories, userMessage: text)
             let req = AgentRequest(
                 systemPrompt: appState.systemPrompt,
                 history: [],
@@ -236,7 +237,7 @@ struct VoiceModeView: View {
                 maxTokens: appState.maxTokens,
                 maxSteps: appState.maxAgentSteps,
                 availableTools: tools,
-                relevantMemories: memories
+                relevantMemories: gatedMemories
             )
 
             var finalText = ""

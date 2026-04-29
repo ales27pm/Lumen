@@ -80,6 +80,7 @@ final class SlotAgentService {
 
                     if let final = parsed.final, !final.isEmpty {
                         finalText = FinalIntentValidator.validate(final, routing: routing, fallback: observations.last)
+                        finalText = appendRichPayloadMarkersIfNeeded(to: finalText, from: observations)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -252,7 +253,27 @@ final class SlotAgentService {
         } else {
             candidate = trimmed
         }
-        return FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
+        let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
+        return appendRichPayloadMarkersIfNeeded(to: validated, from: observations + [draft ?? ""])
+    }
+
+    private func appendRichPayloadMarkersIfNeeded(to text: String, from sources: [String]) -> String {
+        let existing = WebRichContentPayload.decodeAll(from: text)
+        let payloads = sources.flatMap { WebRichContentPayload.decodeAll(from: $0) }
+        guard !payloads.isEmpty else { return text }
+        let existingKeys = Set(existing.map(payloadKey))
+        let missing = payloads.filter { !existingKeys.contains(payloadKey($0)) }
+        guard !missing.isEmpty else { return text }
+        return text + missing.map { $0.encodedMarker() }.joined()
+    }
+
+    private func payloadKey(_ payload: WebRichContentPayload) -> String {
+        switch payload.kind {
+        case .searchResults:
+            return "search:\(payload.query ?? ""):\(payload.results.map { $0.url ?? $0.title }.joined(separator: "|"))"
+        case .fetchedPage:
+            return "page:\(payload.page?.url ?? "")"
+        }
     }
 
     private func generateText(
@@ -297,7 +318,7 @@ final class SlotAgentService {
 
     private func makeStructuredTurnPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition], mode: StructuredTurnMode) -> String {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
-        let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
+        let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
         let contextBlock = shortTermContextBlock(req.history)
 
         switch mode {
@@ -384,8 +405,9 @@ final class SlotAgentService {
     }
 
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
-        let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
-        let draftBlock = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
+        let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
+        let draftBlockRaw = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
+        let draftBlock = WebRichContentPayload.removingMarkers(from: draftBlockRaw)
         let contextBlock = shortTermContextBlock(req.history)
         return """
         Write the final user-facing answer for the current user request only. Do not output JSON.
@@ -442,7 +464,7 @@ final class SlotAgentService {
     }
 
     private func shouldFinalizeAfterObservation(_ observation: String, routing: IntentRoutingDecision, toolID: String) -> Bool {
-        let text = observation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = WebRichContentPayload.removingMarkers(from: observation).trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = text.lowercased()
         guard !text.isEmpty else { return false }
 
@@ -454,7 +476,7 @@ final class SlotAgentService {
         case .weather:
             return lower.contains("weather") || lower.contains("temperature") || lower.contains("humidity") || lower.contains("feels like") || lower.contains("°c")
         case .webSearch:
-            return lower.contains("http") || lower.contains("result") || lower.contains("source") || lower.contains("no direct answer")
+            return lower.contains("http") || lower.contains("result") || lower.contains("source") || lower.contains("search results") || lower.contains("no direct answer")
         case .maps:
             return lower.contains("map") || lower.contains("direction") || lower.contains("near") || lower.contains("location") || lower.contains("opening maps")
         case .photos:
@@ -515,7 +537,7 @@ final class SlotAgentService {
             case .tool: role = "tool"
             case .system: role = "system"
             }
-            let clean = item.content
+            let clean = AssistantOutputSanitizer.sanitize(item.content)
                 .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return "- \(role): \(String(clean.prefix(500)))"

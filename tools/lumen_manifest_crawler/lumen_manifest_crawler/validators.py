@@ -25,8 +25,9 @@ def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str
             if tool_id not in known_tools:
                 failures.append(ValidationFailure(code="unknown_intent_tool", message=f"Intent {intent.id} references missing tool {tool_id}", path=f"intents.{intent.id}"))
 
-    supported_types = set(manifest.agentProtocols.executorOutput.get("supportedJSONTypes", [])) or DEFAULT_SUPPORTED_JSON_TYPES
-    normalized_supported = {str(t).lower() for t in supported_types}.union(DEFAULT_SUPPORTED_JSON_TYPES)
+    raw_supported = manifest.agentProtocols.executorOutput.get("supportedJSONTypes")
+    supported_types = set(raw_supported) if raw_supported else DEFAULT_SUPPORTED_JSON_TYPES
+    normalized_supported = {str(t).lower() for t in supported_types}
     for tool in manifest.tools:
         if getattr(tool, "inferred", False):
             warnings.append(

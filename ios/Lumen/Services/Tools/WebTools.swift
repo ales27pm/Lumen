@@ -129,7 +129,7 @@ nonisolated enum WebTools {
 
             let unique = uniqueNonEmptyLines(lines)
             guard !unique.isEmpty || !results.isEmpty else { return nil }
-            let payload = WebRichContentPayload(kind: .searchResults, query: query, results: results, media: results.compactMap(mediaPayload(from:)))
+            let payload = WebRichContentPayload(kind: .searchResults, query: query, results: results, media: uniqueMedia(results.compactMap(mediaPayload(from:))))
             return SearchOutput(text: unique.joined(separator: "\n"), payload: payload)
         }
     }
@@ -164,7 +164,7 @@ nonisolated enum WebTools {
                 if let snippet = result.snippet, !snippet.isEmpty { lines.append(snippet) }
                 if let url = result.url, !url.isEmpty { lines.append(url) }
             }
-            let payload = WebRichContentPayload(kind: .searchResults, query: query, results: Array(results), media: results.compactMap(mediaPayload(from:)))
+            let payload = WebRichContentPayload(kind: .searchResults, query: query, results: Array(results), media: uniqueMedia(results.compactMap(mediaPayload(from:))))
             return SearchOutput(text: lines.joined(separator: "\n"), payload: payload)
         }
     }
@@ -402,7 +402,7 @@ nonisolated enum WebTools {
                 media.append(WebMediaPayload(kind: .pdf, url: url.absoluteString, title: nil, thumbnailURL: nil, sourcePageURL: baseURL.absoluteString))
             }
         }
-        return Array(NSOrderedSet(array: media).compactMap { $0 as? WebMediaPayload })
+        return uniqueMedia(media)
     }
 
     private static func mediaPayload(from result: WebSearchResultPayload) -> WebMediaPayload? {
@@ -426,6 +426,18 @@ nonisolated enum WebTools {
         if decoded.hasPrefix("//") { return URL(string: "https:\(decoded)") }
         if let url = URL(string: decoded), url.scheme != nil { return url }
         return URL(string: decoded, relativeTo: baseURL)?.absoluteURL
+    }
+
+    private static func uniqueMedia(_ media: [WebMediaPayload]) -> [WebMediaPayload] {
+        var seen: Set<String> = []
+        var output: [WebMediaPayload] = []
+        for item in media {
+            let key = item.url.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !key.isEmpty, !seen.contains(key) else { continue }
+            seen.insert(key)
+            output.append(item)
+        }
+        return output
     }
 
     private static func uniqueNonEmptyLines(_ lines: [String]) -> [String] {

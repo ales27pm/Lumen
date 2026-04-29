@@ -43,8 +43,13 @@ final class MicrosoftGraphAuthManager {
         do {
             let application = try makeMSALApplication()
             let cached = try application.allAccounts()
+            let previousAccountID = account?.id
             accounts = cached.map(Self.snapshot(from:))
-            if account == nil { account = accounts.first }
+            if let previousAccountID {
+                account = accounts.first(where: { $0.id == previousAccountID }) ?? accounts.first
+            } else {
+                account = accounts.first
+            }
         } catch {
             lastError = error
         }
@@ -103,17 +108,16 @@ final class MicrosoftGraphAuthManager {
         do {
             let application = try makeMSALApplication()
             let cached = try application.allAccounts()
-            guard let current = account else { return }
-            if let match = cached.first(where: { Self.snapshot(from: $0).id == current.id }) {
+            if let currentID = account?.id, let match = cached.first(where: { Self.snapshot(from: $0).id == currentID }) {
                 try application.remove(match)
             }
-            token = nil
-            account = nil
-            await reloadCachedAccounts()
-            MicrosoftGraphMailCacheStore.shared.clearAll()
         } catch {
             lastError = error
         }
+        token = nil
+        account = nil
+        await reloadCachedAccounts()
+        MicrosoftGraphMailCacheStore.shared.clearAll()
         #else
         token = nil
         account = nil

@@ -26,7 +26,7 @@ This branch adds a native Microsoft Graph mail surface to Lumen under **Outlook*
 https://github.com/AzureAD/microsoft-authentication-library-for-objc.git
 ```
 
-Use the latest stable MSAL 1.x release and link the `MSAL` product to the **Lumen** target.
+Use the latest stable MSAL 2.x release (for example, 2.10.0) and link the `MSAL` product to the **Lumen** target.
 
 2. In Microsoft Entra admin center, register the app:
 

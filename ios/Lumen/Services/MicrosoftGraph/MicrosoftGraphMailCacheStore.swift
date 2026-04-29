@@ -7,9 +7,13 @@ final class MicrosoftGraphMailCacheStore {
     private let logger = Logger(subsystem: "ai.lumen.microsoftgraph", category: "cache")
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let dateParserWithFractional = ISO8601DateFormatter()
+    private let dateParser = ISO8601DateFormatter()
 
     private init() {
         encoder.outputFormatting = [.sortedKeys]
+        dateParserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        dateParser.formatOptions = [.withInternetDateTime]
     }
 
     nonisolated struct Snapshot: Codable, Sendable {
@@ -53,7 +57,9 @@ final class MicrosoftGraphMailCacheStore {
             }
         }
         let sorted = byID.values.sorted { lhs, rhs in
-            (lhs.receivedDateTime ?? lhs.sentDateTime ?? "") > (rhs.receivedDateTime ?? rhs.sentDateTime ?? "")
+            let lhsDate = parsedDate(for: lhs)
+            let rhsDate = parsedDate(for: rhs)
+            return lhsDate > rhsDate
         }
         return Snapshot(messages: Array(sorted.prefix(250)), deltaLink: deltaLink ?? existing.deltaLink, updatedAt: Date())
     }
@@ -77,6 +83,15 @@ final class MicrosoftGraphMailCacheStore {
     private func cacheDirectory() throws -> URL {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         return support.appendingPathComponent("MicrosoftGraphMail", isDirectory: true)
+    }
+
+    private func parsedDate(for message: GraphMailMessage) -> Date {
+        let timestamp = message.receivedDateTime ?? message.sentDateTime
+        guard let timestamp else { return .distantPast }
+        if let date = dateParserWithFractional.date(from: timestamp) ?? dateParser.date(from: timestamp) {
+            return date
+        }
+        return .distantPast
     }
 }
 
@@ -144,12 +159,13 @@ final class MicrosoftGraphInboxViewModel {
         }
     }
 
-    func send(subject: String, body: String, recipients: [String]) async throws {
+    func send(subject: String, body: String, recipients: [String], sendAsHTML: Bool = true) async throws {
         let token = try await auth.acquireToken(scopes: MicrosoftGraphScope.mailSendScopes, preferredAccountID: auth.account?.id)
+        let content = sendAsHTML ? body.replacingOccurrences(of: "\n", with: "<br>") : body
         let mail = GraphSendMailRequest(
             message: .init(
                 subject: subject,
-                body: .init(contentType: "HTML", content: body),
+                body: .init(contentType: sendAsHTML ? "HTML" : "Text", content: content),
                 toRecipients: recipients.map { .init(emailAddress: .init(address: $0, name: nil)) },
                 ccRecipients: nil,
                 bccRecipients: nil,

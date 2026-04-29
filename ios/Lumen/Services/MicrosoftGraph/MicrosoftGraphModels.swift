@@ -236,7 +236,8 @@ nonisolated struct MicrosoftGraphConfiguration: Sendable {
         }
 
         guard let clientID = value("MSALClientID") else { throw MicrosoftGraphAuthError.missingClientID }
-        let authorityURL = URL(string: value("MSALAuthorityURL") ?? "https://login.microsoftonline.com/common")!
+        let authorityString = value("MSALAuthorityURL") ?? "https://login.microsoftonline.com/common"
+        guard let authorityURL = URL(string: authorityString) else { throw MicrosoftGraphAuthError.invalidConfiguration }
         let keychainGroup = value("MSALKeychainGroup") ?? "com.microsoft.adalcache"
         let redirect = value("MSALRedirectURI")
 

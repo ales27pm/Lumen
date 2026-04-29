@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OutlookMailView: View {
     @State private var auth = MicrosoftGraphAuthManager()
@@ -82,12 +83,14 @@ struct OutlookMailView: View {
             } label: {
                 if auth.isAuthenticating {
                     ProgressView()
+                } else if !auth.canUseMSAL {
+                    Label("MSAL not linked", systemImage: "shippingbox")
                 } else {
                     Label("Sign in with Microsoft", systemImage: "person.crop.circle.badge.checkmark")
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(auth.isAuthenticating)
+            .disabled(auth.isAuthenticating || !auth.canUseMSAL)
         }
         .padding(24)
         .frame(maxWidth: 520)
@@ -217,6 +220,7 @@ struct OutlookMailView: View {
     }
 
     private func signIn() async {
+        guard auth.canUseMSAL else { return }
         guard let presenter = MicrosoftGraphPresenter.topViewController() else {
             auth.registerExternalError(MicrosoftGraphAuthError.presentationAnchorUnavailable)
             return
@@ -240,7 +244,7 @@ struct OutlookMailView: View {
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            try await viewModel?.send(subject: composeSubject, body: composeBody.replacingOccurrences(of: "\n", with: "<br>"), recipients: recipients)
+            try await viewModel?.send(subject: composeSubject, body: composeBody, recipients: recipients, sendAsHTML: true)
             composeTo = ""
             composeSubject = ""
             composeBody = ""
@@ -278,9 +282,7 @@ private struct MailMessageDetailView: View {
                     if isLoading { ProgressView("Loading body…") }
                     if let error { Text(error.localizedDescription).foregroundStyle(.red) }
 
-                    Text((loadedMessage ?? message).body?.content ?? message.previewLine)
-                        .font(.body)
-                        .textSelection(.enabled)
+                    MessageBodyContentView(message: loadedMessage ?? message)
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -300,6 +302,57 @@ private struct MailMessageDetailView: View {
             loadedMessage = try await client.fetchMessageBody(messageID: message.id, accessToken: token)
         } catch {
             self.error = error
+        }
+    }
+}
+
+private struct MessageBodyContentView: View {
+    let message: GraphMailMessage
+
+    var body: some View {
+        let content = message.body?.content ?? message.previewLine
+        let bodyType = message.body?.contentType.lowercased() ?? "text"
+        Group {
+            if bodyType == "html" {
+                HTMLTextView(html: content)
+            } else {
+                Text(content)
+                    .font(.body)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+}
+
+private struct HTMLTextView: UIViewRepresentable {
+    let html: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.isEditable = false
+        textView.isScrollEnabled = false
+        textView.backgroundColor = .clear
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        guard let data = html.data(using: .utf8) else {
+            uiView.text = html
+            return
+        }
+        if let attributed = try? NSAttributedString(
+            data: data,
+            options: [
+                .documentType: NSAttributedString.DocumentType.html,
+                .characterEncoding: String.Encoding.utf8.rawValue
+            ],
+            documentAttributes: nil
+        ) {
+            uiView.attributedText = attributed
+        } else {
+            uiView.text = html
         }
     }
 }

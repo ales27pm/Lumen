@@ -57,7 +57,7 @@ struct OutlookMailView: View {
             VStack(spacing: 8) {
                 Text("Connect Hotmail / Outlook")
                     .font(.title2.weight(.semibold))
-                Text("Use Microsoft Graph for Outlook.com, Hotmail, Live, MSN, and Entra ID mailboxes. Tokens stay in the MSAL Keychain cache.")
+                Text("Use Microsoft Graph for Outlook.com, Hotmail, Live, MSN, and Entra ID mailboxes. Auth provider: \(auth.authProviderDescription).")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -65,9 +65,9 @@ struct OutlookMailView: View {
 
             if !auth.canUseMSAL {
                 ContentUnavailableView(
-                    "MSAL package missing",
-                    systemImage: "shippingbox",
-                    description: Text("Add microsoft-authentication-library-for-objc in Xcode Package Dependencies, then set MSALClientID in Info.plist/build settings.")
+                    "Using native OAuth fallback",
+                    systemImage: "key.radiowaves.forward",
+                    description: Text("MSAL is not linked in this build, so Lumen will sign in with ASWebAuthenticationSession + PKCE and store refresh tokens in the Keychain.")
                 )
             }
 
@@ -83,14 +83,12 @@ struct OutlookMailView: View {
             } label: {
                 if auth.isAuthenticating {
                     ProgressView()
-                } else if !auth.canUseMSAL {
-                    Label("MSAL not linked", systemImage: "shippingbox")
                 } else {
                     Label("Sign in with Microsoft", systemImage: "person.crop.circle.badge.checkmark")
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(auth.isAuthenticating || !auth.canUseMSAL)
+            .disabled(auth.isAuthenticating)
         }
         .padding(24)
         .frame(maxWidth: 520)
@@ -173,7 +171,7 @@ struct OutlookMailView: View {
                     }
                 }
                 Spacer()
-                Text("Graph v1.0 · Delta sync")
+                Text("Graph v1.0 · Delta sync · \(auth.authProviderDescription)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -220,7 +218,6 @@ struct OutlookMailView: View {
     }
 
     private func signIn() async {
-        guard auth.canUseMSAL else { return }
         guard let presenter = MicrosoftGraphPresenter.topViewController() else {
             auth.registerExternalError(MicrosoftGraphAuthError.presentationAnchorUnavailable)
             return

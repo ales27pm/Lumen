@@ -10,6 +10,7 @@ import MSAL
 @Observable
 final class MicrosoftGraphAuthManager {
     private let logger = Logger(subsystem: "ai.lumen.microsoftgraph", category: "auth")
+    private let nativeOAuth = NativeMicrosoftOAuthClient()
     private(set) var account: MicrosoftGraphAccountSnapshot?
     private(set) var token: MicrosoftGraphTokenSnapshot?
     private(set) var accounts: [MicrosoftGraphAccountSnapshot] = []
@@ -24,6 +25,7 @@ final class MicrosoftGraphAuthManager {
         return false
         #endif
     }
+    var authProviderDescription: String { canUseMSAL ? "MSAL" : "Native OAuth PKCE" }
 
     init() {}
 
@@ -54,8 +56,17 @@ final class MicrosoftGraphAuthManager {
             lastError = error
         }
         #else
-        accounts = []
-        lastError = MicrosoftGraphAuthError.msalNotLinked
+        let previousAccountID = account?.id
+        accounts = nativeOAuth.cachedAccounts()
+        if let previousAccountID {
+            account = accounts.first(where: { $0.id == previousAccountID }) ?? accounts.first
+        } else {
+            account = accounts.first
+        }
+        if let session = nativeOAuth.loadCachedSession() {
+            token = Self.tokenSnapshot(from: session.token, scopes: MicrosoftGraphScope.inboxRead)
+            lastError = nil
+        }
         #endif
     }
 
@@ -95,7 +106,19 @@ final class MicrosoftGraphAuthManager {
             throw error
         }
         #else
-        throw MicrosoftGraphAuthError.msalNotLinked
+        do {
+            let nativeToken = try await nativeOAuth.acquireToken(scopes: scopes, forceRefresh: forceRefresh)
+            let mapped = Self.tokenSnapshot(from: nativeToken, scopes: scopes)
+            token = mapped
+            if let session = nativeOAuth.loadCachedSession() {
+                account = session.account
+                accounts = [session.account]
+            }
+            return mapped.accessToken
+        } catch {
+            lastError = error
+            throw error
+        }
         #endif
     }
 
@@ -119,8 +142,11 @@ final class MicrosoftGraphAuthManager {
         await reloadCachedAccounts()
         MicrosoftGraphMailCacheStore.shared.clearAll()
         #else
+        nativeOAuth.signOut()
         token = nil
         account = nil
+        accounts = []
+        MicrosoftGraphMailCacheStore.shared.clearAll()
         #endif
     }
 
@@ -141,8 +167,13 @@ final class MicrosoftGraphAuthManager {
         let result = try await application.acquireTokenAsync(with: params)
         return (Self.tokenSnapshot(from: result, scopes: scopes), Self.snapshot(from: result.account))
         #else
-        throw MicrosoftGraphAuthError.msalNotLinked
+        let session = try await nativeOAuth.signIn(scopes: scopes, presentationViewController: presentationViewController)
+        return (Self.tokenSnapshot(from: session.token, scopes: scopes), session.account)
         #endif
+    }
+
+    private nonisolated static func tokenSnapshot(from token: NativeMicrosoftOAuthTokenSet, scopes: [String]) -> MicrosoftGraphTokenSnapshot {
+        MicrosoftGraphTokenSnapshot(accessToken: token.accessToken, expiresOn: token.expiresOn, scopes: scopes)
     }
 
     #if canImport(MSAL)

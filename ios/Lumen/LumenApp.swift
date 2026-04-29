@@ -160,7 +160,7 @@ struct LumenApp: App {
             Group {
                 switch startup.state {
                 case .loading:
-                    BootSplashView(onDone: {})
+                    BootSplashView()
                 case .ready(let container):
                     RootView()
                         .modelContainer(container)

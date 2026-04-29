@@ -6,6 +6,7 @@
 //
 
 import Testing
+import XCTest
 @testable import Lumen
 
 struct LumenTests {
@@ -411,10 +412,10 @@ struct LumenTests {
 
     @Test func parseFailureSummaryAggregatesByErrorAndNoiseSignatures() async throws {
         let lines = [
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "Prefix NOISE alpha", suffixNoise: "Suffix one"),
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise beta", suffixNoise: "suffix one"),
-            makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: nil, suffixNoise: nil),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "Prefix NOISE alpha", suffixNoise: "Suffix one"),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "prefix noise beta", suffixNoise: "suffix one"),
+            try makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: nil, suffixNoise: nil),
         ]
         let jsonl = lines.joined(separator: "\n")
         let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: jsonl, topN: 5)
@@ -430,8 +431,8 @@ struct LumenTests {
     }
 
     @Test func parseFailureSummarySkipsCorruptLinesAndRespectsTopN() async throws {
-        let validA = makeParseFailureTraceLine(parseError: "invalidFinalType", prefixNoise: "pre a", suffixNoise: "suf a")
-        let validB = makeParseFailureTraceLine(parseError: "invalidThoughtType", prefixNoise: "pre b", suffixNoise: "suf b")
+        let validA = try makeParseFailureTraceLine(parseError: "invalidFinalType", prefixNoise: "pre a", suffixNoise: "suf a")
+        let validB = try makeParseFailureTraceLine(parseError: "invalidThoughtType", prefixNoise: "pre b", suffixNoise: "suf b")
         let jsonl = [validA, "{not-json", validA, validB].joined(separator: "\n")
         let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: jsonl, topN: 1)
 
@@ -444,8 +445,8 @@ struct LumenTests {
     }
 
     @Test func parseNoiseSummarySkipsCorruptLinesAndRespectsTopN() async throws {
-        let validA = makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 0, prefixNoise: "pre a", suffixNoise: "suf a")
-        let validB = makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "pre b", suffixNoise: "suf b")
+        let validA = try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 0, prefixNoise: "pre a", suffixNoise: "suf a")
+        let validB = try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "pre b", suffixNoise: "suf b")
         let jsonl = [validA, "{not-json", validA, validB].joined(separator: "\n")
         let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: jsonl, topN: 1)
 
@@ -460,10 +461,10 @@ struct LumenTests {
 
     @Test func parseNoiseSummaryGroupsByNormalizedSignaturesModelAndStep() async throws {
         let lines = [
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "Prefix Noise Alpha", suffixNoise: "Suffix One"),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "prefix   noise alpha", suffixNoise: "suffix one"),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 2, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
-            makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "Prefix Noise Alpha", suffixNoise: "Suffix One"),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "prefix   noise alpha", suffixNoise: "suffix one"),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 2, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
+            try makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "prefix noise alpha", suffixNoise: "suffix one"),
         ]
         let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
 
@@ -481,11 +482,11 @@ struct LumenTests {
     @Test func parseFailureSummaryComputesRecentTrendWindowsAndRegression() async throws {
         let now = Date(timeIntervalSince1970: 2_000_000)
         let lines = [
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-172_800)),
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-36_000)),
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-3_600)),
-            makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-600)),
-            makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-300)),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-172_800)),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-36_000)),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-3_600)),
+            try makeParseFailureTraceLine(parseError: "invalidJSONObject", prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-600)),
+            try makeParseFailureTraceLine(parseError: "missingActionOrFinal", prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-300)),
         ]
         let summary = AgentParseFailureSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
 
@@ -502,12 +503,12 @@ struct LumenTests {
     @Test func parseNoiseSummaryComputesRecentTrendWindowsAndRegression() async throws {
         let now = Date(timeIntervalSince1970: 3_000_000)
         let lines = [
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-200_000)),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-180_000)),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-1_000)),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-500)),
-            makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-100)),
-            makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-50)),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-200_000)),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-180_000)),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-1_000)),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-500)),
+            try makeParseNoiseTraceLine(modelName: "agent-json", stepIndex: 1, prefixNoise: "alpha", suffixNoise: "one", createdAt: now.addingTimeInterval(-100)),
+            try makeParseNoiseTraceLine(modelName: "agent-thought", stepIndex: 1, prefixNoise: "beta", suffixNoise: "two", createdAt: now.addingTimeInterval(-50)),
         ]
         let summary = AgentParseNoiseSummaryLoader.load(fromJSONLText: lines.joined(separator: "\n"), topN: 5)
 
@@ -532,7 +533,7 @@ struct LumenTests {
         ###############################################
         ```
         """
-        let attachment = makeTestAttachment(name: "code-heavy.txt", kind: .text, content: content)
+        let attachment = try makeTestAttachment(name: "code-heavy.txt", kind: .text, content: content)
         let budget = PromptBudget(totalChars: 12_000, attachmentsShare: 4_000, memoriesShare: 0, historyShare: 2_000)
 
         let rawAssembly = PromptAssembler.assemble(
@@ -574,7 +575,7 @@ struct LumenTests {
         ----- END PAGE -----
         ```
         """
-        let attachment = makeTestAttachment(name: "scan-extract.txt", kind: .text, content: content)
+        let attachment = try makeTestAttachment(name: "scan-extract.txt", kind: .text, content: content)
         let budget = PromptBudget(totalChars: 12_000, attachmentsShare: 4_000, memoriesShare: 0, historyShare: 2_000)
 
         let rawAssembly = PromptAssembler.assemble(
@@ -628,7 +629,7 @@ private func makeParseFailureTraceLine(
     prefixNoise: String?,
     suffixNoise: String?,
     createdAt: Date = Date(timeIntervalSince1970: 1_000)
-) -> String {
+) throws -> String {
     let trace = AgentParseFailureTrace(
         id: UUID(),
         createdAt: createdAt,
@@ -649,7 +650,8 @@ private func makeParseFailureTraceLine(
     )
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
-    let data = try! encoder.encode(trace)
+    let encodedTrace: Data = XCTAssertNoThrow(try encoder.encode(trace), "Encoding parse failure trace should succeed so summary tests validate aggregation behavior.")
+    let data = try XCTUnwrap(encodedTrace, "Expected encoded parse failure trace data to be non-nil after successful encoding.")
     return String(decoding: data, as: UTF8.self)
 }
 
@@ -659,7 +661,7 @@ private func makeParseNoiseTraceLine(
     prefixNoise: String?,
     suffixNoise: String?,
     createdAt: Date = Date(timeIntervalSince1970: 1_000)
-) -> String {
+) throws -> String {
     let trace = AgentParseNoiseTrace(
         id: UUID(),
         createdAt: createdAt,
@@ -677,15 +679,16 @@ private func makeParseNoiseTraceLine(
     )
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
-    let data = try! encoder.encode(trace)
+    let encodedTrace: Data = XCTAssertNoThrow(try encoder.encode(trace), "Encoding parse noise trace should succeed so summary tests validate grouping behavior.")
+    let data = try XCTUnwrap(encodedTrace, "Expected encoded parse noise trace data to be non-nil after successful encoding.")
     return String(decoding: data, as: UTF8.self)
 }
 
-private func makeTestAttachment(name: String, kind: ChatAttachment.Kind, content: String) -> ChatAttachment {
+private func makeTestAttachment(name: String, kind: ChatAttachment.Kind, content: String) throws -> ChatAttachment {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    XCTAssertNoThrow(try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true), "Creating a temporary attachment directory should succeed before writing test fixture content.")
     let fileURL = dir.appendingPathComponent(name)
-    try! content.write(to: fileURL, atomically: true, encoding: .utf8)
+    XCTAssertNoThrow(try content.write(to: fileURL, atomically: true, encoding: .utf8), "Writing attachment fixture content to disk should succeed so prompt assembly tests can load the file.")
     return ChatAttachment(
         name: name,
         kind: kind,

@@ -3,6 +3,11 @@ import SwiftData
 
 @MainActor
 enum MemoryStore {
+    nonisolated struct TTLPolicy: Sendable {
+        let freshness: MemoryFreshnessClass
+        let ttl: TimeInterval?
+    }
+
     static func recall(query: String, context: ModelContext, limit: Int = 5) async -> [MemoryItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, limit > 0 else { return [] }
@@ -15,9 +20,12 @@ enum MemoryStore {
         results.reserveCapacity(hits.count)
         for h in hits {
             if let item = context.model(for: h.id) as? MemoryItem {
+                migrateExpiryIfNeeded(for: item)
+                guard !isExpired(item) else { continue }
                 results.append(item)
             }
         }
+        try? context.save()
         return results
     }
 
@@ -30,7 +38,16 @@ enum MemoryStore {
             }
         }
         let embedding = await AppLlamaService.shared.embed(text: trimmed)
-        let item = MemoryItem(content: trimmed, kind: kind, source: source, embedding: embedding, topic: topic)
+        let policy = ttlPolicy(kind: kind, source: source)
+        let item = MemoryItem(
+            content: trimmed,
+            kind: kind,
+            source: source,
+            embedding: embedding,
+            topic: topic,
+            expiresAt: policy.ttl.map { Date().addingTimeInterval($0) },
+            freshnessClass: policy.freshness
+        )
         context.insert(item)
         try? context.save()
         MemoryVectorIndex.shared.ensureLoaded(context: context)
@@ -160,5 +177,41 @@ enum MemoryStore {
         var out = s
         if out.count > 140 { out = String(out.prefix(140)) + "…" }
         return out
+    }
+
+    static func migrateExpiryIfNeeded(for item: MemoryItem) {
+        guard item.expiresAt == nil || item.freshnessClass == nil else { return }
+        let policy = ttlPolicy(kind: item.memoryKind, source: item.source)
+        item.freshnessClass = policy.freshness.rawValue
+        if item.expiresAt == nil {
+            item.expiresAt = policy.ttl.map { item.createdAt.addingTimeInterval($0) }
+        }
+    }
+
+    static func isExpired(_ item: MemoryItem, now: Date = Date()) -> Bool {
+        guard let expiresAt = item.expiresAt else { return false }
+        return expiresAt <= now
+    }
+
+    nonisolated static func ttlPolicy(kind: MemoryKind, source: String) -> TTLPolicy {
+        let lowerSource = source.lowercased()
+
+        if lowerSource.contains("tool") || lowerSource.contains("ephemeral") || lowerSource.contains("observation") {
+            return TTLPolicy(freshness: .volatile, ttl: 45 * 60)
+        }
+
+        if kind == .conversation || lowerSource.contains("crumb") || lowerSource.contains("chat") {
+            return TTLPolicy(freshness: .shortLived, ttl: 6 * 60 * 60)
+        }
+
+        if kind == .preference || kind == .project || kind == .person {
+            return TTLPolicy(freshness: .timeless, ttl: nil)
+        }
+
+        if lowerSource == "rem-condensed" {
+            return TTLPolicy(freshness: .durable, ttl: nil)
+        }
+
+        return TTLPolicy(freshness: .durable, ttl: 30 * 24 * 60 * 60)
     }
 }

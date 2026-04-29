@@ -70,18 +70,23 @@ final class CameraCaptureController: NSObject {
     }
 
     private func finish(_ result: String) {
+        MainActor.preconditionIsolated()
         continuation?.resume(returning: result)
         continuation = nil
     }
 }
 
-nonisolated final class PhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+@MainActor
+final class PhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    /// Concurrency contract: delegate callbacks may arrive on arbitrary queues; this type
+    /// immediately hops to MainActor before mutating capture controller state.
     private let owner: CameraCaptureController
     init(owner: CameraCaptureController) { self.owner = owner }
 
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+    nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         let data = photo.fileDataRepresentation()
-        Task { @MainActor in
+        Task { @MainActor [owner] in
+            MainActor.preconditionIsolated()
             owner.didCapture(data: data, error: error)
         }
     }

@@ -421,22 +421,26 @@ final class PermissionsCenter {
     }
 }
 
-nonisolated final class LocationAuthWaiter: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+@MainActor
+final class LocationAuthWaiter: NSObject, CLLocationManagerDelegate {
+    /// Concurrency contract: all state mutation and callback dispatch are confined to MainActor.
     var onChange: (() -> Void)?
     private var done = false
-    private let lock = NSLock()
 
     func finishOnce() {
-        lock.lock()
-        if done { lock.unlock(); return }
+        MainActor.preconditionIsolated()
+        if done { return }
         done = true
         let cb = onChange
         onChange = nil
-        lock.unlock()
         cb?()
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus != .notDetermined { finishOnce() }
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            if manager.authorizationStatus != .notDetermined {
+                self.finishOnce()
+            }
+        }
     }
 }

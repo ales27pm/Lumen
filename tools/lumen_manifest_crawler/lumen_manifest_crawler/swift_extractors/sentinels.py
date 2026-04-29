@@ -13,6 +13,17 @@ DEFAULT_FORBIDDEN = {
     "<scratchpad>",
     "<hidden_reasoning>",
 }
+SENTINEL_WORDS = {
+    "final",
+    "hidden",
+    "internal",
+    "private",
+    "reasoning",
+    "scratchpad",
+    "state",
+    "tool",
+    "user",
+}
 
 
 class SentinelExtractor(SwiftExtractor):
@@ -22,9 +33,17 @@ class SentinelExtractor(SwiftExtractor):
         found = set(manifest.sentinels.forbiddenInUserOutput)
         found.update(DEFAULT_FORBIDDEN)
         for literal in string_literals(file.text):
-            if re.fullmatch(r"<[A-Za-z0-9_\-]+>", literal):
-                found.add(literal)
             lowered = literal.lower()
+            if self._looks_like_internal_sentinel(lowered):
+                found.add(literal)
             if "private_reasoning" in lowered or "scratchpad" in lowered or "internal_state" in lowered:
                 found.add(literal)
         manifest.sentinels.forbiddenInUserOutput = sorted(found)
+
+    @staticmethod
+    def _looks_like_internal_sentinel(value: str) -> bool:
+        if not re.fullmatch(r"<[a-z0-9_\-]+>", value):
+            return False
+        inner = value[1:-1]
+        tokens = set(re.split(r"[_\-]+", inner))
+        return bool(tokens.intersection(SENTINEL_WORDS))

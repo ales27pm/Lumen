@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "8efedc4ea70b1a0aa519f6c648d7e12f3fe50188",
+    "commit": "bdfd089557c0cb3a721a35449c0fcb489ef0913a",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -136,10 +136,25 @@
     {
       "id": "calendar.create",
       "displayName": "Create Event",
-      "description": "\"Add an event to your calendar. Args: title",
+      "description": "Add an event to your calendar. Args: title, startsInMinutes.",
       "requiresApproval": true,
       "permissionKey": "NSCalendarsFullAccessUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, startsInMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "startsInMinutes",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, startsInMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -161,7 +176,15 @@
       "description": "Create a new reminder. Args: title.",
       "requiresApproval": true,
       "permissionKey": "NSRemindersFullAccessUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -180,10 +203,18 @@
     {
       "id": "contacts.search",
       "displayName": "Search Contacts",
-      "description": "\"Find a contact by name. Args: query. Only use for the user's address book",
+      "description": "Find a contact by name. Args: query. Only use for the user's address book, not web people search.",
       "requiresApproval": false,
       "permissionKey": "NSContactsUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -191,10 +222,53 @@
     {
       "id": "messages.draft",
       "displayName": "Draft Message",
-      "description": "\"Compose an iMessage/SMS draft. Args: to or recipient or number",
+      "description": "Compose an iMessage/SMS draft. Args: to or recipient or number, body or message or text.",
       "requiresApproval": true,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "recipient",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "number",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or number, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -202,10 +276,60 @@
     {
       "id": "mail.draft",
       "displayName": "Draft Email",
-      "description": "\"Compose an email draft. Args: to or recipient or email",
+      "description": "Compose an email draft. Args: to or recipient or email, subject, body or message or text.",
       "requiresApproval": true,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "recipient",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -215,8 +339,16 @@
       "displayName": "Start Call",
       "description": "Open the phone dialer for a number. Args: number. Never use for general lookup.",
       "requiresApproval": true,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "number",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: number",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -235,10 +367,18 @@
     {
       "id": "weather",
       "displayName": "Current Weather",
-      "description": "\"Get current weather using GPS or a city. Args: optional location or city. Use when the user asks weather",
+      "description": "Get current weather using GPS or a city. Args: optional location or city. Use when the user asks weather, temperature, rain, snow, wind, forecast now, or conditions.",
       "requiresApproval": false,
       "permissionKey": "NSLocationWhenInUseUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "city",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: optional  location or city",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -248,8 +388,16 @@
       "displayName": "Get Directions",
       "description": "Open Apple Maps directions to a real destination. Args: destination. Use only for navigation/route requests.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "destination",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: destination",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -257,10 +405,18 @@
     {
       "id": "maps.search",
       "displayName": "Search Nearby",
-      "description": "\"Find nearby/local places in Apple Maps. Args: query. Use only for local places like coffee near me",
+      "description": "Find nearby/local places in Apple Maps. Args: query. Use only for local places like coffee near me, pharmacy nearby, closest hardware store, addresses, or directions. Do not use for DIY, tutorials, research, articles, or general web search.",
       "requiresApproval": false,
       "permissionKey": "NSLocationWhenInUseUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -271,7 +427,15 @@
       "description": "Search the user's photo library by date/category terms. Args: query. Not for web image search.",
       "requiresApproval": false,
       "permissionKey": "NSPhotoLibraryUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -290,7 +454,7 @@
     {
       "id": "health.summary",
       "displayName": "Health Summary",
-      "description": "\"Read steps",
+      "description": "Read steps, sleep, heart rate, energy, and distance. Args: none.",
       "requiresApproval": false,
       "permissionKey": "NSHealthShareUsageDescription",
       "arguments": [],
@@ -312,10 +476,18 @@
     {
       "id": "web.search",
       "displayName": "Web Search",
-      "description": "\"Search the web for general knowledge",
+      "description": "Search the web for general knowledge, fresh information, tutorials, DIY guides, plans, research, articles, or documentation. Args: query. Use this for `search for ...` unless the user explicitly wants nearby/local places.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -325,8 +497,16 @@
       "displayName": "Fetch URL",
       "description": "Fetch and read a specific web page. Args: url. Use only when the user gives a URL or a prior web search returns one to inspect.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: url",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -336,8 +516,16 @@
       "displayName": "Read File",
       "description": "Read a previously imported local document by name. Args: name. Do not use for attached files already visible in the current prompt.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: name",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -345,10 +533,25 @@
     {
       "id": "memory.save",
       "displayName": "Save Memory",
-      "description": "\"Store a user fact or preference for future recall. Args: content",
+      "description": "Store a user fact or preference for future recall. Args: content, kind.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: content, kind",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: content, kind",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -358,8 +561,16 @@
       "displayName": "Recall Memory",
       "description": "Search stored memories about the user. Args: query. Not for web search.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -367,10 +578,18 @@
     {
       "id": "rag.search",
       "displayName": "Search Personal Data",
-      "description": "\"Semantic search across indexed local files",
+      "description": "Semantic search across indexed local files, PDFs, notes, and photo metadata. Args: query, optional limit. Not for internet search.",
       "requiresApproval": false,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional  limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -380,7 +599,7 @@
       "displayName": "Reindex Files",
       "description": "Rebuild the index for imported files and PDFs. Args: none.",
       "requiresApproval": false,
-      "permissionKey": "nil",
+      "permissionKey": null,
       "arguments": [],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
@@ -392,7 +611,15 @@
       "description": "Rebuild the monthly photo metadata index. Args: months.",
       "requiresApproval": false,
       "permissionKey": "NSPhotoLibraryUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "months",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: months",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -400,10 +627,60 @@
     {
       "id": "trigger.create",
       "displayName": "Schedule Agent Run",
-      "description": "\"Schedule a background agent run. Args: title",
+      "description": "Schedule a background agent run. Args: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule.",
       "requiresApproval": true,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "prompt",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "schedule",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "inMinutes",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "atTime",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "intervalSeconds",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "beforeMinutes",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, prompt, schedule, plus inMinutes/atTime/intervalSeconds/beforeMinutes depending on schedule",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -413,7 +690,7 @@
       "displayName": "List Triggers",
       "description": "Show active scheduled agent runs. Args: none.",
       "requiresApproval": false,
-      "permissionKey": "nil",
+      "permissionKey": null,
       "arguments": [],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
@@ -424,8 +701,23 @@
       "displayName": "Cancel Trigger",
       "description": "Cancel a scheduled agent run. Args: title or id.",
       "requiresApproval": true,
-      "permissionKey": "nil",
-      "arguments": [],
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -455,10 +747,39 @@
     {
       "id": "alarm.schedule",
       "displayName": "Schedule Alarm",
-      "description": "\"Schedule an AlarmKit alarm. Args: title",
+      "description": "Schedule an AlarmKit alarm. Args: title, inMinutes or timestamp, optional repeats, snoozeMinutes.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "inMinutes",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "timestamp",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "snoozeMinutes",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -466,10 +787,25 @@
     {
       "id": "alarm.countdown",
       "displayName": "Start Countdown",
-      "description": "\"Create a countdown alarm. Args: title",
+      "description": "Create a countdown alarm. Args: title, durationSeconds.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, durationSeconds",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "durationSeconds",
+          "type": "number",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: title, durationSeconds",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -491,7 +827,15 @@
       "description": "Pause an alarm. Args: id UUID.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -502,7 +846,15 @@
       "description": "Resume a paused alarm. Args: id UUID.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -513,7 +865,15 @@
       "description": "Stop an alerting alarm. Args: id UUID.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -524,7 +884,15 @@
       "description": "Snooze an alerting alarm. Args: id UUID.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -535,7 +903,22 @@
       "description": "Cancel a scheduled alarm. Args: id UUID or title fallback.",
       "requiresApproval": true,
       "permissionKey": "NSAlarmKitUsageDescription",
-      "arguments": [],
+      "arguments": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID or title fallback",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: id UUID or title fallback",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
       "source": "ios/Lumen/Models/ToolDefinition.swift",
       "inferred": false,
       "inferredSource": null
@@ -1422,7 +1805,7 @@
     ],
     "freshnessClasses": [
       {
-        "id": "shortLived",
+        "id": "timeless",
         "ttlSeconds": null,
         "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
@@ -1440,7 +1823,7 @@
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
       {
-        "id": "timeless",
+        "id": "shortLived",
         "ttlSeconds": null,
         "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"

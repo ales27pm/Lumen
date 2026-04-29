@@ -3,7 +3,7 @@ import SwiftData
 import OSLog
 
 @MainActor
-struct AppStartupCoordinator {
+final class AppStartupCoordinator {
     enum Stage: String {
         case container
         case bootstrap
@@ -30,7 +30,7 @@ struct AppStartupCoordinator {
     private let logger = Logger(subsystem: "ai.lumen.app", category: "startup")
     private(set) var state: State = .loading
 
-    mutating func initialize(
+    func initialize(
         appState: AppState,
         createContainer: @MainActor @Sendable () throws -> ModelContainer = Self.defaultContainerFactory,
         bootstrap: @MainActor @Sendable (AppState, ModelContext) async throws -> Void = Self.defaultBootstrap
@@ -70,7 +70,7 @@ struct AppStartupCoordinator {
         return FailureContext(stage: stage, message: nsError.localizedDescription, domain: nsError.domain, code: nsError.code)
     }
 
-    mutating func continueInLimitedMode(appState: AppState) {
+    func continueInLimitedMode(appState: AppState) {
         do {
             let container = try Self.inMemoryContainerFactory()
             SharedContainer.shared = container

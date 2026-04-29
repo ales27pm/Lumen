@@ -126,7 +126,7 @@ enum PhotosTools {
 
         let fallbackStart = now.addingTimeInterval(-86_400)
         logger.warning(
-            "date_math_fallback tool=photos reason=previous_day_addition_failed now=\(now.formatted(date: .iso8601, time: .standard), privacy: .public) fallback_start=\(fallbackStart.formatted(date: .iso8601, time: .standard), privacy: .public)"
+            "date_math_fallback tool=photos reason=previous_day_addition_failed now=\(now.formatted(date: .numeric, time: .standard), privacy: .public) fallback_start=\(fallbackStart.formatted(date: .numeric, time: .standard), privacy: .public)"
         )
         return (fallbackStart, now)
     }

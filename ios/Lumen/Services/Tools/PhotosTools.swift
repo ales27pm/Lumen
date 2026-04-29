@@ -1,9 +1,12 @@
 import Foundation
 import Photos
 import AVFoundation
+import OSLog
 
 @MainActor
 enum PhotosTools {
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "PhotosTools")
+
     static func searchPhotos(query: String) async -> String {
         let status = await withCheckedContinuation { (cont: CheckedContinuation<PHAuthorizationStatus, Never>) in
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
@@ -26,15 +29,19 @@ enum PhotosTools {
             let start = cal.startOfDay(for: now)
             dateRange = (start, now)
         } else if trimmed.contains("yesterday") {
-            let start = cal.startOfDay(for: cal.date(byAdding: .day, value: -1, to: now)!)
-            let end = cal.startOfDay(for: now)
-            dateRange = (start, end)
+            dateRange = previousDayRange(now: now, calendar: cal)
         } else if trimmed.contains("week") {
-            dateRange = (cal.date(byAdding: .day, value: -7, to: now)!, now)
+            if let weekStart = cal.date(byAdding: .day, value: -7, to: now) {
+                dateRange = (weekStart, now)
+            }
         } else if trimmed.contains("month") {
-            dateRange = (cal.date(byAdding: .month, value: -1, to: now)!, now)
+            if let monthStart = cal.date(byAdding: .month, value: -1, to: now) {
+                dateRange = (monthStart, now)
+            }
         } else if trimmed.contains("year") {
-            dateRange = (cal.date(byAdding: .year, value: -1, to: now)!, now)
+            if let yearStart = cal.date(byAdding: .year, value: -1, to: now) {
+                dateRange = (yearStart, now)
+            }
         }
 
         let wantFavorites = trimmed.contains("favorite") || trimmed.contains("favourite")
@@ -105,5 +112,22 @@ enum PhotosTools {
         guard let date else { return "unknown date" }
         return date.formatted(date: .abbreviated, time: .shortened)
     }
-}
 
+    static func previousDayRange(
+        now: Date,
+        calendar: Calendar,
+        previousDayProvider: (Calendar, Date) -> Date? = { cal, reference in
+            cal.date(byAdding: .day, value: -1, to: reference)
+        }
+    ) -> (Date, Date) {
+        if let previousDay = previousDayProvider(calendar, now) {
+            return (calendar.startOfDay(for: previousDay), calendar.startOfDay(for: now))
+        }
+
+        let fallbackStart = now.addingTimeInterval(-86_400)
+        logger.warning(
+            "date_math_fallback tool=photos reason=previous_day_addition_failed now=\(now.formatted(date: .iso8601, time: .standard), privacy: .public) fallback_start=\(fallbackStart.formatted(date: .iso8601, time: .standard), privacy: .public)"
+        )
+        return (fallbackStart, now)
+    }
+}

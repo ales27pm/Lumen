@@ -7,6 +7,8 @@ public struct AgentGroundingAuditView: View {
     @State private var report: RuntimeAgentManifestAuditReport?
     @State private var scenarioResults: [RuntimeScenarioResult] = []
     @State private var errorMessage: String?
+    @State private var manifestSource: String?
+    @State private var usedRuntimeFallback = false
 
     public init(registryProvider: RuntimeToolRegistryProviding) {
         self.auditor = RuntimeManifestAuditor(registryProvider: registryProvider)
@@ -18,6 +20,8 @@ public struct AgentGroundingAuditView: View {
                 Button("Run Agent Grounding Audit") {
                     runAudit()
                 }
+            } footer: {
+                Text("Compares the bundled AgentBehaviorManifest.json against the live ToolRegistry. If the manifest resource is missing in a dev build, Lumen falls back to a runtime-generated manifest and reports that fallback here.")
             }
 
             if let errorMessage {
@@ -37,6 +41,15 @@ public struct AgentGroundingAuditView: View {
                     Text(report.generatedAt.formatted())
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let manifestSource {
+                        LabeledContent("Manifest", value: manifestSource)
+                            .font(.caption)
+                    }
+                    if usedRuntimeFallback {
+                        Label("Runtime fallback was used. Sync AgentBehaviorManifest.json into the app bundle before trusting this as a source-of-truth audit.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
 
                 if !report.failures.isEmpty {
@@ -85,21 +98,15 @@ public struct AgentGroundingAuditView: View {
 
     private func runAudit() {
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let manifest = try auditor.loadBundledManifest()
-                let auditReport = auditor.audit(manifest: manifest)
-                let scenarios = scenarioRunner.validateStaticScenarios(manifest: manifest)
-                DispatchQueue.main.async {
-                    report = auditReport
-                    scenarioResults = scenarios
-                    errorMessage = nil
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    report = nil
-                    scenarioResults = []
-                    errorMessage = error.localizedDescription
-                }
+            let loadResult = auditor.loadBundledManifestOrRuntimeFallback()
+            let auditReport = auditor.audit(manifest: loadResult.manifest)
+            let scenarios = scenarioRunner.validateStaticScenarios(manifest: loadResult.manifest)
+            DispatchQueue.main.async {
+                report = auditReport
+                scenarioResults = scenarios
+                manifestSource = loadResult.source
+                usedRuntimeFallback = loadResult.usedRuntimeFallback
+                errorMessage = nil
             }
         }
     }

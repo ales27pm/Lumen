@@ -40,7 +40,32 @@ public final class RuntimeManifestAuditor {
         return try JSONDecoder().decode(AgentBehaviorManifest.self, from: data)
     }
 
-    public func loadBundledManifestOrRuntimeFallback(resourceName: String = "AgentBehaviorManifest", bundle: Bundle = .main) -> RuntimeManifestLoadResult {
+    public func loadManifestFromStoreBundleOrRuntimeFallback(resourceName: String = "AgentBehaviorManifest", bundle: Bundle = .main) -> RuntimeManifestLoadResult {
+        do {
+            if let stored = try AgentManifestStore.load() {
+                return RuntimeManifestLoadResult(
+                    manifest: stored,
+                    source: "application-support:\(AgentManifestStore.directoryName)/\(AgentManifestStore.fileName)",
+                    usedRuntimeFallback: false
+                )
+            }
+        } catch {
+            // Fall through to bundled manifest, then runtime fallback.
+        }
+
+        do {
+            if let seededURL = try AgentManifestStore.seedFromBundleIfNeeded(resourceName: resourceName, bundle: bundle),
+               let seeded = try AgentManifestStore.load() {
+                return RuntimeManifestLoadResult(
+                    manifest: seeded,
+                    source: "application-support:\(seededURL.lastPathComponent) seeded-from-bundle",
+                    usedRuntimeFallback: false
+                )
+            }
+        } catch {
+            // Fall through to direct bundle read, then runtime fallback.
+        }
+
         do {
             return RuntimeManifestLoadResult(
                 manifest: try loadBundledManifest(resourceName: resourceName, bundle: bundle),
@@ -54,6 +79,10 @@ public final class RuntimeManifestAuditor {
                 usedRuntimeFallback: true
             )
         }
+    }
+
+    public func loadBundledManifestOrRuntimeFallback(resourceName: String = "AgentBehaviorManifest", bundle: Bundle = .main) -> RuntimeManifestLoadResult {
+        loadManifestFromStoreBundleOrRuntimeFallback(resourceName: resourceName, bundle: bundle)
     }
 
     public func syntheticManifestFromRuntimeRegistry(missingResourceName: String = "AgentBehaviorManifest") -> AgentBehaviorManifest {

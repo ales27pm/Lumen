@@ -217,6 +217,26 @@ nonisolated enum GraphHTTPError: LocalizedError, Equatable, Sendable {
     }
 }
 
+
+nonisolated enum MicrosoftGraphRuntimeConfig {
+    static let clientIDDefaultsKey = "MSALClientIDOverride"
+
+    static func saveClientIDOverride(_ clientID: String?) {
+        let trimmed = clientID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty {
+            UserDefaults.standard.set(trimmed, forKey: clientIDDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: clientIDDefaultsKey)
+        }
+    }
+
+    static func loadClientIDOverride() -> String? {
+        let value = UserDefaults.standard.string(forKey: clientIDDefaultsKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value, !value.isEmpty else { return nil }
+        return value
+    }
+}
+
 nonisolated struct MicrosoftGraphConfiguration: Sendable {
     let clientID: String
     let authorityURL: URL
@@ -235,7 +255,8 @@ nonisolated struct MicrosoftGraphConfiguration: Sendable {
             return candidate
         }
 
-        guard let clientID = value("MSALClientID") else { throw MicrosoftGraphAuthError.missingClientID }
+        let runtimeClientID = MicrosoftGraphRuntimeConfig.loadClientIDOverride()
+        guard let clientID = runtimeClientID ?? value("MSALClientID") else { throw MicrosoftGraphAuthError.missingClientID }
         let authorityString = value("MSALAuthorityURL") ?? "https://login.microsoftonline.com/common"
         guard let authorityURL = URL(string: authorityString) else {
             throw MicrosoftGraphAuthError.invalidConfiguration("Invalid Microsoft identity authority URL: \(authorityString)")

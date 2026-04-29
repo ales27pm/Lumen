@@ -6,6 +6,7 @@ from lumen_manifest_crawler.manifest import FreshnessClassManifest
 from lumen_manifest_crawler.swift_extractors.base import SwiftExtractor, SwiftFile, enum_cases, string_literals
 
 DURABLE_NAMES = {"durable", "permanent", "pinned"}
+TTL_NAME_PATTERN = r"(?:ephemeral|session|durable|permanent|project)\w*(?:ttl|ttlseconds|lifetime|duration|expiration|expiry|seconds)\w*|(?:ttl|ttlseconds|lifetime|duration|expiration|expiry)\w*(?:ephemeral|session|durable|permanent|project)\w*"
 
 
 class MemoryExtractor(SwiftExtractor):
@@ -67,8 +68,21 @@ class MemoryExtractor(SwiftExtractor):
     @staticmethod
     def _extract_ttl_constants(text: str) -> list[tuple[str, int | None]]:
         out: list[tuple[str, int | None]] = []
-        for match in re.finditer(r"(ephemeral|session|durable|permanent|project)\w*\s*[=:]\s*(\d+)?", text, flags=re.I):
-            raw_name = match.group(1)
-            raw_value = match.group(2)
-            out.append((raw_name.casefold(), int(raw_value) if raw_value else None))
+        declaration = re.compile(
+            rf"\b(?:static\s+)?(?:let|var)\s+(?P<name>{TTL_NAME_PATTERN})\b(?:\s*:[^=\n]+)?\s*=\s*(?P<value>\d+)?",
+            flags=re.I,
+        )
+        for match in declaration.finditer(text):
+            raw_name = match.group("name").casefold()
+            raw_value = match.group("value")
+            freshness = MemoryExtractor._freshness_name_from_ttl_identifier(raw_name)
+            if freshness:
+                out.append((freshness, int(raw_value) if raw_value else None))
         return out
+
+    @staticmethod
+    def _freshness_name_from_ttl_identifier(identifier: str) -> str | None:
+        for name in ("ephemeral", "session", "durable", "permanent", "project"):
+            if re.search(rf"(?:^|_){name}(?:_|$)|{name}", identifier, flags=re.I):
+                return name.casefold()
+        return None

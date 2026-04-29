@@ -14,6 +14,11 @@ from lumen_manifest_crawler.swift_extractors.base import (
 )
 
 
+TOOL_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*")
+TOOL_ID_LABEL_PATTERN = re.compile(r"\b(?:id|toolID|toolId|identifier)\s*:\s*\"([^\"]+)\"")
+TOOL_ID_COLLECTION_PATTERN = re.compile(r"\b(?:toolIDs|toolIds|allowedToolIDs|allowedToolIds)\b[^\n=:\[]*[:=]\s*\[(?P<body>.*?)\]", flags=re.S)
+
+
 class ToolDefinitionExtractor(SwiftExtractor):
     target_names = ("ToolDefinition.swift",)
 
@@ -38,9 +43,9 @@ class ToolDefinitionExtractor(SwiftExtractor):
                 )
             )
 
-        # Literal fallback keeps incomplete registry references visible but marks them as inferred.
-        for literal in string_literals(file.text):
-            if self._looks_like_tool_id(literal) and literal not in seen:
+        # Literal fallback only accepts explicit tool-id labels/collections, then marks entries as inferred.
+        for literal in self._fallback_tool_literals(file.text):
+            if literal not in seen:
                 seen.add(literal)
                 manifest.tools.append(
                     ToolManifest(
@@ -59,8 +64,11 @@ class ToolDefinitionExtractor(SwiftExtractor):
             value = clean_swift_string(argument_value(block, label))
             if value and self._looks_like_tool_id(value):
                 return value
-        literals = [s for s in string_literals(block) if self._looks_like_tool_id(s)]
-        return literals[0] if literals else None
+        labelled = [match.group(1) for match in TOOL_ID_LABEL_PATTERN.finditer(block)]
+        for value in labelled:
+            if self._looks_like_tool_id(value):
+                return value
+        return None
 
     def _extract_arguments(self, block: str, source: str) -> list[ToolArgumentManifest]:
         args: list[ToolArgumentManifest] = []
@@ -87,6 +95,19 @@ class ToolDefinitionExtractor(SwiftExtractor):
                     )
                 )
         return args
+
+    @staticmethod
+    def _fallback_tool_literals(text: str) -> list[str]:
+        values: list[str] = []
+        for match in TOOL_ID_LABEL_PATTERN.finditer(text):
+            value = match.group(1)
+            if ToolDefinitionExtractor._looks_like_tool_id(value):
+                values.append(value)
+        for match in TOOL_ID_COLLECTION_PATTERN.finditer(text):
+            for literal in string_literals(match.group("body")):
+                if ToolDefinitionExtractor._looks_like_tool_id(literal):
+                    values.append(literal)
+        return list(dict.fromkeys(values))
 
     @staticmethod
     def _first_string(block: str) -> str | None:
@@ -132,4 +153,4 @@ class ToolDefinitionExtractor(SwiftExtractor):
 
     @staticmethod
     def _looks_like_tool_id(value: str) -> bool:
-        return bool(re.fullmatch(r"[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+", value))
+        return bool(TOOL_ID_PATTERN.fullmatch(value))

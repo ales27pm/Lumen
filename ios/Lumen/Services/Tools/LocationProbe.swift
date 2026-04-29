@@ -66,55 +66,67 @@ private final class DelegateHolder {
     var delegate: AnyObject?
 }
 
-nonisolated final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+@MainActor
+final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
+    /// Concurrency contract: callbacks are normalized onto MainActor before reading or mutating state.
     private let handler: (CLLocationCoordinate2D?) -> Void
     private var done = false
-    private let lock = NSLock()
 
     init(handler: @escaping (CLLocationCoordinate2D?) -> Void) { self.handler = handler }
 
     func finish(with coord: CLLocationCoordinate2D?) {
-        lock.lock()
-        if done { lock.unlock(); return }
+        MainActor.preconditionIsolated()
+        if done { return }
         done = true
-        lock.unlock()
         handler(coord)
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        finish(with: locations.last?.coordinate)
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let coord = locations.last?.coordinate
+        Task { @MainActor in
+            self.finish(with: coord)
+        }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        finish(with: nil)
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.finish(with: nil)
+        }
     }
 }
 
-nonisolated final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+@MainActor
+final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate {
+    /// Concurrency contract: callbacks are normalized onto MainActor before reading or mutating state.
     private let handler: (String) -> Void
     private var done = false
-    private let lock = NSLock()
 
     init(handler: @escaping (String) -> Void) { self.handler = handler }
 
     func finish(with text: String) {
-        lock.lock()
-        if done { lock.unlock(); return }
+        MainActor.preconditionIsolated()
+        if done { return }
         done = true
-        lock.unlock()
         handler(text)
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let loc = locations.last else {
-            finish(with: "Couldn't get location.")
-            return
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let message: String
+        if let loc = locations.last {
+            let c = loc.coordinate
+            message = String(format: "Current location: %.4f, %.4f (±%.0fm)", c.latitude, c.longitude, loc.horizontalAccuracy)
+        } else {
+            message = "Couldn't get location."
         }
-        let c = loc.coordinate
-        finish(with: String(format: "Current location: %.4f, %.4f (±%.0fm)", c.latitude, c.longitude, loc.horizontalAccuracy))
+
+        Task { @MainActor in
+            self.finish(with: message)
+        }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        finish(with: "Couldn't get location: \(error.localizedDescription)")
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.finish(with: "Couldn't get location: \(error.localizedDescription)")
+        }
     }
 }

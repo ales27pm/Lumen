@@ -226,6 +226,7 @@ struct ChatView: View {
         let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
         let routedTools = enabledTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
         let baseSystemPrompt = conversation.systemPrompt ?? appState.systemPrompt
+        let gatedMemories = MemoryGate.filter(intent: routing.intent, items: memories, userMessage: text)
         let req = AgentRequest(
             systemPrompt: baseSystemPrompt,
             history: recentContext,
@@ -236,7 +237,7 @@ struct ChatView: View {
             maxTokens: appState.maxTokens,
             maxSteps: appState.maxAgentSteps,
             availableTools: routedTools,
-            relevantMemories: memories,
+            relevantMemories: gatedMemories,
             attachments: attachments
         )
 

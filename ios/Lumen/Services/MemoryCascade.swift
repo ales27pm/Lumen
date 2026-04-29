@@ -147,6 +147,7 @@ enum MemoryCascade {
             let saved = try context.fetch(existingDescriptor)
             if let latest = saved.first {
                 latest.freshnessClass = MemoryFreshnessClass.durable.rawValue
+                latest.expiresAt = nil
             }
         }
 

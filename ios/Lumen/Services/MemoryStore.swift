@@ -15,10 +15,12 @@ enum MemoryStore {
         guard !queryVec.isEmpty else { return [] }
 
         MemoryVectorIndex.shared.ensureLoaded(context: context)
-        let hits = MemoryVectorIndex.shared.search(query: queryVec, topK: limit, pinBonus: 0.15)
+        let overfetchLimit = max(limit * 3, limit + 8)
+        let hits = MemoryVectorIndex.shared.search(query: queryVec, topK: overfetchLimit, pinBonus: 0.15)
         var results: [MemoryItem] = []
-        results.reserveCapacity(hits.count)
+        results.reserveCapacity(limit)
         for h in hits {
+            if results.count >= limit { break }
             if let item = context.model(for: h.id) as? MemoryItem {
                 migrateExpiryIfNeeded(for: item)
                 guard !isExpired(item) else { continue }
@@ -200,16 +202,16 @@ enum MemoryStore {
             return TTLPolicy(freshness: .volatile, ttl: 45 * 60)
         }
 
+        if lowerSource == "rem-condensed" {
+            return TTLPolicy(freshness: .durable, ttl: nil)
+        }
+
         if kind == .conversation || lowerSource.contains("crumb") || lowerSource.contains("chat") {
             return TTLPolicy(freshness: .shortLived, ttl: 6 * 60 * 60)
         }
 
         if kind == .preference || kind == .project || kind == .person {
             return TTLPolicy(freshness: .timeless, ttl: nil)
-        }
-
-        if lowerSource == "rem-condensed" {
-            return TTLPolicy(freshness: .durable, ttl: nil)
         }
 
         return TTLPolicy(freshness: .durable, ttl: 30 * 24 * 60 * 60)

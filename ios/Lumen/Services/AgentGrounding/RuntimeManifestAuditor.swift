@@ -20,7 +20,7 @@ public struct RuntimeManifestFailure: Codable, Hashable, Identifiable {
 
 public final class RuntimeManifestAuditor {
     private let registryProvider: RuntimeToolRegistryProviding
-    private let supportedTypes: Set<String> = ["string", "double", "int", "bool", "array", "object", "null"]
+    private let supportedTypes: Set<String> = ["string", "number", "bool", "array", "object", "null"]
 
     public init(registryProvider: RuntimeToolRegistryProviding) {
         self.registryProvider = registryProvider
@@ -197,11 +197,11 @@ public final class RuntimeManifestAuditor {
     private func normalizeType(_ value: String) -> String {
         switch value.lowercased() {
         case "str", "text": return "string"
-        case "float", "number": return "double"
-        case "integer": return "int"
+        case "double", "float", "int", "integer": return "number"
         case "boolean": return "bool"
         case "list": return "array"
         case "dictionary", "dict": return "object"
+        case "nil", "none": return "null"
         default: return value.lowercased()
         }
     }

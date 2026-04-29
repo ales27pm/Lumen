@@ -17,6 +17,7 @@ from lumen_manifest_crawler.swift_extractors.base import (
 TOOL_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*")
 TOOL_ID_LABEL_PATTERN = re.compile(r"\b(?:id|toolID|toolId|identifier)\s*:\s*\"([^\"]+)\"")
 TOOL_ID_COLLECTION_PATTERN = re.compile(r"\b(?:toolIDs|toolIds|allowedToolIDs|allowedToolIds)\b[^\n=:\[]*[:=]\s*\[(?P<body>.*?)\]", flags=re.S)
+ARG_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ToolDefinitionExtractor(SwiftExtractor):
@@ -29,16 +30,17 @@ class ToolDefinitionExtractor(SwiftExtractor):
             if not tool_id or tool_id in seen:
                 continue
             seen.add(tool_id)
+            description = clean_swift_string(argument_value(block, "description"))
             manifest.tools.append(
                 ToolManifest(
                     id=tool_id,
                     displayName=clean_swift_string(argument_value(block, "displayName"))
                     or clean_swift_string(argument_value(block, "name"))
                     or tool_id,
-                    description=clean_swift_string(argument_value(block, "description")),
+                    description=description,
                     requiresApproval=bool_value(argument_value(block, "requiresApproval"), False),
                     permissionKey=clean_swift_string(argument_value(block, "permissionKey")),
-                    arguments=self._extract_arguments(block, file.relpath),
+                    arguments=self._extract_arguments(block, file.relpath, description),
                     source=file.relpath,
                 )
             )
@@ -70,7 +72,7 @@ class ToolDefinitionExtractor(SwiftExtractor):
                 return value
         return None
 
-    def _extract_arguments(self, block: str, source: str) -> list[ToolArgumentManifest]:
+    def _extract_arguments(self, block: str, source: str, description: str | None) -> list[ToolArgumentManifest]:
         args: list[ToolArgumentManifest] = []
         seen: set[str] = set()
         for callee in ("ToolArgument", "ToolParameter", "ArgumentDefinition", "ParameterDefinition"):
@@ -94,7 +96,69 @@ class ToolDefinitionExtractor(SwiftExtractor):
                         source=source,
                     )
                 )
+        for inferred in self._extract_args_from_description(description, source):
+            if inferred.name not in seen:
+                seen.add(inferred.name)
+                args.append(inferred)
         return args
+
+    @staticmethod
+    def _extract_args_from_description(description: str | None, source: str) -> list[ToolArgumentManifest]:
+        if not description:
+            return []
+        match = re.search(r"\bArgs?\s*:\s*(?P<body>.*?)(?:\.|$)", description, flags=re.I)
+        if not match:
+            return []
+        body = match.group("body").strip()
+        if not body or body.lower() in {"none", "no args", "n/a"}:
+            return []
+
+        body = re.sub(r"\boptional\b", "optional ", body, flags=re.I)
+        normalized = body.replace(" or ", ", ").replace(" plus ", ", ").replace(" depending on ", ", ")
+        names: list[str] = []
+        for raw in re.split(r"[,;/]", normalized):
+            token = raw.strip()
+            if not token:
+                continue
+            token = re.sub(r"\(.*?\)", "", token).strip()
+            token = token.split()[0].strip("`'\".:") if token.split() else token
+            if token.lower() in {"none", "optional", "args", "arg"}:
+                continue
+            if not ARG_NAME_PATTERN.fullmatch(token):
+                continue
+            if token not in names:
+                names.append(token)
+
+        return [
+            ToolArgumentManifest(
+                name=name,
+                type=ToolDefinitionExtractor._infer_arg_type_from_name(name),
+                required=not ToolDefinitionExtractor._is_optional_arg_name(name, body),
+                description=f"Inferred from ToolDefinition description Args contract: {body}",
+                source=source,
+            )
+            for name in names
+        ]
+
+    @staticmethod
+    def _is_optional_arg_name(name: str, args_body: str) -> bool:
+        lowered = args_body.lower()
+        name_index = lowered.find(name.lower())
+        if name_index == -1:
+            return False
+        prefix = lowered[max(0, name_index - 20):name_index]
+        return "optional" in prefix
+
+    @staticmethod
+    def _infer_arg_type_from_name(name: str) -> str:
+        lowered = name.lower()
+        if lowered in {"inminutes", "durationminutes", "durationseconds", "beforeminutes", "intervalseconds", "months", "limit", "count"}:
+            return "number"
+        if lowered in {"repeats"} or lowered.startswith("is") or lowered.startswith("has"):
+            return "bool"
+        if lowered in {"query", "title", "subject", "body", "message", "text", "recipient", "number", "destination", "location", "city", "url", "name", "kind", "content", "schedule", "timestamp", "attime", "id", "email", "to"}:
+            return "string"
+        return "string"
 
     @staticmethod
     def _fallback_tool_literals(text: str) -> list[str]:
@@ -118,9 +182,9 @@ class ToolDefinitionExtractor(SwiftExtractor):
     def _infer_type_from_block(block: str) -> str:
         lowered = block.lower()
         if "double" in lowered or "float" in lowered or "number" in lowered:
-            return "double"
+            return "number"
         if "int" in lowered:
-            return "int"
+            return "number"
         if "bool" in lowered:
             return "bool"
         if "array" in lowered or "list" in lowered:
@@ -136,11 +200,11 @@ class ToolDefinitionExtractor(SwiftExtractor):
             "str": "string",
             "string": "string",
             "text": "string",
-            "double": "double",
-            "float": "double",
-            "number": "double",
-            "int": "int",
-            "integer": "int",
+            "double": "number",
+            "float": "number",
+            "number": "number",
+            "int": "number",
+            "integer": "number",
             "bool": "bool",
             "boolean": "bool",
             "array": "array",
@@ -148,6 +212,9 @@ class ToolDefinitionExtractor(SwiftExtractor):
             "object": "object",
             "dictionary": "object",
             "dict": "object",
+            "nil": "null",
+            "none": "null",
+            "null": "null",
         }
         return mapping.get(value, value or "string")
 

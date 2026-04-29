@@ -11,10 +11,12 @@ from lumen_manifest_crawler.output.writer import write_outputs
 from lumen_manifest_crawler.validators import validate_manifest
 
 app = typer.Typer(no_args_is_help=True)
+generate_app = typer.Typer(help="Generate AgentBehaviorManifest.json and grounded datasets.", invoke_without_command=True)
+app.add_typer(generate_app, name="generate")
 console = Console()
 
 
-@app.command()
+@generate_app.callback()
 def generate(
     root: Path = typer.Option(Path("."), "--root", help="Repository root to scan."),
     output: Path = typer.Option(Path("generated/agent_manifest"), "--output", help="Output directory."),

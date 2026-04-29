@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 
-from lumen_manifest_crawler.manifest import AgentBehaviorManifest, AppManifestInfo, SourceFileHash
+from lumen_manifest_crawler.manifest import AgentBehaviorManifest, AppManifestInfo, RoutingMatrixEntry, SourceFileHash
 from lumen_manifest_crawler.output.hashing import normalized_repo_path, sha256_file
 from lumen_manifest_crawler.swift_extractors import ALL_EXTRACTORS
 from lumen_manifest_crawler.swift_extractors.base import SwiftFile
 
+logger = logging.getLogger(__name__)
 
 IGNORED_DIRS = {
     ".git",
@@ -84,7 +86,16 @@ def _git_commit(root: Path) -> str | None:
             timeout=5,
         )
         return completed.stdout.strip() or None
-    except Exception:
+    except subprocess.CalledProcessError as error:
+        logger.debug(
+            "git rev-parse HEAD failed in _git_commit: returncode=%s stdout=%r stderr=%r",
+            error.returncode,
+            error.stdout,
+            error.stderr,
+        )
+        return None
+    except Exception as error:
+        logger.debug("git rev-parse HEAD failed in _git_commit: %s", error, exc_info=True)
         return None
 
 
@@ -114,8 +125,6 @@ def _plist_value_after_key(text: str, key: str) -> str | None:
 
 
 def _finalize_defaults(manifest: AgentBehaviorManifest) -> None:
-    if not manifest.fleet.slots:
-        manifest.fleet.slots = []
     if not manifest.sentinels.forbiddenInUserOutput:
         manifest.sentinels.forbiddenInUserOutput = sorted({
             "<user_final_text>",
@@ -130,7 +139,6 @@ def _finalize_defaults(manifest: AgentBehaviorManifest) -> None:
 
     known_tools = sorted({tool.id for tool in manifest.tools})
     if manifest.intents and not manifest.routingMatrix:
-        from lumen_manifest_crawler.manifest import RoutingMatrixEntry
         manifest.routingMatrix = [
             RoutingMatrixEntry(
                 intent=intent.id,

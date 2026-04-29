@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum UserIntent: String, Codable, Sendable, CaseIterable {
+nonisolated enum UserIntent: String, Codable, Sendable, CaseIterable, Hashable {
     case weather
     case webSearch
     case emailDraft

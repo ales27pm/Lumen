@@ -261,8 +261,14 @@ final class SlotAgentService {
         let existing = WebRichContentPayload.decodeAll(from: text)
         let payloads = sources.flatMap { WebRichContentPayload.decodeAll(from: $0) }
         guard !payloads.isEmpty else { return text }
+
+        var seen = Set<String>()
+        let uniquePayloads = payloads.filter { payload in
+            seen.insert(payloadKey(payload)).inserted
+        }
+
         let existingKeys = Set(existing.map(payloadKey))
-        let missing = payloads.filter { !existingKeys.contains(payloadKey($0)) }
+        let missing = uniquePayloads.filter { !existingKeys.contains(payloadKey($0)) }
         guard !missing.isEmpty else { return text }
         return text + missing.map { $0.encodedMarker() }.joined()
     }

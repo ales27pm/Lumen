@@ -213,21 +213,22 @@ struct ChatView: View {
             }
             let routing = IntentRouter.classify(text)
             let memories = await safeRecalledMemories(query: text, routing: routing)
+            let recentContext = safeShortTermContext(excludingCurrentUserMessageID: userMsg.id)
             if appState.agentModeEnabled {
-                await runAgent(turnID: turnID, text: text, routing: routing, memories: memories, attachments: turnAttachments)
+                await runAgent(turnID: turnID, text: text, routing: routing, memories: memories, attachments: turnAttachments, recentContext: recentContext)
             } else {
                 await runPlain(turnID: turnID, text: text, memories: memories, attachments: turnAttachments)
             }
         }
     }
 
-    private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment]) async {
+    private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment], recentContext: [(role: MessageRole, content: String)]) async {
         let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
         let routedTools = enabledTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
         let baseSystemPrompt = conversation.systemPrompt ?? appState.systemPrompt
         let req = AgentRequest(
             systemPrompt: baseSystemPrompt,
-            history: [],
+            history: recentContext,
             userMessage: text,
             temperature: appState.temperature,
             topP: appState.topP,
@@ -329,6 +330,20 @@ struct ChatView: View {
         conversation.updatedAt = Date()
         try? modelContext.save()
         appState.isGenerating = false
+    }
+
+    private func safeShortTermContext(excludingCurrentUserMessageID currentID: UUID) -> [(role: MessageRole, content: String)] {
+        conversation.sortedMessages
+            .filter { $0.id != currentID }
+            .suffix(4)
+            .compactMap { message in
+                guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
+                let clean = message.content
+                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !clean.isEmpty else { return nil }
+                return (message.messageRole, String(clean.prefix(500)))
+            }
     }
 
     private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [String] {

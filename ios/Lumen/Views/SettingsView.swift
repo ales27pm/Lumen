@@ -109,6 +109,13 @@ struct SettingsView: View {
 
                 Section("Developer") {
                     NavigationLink {
+                        AgentGroundingAuditView(registryProvider: LiveRuntimeToolRegistryProvider())
+                    } label: {
+                        Label("Agent grounding audit", systemImage: "checkmark.seal.text.page")
+                    }
+                    .accessibilityIdentifier("settings.developer.agentGroundingAudit")
+
+                    NavigationLink {
                         E2ETestRunnerView()
                     } label: {
                         Label("End-to-end tests", systemImage: "testtube.2")

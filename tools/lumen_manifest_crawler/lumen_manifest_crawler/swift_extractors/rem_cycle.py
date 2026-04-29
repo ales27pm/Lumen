@@ -13,8 +13,16 @@ class RemCycleExtractor(SwiftExtractor):
                 report_fields.update(string_literals(block))
         literals = [s for s in string_literals(file.text) if "training" in s.lower() or "reflection" in s.lower() or "memory" in s.lower()]
         if report_fields or literals:
+            existing = manifest.agentProtocols.executorOutput.get("remCycle") or {}
+            existing_fields = set(existing.get("reportFields", []))
+            existing_hints = list(existing.get("hints", []))
+            existing_sources = existing.get("source", [])
+            if isinstance(existing_sources, str):
+                existing_sources = [existing_sources]
+            merged_hints = list(dict.fromkeys([*existing_hints, *literals]))[:100]
+            merged_sources = list(dict.fromkeys([*existing_sources, file.relpath]))
             manifest.agentProtocols.executorOutput["remCycle"] = {
-                "reportFields": sorted(report_fields),
-                "hints": sorted(dict.fromkeys(literals))[:100],
-                "source": file.relpath,
+                "reportFields": sorted(existing_fields.union(report_fields)),
+                "hints": merged_hints,
+                "source": merged_sources,
             }

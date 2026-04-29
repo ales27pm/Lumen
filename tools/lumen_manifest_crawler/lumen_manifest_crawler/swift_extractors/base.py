@@ -85,10 +85,37 @@ def balanced_call_blocks(text: str, callee: str) -> list[str]:
 
 
 def argument_value(block: str, label: str) -> str | None:
-    m = re.search(rf"\b{re.escape(label)}\s*:\s*([^,\n\)]+)", block)
-    if not m:
+    match = re.search(rf"\b{re.escape(label)}\s*:\s*", block)
+    if not match:
         return None
-    return m.group(1).strip()
+
+    start = match.end()
+    depth = 0
+    in_string = False
+    escaped = False
+    end = start
+    while end < len(block):
+        ch = block[end]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch in "([{":
+                depth += 1
+            elif ch in ")]}" and depth > 0:
+                depth -= 1
+            elif depth == 0 and ch in ",\n)":
+                break
+        end += 1
+
+    value = block[start:end].strip()
+    return value or None
 
 
 def bool_value(raw: str | None, default: bool = False) -> bool:
@@ -105,7 +132,9 @@ def bool_value(raw: str | None, default: bool = False) -> bool:
 def clean_swift_string(raw: str | None) -> str | None:
     if not raw:
         return None
-    raw = raw.strip()
+    raw = raw.strip().strip(",")
+    if raw in {"nil", "NULL", "Null", "null", "Optional.none", ".none"}:
+        return None
     if raw.startswith('"') and raw.endswith('"'):
         return raw[1:-1]
     if raw.startswith("."):

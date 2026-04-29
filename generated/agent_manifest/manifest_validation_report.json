@@ -1,0 +1,66 @@
+{
+  "passed": true,
+  "failures": [],
+  "warnings": [
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent alarm has multiple allowed tools",
+      "path": "routingMatrix.alarm"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent calendar has multiple allowed tools",
+      "path": "routingMatrix.calendar"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent files has multiple allowed tools",
+      "path": "routingMatrix.files"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent maps has multiple allowed tools",
+      "path": "routingMatrix.maps"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent memory has multiple allowed tools",
+      "path": "routingMatrix.memory"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent photos has multiple allowed tools",
+      "path": "routingMatrix.photos"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent rag has multiple allowed tools",
+      "path": "routingMatrix.rag"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent trigger has multiple allowed tools",
+      "path": "routingMatrix.trigger"
+    },
+    {
+      "code": "ambiguous_intent_tools",
+      "message": "Intent weather has multiple allowed tools",
+      "path": "routingMatrix.weather"
+    },
+    {
+      "code": "freshness_missing_ttl",
+      "message": "Freshness class shortLived has no TTL or durable marker",
+      "path": "memory.freshnessClasses.shortLived"
+    },
+    {
+      "code": "freshness_missing_ttl",
+      "message": "Freshness class volatile has no TTL or durable marker",
+      "path": "memory.freshnessClasses.volatile"
+    },
+    {
+      "code": "freshness_missing_ttl",
+      "message": "Freshness class timeless has no TTL or durable marker",
+      "path": "memory.freshnessClasses.timeless"
+    }
+  ]
+}

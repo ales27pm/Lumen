@@ -5,14 +5,16 @@ import json
 from pathlib import Path
 
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationReport
-from lumen_manifest_crawler.output.hashing import sha256_file, sha256_text
+from lumen_manifest_crawler.output.hashing import sha256_file
 
 
 def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: ValidationReport, datasets: dict[str, list[dict]], *, pretty: bool) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest.write_json(output_dir / "AgentBehaviorManifest.json", pretty=False)
-    manifest.write_json(output_dir / "AgentBehaviorManifest.pretty.json", pretty=True)
-    (output_dir / "AgentBehaviorManifest.sha256").write_text(sha256_file(output_dir / "AgentBehaviorManifest.json") + "\n", encoding="utf-8")
+    canonical_path = output_dir / "AgentBehaviorManifest.json"
+    manifest.write_json(canonical_path, pretty=False)
+    if pretty:
+        manifest.write_json(output_dir / "AgentBehaviorManifest.pretty.json", pretty=True)
+    (output_dir / "AgentBehaviorManifest.sha256").write_text(sha256_file(canonical_path) + "\n", encoding="utf-8")
     (output_dir / "manifest_validation_report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
     _write_tool_registry_csv(output_dir / "tool_registry.csv", manifest)
     _write_routing_matrix_csv(output_dir / "routing_matrix.csv", manifest)

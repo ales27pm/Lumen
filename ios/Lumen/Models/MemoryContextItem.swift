@@ -35,13 +35,19 @@ nonisolated enum MemoryContextAdapter {
             guard !trimmed.isEmpty else { return nil }
 
             if let content = trimmed.stripPrefix("Tier 1 Ephemeral: ") {
-                return MemoryContextItem(content: content, scope: .currentTurn, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier1", topic: nil)
+                let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty else { return nil }
+                return MemoryContextItem(content: normalized, scope: .currentTurn, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier1", topic: nil)
             }
             if let content = trimmed.stripPrefix("Tier 2 Vectorized: ") {
-                return MemoryContextItem(content: content, scope: .conversation, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier2", topic: nil)
+                let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty else { return nil }
+                return MemoryContextItem(content: normalized, scope: .conversation, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier2", topic: nil)
             }
             if let content = trimmed.stripPrefix("Tier 3 Condensed: ") {
-                return MemoryContextItem(content: content, scope: .remCondensed, authority: .backgroundOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier3", topic: nil)
+                let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty else { return nil }
+                return MemoryContextItem(content: normalized, scope: .remCondensed, authority: .backgroundOnly, createdAt: nil, expiresAt: nil, source: "legacy-tier3", topic: nil)
             }
 
             return MemoryContextItem(content: trimmed, scope: .conversation, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "legacy", topic: nil)

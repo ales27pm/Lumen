@@ -284,11 +284,8 @@ struct VoiceModeView: View {
         }
     }
 
-    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [String] {
-        let raw = await MemoryStore.recall(query: query, context: modelContext, limit: 8).map(\.content)
-        return raw.filter { memory in
-            FinalIntentValidator.validate(memory, routing: routing, fallback: nil) == memory.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [MemoryContextItem] {
+        await MemoryRecall.recallAndNormalize(query: query, routing: routing, context: modelContext, limit: 8)
     }
 
     private func isSafeToStoreMemory(userText: String, assistantText: String, routing: IntentRoutingDecision) -> Bool {

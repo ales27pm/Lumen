@@ -2,12 +2,12 @@ import Foundation
 import SwiftData
 
 nonisolated struct MemoryCascadeResult: Sendable {
-    let ephemeral: [String]
-    let vectorized: [String]
-    let condensed: [String]
+    let ephemeral: [MemoryContextItem]
+    let vectorized: [MemoryContextItem]
+    let condensed: [MemoryContextItem]
 
-    var promptFragments: [String] {
-        var fragments: [String] = []
+    var promptFragments: [MemoryContextItem] {
+        var fragments: [MemoryContextItem] = []
         if !ephemeral.isEmpty { fragments.append(contentsOf: ephemeral) }
         if !vectorized.isEmpty { fragments.append(contentsOf: vectorized) }
         if !condensed.isEmpty { fragments.append(contentsOf: condensed) }
@@ -24,18 +24,18 @@ enum MemoryCascade {
     ) async -> MemoryCascadeResult {
         let tier1 = history
             .suffix(12)
-            .compactMap { item -> String? in
+            .compactMap { item -> MemoryContextItem? in
                 let compact = compactAndTrim(item.content, maxLength: 260)
                 guard !compact.isEmpty else { return nil }
-                return "Tier 1 Ephemeral: \(compact)"
+                return MemoryContextItem(content: compact, scope: .currentTurn, authority: .referenceOnly, createdAt: nil, expiresAt: nil, source: "tier1-ephemeral", topic: nil)
             }
 
         let tier2 = await MemoryStore.recall(query: query, context: context, limit: 8)
             .filter { $0.source != "rem-condensed" }
-            .compactMap { item -> String? in
+            .compactMap { item -> MemoryContextItem? in
                 let compact = compactAndTrim(item.content, maxLength: 260)
                 guard !compact.isEmpty else { return nil }
-                return "Tier 2 Vectorized: \(compact)"
+                return MemoryContextItem(content: compact, scope: .conversation, authority: .referenceOnly, createdAt: item.createdAt, expiresAt: nil, source: item.source, topic: item.topic)
             }
 
         let queryTokens = tokenSet(query)
@@ -56,10 +56,10 @@ enum MemoryCascade {
                 return lhs.item.createdAt > rhs.item.createdAt
             }
             .prefix(8)
-            .compactMap { pair -> String? in
+            .compactMap { pair -> MemoryContextItem? in
                 let compact = compactAndTrim(pair.item.content, maxLength: 260)
                 guard !compact.isEmpty else { return nil }
-                return "Tier 3 Condensed: \(compact)"
+                return MemoryContextItem(content: compact, scope: .remCondensed, authority: .backgroundOnly, createdAt: pair.item.createdAt, expiresAt: nil, source: pair.item.source, topic: pair.item.topic)
             }
 
         return MemoryCascadeResult(

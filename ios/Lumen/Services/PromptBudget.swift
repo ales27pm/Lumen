@@ -123,7 +123,7 @@ nonisolated enum PromptAssembler {
         systemPrompt: String,
         history: [(role: MessageRole, content: String)],
         userMessage: String,
-        memories: [String],
+        memories: [MemoryContextItem],
         attachments: [ChatAttachment],
         budget: PromptBudget,
         attachmentNormalization: AttachmentNormalizationMode = .preserveRaw
@@ -183,21 +183,20 @@ nonisolated enum PromptAssembler {
 
     // MARK: - Sections
 
-    private static func buildMemoriesBlock(memories: [String], share: Int) -> String {
+    private static func buildMemoriesBlock(memories: [MemoryContextItem], share: Int) -> String {
         guard !memories.isEmpty, share > 0 else { return "" }
         var used = 0
-        var lines: [String] = []
+        var items: [MemoryContextItem] = []
         for m in memories.prefix(10) {
-            let cleaned = m.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
             if cleaned.isEmpty { continue }
-            let line = "• " + cleaned
+            let line = "• [\(m.scope.rawValue) | \(m.authority.rawValue)] " + cleaned
             let cost = line.count + 1
             if used + cost > share { break }
-            lines.append(line)
+            items.append(m)
             used += cost
         }
-        guard !lines.isEmpty else { return "" }
-        return "\n\nRelevant memory from previous conversations:\n" + lines.joined(separator: "\n")
+        return PromptContextBuilder.renderMemoryBlock(items)
     }
 
     private static func buildAttachmentsBlock(

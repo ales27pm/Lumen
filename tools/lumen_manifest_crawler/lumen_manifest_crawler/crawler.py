@@ -24,6 +24,7 @@ IGNORED_DIRS = {
     "dist",
     "generated",
 }
+IGNORED_PLIST_DIRS = IGNORED_DIRS | {"Tests", "UITests", "UnitTests", "Fixtures", "fixtures"}
 
 
 def generate_manifest(root: Path) -> AgentBehaviorManifest:
@@ -50,7 +51,7 @@ def generate_manifest(root: Path) -> AgentBehaviorManifest:
 
 
 def _iter_swift_files(root: Path):
-    for path in root.rglob("*.swift"):
+    for path in sorted(root.rglob("*.swift"), key=lambda candidate: normalized_repo_path(root, candidate)):
         parts = set(path.relative_to(root).parts)
         if parts.intersection(IGNORED_DIRS):
             continue
@@ -100,15 +101,30 @@ def _git_commit(root: Path) -> str | None:
 
 
 def _read_app_info(root: Path) -> AppManifestInfo:
-    bundle_id = None
-    build_version = None
-    for plist in root.rglob("Info.plist"):
+    selected = _select_info_plist(root)
+    if not selected:
+        return AppManifestInfo(name="Lumen")
+    text = selected.read_text(encoding="utf-8", errors="replace")
+    return AppManifestInfo(
+        name="Lumen",
+        bundleIdentifier=_plist_value_after_key(text, "CFBundleIdentifier"),
+        buildVersion=_plist_value_after_key(text, "CFBundleShortVersionString"),
+    )
+
+
+def _select_info_plist(root: Path) -> Path | None:
+    candidates: list[Path] = []
+    for plist in sorted(root.rglob("Info.plist"), key=lambda candidate: normalized_repo_path(root, candidate)):
+        parts = set(plist.relative_to(root).parts)
+        if parts.intersection(IGNORED_PLIST_DIRS):
+            continue
         text = plist.read_text(encoding="utf-8", errors="replace")
         if "CFBundleIdentifier" in text:
-            bundle_id = _plist_value_after_key(text, "CFBundleIdentifier") or bundle_id
-        if "CFBundleShortVersionString" in text:
-            build_version = _plist_value_after_key(text, "CFBundleShortVersionString") or build_version
-    return AppManifestInfo(name="Lumen", bundleIdentifier=bundle_id, buildVersion=build_version)
+            candidates.append(plist)
+    if not candidates:
+        return None
+    preferred = [plist for plist in candidates if any(part in {"Lumen", "ios"} for part in plist.relative_to(root).parts)]
+    return (preferred or candidates)[0]
 
 
 def _plist_value_after_key(text: str, key: str) -> str | None:

@@ -38,19 +38,8 @@ public final class RuntimeManifestAuditor {
         let liveTools = registryProvider.currentToolDefinitions()
         var failures: [RuntimeManifestFailure] = []
 
-        let manifestByID = Dictionary(uniqueKeysWithValues: manifest.tools.map { ($0.id, $0) })
-        let liveByID = Dictionary(grouping: liveTools, by: \RuntimeToolDefinition.id)
-
-        for (toolID, liveGroup) in liveByID where liveGroup.count > 1 {
-            failures.append(RuntimeManifestFailure(
-                type: "duplicate_live_tool_id",
-                agent: "runtime",
-                expected: [toolID],
-                actual: toolID,
-                scenario: nil,
-                problem: "Runtime registry exposes duplicate tool ID \(toolID)."
-            ))
-        }
+        let manifestByID = Self.uniqueToolMap(manifest.tools, origin: "manifest", failures: &failures)
+        let liveByID = Self.groupToolsByID(liveTools, origin: "runtime", failures: &failures)
 
         for manifestTool in manifest.tools {
             guard let liveTool = liveByID[manifestTool.id]?.first else {
@@ -111,8 +100,8 @@ public final class RuntimeManifestAuditor {
             ))
         }
 
-        let manifestArgs = Dictionary(uniqueKeysWithValues: manifestTool.arguments.map { ($0.name, $0) })
-        let liveArgs = Dictionary(uniqueKeysWithValues: liveTool.arguments.map { ($0.name, $0) })
+        let manifestArgs = Self.uniqueArgumentMap(manifestTool.arguments, toolID: manifestTool.id, origin: "manifest", failures: &failures)
+        let liveArgs = Self.uniqueArgumentMap(liveTool.arguments, toolID: liveTool.id, origin: "runtime", failures: &failures)
 
         for (name, manifestArg) in manifestArgs {
             guard let liveArg = liveArgs[name] else {
@@ -160,6 +149,51 @@ public final class RuntimeManifestAuditor {
         }
     }
 
+    private static func uniqueToolMap(_ tools: [RuntimeToolDefinition], origin: String, failures: inout [RuntimeManifestFailure]) -> [String: RuntimeToolDefinition] {
+        let grouped = Dictionary(grouping: tools, by: \RuntimeToolDefinition.id)
+        for (toolID, group) in grouped where group.count > 1 {
+            failures.append(RuntimeManifestFailure(
+                type: "duplicate_\(origin)_tool_id",
+                agent: "runtime",
+                expected: [toolID],
+                actual: toolID,
+                scenario: nil,
+                problem: "\(origin.capitalized) registry exposes duplicate tool ID \(toolID). Keeping the first entry for comparison."
+            ))
+        }
+        return grouped.compactMapValues { $0.first }
+    }
+
+    private static func groupToolsByID(_ tools: [RuntimeToolDefinition], origin: String, failures: inout [RuntimeManifestFailure]) -> [String: [RuntimeToolDefinition]] {
+        let grouped = Dictionary(grouping: tools, by: \RuntimeToolDefinition.id)
+        for (toolID, group) in grouped where group.count > 1 {
+            failures.append(RuntimeManifestFailure(
+                type: "duplicate_\(origin)_tool_id",
+                agent: "runtime",
+                expected: [toolID],
+                actual: toolID,
+                scenario: nil,
+                problem: "\(origin.capitalized) registry exposes duplicate tool ID \(toolID). Keeping the first entry for comparison."
+            ))
+        }
+        return grouped
+    }
+
+    private static func uniqueArgumentMap(_ arguments: [RuntimeToolArgument], toolID: String, origin: String, failures: inout [RuntimeManifestFailure]) -> [String: RuntimeToolArgument] {
+        let grouped = Dictionary(grouping: arguments, by: \RuntimeToolArgument.name)
+        for (argumentName, group) in grouped where group.count > 1 {
+            failures.append(RuntimeManifestFailure(
+                type: "duplicate_\(origin)_argument_name",
+                agent: "runtime",
+                expected: [argumentName],
+                actual: argumentName,
+                scenario: toolID,
+                problem: "\(origin.capitalized) tool \(toolID) exposes duplicate argument name \(argumentName). Keeping the first entry for comparison."
+            ))
+        }
+        return grouped.compactMapValues { $0.first }
+    }
+
     private func normalizeType(_ value: String) -> String {
         switch value.lowercased() {
         case "str", "text": return "string"
@@ -181,12 +215,12 @@ public final class RuntimeManifestAuditor {
     private static func repairHints(for failures: [RuntimeManifestFailure]) -> [String] {
         Array(Set(failures.map { failure in
             switch failure.type {
-            case "unmanifested_live_tool", "missing_live_tool":
-                return "Regenerate AgentBehaviorManifest.json from the current Swift source."
+            case "unmanifested_live_tool", "missing_live_tool", "duplicate_manifest_tool_id", "duplicate_runtime_tool_id":
+                return "Regenerate AgentBehaviorManifest.json from the current Swift source and resolve duplicate tool IDs."
             case "approval_mismatch":
                 return "Regenerate approval-boundary dataset samples for changed tools."
-            case "argument_mismatch", "missing_live_argument", "unmanifested_live_argument":
-                return "Regenerate Tool Executor schema samples and negative contrast records."
+            case "argument_mismatch", "missing_live_argument", "unmanifested_live_argument", "duplicate_manifest_argument_name", "duplicate_runtime_argument_name":
+                return "Regenerate Tool Executor schema samples and resolve duplicate argument names."
             default:
                 return "Review runtime manifest drift and add a REM repair sample."
             }

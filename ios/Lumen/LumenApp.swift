@@ -1,14 +1,103 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
-@main
-struct LumenApp: App {
-    @UIApplicationDelegateAdaptor(LumenAppDelegate.self) private var appDelegate
-    @State private var appState = AppState()
-    @Environment(\.scenePhase) private var scenePhase
+@MainActor
+struct AppStartupCoordinator {
+    enum Stage: String {
+        case container
+        case bootstrap
+        case modelLoader
+        case triggers
+        case remCycle
+    }
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
+    struct FailureContext: Error, Equatable {
+        let stage: Stage
+        let message: String
+        let domain: String
+        let code: Int
+
+        var summary: String { "\(domain) (\(code)): \(message)" }
+    }
+
+    enum State: Equatable {
+        case loading
+        case ready(ModelContainer)
+        case failed(FailureContext)
+    }
+
+    private let logger = Logger(subsystem: "ai.lumen.app", category: "startup")
+    private(set) var state: State = .loading
+
+    mutating func initialize(
+        appState: AppState,
+        createContainer: () throws -> ModelContainer = Self.defaultContainerFactory,
+        bootstrap: (AppState, ModelContext) async throws -> Void = Self.defaultBootstrap
+    ) async {
+        state = .loading
+        appState.runtime.startBoot()
+        do {
+            let container = try createContainer()
+            appState.runtime.updateBootStep(id: "container", detail: "SwiftData container ready", state: .complete)
+
+            let ctx = ModelContext(container)
+            try await bootstrap(appState, ctx)
+            state = .ready(container)
+        } catch {
+            let failure = Self.failureContext(stage: currentStage(error), from: error)
+            emitFailureTelemetry(failure)
+            state = .failed(failure)
+        }
+    }
+
+    private func currentStage(_ error: Error) -> Stage {
+        (error as? StartupError)?.stage ?? .container
+    }
+
+    private func emitFailureTelemetry(_ failure: FailureContext) {
+        logger.error("startup_failed stage=\(failure.stage.rawValue, privacy: .public) domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public) message=\(failure.message, privacy: .private)")
+    }
+
+    private static func failureContext(stage: Stage, from error: Error) -> FailureContext {
+        let baseError: Error
+        if let startupError = error as? StartupError {
+            baseError = startupError.underlying
+        } else {
+            baseError = error
+        }
+        let nsError = baseError as NSError
+        return FailureContext(stage: stage, message: nsError.localizedDescription, domain: nsError.domain, code: nsError.code)
+    }
+
+    mutating func continueInLimitedMode(appState: AppState) {
+        do {
+            let container = try Self.inMemoryContainerFactory()
+            SharedContainer.shared = container
+            appState.runtime.completeBootCore()
+            state = .ready(container)
+        } catch {
+            let failure = Self.failureContext(stage: .container, from: error)
+            emitFailureTelemetry(failure)
+            state = .failed(failure)
+        }
+    }
+
+    private static func inMemoryContainerFactory() throws -> ModelContainer {
+        try makeContainer(isStoredInMemoryOnly: true)
+    }
+
+    private static func defaultContainerFactory() throws -> ModelContainer {
+        try makeContainer(isStoredInMemoryOnly: false)
+    }
+
+    private static func makeContainer(isStoredInMemoryOnly: Bool) throws -> ModelContainer {
+        let config = ModelConfiguration(schema: appSchema, isStoredInMemoryOnly: isStoredInMemoryOnly)
+        return try ModelContainer(for: appSchema, configurations: [config])
+    }
+
+    private static var appSchema: Schema {
+        Schema([
             Conversation.self,
             ChatMessage.self,
             MemoryItem.self,
@@ -16,54 +105,135 @@ struct LumenApp: App {
             RAGChunk.self,
             Trigger.self,
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        do {
-            return try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("ModelContainer failed: \(error)")
+    }
+
+    private static func defaultBootstrap(appState: AppState, ctx: ModelContext) async throws {
+        try await withStage(.bootstrap) {
+            await ModelLaunchBootstrap.ensureV0FleetDownloaded(appState: appState, context: ctx)
         }
-    }()
+
+        try await withStage(.modelLoader) {
+            appState.runtime.updateBootStep(id: "loader", detail: "Loading active chat and embedding models", state: .running)
+            let storedModels = (try? ctx.fetch(FetchDescriptor<StoredModel>())) ?? []
+            await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
+            appState.runtime.updateBootStep(id: "loader", detail: "Model runtime initialized", state: .complete)
+        }
+
+        try await withStage(.triggers) {
+            appState.runtime.updateBootStep(id: "triggers", detail: "Registering background tasks", state: .running)
+            TriggerScheduler.shared.registerTasks()
+            TriggerScheduler.shared.scheduleBackgroundRefresh()
+            await TriggerScheduler.shared.requestPermission()
+            appState.runtime.updateBootStep(id: "triggers", detail: "Background tasks ready", state: .complete)
+        }
+
+        try await withStage(.remCycle) {
+            await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "launch")
+            appState.runtime.completeBootCore()
+        }
+    }
+
+    private static func withStage(_ stage: Stage, operation: () async throws -> Void) async throws {
+        do {
+            try await operation()
+        } catch {
+            throw StartupError(stage: stage, underlying: error)
+        }
+    }
+
+    struct StartupError: Error {
+        let stage: Stage
+        let underlying: Error
+    }
+}
+
+@main
+struct LumenApp: App {
+    @UIApplicationDelegateAdaptor(LumenAppDelegate.self) private var appDelegate
+    @State private var appState = AppState()
+    @State private var startup = AppStartupCoordinator()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(appState)
-                .environment(VoiceService.shared)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
-                .task {
-                    appState.runtime.startBoot()
-                    appState.runtime.updateBootStep(id: "container", detail: "SwiftData container ready", state: .complete)
-
-                    SharedContainer.shared = sharedModelContainer
-                    let ctx = ModelContext(sharedModelContainer)
-
-                    await ModelLaunchBootstrap.ensureV0FleetDownloaded(appState: appState, context: ctx)
-
-                    appState.runtime.updateBootStep(id: "loader", detail: "Loading active chat and embedding models", state: .running)
-                    let storedModels = (try? ctx.fetch(FetchDescriptor<StoredModel>())) ?? []
-                    await ModelLoader.loadAtLaunch(appState: appState, stored: storedModels)
-                    appState.runtime.updateBootStep(id: "loader", detail: "Model runtime initialized", state: .complete)
-
-                    appState.runtime.updateBootStep(id: "triggers", detail: "Registering background tasks", state: .running)
-                    TriggerScheduler.shared.registerTasks()
-                    TriggerScheduler.shared.scheduleBackgroundRefresh()
-                    await TriggerScheduler.shared.requestPermission()
-                    appState.runtime.updateBootStep(id: "triggers", detail: "Background tasks ready", state: .complete)
-
-                    await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "launch")
-                    appState.runtime.completeBootCore()
-                }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
-                        Task { @MainActor in
-                            let ctx = ModelContext(sharedModelContainer)
-                            await TriggerScheduler.shared.fireDueTriggers(context: ctx, appState: appState)
-                            await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "scene-active")
+            Group {
+                switch startup.state {
+                case .loading:
+                    BootSplashView(onDone: {})
+                case .ready(let container):
+                    RootView()
+                        .modelContainer(container)
+                        .onChange(of: scenePhase) { _, phase in
+                            if phase == .active {
+                                Task { @MainActor in
+                                    let ctx = ModelContext(container)
+                                    await TriggerScheduler.shared.fireDueTriggers(context: ctx, appState: appState)
+                                    await RemCycleService.runIfDue(context: ctx, appState: appState, reason: "scene-active")
+                                }
+                            }
                         }
+                case .failed(let failure):
+                    StartupFailureView(failure: failure) {
+                        await startup.initialize(appState: appState)
+                        if case .ready(let container) = startup.state {
+                            SharedContainer.shared = container
+                        }
+                    } safeModeAction: {
+                        startup.continueInLimitedMode(appState: appState)
                     }
                 }
+            }
+            .environment(appState)
+            .environment(VoiceService.shared)
+            .preferredColorScheme(.dark)
+            .tint(Theme.accent)
+            .task {
+                guard case .loading = startup.state else { return }
+                await startup.initialize(appState: appState)
+                if case .ready(let container) = startup.state {
+                    SharedContainer.shared = container
+                }
+            }
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+private struct StartupFailureView: View {
+    let failure: AppStartupCoordinator.FailureContext
+    let retryAction: () async -> Void
+    let safeModeAction: () -> Void
+    @State private var isRetrying = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 42))
+                .foregroundStyle(.yellow)
+            Text("Couldn’t Start Lumen")
+                .font(.title2.weight(.semibold))
+            Text("Lumen hit an initialization problem and couldn’t finish startup.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Text("Stage: \(failure.stage.rawValue)\n\(failure.summary)")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+            Button("Retry") {
+                guard !isRetrying else { return }
+                isRetrying = true
+                Task {
+                    defer { isRetrying = false }
+                    await retryAction()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isRetrying)
+
+            Button("Continue in Limited Mode", action: safeModeAction)
+                .buttonStyle(.bordered)
+        }
+        .padding(24)
     }
 }

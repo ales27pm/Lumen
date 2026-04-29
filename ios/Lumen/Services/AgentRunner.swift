@@ -38,14 +38,17 @@ enum AgentRunner {
         fleetSnapshot: LumenModelFleetSnapshot
     ) async -> (text: String, steps: [AgentStep]) {
         let cascade = await MemoryCascade.recall(query: prompt, history: [], context: context)
-        let routing = IntentRouter.classify(prompt)
-        let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: prompt)
+        let resolvedMemories = MemoryContextAdapter.fromLegacyStrings(cascade.promptFragments)
+        let resolution = ReferenceResolver.resolve(prompt: prompt, history: [], relevantMemories: resolvedMemories)
+        let executionPrompt = resolution.rewrittenPrompt
+        let routing = IntentRouter.classify(executionPrompt)
+        let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: executionPrompt)
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
-        let mimicry = MimicryProfiler.profile(userMessage: prompt, settings: settings)
+        let mimicry = MimicryProfiler.profile(userMessage: executionPrompt, settings: settings)
         let req = AgentRequest(
             systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt, fleetSnapshot: fleetSnapshot, mimicry: mimicry),
             history: [],
-            userMessage: prompt,
+            userMessage: executionPrompt,
             temperature: settings.temperature,
             topP: settings.topP,
             repetitionPenalty: settings.repetitionPenalty,

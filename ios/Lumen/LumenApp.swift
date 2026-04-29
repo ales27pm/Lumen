@@ -188,6 +188,9 @@ struct LumenApp: App {
             .environment(VoiceService.shared)
             .preferredColorScheme(.dark)
             .tint(Theme.accent)
+            .onOpenURL { url in
+                MicrosoftGraphURLHandler.handle(url)
+            }
             .task {
                 guard case .loading = startup.state else { return }
                 await startup.initialize(appState: appState)

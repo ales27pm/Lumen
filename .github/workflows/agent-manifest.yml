@@ -1,0 +1,50 @@
+name: Agent Manifest
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install crawler
+        working-directory: tools/lumen_manifest_crawler
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run tests
+        working-directory: tools/lumen_manifest_crawler
+        run: pytest
+
+      - name: Generate manifest and datasets
+        run: python -m lumen_manifest_crawler generate --root . --output generated/agent_manifest --pretty
+        env:
+          PYTHONPATH: tools/lumen_manifest_crawler
+
+      - name: Check generated artifacts are committed
+        run: |
+          git diff --exit-code generated/agent_manifest
+          untracked="$(git ls-files --others --exclude-standard generated/agent_manifest)"
+          if [ -n "$untracked" ]; then
+            echo "Untracked generated manifest artifacts detected:"
+            echo "$untracked"
+            exit 1
+          fi
+
+      - name: Upload generated manifest artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-manifest
+          path: generated/agent_manifest

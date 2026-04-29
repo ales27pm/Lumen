@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 nonisolated enum LumenModelSlot: String, Codable, CaseIterable, Sendable, Identifiable {
     case cortex
@@ -44,6 +45,23 @@ nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
 }
 
 nonisolated struct LumenModelSlotContract: Sendable, Hashable {
+    nonisolated static let fleetContractVersion = "2026.04.29"
+    private nonisolated static let logger = Logger(subsystem: "ai.lumen.app", category: "model-fleet")
+
+    nonisolated enum ContractError: LocalizedError, Equatable {
+        case missingContract(slot: LumenModelSlot, appVersion: String, modelConfigVersion: String)
+        case incompleteMapping(missingSlots: [LumenModelSlot], appVersion: String, modelConfigVersion: String)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingContract(let slot, let appVersion, let modelConfigVersion):
+                return "Missing LumenModelSlotContract for slot=\(slot.rawValue) appVersion=\(appVersion) modelConfigVersion=\(modelConfigVersion)"
+            case .incompleteMapping(let missingSlots, let appVersion, let modelConfigVersion):
+                let slots = missingSlots.map(\.rawValue).sorted().joined(separator: ",")
+                return "Incomplete LumenModelSlotContract mapping missingSlots=[\(slots)] appVersion=\(appVersion) modelConfigVersion=\(modelConfigVersion)"
+            }
+        }
+    }
     let slot: LumenModelSlot
     let systemContract: String
     let defaultTemperature: Double
@@ -100,16 +118,74 @@ nonisolated struct LumenModelSlotContract: Sendable, Hashable {
 
     static let all: [LumenModelSlotContract] = [.cortex, .executor, .mouth, .mimicry, .rem, .embedding]
 
+    private static let contractsBySlot: [LumenModelSlot: LumenModelSlotContract] = [
+        .cortex: .cortex,
+        .executor: .executor,
+        .mouth: .mouth,
+        .mimicry: .mimicry,
+        .rem: .rem,
+        .embedding: .embedding,
+    ]
+
     static func contract(for slot: LumenModelSlot) -> LumenModelSlotContract? {
-        all.first { $0.slot == slot }
+        switch slot {
+        case .cortex: return contractsBySlot[.cortex]
+        case .executor: return contractsBySlot[.executor]
+        case .mouth: return contractsBySlot[.mouth]
+        case .mimicry: return contractsBySlot[.mimicry]
+        case .rem: return contractsBySlot[.rem]
+        case .embedding: return contractsBySlot[.embedding]
+        }
     }
 
-    static func requiredContract(for slot: LumenModelSlot) -> LumenModelSlotContract {
-        if let contract = contract(for: slot) {
+    static func requiredContract(for slot: LumenModelSlot) throws -> LumenModelSlotContract {
+        try requiredContract(for: slot, using: contractsBySlot)
+    }
+
+    static func requiredContract(for slot: LumenModelSlot, using mapping: [LumenModelSlot: LumenModelSlotContract]) throws -> LumenModelSlotContract {
+        if let contract = mapping[slot] {
             return contract
         }
-        assertionFailure("Missing LumenModelSlotContract for slot: \(slot.rawValue)")
-        return .mouth
+        let error = ContractError.missingContract(
+            slot: slot,
+            appVersion: appVersionString(),
+            modelConfigVersion: fleetContractVersion
+        )
+        emitMissingContractTelemetry(for: error)
+        throw error
+    }
+
+    static func validateCompletenessAtStartup() throws {
+        try validateCompleteness(using: contractsBySlot)
+    }
+
+    static func validateCompleteness(using mapping: [LumenModelSlot: LumenModelSlotContract]) throws {
+        let missing = LumenModelSlot.allCases.filter { mapping[$0] == nil }
+        guard missing.isEmpty else {
+            let error = ContractError.incompleteMapping(
+                missingSlots: missing,
+                appVersion: appVersionString(),
+                modelConfigVersion: fleetContractVersion
+            )
+            missing.forEach { slot in
+                emitMissingContractTelemetry(
+                    for: .missingContract(slot: slot, appVersion: appVersionString(), modelConfigVersion: fleetContractVersion)
+                )
+            }
+            throw error
+        }
+    }
+
+    private static func emitMissingContractTelemetry(for error: ContractError) {
+        guard case .missingContract(let slot, let appVersion, let modelConfigVersion) = error else { return }
+        logger.error("slot_contract_missing slot=\(slot.rawValue, privacy: .public) appVersion=\(appVersion, privacy: .public) modelConfigVersion=\(modelConfigVersion, privacy: .public)")
+    }
+
+    private static func appVersionString() -> String {
+        let bundle = Bundle.main
+        let short = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return "\(short) (\(build))"
     }
 }
 

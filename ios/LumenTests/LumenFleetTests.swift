@@ -2,6 +2,43 @@ import Testing
 @testable import Lumen
 
 struct LumenFleetTests {
+    @Test func contractValidationFailsDeterministicallyWhenSlotMappingIsMissing() async throws {
+        var mapping: [LumenModelSlot: LumenModelSlotContract] = [
+            .cortex: .cortex,
+            .executor: .executor,
+            .mouth: .mouth,
+            .mimicry: .mimicry,
+            .rem: .rem,
+            .embedding: .embedding,
+        ]
+        mapping.removeValue(forKey: .rem)
+
+        do {
+            try LumenModelSlotContract.validateCompleteness(using: mapping)
+            Issue.record("Expected validation to throw for missing slot contract")
+        } catch let error as LumenModelSlotContract.ContractError {
+            guard case .incompleteMapping(let missingSlots, _, _) = error else {
+                Issue.record("Expected incompleteMapping error")
+                return
+            }
+            #expect(missingSlots == [.rem])
+        }
+    }
+
+    @Test func requiredContractThrowsForMissingSlotWithoutFallback() async throws {
+        do {
+            _ = try LumenModelSlotContract.requiredContract(for: .rem, using: [.cortex: .cortex])
+            Issue.record("Expected missingContract error")
+        } catch let error as LumenModelSlotContract.ContractError {
+            guard case .missingContract(let slot, _, let modelConfigVersion) = error else {
+                Issue.record("Expected missingContract error")
+                return
+            }
+            #expect(slot == .rem)
+            #expect(modelConfigVersion == LumenModelSlotContract.fleetContractVersion)
+        }
+    }
+
     @Test @MainActor func v0ResolverAssignsAllTextSlotsFromSingleSmallChatModel() async throws {
         let chat = StoredModel(
             name: "Qwen2.5 Coder Fleet",

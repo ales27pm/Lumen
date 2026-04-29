@@ -21,7 +21,7 @@ public struct AgentGroundingAuditView: View {
                     runAudit()
                 }
             } footer: {
-                Text("Compares the bundled AgentBehaviorManifest.json against the live ToolRegistry. If the manifest resource is missing in a dev build, Lumen falls back to a runtime-generated manifest and reports that fallback here.")
+                Text("Loads the writable Application Support manifest first, seeds it from the bundled AgentBehaviorManifest.json when available, then compares it against the live ToolRegistry. Runtime fallback is only used when no stored or bundled manifest exists.")
             }
 
             if let errorMessage {
@@ -46,7 +46,7 @@ public struct AgentGroundingAuditView: View {
                             .font(.caption)
                     }
                     if usedRuntimeFallback {
-                        Label("Runtime fallback was used. Sync AgentBehaviorManifest.json into the app bundle before trusting this as a source-of-truth audit.", systemImage: "exclamationmark.triangle.fill")
+                        Label("Runtime fallback was used. Add AgentBehaviorManifest.json to the app bundle or seed the Application Support manifest before trusting this as a source-of-truth audit.", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -98,7 +98,7 @@ public struct AgentGroundingAuditView: View {
 
     private func runAudit() {
         DispatchQueue.global(qos: .userInitiated).async {
-            let loadResult = auditor.loadBundledManifestOrRuntimeFallback()
+            let loadResult = auditor.loadManifestFromStoreBundleOrRuntimeFallback()
             let auditReport = auditor.audit(manifest: loadResult.manifest)
             let scenarios = scenarioRunner.validateStaticScenarios(manifest: loadResult.manifest)
             DispatchQueue.main.async {

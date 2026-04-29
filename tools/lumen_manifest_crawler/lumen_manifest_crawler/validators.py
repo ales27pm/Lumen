@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Iterable
+from typing import Any
 
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationFailure, ValidationReport, ValidationWarning
 
@@ -74,10 +76,9 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
 
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
-            dumped = json.dumps(record, ensure_ascii=False)
             if name in {"mouth_responses", "mimicry_style"}:
                 for sentinel in forbidden:
-                    if sentinel and sentinel in dumped:
+                    if sentinel and _record_model_visible_text_contains(record, sentinel):
                         failures.append(ValidationFailure(code="sentinel_leak", message=f"Sentinel {sentinel} leaked in {name}[{index}]", path=f"dataset.{name}.{index}"))
             if name in {"executor_tool_calls", "approval_boundary_samples"}:
                 tool_id = _find_tool_id(record)
@@ -97,6 +98,47 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
             failures.append(ValidationFailure(code="missing_executor_sample", message=f"Tool {tool.id} has required args but no executor sample", path=f"tools.{tool.id}"))
         if tool.requiresApproval and tool.id not in covered_approval_tools:
             failures.append(ValidationFailure(code="missing_approval_sample", message=f"Tool {tool.id} requires approval but has no approval dataset sample", path=f"tools.{tool.id}"))
+
+
+def _record_model_visible_text_contains(record: dict, needle: str) -> bool:
+    """Check only prompt/completion text visible to the trained model.
+
+    Grounding metadata may intentionally contain forbidden sentinel strings as a
+    blacklist. Treating the whole JSON record as trainable text makes the
+    validator report its own guardrail as a leak.
+    """
+    for value in _model_visible_values(record):
+        if needle in value:
+            return True
+    return False
+
+
+def _model_visible_values(record: dict) -> Iterable[str]:
+    for message in record.get("messages", []):
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            yield content
+        elif isinstance(content, dict):
+            yield from _string_values(content)
+    for key in ("input", "output", "prompt", "completion", "response"):
+        value = record.get(key)
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            yield from _string_values(value)
+
+
+def _string_values(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from _string_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _string_values(child)
 
 
 def _find_tool_id(record: dict) -> str | None:

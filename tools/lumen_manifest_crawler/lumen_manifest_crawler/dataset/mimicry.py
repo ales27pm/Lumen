@@ -6,7 +6,7 @@ from lumen_manifest_crawler.manifest import AgentBehaviorManifest
 def generate_mimicry_records(manifest: AgentBehaviorManifest) -> list[dict]:
     records: list[dict] = []
     base_states = [
-        ("This build keeps failing again. I’m losing my mind.", "frustrated_focused", "direct"),
+        ("This build keeps failing again. I'm losing my mind.", "frustrated_focused", "direct"),
         ("Can you just give me the fix without the essay?", "impatient_technical", "concise"),
         ("I need this to work on device, not as a fake demo.", "precision_demanding", "clinical"),
     ]

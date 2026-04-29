@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WebKit
 
 struct MessageBubble: View {
     let message: ChatMessage
@@ -64,7 +65,7 @@ struct MessageBubble: View {
 
                 if streamingOverride == nil {
                     if let webURL = firstWebURL(from: visibleContent) {
-                        EmbeddedContentButton(icon: "globe", title: "Open Web Page", subtitle: webURL.host() ?? webURL.absoluteString) {
+                        InlineWebBubble(url: webURL) {
                             webPreview = WebPreviewItem(url: webURL)
                         }
                     }
@@ -364,5 +365,57 @@ struct ToolCallCard: View {
             if parts.count == 2 { out[parts[0]] = parts[1] }
         }
         return out
+    }
+}
+
+
+private struct InlineWebBubble: View {
+    let url: URL
+    let openAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                Text(url.host() ?? url.absoluteString)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Button("Open") { openAction() }
+                    .font(.caption)
+            }
+            InlineBubbleWebView(url: url)
+                .frame(height: 220)
+                .clipShape(.rect(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Theme.border, lineWidth: 1)
+                }
+        }
+        .padding(8)
+        .background(Theme.surfaceHigh)
+        .clipShape(.rect(cornerRadius: 10))
+    }
+}
+
+private struct InlineBubbleWebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.scrollView.isScrollEnabled = true
+        webView.allowsBackForwardNavigationGestures = false
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        guard webView.url != url else { return }
+        let req = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+        webView.load(req)
     }
 }

@@ -3,6 +3,8 @@ import CoreLocation
 
 @MainActor
 enum WeatherTools {
+    private static let retryPolicy = ToolRetryPolicy(maxAttempts: 3, baseDelay: 0.4, maxDelay: 2.0, jitterRatio: 0.2)
+
     static func currentWeather(location: String? = nil) async -> String {
         let coordinate: CLLocationCoordinate2D?
         let requestedLocation = (location ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,17 +31,17 @@ enum WeatherTools {
             return "Couldn't build the weather request."
         }
 
-        do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 15
-            request.setValue("Lumen iOS", forHTTPHeaderField: "User-Agent")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                return "Weather service returned HTTP \(http.statusCode). Try again later."
-            }
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        var request = URLRequest(url: url)
+        request.setValue("Lumen iOS", forHTTPHeaderField: "User-Agent")
+
+        let result = await executeRequest(endpoint: "openmeteo.current", request: request, timeout: 10, retryPolicy: retryPolicy, context: "Weather service")
+        switch result {
+        case .failure(let message):
+            return message
+        case .success(let data, _):
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let current = json["current"] as? [String: Any] else {
-                return "Couldn't parse the weather response."
+                return ToolNetworkResilience.fallbackMessage(for: .parsing, context: "Weather service")
             }
 
             let temp = currentDouble(current, "temperature_2m")
@@ -65,9 +67,50 @@ enum WeatherTools {
             parts.append("updated \(time)")
 
             return parts.joined(separator: " · ")
-        } catch {
-            return "Couldn't load weather: \(error.localizedDescription)"
         }
+    }
+
+    private static func executeRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), String> {
+        if !(await ToolNetworkResilience.circuitBreaker.allowRequest(endpoint: endpoint)) {
+            return .failure(ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context))
+        }
+
+        var req = request
+        req.timeoutInterval = timeout
+        var retries = 0
+        let started = Date()
+
+        for attempt in 1...retryPolicy.maxAttempts {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                let http = response as? HTTPURLResponse
+                let errorClass = ToolNetworkResilience.classify(error: nil, response: http)
+                if let status = http?.statusCode, !(200..<300).contains(status) {
+                    if ToolNetworkResilience.shouldRetry(errorClass: errorClass), attempt < retryPolicy.maxAttempts {
+                        retries += 1
+                        try? await Task.sleep(nanoseconds: ToolNetworkResilience.backoffDelay(attempt: attempt, policy: retryPolicy))
+                        continue
+                    }
+                    await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
+                    ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: status))
+                    return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                }
+                await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: true)
+                ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: true, errorClass: nil, retryCount: retries, statusCode: http?.statusCode))
+                return .success((data, http))
+            } catch {
+                let errorClass = ToolNetworkResilience.classify(error: error, response: nil)
+                if ToolNetworkResilience.shouldRetry(errorClass: errorClass), attempt < retryPolicy.maxAttempts {
+                    retries += 1
+                    try? await Task.sleep(nanoseconds: ToolNetworkResilience.backoffDelay(attempt: attempt, policy: retryPolicy))
+                    continue
+                }
+                await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
+                ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
+                return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+            }
+        }
+        return .failure(ToolNetworkResilience.fallbackMessage(for: .unknown, context: context))
     }
 
     private static func geocode(_ text: String) async -> CLLocationCoordinate2D? {

@@ -4,7 +4,7 @@ struct ToolLedgerEntry: Sendable, Hashable {
     let id: UUID
     let conversationID: UUID?
     let turnID: UUID?
-    let intent: IntentRoute
+    let intent: UserIntent
     let toolID: String
     let query: String
     let result: String
@@ -15,12 +15,12 @@ struct ToolLedgerEntry: Sendable, Hashable {
         id: UUID = UUID(),
         conversationID: UUID?,
         turnID: UUID?,
-        intent: IntentRoute,
+        intent: UserIntent,
         toolID: String,
         query: String,
         result: String,
         createdAt: Date = Date(),
-        ttl: TimeInterval = ToolLedger.defaultTTL
+        ttl: TimeInterval = 60 * 8
     ) {
         self.id = id
         self.conversationID = conversationID
@@ -44,7 +44,7 @@ final class ToolLedger {
     private var entries: [ToolLedgerEntry] = []
     private init() {}
 
-    func record(conversationID: UUID?, turnID: UUID?, intent: IntentRoute, toolID: String, query: String, result: String) {
+    func record(conversationID: UUID?, turnID: UUID?, intent: UserIntent, toolID: String, query: String, result: String) {
         pruneExpired()
         let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -66,10 +66,11 @@ final class ToolLedger {
         return entries.filter { $0.conversationID == conversationID && $0.turnID == turnID }
     }
 
-    func shortTermEntries(conversationID: UUID?, since: Date = Date().addingTimeInterval(-defaultTTL)) -> [ToolLedgerEntry] {
+    func shortTermEntries(conversationID: UUID?, since: Date? = nil) -> [ToolLedgerEntry] {
+        let threshold = since ?? Date().addingTimeInterval(-Self.defaultTTL)
         pruneExpired()
         return entries.filter { entry in
-            entry.conversationID == conversationID && entry.createdAt >= since
+            entry.conversationID == conversationID && entry.createdAt >= threshold
         }
     }
 

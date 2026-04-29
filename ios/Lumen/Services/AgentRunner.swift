@@ -38,8 +38,7 @@ enum AgentRunner {
         fleetSnapshot: LumenModelFleetSnapshot
     ) async -> (text: String, steps: [AgentStep]) {
         let cascade = await MemoryCascade.recall(query: prompt, history: [], context: context)
-        let resolvedMemories = MemoryContextAdapter.fromLegacyStrings(cascade.promptFragments)
-        let resolution = ReferenceResolver.resolve(prompt: prompt, history: [], relevantMemories: resolvedMemories)
+        let resolution = ReferenceResolver.resolve(prompt: prompt, history: [], relevantMemories: cascade.promptFragments)
         let executionPrompt = resolution.rewrittenPrompt
         let routing = IntentRouter.classify(executionPrompt)
         let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: executionPrompt)

@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "bdfd089557c0cb3a721a35449c0fcb489ef0913a",
+    "commit": "98b079a8934da612069e70c5d5a686d4f3222c6c",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -149,7 +149,7 @@
         },
         {
           "name": "startsInMinutes",
-          "type": "string",
+          "type": "number",
           "required": true,
           "description": "Inferred from ToolDefinition description Args contract: title, startsInMinutes",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
@@ -372,10 +372,17 @@
       "permissionKey": "NSLocationWhenInUseUsageDescription",
       "arguments": [
         {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional location or city",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
           "name": "city",
           "type": "string",
-          "required": true,
-          "description": "Inferred from ToolDefinition description Args contract: optional  location or city",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional location or city",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         }
       ],
@@ -586,7 +593,14 @@
           "name": "query",
           "type": "string",
           "required": true,
-          "description": "Inferred from ToolDefinition description Args contract: query, optional  limit",
+          "description": "Inferred from ToolDefinition description Args contract: query, optional limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional limit",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         }
       ],
@@ -755,28 +769,35 @@
           "name": "title",
           "type": "string",
           "required": true,
-          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional repeats, snoozeMinutes",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         },
         {
           "name": "inMinutes",
           "type": "number",
           "required": true,
-          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional repeats, snoozeMinutes",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         },
         {
           "name": "timestamp",
           "type": "string",
           "required": true,
-          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional repeats, snoozeMinutes",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "repeats",
+          "type": "bool",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional repeats, snoozeMinutes",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         },
         {
           "name": "snoozeMinutes",
-          "type": "string",
+          "type": "number",
           "required": false,
-          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional  repeats, snoozeMinutes",
+          "description": "Inferred from ToolDefinition description Args contract: title, inMinutes or timestamp, optional repeats, snoozeMinutes",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         }
       ],
@@ -1805,7 +1826,7 @@
     ],
     "freshnessClasses": [
       {
-        "id": "timeless",
+        "id": "shortLived",
         "ttlSeconds": null,
         "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
@@ -1817,15 +1838,15 @@
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
       {
-        "id": "durable",
+        "id": "timeless",
         "ttlSeconds": null,
-        "durable": true,
+        "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
       {
-        "id": "shortLived",
+        "id": "durable",
         "ttlSeconds": null,
-        "durable": false,
+        "durable": true,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       }
     ]

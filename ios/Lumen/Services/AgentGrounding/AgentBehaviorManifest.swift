@@ -60,7 +60,26 @@ public struct ManifestMemory: Codable, Hashable {
 public struct ManifestFreshnessClass: Codable, Hashable {
     public let id: String
     public let ttlSeconds: Int?
-    public let durable: Bool?
+    public let durable: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case ttlSeconds
+        case durable
+    }
+
+    public init(id: String, ttlSeconds: Int?, durable: Bool = false) {
+        self.id = id
+        self.ttlSeconds = ttlSeconds
+        self.durable = durable
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        ttlSeconds = try container.decodeIfPresent(Int.self, forKey: .ttlSeconds)
+        durable = try container.decodeIfPresent(Bool.self, forKey: .durable) ?? false
+    }
 }
 
 public struct ManifestSentinels: Codable, Hashable {

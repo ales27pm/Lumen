@@ -5,6 +5,8 @@ import re
 from lumen_manifest_crawler.manifest import FreshnessClassManifest
 from lumen_manifest_crawler.swift_extractors.base import SwiftExtractor, SwiftFile, enum_cases, string_literals
 
+DURABLE_NAMES = {"durable", "permanent", "pinned"}
+
 
 class MemoryExtractor(SwiftExtractor):
     target_names = ("MemoryItem.swift", "MemoryStore.swift", "MemoryContextItem.swift")
@@ -26,7 +28,7 @@ class MemoryExtractor(SwiftExtractor):
                     FreshnessClassManifest(
                         id=name,
                         ttlSeconds=self._ttl_near(file.text, name),
-                        durable=name.lower() in {"durable", "permanent", "pinned"},
+                        durable=name.lower() in DURABLE_NAMES,
                         source=file.relpath,
                     )
                 )
@@ -35,7 +37,7 @@ class MemoryExtractor(SwiftExtractor):
         for ttl_name, ttl in self._extract_ttl_constants(file.text):
             if ttl_name not in existing:
                 manifest.memory.freshnessClasses.append(
-                    FreshnessClassManifest(id=ttl_name, ttlSeconds=ttl, durable=ttl is None, source=file.relpath)
+                    FreshnessClassManifest(id=ttl_name, ttlSeconds=ttl, durable=ttl_name.lower() in DURABLE_NAMES, source=file.relpath)
                 )
                 existing.add(ttl_name)
 
@@ -68,5 +70,5 @@ class MemoryExtractor(SwiftExtractor):
         for match in re.finditer(r"(ephemeral|session|durable|permanent|project)\w*\s*[=:]\s*(\d+)?", text, flags=re.I):
             raw_name = match.group(1)
             raw_value = match.group(2)
-            out.append((raw_name[0].lower() + raw_name[1:], int(raw_value) if raw_value else None))
+            out.append((raw_name.casefold(), int(raw_value) if raw_value else None))
         return out

@@ -41,6 +41,6 @@ class IntentRouterExtractor(SwiftExtractor):
         for match in re.finditer(pattern, text):
             window = text[max(0, match.start() - 500): min(len(text), match.end() + 900)]
             for literal in string_literals(window):
-                if literal in known_tool_ids or ("." in literal and literal.replace(".", "").replace("_", "").isalnum()):
+                if literal in known_tool_ids:
                     allowed.add(literal)
         return sorted(allowed)

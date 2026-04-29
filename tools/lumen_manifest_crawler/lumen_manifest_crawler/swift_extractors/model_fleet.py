@@ -96,5 +96,37 @@ class ModelFleetExtractor(SwiftExtractor):
     def _extract_responsibilities(block: str, role: str) -> list[str]:
         if "responsibilities" not in block:
             return DEFAULT_RESPONSIBILITIES.get(role, [])
-        values = [s for s in string_literals(block) if len(s.split()) > 1]
+        extracted = ModelFleetExtractor._extract_array_literals(block, "responsibilities")
+        values = [value for value in extracted if len(value.split()) > 1]
         return values or DEFAULT_RESPONSIBILITIES.get(role, [])
+
+    @staticmethod
+    def _extract_array_literals(block: str, label: str) -> list[str]:
+        match = re.search(rf"\b{re.escape(label)}\s*:\s*\[", block)
+        if not match:
+            match = re.search(rf"\b{re.escape(label)}\s*=\s*\[", block)
+        if not match:
+            return []
+        start = match.end() - 1
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(block)):
+            char = block[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == "[":
+                    depth += 1
+                elif char == "]":
+                    depth -= 1
+                    if depth == 0:
+                        return string_literals(block[start:index + 1])
+        return []

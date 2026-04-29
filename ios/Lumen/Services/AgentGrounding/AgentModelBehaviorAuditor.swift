@@ -6,17 +6,19 @@ final class AgentModelBehaviorAuditor {
 
     func audit(manifest: AgentBehaviorManifest, messages: [ChatMessage], limit: Int = 80) -> AgentBehaviorAuditReport {
         let ordered = messages.sorted { $0.createdAt < $1.createdAt }
-        let recent = Array(ordered.suffix(limit))
+        let boundedLimit = max(0, limit)
+        let startIndex = max(0, ordered.count - boundedLimit)
         let toolsByID = Dictionary(manifest.tools.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let manifestAllowedByIntent = allowedToolsByIntent(manifest)
+        let toolsByCanonicalID = Dictionary(manifest.tools.map { (ToolRouteGuard.canonicalToolID($0.id), $0) }, uniquingKeysWith: { first, _ in first })
+        let manifestAllowedByIntent = allowedToolsByIntent(manifest).mapValues { Set($0.map(ToolRouteGuard.canonicalToolID)) }
         let forbiddenSentinels = Set(manifest.sentinels.forbiddenInUserOutput)
         var violations: [AgentBehaviorViolation] = []
         var auditedTraceCount = 0
 
-        for index in recent.indices {
-            let message = recent[index]
+        for index in startIndex..<ordered.count {
+            let message = ordered[index]
             guard message.messageRole == .assistant else { continue }
-            let prompt = previousUserPrompt(before: index, in: recent) ?? ""
+            let prompt = previousUserPrompt(before: index, in: ordered) ?? ""
             let routing = IntentRouter.classify(prompt)
             let expectedIntent = routing.intent.rawValue
             let expectedManifestTools = manifestAllowedByIntent[expectedIntent] ?? []
@@ -75,7 +77,7 @@ final class AgentModelBehaviorAuditor {
             }
 
             for action in actionSteps {
-                guard let toolID = action.toolID ?? action.toolArgs?["tool"] else {
+                guard let selectedToolID = action.toolID ?? action.toolArgs?["tool"] else {
                     violations.append(violation(
                         severity: .critical,
                         code: "action_missing_tool_id",
@@ -88,38 +90,40 @@ final class AgentModelBehaviorAuditor {
                     continue
                 }
 
-                guard let tool = toolsByID[toolID] else {
+                let canonicalToolID = ToolRouteGuard.canonicalToolID(selectedToolID)
+
+                guard let tool = toolsByID[selectedToolID] ?? toolsByCanonicalID[canonicalToolID] else {
                     violations.append(violation(
                         severity: .critical,
                         code: "unknown_tool_id",
                         agent: "executor",
                         expected: "Known manifest tool IDs: \(toolsByID.keys.sorted().joined(separator: ", "))",
-                        actual: toolID,
+                        actual: selectedToolID,
                         prompt: prompt,
                         problem: "Executor selected a tool ID absent from the static code-analysis manifest."
                     ))
                     continue
                 }
 
-                if !expectedManifestTools.isEmpty && !expectedManifestTools.contains(toolID) {
+                if !expectedManifestTools.isEmpty && !expectedManifestTools.contains(canonicalToolID) {
                     violations.append(violation(
                         severity: .critical,
                         code: "tool_not_allowed_by_static_manifest",
                         agent: "cortex",
                         expected: "Intent \(expectedIntent) allows: \(expectedManifestTools.sorted().joined(separator: ", "))",
-                        actual: toolID,
+                        actual: selectedToolID,
                         prompt: prompt,
                         problem: "Cortex/Executor selected a tool outside the static manifest routing matrix."
                     ))
                 }
 
-                if !runtimeAllowedTools.isEmpty && !runtimeAllowedTools.contains(ToolRouteGuard.canonicalToolID(toolID)) {
+                if !runtimeAllowedTools.isEmpty && !runtimeAllowedTools.contains(canonicalToolID) {
                     violations.append(violation(
                         severity: .critical,
                         code: "tool_not_allowed_by_runtime_router",
                         agent: "cortex",
                         expected: "Runtime router allows: \(runtimeAllowedTools.sorted().joined(separator: ", "))",
-                        actual: toolID,
+                        actual: selectedToolID,
                         prompt: prompt,
                         problem: "Cortex/Executor selected a tool outside the live IntentRouter decision."
                     ))
@@ -132,7 +136,7 @@ final class AgentModelBehaviorAuditor {
                             severity: .error,
                             code: "missing_required_tool_argument",
                             agent: "executor",
-                            expected: "\(toolID).\(arg.name): \(arg.type), required=true",
+                            expected: "\(tool.id).\(arg.name): \(arg.type), required=true",
                             actual: providedArgs.keys.sorted().joined(separator: ", "),
                             prompt: prompt,
                             problem: "Executor omitted a required argument from the static manifest schema."
@@ -140,12 +144,12 @@ final class AgentModelBehaviorAuditor {
                     }
                 }
 
-                if tool.requiresApproval && !isObviouslyUserInitiatedWrite(prompt: prompt, toolID: toolID) {
+                if tool.requiresApproval && !isObviouslyUserInitiatedWrite(prompt: prompt, toolID: tool.id) {
                     violations.append(violation(
                         severity: .warning,
                         code: "approval_sensitive_tool_selected",
                         agent: "executor",
-                        expected: "Tool \(toolID) requires an approval boundary unless the request is explicitly user-initiated.",
+                        expected: "Tool \(tool.id) requires an approval boundary unless the request is explicitly user-initiated.",
                         actual: action.content,
                         prompt: prompt,
                         problem: "A requiresApproval tool was selected. Verify that the approval boundary was respected."
@@ -204,7 +208,7 @@ final class AgentModelBehaviorAuditor {
         if toolID.contains("draft") || toolID.contains("create") || toolID.contains("schedule") || toolID.contains("call") || toolID.contains("save") || toolID.contains("cancel") {
             return lower.contains("create") || lower.contains("draft") || lower.contains("send") || lower.contains("call") || lower.contains("save") || lower.contains("schedule") || lower.contains("cancel") || lower.contains("remind") || lower.contains("set")
         }
-        return true
+        return false
     }
 
     private func violation(

@@ -101,7 +101,8 @@ nonisolated enum AgentBehaviorTraceRecorder {
                     guard let lineData = String(line).data(using: .utf8) else { return nil }
                     return try? decoder.decode(AgentBehaviorTrace.self, from: lineData)
                 }
-            return Array(traces.suffix(limit))
+            let boundedLimit = max(0, limit)
+            return Array(traces.suffix(boundedLimit))
         } catch {
             return []
         }

@@ -18,6 +18,8 @@ TOOL_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*")
 TOOL_ID_LABEL_PATTERN = re.compile(r"\b(?:id|toolID|toolId|identifier)\s*:\s*\"([^\"]+)\"")
 TOOL_ID_COLLECTION_PATTERN = re.compile(r"\b(?:toolIDs|toolIds|allowedToolIDs|allowedToolIds)\b[^\n=:\[]*[:=]\s*\[(?P<body>.*?)\]", flags=re.S)
 ARG_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+OPTIONAL_PREFIX_PATTERN = re.compile(r"^optional\s+", flags=re.I)
+ARG_TYPE_HINT_WORDS = {"uuid", "fallback"}
 
 
 class ToolDefinitionExtractor(SwiftExtractor):
@@ -113,50 +115,51 @@ class ToolDefinitionExtractor(SwiftExtractor):
         if not body or body.lower() in {"none", "no args", "n/a"}:
             return []
 
-        body = re.sub(r"\boptional\b", "optional ", body, flags=re.I)
         normalized = body.replace(" or ", ", ").replace(" plus ", ", ").replace(" depending on ", ", ")
-        names: list[str] = []
+        specs: list[tuple[str, bool]] = []
+        optional_group = False
         for raw in re.split(r"[,;/]", normalized):
             token = raw.strip()
             if not token:
                 continue
             token = re.sub(r"\(.*?\)", "", token).strip()
-            token = token.split()[0].strip("`'\".:") if token.split() else token
-            if token.lower() in {"none", "optional", "args", "arg"}:
+            token_lower = token.lower()
+            token_optional = optional_group or token_lower.startswith("optional ")
+            token = OPTIONAL_PREFIX_PATTERN.sub("", token).strip()
+            if not token:
+                optional_group = True
                 continue
-            if not ARG_NAME_PATTERN.fullmatch(token):
+            parts = token.split()
+            name = parts[0].strip("`'\".:") if parts else token.strip("`'\".:")
+            if name.lower() in {"none", "args", "arg"}:
                 continue
-            if token not in names:
-                names.append(token)
+            if name.lower() in ARG_TYPE_HINT_WORDS and len(parts) > 1:
+                continue
+            if not ARG_NAME_PATTERN.fullmatch(name):
+                continue
+            if not any(existing == name for existing, _ in specs):
+                specs.append((name, token_optional))
+            optional_group = token_optional
 
         return [
             ToolArgumentManifest(
                 name=name,
                 type=ToolDefinitionExtractor._infer_arg_type_from_name(name),
-                required=not ToolDefinitionExtractor._is_optional_arg_name(name, body),
+                required=not optional,
                 description=f"Inferred from ToolDefinition description Args contract: {body}",
                 source=source,
             )
-            for name in names
+            for name, optional in specs
         ]
-
-    @staticmethod
-    def _is_optional_arg_name(name: str, args_body: str) -> bool:
-        lowered = args_body.lower()
-        name_index = lowered.find(name.lower())
-        if name_index == -1:
-            return False
-        prefix = lowered[max(0, name_index - 20):name_index]
-        return "optional" in prefix
 
     @staticmethod
     def _infer_arg_type_from_name(name: str) -> str:
         lowered = name.lower()
-        if lowered in {"inminutes", "durationminutes", "durationseconds", "beforeminutes", "intervalseconds", "months", "limit", "count"}:
+        if any(marker in lowered for marker in ("minutes", "seconds", "count", "limit", "months", "duration", "interval")):
             return "number"
-        if lowered in {"repeats"} or lowered.startswith("is") or lowered.startswith("has"):
+        if lowered in {"repeats"} or lowered.startswith("is") or lowered.startswith("has") or lowered.startswith("should"):
             return "bool"
-        if lowered in {"query", "title", "subject", "body", "message", "text", "recipient", "number", "destination", "location", "city", "url", "name", "kind", "content", "schedule", "timestamp", "attime", "id", "email", "to"}:
+        if lowered in {"query", "title", "subject", "body", "message", "text", "recipient", "number", "destination", "location", "city", "url", "name", "kind", "content", "schedule", "timestamp", "attime", "id", "email", "to", "prompt"}:
             return "string"
         return "string"
 

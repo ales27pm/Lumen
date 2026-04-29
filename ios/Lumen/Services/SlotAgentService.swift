@@ -12,6 +12,7 @@ final class SlotAgentService {
                 var steps: [AgentStep] = []
                 var observations: [String] = []
                 var finalText = ""
+                var executedActionFingerprints: Set<String> = []
 
                 let routing = IntentRouter.classify(req.userMessage)
                 let scopedTools = req.availableTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
@@ -28,7 +29,7 @@ final class SlotAgentService {
                     return
                 }
 
-                let maxSteps = max(1, req.maxSteps)
+                let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
                     let slot: LumenModelSlot = stepIndex == 0 ? .cortex : .executor
                     let turnPrompt = makeStructuredTurnPrompt(req: req, observations: observations, stepIndex: stepIndex, scopedTools: scopedTools)
@@ -73,25 +74,43 @@ final class SlotAgentService {
                         return
                     }
 
-                    let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: action.tool, toolArgs: action.args.stringCoerced)
+                    let canonicalTool = ToolRouteGuard.canonicalToolID(action.tool)
+                    let normalizedArgs = ToolRouteGuard.normalizedArguments(for: canonicalTool, rawToolID: action.tool, arguments: action.args.stringCoerced)
+                    let fingerprint = actionFingerprint(toolID: canonicalTool, arguments: normalizedArgs)
+
+                    if executedActionFingerprints.contains(fingerprint) {
+                        recordTrace(slot: slot, stage: "tool-loop", stepIndex: stepIndex, error: "duplicate_tool_action", raw: action.displayContent, prompt: req.userMessage)
+                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observations.last)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    }
+
+                    let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
                     steps.append(actionStep)
                     continuation.yield(.step(actionStep))
 
-                    guard SlotAgentService.isActionAllowed(action.tool, routing: routing) else {
+                    guard SlotAgentService.isActionAllowed(canonicalTool, routing: routing) else {
                         recordTrace(slot: slot, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
                         finalText = IntentRouter.blockedToolMessage(for: routing)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
 
-                    let observation = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
-                    observations.append("\(action.tool): \(observation)")
-                    let observationStep = AgentStep(kind: .observation, content: observation, toolID: action.tool, toolArgs: action.args.stringCoerced)
+                    executedActionFingerprints.insert(fingerprint)
+                    let observation = await ToolExecutor.shared.execute(canonicalTool, arguments: normalizedArgs)
+                    observations.append("\(canonicalTool): \(observation)")
+                    let observationStep = AgentStep(kind: .observation, content: observation, toolID: canonicalTool, toolArgs: normalizedArgs)
                     steps.append(observationStep)
                     continuation.yield(.step(observationStep))
+
+                    if shouldFinalizeAfterObservation(observation, routing: routing) {
+                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observation)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    }
                 }
 
-                finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: nil)
+                finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observations.last)
                 yieldFinal(finalText, steps: steps, continuation: continuation)
             }
 
@@ -188,8 +207,9 @@ final class SlotAgentService {
         Rules:
         - Use only information from this prompt and this request's observations.
         - Never reuse a previous request's tool result.
+        - Never call the same tool with the same arguments twice.
+        - If a tool observation answers the request, return final immediately.
         - Use a tool only when live device data or an action is needed.
-        - If enough information is available, return final.
         - You may only call one of the listed tools. If no listed tool fits, return final asking for clarification or explaining the limitation.
         - Do not include prose outside JSON.
         """
@@ -215,6 +235,66 @@ final class SlotAgentService {
         - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
         - Keep it concise, accurate, and do not claim actions that did not happen.
         """
+    }
+
+    private func boundedMaxSteps(for routing: IntentRoutingDecision, requested: Int) -> Int {
+        let hardCap: Int
+        switch routing.intent {
+        case .weather, .webSearch, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .contactSearch:
+            hardCap = 2
+        case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm, .note:
+            hardCap = 3
+        case .chat, .unknown:
+            hardCap = 1
+        }
+        return max(1, min(requested, hardCap))
+    }
+
+    private func shouldFinalizeAfterObservation(_ observation: String, routing: IntentRoutingDecision) -> Bool {
+        let text = observation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = text.lowercased()
+        guard !text.isEmpty else { return false }
+
+        if lower.contains("requires explicit user approval") { return true }
+        if lower.contains("unavailable") || lower.contains("not available") || lower.contains("denied") { return true }
+        if lower.contains("no direct answer") || lower.contains("try a different phrasing") { return true }
+
+        switch routing.intent {
+        case .weather:
+            return lower.contains("weather") || lower.contains("temperature") || lower.contains("humidity") || lower.contains("feels like") || lower.contains("°c")
+        case .webSearch:
+            return lower.contains("http") || lower.contains("result") || lower.contains("source") || lower.contains("no direct answer")
+        case .maps:
+            return lower.contains("map") || lower.contains("direction") || lower.contains("near") || lower.contains("location") || lower.contains("opening maps")
+        case .photos:
+            return lower.contains("photo") || lower.contains("image") || lower.contains("library")
+        case .camera:
+            return lower.contains("camera") || lower.contains("captured") || lower.contains("photo")
+        case .health:
+            return lower.contains("health") || lower.contains("steps") || lower.contains("sleep") || lower.contains("heart")
+        case .motion:
+            return lower.contains("motion") || lower.contains("activity") || lower.contains("walking") || lower.contains("running")
+        case .files:
+            return lower.contains("file") || lower.contains("document") || lower.contains("read")
+        case .memory, .note:
+            return lower.contains("memory") || lower.contains("remember") || lower.contains("saved") || lower.contains("recall")
+        case .rag:
+            return lower.contains("search") || lower.contains("index") || lower.contains("file") || lower.contains("photo")
+        case .contactSearch:
+            return lower.contains("contact") || lower.contains("phone") || lower.contains("email") || lower.contains("found")
+        case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm:
+            return true
+        case .chat, .unknown:
+            return false
+        }
+    }
+
+    private func actionFingerprint(toolID: String, arguments: [String: String]) -> String {
+        let args = arguments
+            .map { key, value in "\(key.lowercased())=\(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())" }
+            .sorted()
+            .joined(separator: "&")
+        return "\(toolID.lowercased())?\(args)"
     }
 
     nonisolated static func isActionAllowed(_ toolID: String, routing: IntentRoutingDecision) -> Bool {

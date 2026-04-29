@@ -1,0 +1,22 @@
+name: No Print in App Services
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  no-print:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block print() in app/service Swift code
+        run: |
+          set -euo pipefail
+          if rg -n "\\bprint\\s*\\(" ios/Lumen/Services ios/Lumen/State ios/Lumen/Models ios/Lumen/Views --glob '*.swift'; then
+            echo "Found forbidden print() usage in production targets. Use OSLog Logger instead."
+            exit 1
+          fi

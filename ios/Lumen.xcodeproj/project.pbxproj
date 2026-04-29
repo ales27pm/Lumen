@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		9A1B2C3D4E5F678901234570 /* SwiftLlama in Frameworks */ = {isa = PBXBuildFile; productRef = 9A1B2C3D4E5F678901234571 /* SwiftLlama */; };
+		A27B0C0D0E0F000000000002 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = A27B0C0D0E0F000000000004 /* MSAL */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +58,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A1B2C3D4E5F678901234570 /* SwiftLlama in Frameworks */,
+				A27B0C0D0E0F000000000002 /* MSAL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +120,7 @@
 			name = Lumen;
 			packageProductDependencies = (
 				9A1B2C3D4E5F678901234571 /* SwiftLlama */,
+				A27B0C0D0E0F000000000004 /* MSAL */,
 			);
 			productName = Lumen;
 			productReference = 105FC57A2E9EAD3100EA8BCF /* Lumen.app */;
@@ -204,6 +207,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				9A1B2C3D4E5F678901234572 /* XCRemoteSwiftPackageReference "swift-llama-cpp" */,
+				A27B0C0D0E0F000000000003 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 105FC57B2E9EAD3100EA8BCF /* Products */;
@@ -287,6 +291,14 @@
 				version = 1.2.0;
 			};
 		};
+		A27B0C0D0E0F000000000003 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AzureAD/microsoft-authentication-library-for-objc.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -294,6 +306,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9A1B2C3D4E5F678901234572 /* XCRemoteSwiftPackageReference "swift-llama-cpp" */;
 			productName = SwiftLlama;
+		};
+		A27B0C0D0E0F000000000004 /* MSAL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A27B0C0D0E0F000000000003 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */;
+			productName = MSAL;
 		};
 /* End XCSwiftPackageProductDependency section */
 

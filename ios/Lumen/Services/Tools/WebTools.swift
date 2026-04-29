@@ -237,6 +237,8 @@ nonisolated enum WebTools {
 
     private static func normalizeURL(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasExplicitScheme = trimmed.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*:"#, options: .regularExpression) != nil
+        if hasExplicitScheme { return trimmed }
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") { return trimmed }
         return "https://\(trimmed)"
     }
@@ -348,7 +350,7 @@ nonisolated enum WebTools {
 
     private static func decodeHTMLEntities(_ value: String) -> String {
         var s = value
-        let entities: [(String, String)] = [("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'")]
+        let entities: [(String, String)] = [("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"), ("&amp;", "&")]
         for (entity, replacement) in entities { s = s.replacingOccurrences(of: entity, with: replacement) }
         s = s.regexReplace(#"&#(\d+);"#) { match in
             guard let scalarValue = UInt32(match.dropFirst(2).dropLast()), let scalar = UnicodeScalar(scalarValue) else { return String(match) }

@@ -1,7 +1,6 @@
 import Foundation
 import WebKit
 
-@MainActor
 nonisolated enum WebTools {
     private static let searchPolicy = ToolRetryPolicy(maxAttempts: 3, baseDelay: 0.35, maxDelay: 1.5, jitterRatio: 0.25)
     private static let fetchPolicy = ToolRetryPolicy(maxAttempts: 2, baseDelay: 0.4, maxDelay: 1.2, jitterRatio: 0.2)
@@ -17,12 +16,11 @@ nonisolated enum WebTools {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; Lumen/2.0)", forHTTPHeaderField: "User-Agent")
 
-        let result = await executeWebRequest(endpoint: "duckduckgo.search", request: request, timeout: 8, retryPolicy: searchPolicy, context: "Web search")
+        let result = await executeAPIRequest(endpoint: "duckduckgo.search", request: request, timeout: 8, retryPolicy: searchPolicy, context: "Web search")
         switch result {
         case .failure(let message): return message
-        case .success(let body, _):
-            guard let data = body.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        case .success(let data, _):
+            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return ToolNetworkResilience.fallbackMessage(for: .parsing, context: "Web search")
             }
             var lines: [String] = []
@@ -39,6 +37,7 @@ nonisolated enum WebTools {
         }
     }
 
+    @MainActor
     static func webFetch(url: String) async -> String {
         guard let u = URL(string: url) else { return "Invalid URL." }
         var req = URLRequest(url: u)
@@ -52,6 +51,48 @@ nonisolated enum WebTools {
             let trimmed = String(text.prefix(2000))
             return trimmed.isEmpty ? "Page was empty." : trimmed
         }
+    }
+
+    private static func executeAPIRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), String> {
+        if !(await ToolNetworkResilience.circuitBreaker.allowRequest(endpoint: endpoint)) {
+            return .failure(ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context))
+        }
+
+        var req = request
+        req.timeoutInterval = timeout
+        var retries = 0
+        let started = Date()
+        for attempt in 1...retryPolicy.maxAttempts {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                let http = response as? HTTPURLResponse
+                let errorClass = ToolNetworkResilience.classify(error: nil, response: http)
+                if let status = http?.statusCode, !(200..<300).contains(status) {
+                    if ToolNetworkResilience.shouldRetry(errorClass: errorClass), attempt < retryPolicy.maxAttempts {
+                        retries += 1
+                        try? await Task.sleep(nanoseconds: ToolNetworkResilience.backoffDelay(attempt: attempt, policy: retryPolicy))
+                        continue
+                    }
+                    await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
+                    ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: status))
+                    return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                }
+                await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: true)
+                ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: true, errorClass: nil, retryCount: retries, statusCode: http?.statusCode))
+                return .success((data, http))
+            } catch {
+                let errorClass = ToolNetworkResilience.classify(error: error, response: nil)
+                if ToolNetworkResilience.shouldRetry(errorClass: errorClass), attempt < retryPolicy.maxAttempts {
+                    retries += 1
+                    try? await Task.sleep(nanoseconds: ToolNetworkResilience.backoffDelay(attempt: attempt, policy: retryPolicy))
+                    continue
+                }
+                await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
+                ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
+                return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+            }
+        }
+        return .failure(ToolNetworkResilience.fallbackMessage(for: .unknown, context: context))
     }
 
     private static func executeWebRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(String, HTTPURLResponse?), String> {
@@ -111,6 +152,7 @@ nonisolated enum WebTools {
     }
 }
 
+@MainActor
 @MainActor
 private final class WebViewRequestLoader: NSObject, WKNavigationDelegate {
     private var continuation: CheckedContinuation<(String, HTTPURLResponse?), Error>?

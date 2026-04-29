@@ -11,7 +11,7 @@ nonisolated struct AgentRequest: Sendable {
     let maxTokens: Int
     let maxSteps: Int
     let availableTools: [ToolDefinition]
-    let relevantMemories: [String]
+    let relevantMemories: [MemoryContextItem]
     let attachments: [ChatAttachment]
 
     init(
@@ -24,7 +24,7 @@ nonisolated struct AgentRequest: Sendable {
         maxTokens: Int,
         maxSteps: Int,
         availableTools: [ToolDefinition],
-        relevantMemories: [String],
+        relevantMemories: [MemoryContextItem],
         attachments: [ChatAttachment] = []
     ) {
         self.systemPrompt = systemPrompt
@@ -38,6 +38,34 @@ nonisolated struct AgentRequest: Sendable {
         self.availableTools = availableTools
         self.relevantMemories = relevantMemories
         self.attachments = attachments
+    }
+
+    init(
+        systemPrompt: String,
+        history: [(role: MessageRole, content: String)],
+        userMessage: String,
+        temperature: Double,
+        topP: Double,
+        repetitionPenalty: Double,
+        maxTokens: Int,
+        maxSteps: Int,
+        availableTools: [ToolDefinition],
+        legacyRelevantMemories: [String],
+        attachments: [ChatAttachment] = []
+    ) {
+        self.init(
+            systemPrompt: systemPrompt,
+            history: history,
+            userMessage: userMessage,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            maxSteps: maxSteps,
+            availableTools: availableTools,
+            relevantMemories: MemoryContextAdapter.fromLegacyStrings(legacyRelevantMemories),
+            attachments: attachments
+        )
     }
 }
 
@@ -1549,9 +1577,8 @@ final class AgentService {
         }
 
         if !req.relevantMemories.isEmpty {
-            sys += "Relevant memories:\n"
-            for m in req.relevantMemories.prefix(6) { sys += "- \(m)\n" }
-            sys += "\n"
+            sys += PromptContextBuilder.renderMemoryBlock(Array(req.relevantMemories.prefix(6)))
+            sys += "\n\n"
         }
 
         sys += "Routing guidelines:\n"

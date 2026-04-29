@@ -13,7 +13,7 @@ nonisolated struct GenerateRequest: Sendable {
     let repetitionPenalty: Double
     let maxTokens: Int
     let modelName: String
-    let relevantMemories: [String]
+    let relevantMemories: [MemoryContextItem]
     let attachments: [ChatAttachment]
     let seed: UInt32?
 
@@ -27,7 +27,7 @@ nonisolated struct GenerateRequest: Sendable {
         repetitionPenalty: Double,
         maxTokens: Int,
         modelName: String,
-        relevantMemories: [String],
+        relevantMemories: [MemoryContextItem],
         attachments: [ChatAttachment] = [],
         seed: UInt32? = nil
     ) {
@@ -43,6 +43,36 @@ nonisolated struct GenerateRequest: Sendable {
         self.relevantMemories = relevantMemories
         self.attachments = attachments
         self.seed = seed
+    }
+
+    init(
+        sessionID: String? = nil,
+        systemPrompt: String,
+        history: [(role: MessageRole, content: String)],
+        userMessage: String,
+        temperature: Double,
+        topP: Double,
+        repetitionPenalty: Double,
+        maxTokens: Int,
+        modelName: String,
+        legacyRelevantMemories: [String],
+        attachments: [ChatAttachment] = [],
+        seed: UInt32? = nil
+    ) {
+        self.init(
+            sessionID: sessionID,
+            systemPrompt: systemPrompt,
+            history: history,
+            userMessage: userMessage,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: maxTokens,
+            modelName: modelName,
+            relevantMemories: MemoryContextAdapter.fromLegacyStrings(legacyRelevantMemories),
+            attachments: attachments,
+            seed: seed
+        )
     }
 }
 

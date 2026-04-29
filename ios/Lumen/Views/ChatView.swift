@@ -222,7 +222,7 @@ struct ChatView: View {
         }
     }
 
-    private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment], recentContext: [(role: MessageRole, content: String)]) async {
+    private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [MemoryContextItem], attachments: [ChatAttachment], recentContext: [(role: MessageRole, content: String)]) async {
         let enabledTools = ToolRegistry.all.filter { appState.enabledToolIDs.contains($0.id) }
         let routedTools = enabledTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
         let baseSystemPrompt = conversation.systemPrompt ?? appState.systemPrompt
@@ -289,7 +289,7 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func runPlain(turnID: UUID, text: String, memories: [String], attachments: [ChatAttachment]) async {
+    private func runPlain(turnID: UUID, text: String, memories: [MemoryContextItem], attachments: [ChatAttachment]) async {
         let request = GenerateRequest(
             sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
@@ -346,18 +346,19 @@ struct ChatView: View {
             }
     }
 
-    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [String] {
+    private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [MemoryContextItem] {
         let raw = await MemoryStore.recall(query: query, context: modelContext, limit: 8).map(\.content)
-        return raw.filter { memory in
+        let filtered = raw.filter { memory in
             FinalIntentValidator.validate(memory, routing: routing, fallback: nil) == memory.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        return MemoryContextAdapter.fromLegacyStrings(filtered)
     }
 
     private func isSafeToStoreMemory(userText: String, assistantText: String, routing: IntentRoutingDecision) -> Bool {
         FinalIntentValidator.validate(assistantText, routing: routing, fallback: nil) == assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func repairSchemaPlaceholderFinalIfNeeded(_ finalText: String, userText: String, routing: IntentRoutingDecision, memories: [String], attachments: [ChatAttachment]) async -> String {
+    private func repairSchemaPlaceholderFinalIfNeeded(_ finalText: String, userText: String, routing: IntentRoutingDecision, memories: [MemoryContextItem], attachments: [ChatAttachment]) async -> String {
         let trimmed = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SchemaPlaceholderDetector.isPlaceholderFinal(trimmed) else { return finalText }
 

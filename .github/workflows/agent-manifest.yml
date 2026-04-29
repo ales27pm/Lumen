@@ -33,7 +33,14 @@ jobs:
           PYTHONPATH: tools/lumen_manifest_crawler
 
       - name: Check generated artifacts are committed
-        run: git diff --exit-code generated/agent_manifest
+        run: |
+          git diff --exit-code generated/agent_manifest
+          untracked="$(git ls-files --others --exclude-standard generated/agent_manifest)"
+          if [ -n "$untracked" ]; then
+            echo "Untracked generated manifest artifacts detected:"
+            echo "$untracked"
+            exit 1
+          fi
 
       - name: Upload generated manifest artifacts
         if: always()

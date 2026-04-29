@@ -37,8 +37,16 @@ def replace_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
-def ensure_line_after(text: str, anchor: str, line: str) -> str:
+def ensure_line_after(
+    text: str,
+    anchor: str,
+    line: str,
+    *,
+    already_present: str | None = None,
+) -> str:
     if line in text:
+        return text
+    if already_present and already_present in text:
         return text
     return replace_once(text, anchor, anchor + line)
 
@@ -56,6 +64,7 @@ def main() -> int:
         text,
         f"\t\t{SWIFT_LLAMA_BUILD_FILE_ID} /* SwiftLlama in Frameworks */ = {{isa = PBXBuildFile; productRef = {SWIFT_LLAMA_PRODUCT_DEP_ID} /* SwiftLlama */; }};\n",
         f"\t\t{MSAL_BUILD_FILE_ID} /* MSAL in Frameworks */ = {{isa = PBXBuildFile; productRef = {MSAL_PRODUCT_DEP_ID} /* MSAL */; }};\n",
+        already_present="/* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = ",
     )
 
     # Lumen app Frameworks build phase.
@@ -63,6 +72,7 @@ def main() -> int:
         text,
         f"\t\t\t\t{SWIFT_LLAMA_BUILD_FILE_ID} /* SwiftLlama in Frameworks */,\n",
         f"\t\t\t\t{MSAL_BUILD_FILE_ID} /* MSAL in Frameworks */,\n",
+        already_present="/* MSAL in Frameworks */,",
     )
 
     # Lumen app target package product dependencies.
@@ -70,6 +80,7 @@ def main() -> int:
         text,
         f"\t\t\t\t{SWIFT_LLAMA_PRODUCT_DEP_ID} /* SwiftLlama */,\n",
         f"\t\t\t\t{MSAL_PRODUCT_DEP_ID} /* MSAL */,\n",
+        already_present="/* MSAL */,",
     )
 
     # Project-level package reference list.
@@ -77,6 +88,7 @@ def main() -> int:
         text,
         f"\t\t\t\t{SWIFT_LLAMA_PACKAGE_REF_ID} /* XCRemoteSwiftPackageReference \"swift-llama-cpp\" */,\n",
         f"\t\t\t\t{MSAL_PACKAGE_REF_ID} /* XCRemoteSwiftPackageReference \"microsoft-authentication-library-for-objc\" */,\n",
+        already_present='/* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */,',
     )
 
     # XCRemoteSwiftPackageReference section.
@@ -89,7 +101,11 @@ def main() -> int:
 \t\t\t}};
 \t\t}};
 """
-    if msal_remote_ref not in text:
+    if (
+        msal_remote_ref not in text
+        and 'repositoryURL = "https://github.com/AzureAD/microsoft-authentication-library-for-objc.git";'
+        not in text
+    ):
         text = replace_once(
             text,
             "\t\t};\n/* End XCRemoteSwiftPackageReference section */",
@@ -103,7 +119,7 @@ def main() -> int:
 \t\t\tproductName = MSAL;
 \t\t}};
 """
-    if msal_product_dep not in text:
+    if msal_product_dep not in text and "productName = MSAL;" not in text:
         text = replace_once(
             text,
             "\t\t};\n/* End XCSwiftPackageProductDependency section */",

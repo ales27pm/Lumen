@@ -11,16 +11,35 @@ final class MemoryItem {
     var kind: String = "fact"
     var isPinned: Bool = false
     var topic: String?
+    var expiresAt: Date?
+    var freshnessClass: String?
 
-    init(content: String, kind: MemoryKind = .fact, source: String = "manual", embedding: [Double] = [], topic: String? = nil) {
+    init(
+        content: String,
+        kind: MemoryKind = .fact,
+        source: String = "manual",
+        embedding: [Double] = [],
+        topic: String? = nil,
+        expiresAt: Date? = nil,
+        freshnessClass: MemoryFreshnessClass? = nil
+    ) {
         self.content = content
         self.kind = kind.rawValue
         self.source = source
         self.embedding = embedding
         self.topic = topic
+        self.expiresAt = expiresAt
+        self.freshnessClass = freshnessClass?.rawValue
     }
 
     var memoryKind: MemoryKind { MemoryKind(rawValue: kind) ?? .fact }
+}
+
+enum MemoryFreshnessClass: String, Codable, CaseIterable, Sendable {
+    case volatile
+    case shortLived
+    case durable
+    case timeless
 }
 
 enum MemoryKind: String, Codable, CaseIterable, Sendable {

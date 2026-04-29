@@ -35,14 +35,17 @@ enum MemoryCascade {
             .compactMap { item -> MemoryContextItem? in
                 let compact = compactAndTrim(item.content, maxLength: 260)
                 guard !compact.isEmpty else { return nil }
-                return MemoryContextItem(content: compact, scope: .conversation, authority: .referenceOnly, createdAt: item.createdAt, expiresAt: nil, source: item.source, topic: item.topic)
+                return MemoryContextItem(content: compact, scope: .conversation, authority: .referenceOnly, createdAt: item.createdAt, expiresAt: item.expiresAt, source: item.source, topic: item.topic)
             }
 
         let queryTokens = tokenSet(query)
         let condensedDescriptor = FetchDescriptor<MemoryItem>(
             predicate: #Predicate<MemoryItem> { $0.source == "rem-condensed" }
         )
-        let condensedItems = (try? context.fetch(condensedDescriptor)) ?? []
+        let condensedItems = ((try? context.fetch(condensedDescriptor)) ?? []).filter { item in
+            MemoryStore.migrateExpiryIfNeeded(for: item)
+            return !MemoryStore.isExpired(item)
+        }
 
         let rankedTier3 = condensedItems
             .map { item in
@@ -59,7 +62,7 @@ enum MemoryCascade {
             .compactMap { pair -> MemoryContextItem? in
                 let compact = compactAndTrim(pair.item.content, maxLength: 260)
                 guard !compact.isEmpty else { return nil }
-                return MemoryContextItem(content: compact, scope: .remCondensed, authority: .backgroundOnly, createdAt: pair.item.createdAt, expiresAt: nil, source: pair.item.source, topic: pair.item.topic)
+                return MemoryContextItem(content: compact, scope: .remCondensed, authority: .backgroundOnly, createdAt: pair.item.createdAt, expiresAt: pair.item.expiresAt, source: pair.item.source, topic: pair.item.topic)
             }
 
         return MemoryCascadeResult(
@@ -77,8 +80,10 @@ enum MemoryCascade {
         let allItems = try context.fetch(descriptor)
 
         let candidates = allItems.filter { item in
+            MemoryStore.migrateExpiryIfNeeded(for: item)
             guard item.source != "rem-condensed" else { return false }
             guard item.isPinned == false else { return false }
+            guard !MemoryStore.isExpired(item) else { return false }
             return !item.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
 
@@ -129,7 +134,7 @@ enum MemoryCascade {
             let summaryBody = extracts.enumerated().map { index, line in
                 "\(index + 1). \(line)"
             }.joined(separator: " ")
-            let summary = "Condensed \(groupKey): \(summaryBody)"
+            let summary = "Background (low-authority) condensed \(groupKey): \(summaryBody)"
 
             await MemoryStore.remember(
                 summary,
@@ -138,7 +143,15 @@ enum MemoryCascade {
                 topic: cascadeTopic,
                 context: context
             )
+
+            let saved = try context.fetch(existingDescriptor)
+            if let latest = saved.first {
+                latest.freshnessClass = MemoryFreshnessClass.durable.rawValue
+                latest.expiresAt = nil
+            }
         }
+
+        try context.save()
     }
 
     private static func compactAndTrim(_ text: String, maxLength: Int) -> String {

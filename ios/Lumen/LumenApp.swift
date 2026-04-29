@@ -32,8 +32,8 @@ final class AppStartupCoordinator {
 
     func initialize(
         appState: AppState,
-        createContainer: @MainActor @Sendable () throws -> ModelContainer = Self.defaultContainerFactory,
-        bootstrap: @MainActor @Sendable (AppState, ModelContext) async throws -> Void = Self.defaultBootstrap
+        createContainer: @MainActor @Sendable () throws -> ModelContainer = AppStartupCoordinator.defaultContainerFactory,
+        bootstrap: @MainActor @Sendable (AppState, ModelContext) async throws -> Void = AppStartupCoordinator.defaultBootstrap
     ) async {
         state = .loading
         appState.runtime.startBoot()

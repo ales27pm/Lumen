@@ -94,7 +94,12 @@ def argument_value(block: str, label: str) -> str | None:
 def bool_value(raw: str | None, default: bool = False) -> bool:
     if raw is None:
         return default
-    return raw.strip().lower().startswith("true")
+    token = raw.strip().strip(",)").lower()
+    if token in {"true", ".true"}:
+        return True
+    if token in {"false", ".false"}:
+        return False
+    return default
 
 
 def clean_swift_string(raw: str | None) -> str | None:

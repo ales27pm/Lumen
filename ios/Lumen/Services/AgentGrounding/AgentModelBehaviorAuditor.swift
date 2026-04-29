@@ -204,10 +204,48 @@ final class AgentModelBehaviorAuditor {
     }
 
     private func isObviouslyUserInitiatedWrite(prompt: String, toolID: String) -> Bool {
-        let lower = prompt.lowercased()
-        if toolID.contains("draft") || toolID.contains("create") || toolID.contains("schedule") || toolID.contains("call") || toolID.contains("save") || toolID.contains("cancel") {
-            return lower.contains("create") || lower.contains("draft") || lower.contains("send") || lower.contains("call") || lower.contains("save") || lower.contains("schedule") || lower.contains("cancel") || lower.contains("remind") || lower.contains("set")
+        _ = toolID
+        let lower = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let actionVerbs = ["send", "create", "draft", "call", "save", "schedule", "cancel", "set", "remind"]
+
+        guard actionVerbs.contains(where: { lower.contains($0) }) else { return false }
+
+        let explicitRequestMarkers = [
+            "please ",
+            "can you ",
+            "could you ",
+            "i want you to ",
+            "i need you to ",
+            "help me ",
+            "for me"
+        ]
+
+        let imperativePatterns = [
+            "please send", "please create", "please draft", "please call", "please save", "please schedule", "please cancel", "please set", "please remind",
+            "send this", "create this", "draft this", "call ", "save this", "schedule this", "cancel this", "set this", "remind me",
+            "i want you to send", "i want you to create", "i want you to draft", "i want you to call", "i need you to call", "i need you to create"
+        ]
+
+        let informationalMarkers = [
+            "how to", "what is", "what's", "why", "when", "example", "examples", "should i", "can i", "could i", "tell me about"
+        ]
+
+        if informationalMarkers.contains(where: { lower.contains($0) }) {
+            return false
         }
+
+        let hasFirstPerson = lower.contains(" i ") || lower.hasPrefix("i ") || lower.contains(" my ") || lower.hasPrefix("my ")
+        let hasRequestMarker = explicitRequestMarkers.contains(where: { lower.contains($0) })
+        let hasImperativePattern = imperativePatterns.contains(where: { lower.contains($0) })
+
+        if hasImperativePattern {
+            return true
+        }
+
+        if hasFirstPerson && hasRequestMarker {
+            return true
+        }
+
         return false
     }
 

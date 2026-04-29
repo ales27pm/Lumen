@@ -1,6 +1,6 @@
 import Foundation
 
-struct WebRichContentPayload: Codable, Hashable {
+nonisolated struct WebRichContentPayload: Codable, Hashable {
     enum Kind: String, Codable {
         case searchResults
         case fetchedPage
@@ -75,7 +75,7 @@ struct WebRichContentPayload: Codable, Hashable {
     }
 }
 
-struct WebSearchResultPayload: Codable, Hashable {
+nonisolated struct WebSearchResultPayload: Codable, Hashable {
     let title: String
     let url: String?
     let snippet: String?
@@ -83,7 +83,7 @@ struct WebSearchResultPayload: Codable, Hashable {
     let mediaKind: WebMediaPayload.Kind?
 }
 
-struct WebFetchedPagePayload: Codable, Hashable {
+nonisolated struct WebFetchedPagePayload: Codable, Hashable {
     let title: String?
     let url: String
     let excerpt: String
@@ -91,7 +91,7 @@ struct WebFetchedPagePayload: Codable, Hashable {
     let description: String?
 }
 
-struct WebMediaPayload: Codable, Hashable, Identifiable {
+nonisolated struct WebMediaPayload: Codable, Hashable, Identifiable {
     enum Kind: String, Codable {
         case image
         case video

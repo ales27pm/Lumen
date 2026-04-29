@@ -2,7 +2,8 @@ import Foundation
 
 nonisolated enum AssistantOutputSanitizer {
     static func sanitize(_ text: String, lastUserMessage: String? = nil) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutWebPayload = WebRichContentPayload.removingMarkers(from: text)
+        let trimmed = withoutWebPayload.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
 
         if isLeakedToolJSONArtifact(trimmed) {

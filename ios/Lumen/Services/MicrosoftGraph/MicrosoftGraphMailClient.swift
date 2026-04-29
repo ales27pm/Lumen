@@ -102,6 +102,7 @@ actor MicrosoftGraphMailClient {
             chunkRequest.httpMethod = "PUT"
             chunkRequest.setValue("bytes \(offset)-\(end)/\(fileData.count)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue(String(chunk.count), forHTTPHeaderField: "Content-Length")
+            chunkRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             chunkRequest.httpBody = chunk
             let response = try await uploadChunkWithRetry(request: chunkRequest)
             if response.statusCode == 200 || response.statusCode == 201 { break }

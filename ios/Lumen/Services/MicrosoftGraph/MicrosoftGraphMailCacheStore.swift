@@ -131,7 +131,7 @@ final class MicrosoftGraphInboxViewModel {
         do {
             var snapshot = cache.load(accountID: account.id)
             let accessToken = try await auth.acquireToken(scopes: MicrosoftGraphScope.inboxRead, preferredAccountID: account.id, forceRefresh: auth.token?.shouldRefreshProactively == true)
-            if resetDelta && unreadOnly {
+            if resetDelta {
                 snapshot = .init(messages: [], deltaLink: nil, updatedAt: .distantPast)
             }
             var nextLink: String? = resetDelta ? nil : snapshot.deltaLink
@@ -161,7 +161,12 @@ final class MicrosoftGraphInboxViewModel {
 
     func send(subject: String, body: String, recipients: [String], sendAsHTML: Bool = true) async throws {
         let token = try await auth.acquireToken(scopes: MicrosoftGraphScope.mailSendScopes, preferredAccountID: auth.account?.id)
-        let content = sendAsHTML ? body.replacingOccurrences(of: "\n", with: "<br>") : body
+        let content: String
+        if sendAsHTML {
+            content = Self.escapeHTML(body).replacingOccurrences(of: "\n", with: "<br>")
+        } else {
+            content = body
+        }
         let mail = GraphSendMailRequest(
             message: .init(
                 subject: subject,
@@ -174,5 +179,14 @@ final class MicrosoftGraphInboxViewModel {
             saveToSentItems: true
         )
         try await client.sendMail(mail, accessToken: token)
+    }
+
+    private nonisolated static func escapeHTML(_ input: String) -> String {
+        input
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }

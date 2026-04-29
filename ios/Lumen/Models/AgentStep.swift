@@ -86,7 +86,8 @@ nonisolated enum AgentVisibleContentSanitizer {
     }
 
     static func sanitize(_ text: String, kind: AgentStep.Kind? = nil) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutWebPayload = WebRichContentPayload.removingMarkers(from: text)
+        let trimmed = withoutWebPayload.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard !isPrivateOrSchemaPlaceholder(trimmed) else { return nil }
         guard !isInternalRepairNoise(trimmed) else { return nil }

@@ -33,13 +33,11 @@ nonisolated enum LumenModelSlot: String, Codable, CaseIterable, Sendable, Identi
 }
 
 nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
-    case v0SingleRuntime
-    case v1MultiResidentPlanned
+    case v1MultiResident
 
     var displayName: String {
         switch self {
-        case .v0SingleRuntime: return "v0 single runtime"
-        case .v1MultiResidentPlanned: return "v1 multi-resident planned"
+        case .v1MultiResident: return "v1 multi-resident"
         }
     }
 }
@@ -207,7 +205,7 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
     let runtimeResidentSlots: Set<LumenModelSlot>
 
     init(
-        mode: LumenFleetRuntimeMode = .v0SingleRuntime,
+        mode: LumenFleetRuntimeMode = .v1MultiResident,
         assignments: [LumenModelSlot: LumenModelAssignment],
         missingSlots: [LumenModelSlot],
         targetResidentSlots: Set<LumenModelSlot> = [],
@@ -224,10 +222,6 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
         assignments[slot]
     }
 
-    var isRunnableV0: Bool {
-        assignment(for: .cortex) != nil && assignment(for: .mouth) != nil
-    }
-
     var isRunnableV1: Bool {
         assignment(for: .cortex) != nil
         && assignment(for: .executor) != nil
@@ -238,48 +232,6 @@ nonisolated struct LumenModelFleetSnapshot: Sendable, Hashable {
 
 @MainActor
 enum LumenModelFleetResolver {
-    static func resolveV0(appState: AppState, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
-        resolveV0(
-            activeChatModelID: appState.activeChatModelID,
-            activeEmbeddingModelID: appState.activeEmbeddingModelID,
-            storedModels: storedModels
-        )
-    }
-
-    static func resolveV0(settings: SettingsSnapshot, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
-        resolveV0(
-            activeChatModelID: settings.activeChatModelID,
-            activeEmbeddingModelID: settings.activeEmbeddingModelID,
-            storedModels: storedModels
-        )
-    }
-
-    static func resolveV0(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
-        var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
-        let textModels = storedModels.filter { $0.modelRole == .chat }
-        let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
-        let runtimeText = activeText ?? preferredTextModel(from: textModels)
-
-        if let runtimeText {
-            for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
-                assignments[slot] = assignment(slot: slot, model: runtimeText)
-            }
-        }
-
-        if let embed = preferredEmbedding(activeEmbeddingModelID: activeEmbeddingModelID, storedModels: storedModels) {
-            assignments[.embedding] = assignment(slot: .embedding, model: embed)
-        }
-
-        let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
-        return LumenModelFleetSnapshot(
-            mode: .v0SingleRuntime,
-            assignments: assignments,
-            missingSlots: missing,
-            targetResidentSlots: Set(assignments.keys),
-            runtimeResidentSlots: Set(assignments.keys)
-        )
-    }
-
     static func resolveV1(appState: AppState, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
         resolveV1(
             activeChatModelID: appState.activeChatModelID,
@@ -315,7 +267,7 @@ enum LumenModelFleetResolver {
         let missing = LumenModelSlot.allCases.filter { assignments[$0] == nil }
         let runtimeResident = Set([LumenModelSlot.cortex, .embedding].filter { assignments[$0] != nil })
         return LumenModelFleetSnapshot(
-            mode: .v1MultiResidentPlanned,
+            mode: .v1MultiResident,
             assignments: assignments,
             missingSlots: missing,
             targetResidentSlots: Set(assignments.keys),

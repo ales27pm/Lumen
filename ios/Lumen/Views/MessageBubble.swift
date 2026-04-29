@@ -14,8 +14,16 @@ struct MessageBubble: View {
     @State private var videoPreview: VideoPreviewItem?
     @State private var pdfPreview: PDFPreviewItem?
 
+    private var assistantRawContent: String {
+        streamingOverride ?? message.content
+    }
+
     private var assistantVisibleContent: String {
-        AssistantOutputSanitizer.sanitize(streamingOverride ?? message.content)
+        AssistantOutputSanitizer.sanitize(assistantRawContent)
+    }
+
+    private var assistantRichPayloads: [WebRichContentPayload] {
+        streamingOverride == nil ? WebRichContentPayload.decodeAll(from: message.content) : []
     }
 
     static func streaming(text: String) -> some View {
@@ -52,19 +60,25 @@ struct MessageBubble: View {
     private var assistantBubble: some View {
         let steps = streamingOverride == nil ? message.agentSteps : []
         let visibleContent = assistantVisibleContent
+        let richPayloads = assistantRichPayloads
         return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
                 if !steps.isEmpty {
                     AgentStepsPanel(steps: steps, expanded: false)
                 }
-                Text(visibleContent)
-                    .font(.body)
-                    .foregroundStyle(Theme.textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !visibleContent.isEmpty {
+                    Text(visibleContent)
+                        .font(.body)
+                        .foregroundStyle(Theme.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 if streamingOverride == nil {
-                    if let webURL = firstWebURL(from: visibleContent) {
+                    WebRichContentStack(payloads: richPayloads)
+
+                    if richPayloads.isEmpty, let webURL = firstWebURL(from: visibleContent) {
                         InlineWebBubble(url: webURL) {
                             webPreview = WebPreviewItem(url: webURL)
                         }
@@ -74,17 +88,17 @@ struct MessageBubble: View {
                             mapPreview = MapPreviewItem(query: mapQuery)
                         }
                     }
-                    if let imageURL = firstImageURL(from: visibleContent) {
+                    if richPayloads.isEmpty, let imageURL = firstImageURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "photo", title: "Open Image", subtitle: imageURL.lastPathComponent.isEmpty ? (imageURL.host() ?? imageURL.absoluteString) : imageURL.lastPathComponent) {
                             imagePreview = ImagePreviewItem(url: imageURL)
                         }
                     }
-                    if let videoURL = firstVideoURL(from: visibleContent) {
+                    if richPayloads.isEmpty, let videoURL = firstVideoURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "play.rectangle", title: "Open Video", subtitle: videoURL.lastPathComponent.isEmpty ? (videoURL.host() ?? videoURL.absoluteString) : videoURL.lastPathComponent) {
                             videoPreview = VideoPreviewItem(url: videoURL)
                         }
                     }
-                    if let pdfURL = firstPDFURL(from: visibleContent) {
+                    if richPayloads.isEmpty, let pdfURL = firstPDFURL(from: visibleContent) {
                         EmbeddedContentButton(icon: "doc.richtext", title: "Open PDF", subtitle: pdfURL.lastPathComponent.isEmpty ? (pdfURL.host() ?? pdfURL.absoluteString) : pdfURL.lastPathComponent) {
                             pdfPreview = PDFPreviewItem(url: pdfURL)
                         }
@@ -291,13 +305,18 @@ struct ToolCallCard: View {
                             .tint(Theme.accent)
                     }
                 } else if let result = message.toolResult, !result.isEmpty {
-                    Text(result)
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(Theme.surfaceHigh)
-                        .clipShape(.rect(cornerRadius: 8))
+                    let visibleResult = AssistantOutputSanitizer.sanitize(result)
+                    let richPayloads = WebRichContentPayload.decodeAll(from: result)
+                    if !visibleResult.isEmpty {
+                        Text(visibleResult)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(Theme.surfaceHigh)
+                            .clipShape(.rect(cornerRadius: 8))
+                    }
+                    WebRichContentStack(payloads: richPayloads)
                 }
             }
         }
@@ -369,7 +388,6 @@ struct ToolCallCard: View {
         return out
     }
 }
-
 
 private struct InlineWebBubble: View {
     let url: URL

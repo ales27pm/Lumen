@@ -57,9 +57,7 @@ final class MicrosoftGraphMailCacheStore {
             }
         }
         let sorted = byID.values.sorted { lhs, rhs in
-            let lhsDate = parsedDate(for: lhs)
-            let rhsDate = parsedDate(for: rhs)
-            return lhsDate > rhsDate
+            parsedDate(for: lhs) > parsedDate(for: rhs)
         }
         return Snapshot(messages: Array(sorted.prefix(250)), deltaLink: deltaLink ?? existing.deltaLink, updatedAt: Date())
     }
@@ -86,12 +84,8 @@ final class MicrosoftGraphMailCacheStore {
     }
 
     private func parsedDate(for message: GraphMailMessage) -> Date {
-        let timestamp = message.receivedDateTime ?? message.sentDateTime
-        guard let timestamp else { return .distantPast }
-        if let date = dateParserWithFractional.date(from: timestamp) ?? dateParser.date(from: timestamp) {
-            return date
-        }
-        return .distantPast
+        guard let timestamp = message.receivedDateTime ?? message.sentDateTime else { return .distantPast }
+        return dateParserWithFractional.date(from: timestamp) ?? dateParser.date(from: timestamp) ?? .distantPast
     }
 }
 
@@ -108,16 +102,16 @@ final class MicrosoftGraphInboxViewModel {
     private(set) var error: Error?
     var unreadOnly = false
 
-    init(auth: MicrosoftGraphAuthManager, client: MicrosoftGraphMailClient = MicrosoftGraphMailClient(), cache: MicrosoftGraphMailCacheStore = .shared) {
+    init(auth: MicrosoftGraphAuthManager, client: MicrosoftGraphMailClient = MicrosoftGraphMailClient(), cache: MicrosoftGraphMailCacheStore? = nil) {
         self.auth = auth
         self.client = client
-        self.cache = cache
+        self.cache = cache ?? MicrosoftGraphMailCacheStore.shared
     }
 
     func loadCached() {
         guard let account = auth.account else { return }
         let snapshot = cache.load(accountID: account.id)
-        messages = snapshot.messages
+        messages = filteredMessages(from: snapshot)
         lastSyncDate = snapshot.updatedAt == .distantPast ? nil : snapshot.updatedAt
     }
 
@@ -151,7 +145,7 @@ final class MicrosoftGraphInboxViewModel {
 
             snapshot = cache.merge(existing: snapshot, incoming: changed, deltaLink: deltaLink)
             cache.save(snapshot, accountID: account.id)
-            messages = unreadOnly ? snapshot.messages.filter { !$0.isRead } : snapshot.messages
+            messages = filteredMessages(from: snapshot)
             lastSyncDate = snapshot.updatedAt
             error = nil
         } catch {
@@ -161,12 +155,7 @@ final class MicrosoftGraphInboxViewModel {
 
     func send(subject: String, body: String, recipients: [String], sendAsHTML: Bool = true) async throws {
         let token = try await auth.acquireToken(scopes: MicrosoftGraphScope.mailSendScopes, preferredAccountID: auth.account?.id)
-        let content: String
-        if sendAsHTML {
-            content = Self.escapeHTML(body).replacingOccurrences(of: "\n", with: "<br>")
-        } else {
-            content = body
-        }
+        let content = sendAsHTML ? Self.escapeHTML(body).replacingOccurrences(of: "\n", with: "<br>") : body
         let mail = GraphSendMailRequest(
             message: .init(
                 subject: subject,
@@ -181,12 +170,16 @@ final class MicrosoftGraphInboxViewModel {
         try await client.sendMail(mail, accessToken: token)
     }
 
+    private func filteredMessages(from snapshot: MicrosoftGraphMailCacheStore.Snapshot) -> [GraphMailMessage] {
+        guard unreadOnly else { return snapshot.messages }
+        return snapshot.messages.filter { $0.isRead != true }
+    }
+
     private nonisolated static func escapeHTML(_ input: String) -> String {
         input
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }

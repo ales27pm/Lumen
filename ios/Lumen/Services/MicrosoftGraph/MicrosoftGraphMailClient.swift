@@ -24,7 +24,7 @@ actor MicrosoftGraphMailClient {
             url = continuationURL
         } else {
             var components = URLComponents(url: baseURL.appendingPathComponent("me/mailFolders/inbox/messages/delta"), resolvingAgainstBaseURL: false)!
-            var queryItems = [
+            let queryItems = [
                 URLQueryItem(name: "$select", value: "id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,bodyPreview,isRead,hasAttachments"),
                 URLQueryItem(name: "$orderby", value: "receivedDateTime desc"),
                 URLQueryItem(name: "$top", value: String(min(max(pageSize, 1), 100)))

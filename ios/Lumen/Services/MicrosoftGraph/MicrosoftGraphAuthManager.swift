@@ -16,9 +16,14 @@ final class MicrosoftGraphAuthManager {
     private(set) var accounts: [MicrosoftGraphAccountSnapshot] = []
     private(set) var isAuthenticating = false
     private(set) var lastError: Error?
+    private let cachedForceNativeOAuth: Bool
 
     var isSignedIn: Bool { account != nil }
+    private var shouldUseNativeOAuth: Bool {
+        cachedForceNativeOAuth
+    }
     var canUseMSAL: Bool {
+        guard !shouldUseNativeOAuth else { return false }
         #if canImport(MSAL)
         return true
         #else
@@ -27,7 +32,9 @@ final class MicrosoftGraphAuthManager {
     }
     var authProviderDescription: String { canUseMSAL ? "MSAL" : "Native OAuth PKCE" }
 
-    init() {}
+    init() {
+        cachedForceNativeOAuth = (try? MicrosoftGraphConfiguration.load().forceNativeOAuth) ?? false
+    }
 
     func bootstrap() async {
         await reloadCachedAccounts()
@@ -41,33 +48,35 @@ final class MicrosoftGraphAuthManager {
     }
 
     func reloadCachedAccounts() async {
-        #if canImport(MSAL)
-        do {
-            let application = try makeMSALApplication()
-            let cached = try application.allAccounts()
+        if canUseMSAL {
+            #if canImport(MSAL)
+            do {
+                let application = try makeMSALApplication()
+                let cached = try application.allAccounts()
+                let previousAccountID = account?.id
+                accounts = cached.map(Self.snapshot(from:))
+                if let previousAccountID {
+                    account = accounts.first(where: { $0.id == previousAccountID }) ?? accounts.first
+                } else {
+                    account = accounts.first
+                }
+            } catch {
+                lastError = error
+            }
+            #endif
+        } else {
             let previousAccountID = account?.id
-            accounts = cached.map(Self.snapshot(from:))
+            accounts = nativeOAuth.cachedAccounts()
             if let previousAccountID {
                 account = accounts.first(where: { $0.id == previousAccountID }) ?? accounts.first
             } else {
                 account = accounts.first
             }
-        } catch {
-            lastError = error
+            if let session = nativeOAuth.loadCachedSession() {
+                token = Self.tokenSnapshot(from: session.token, scopes: MicrosoftGraphScope.inboxRead)
+                lastError = nil
+            }
         }
-        #else
-        let previousAccountID = account?.id
-        accounts = nativeOAuth.cachedAccounts()
-        if let previousAccountID {
-            account = accounts.first(where: { $0.id == previousAccountID }) ?? accounts.first
-        } else {
-            account = accounts.first
-        }
-        if let session = nativeOAuth.loadCachedSession() {
-            token = Self.tokenSnapshot(from: session.token, scopes: MicrosoftGraphScope.inboxRead)
-            lastError = nil
-        }
-        #endif
     }
 
     func signIn(scopes: [String] = MicrosoftGraphScope.inboxRead, presentationViewController: UIViewController) async throws {
@@ -85,41 +94,45 @@ final class MicrosoftGraphAuthManager {
     }
 
     func acquireToken(scopes: [String], preferredAccountID: String? = nil, forceRefresh: Bool = false) async throws -> String {
-        #if canImport(MSAL)
-        let application = try makeMSALApplication()
-        let cachedAccounts = try application.allAccounts()
-        let selected = cachedAccounts.first { Self.snapshot(from: $0).id == preferredAccountID } ?? cachedAccounts.first
-        guard let selected else { throw MicrosoftGraphAuthError.noAccount }
+        if canUseMSAL {
+            #if canImport(MSAL)
+            let application = try makeMSALApplication()
+            let cachedAccounts = try application.allAccounts()
+            let selected = cachedAccounts.first { Self.snapshot(from: $0).id == preferredAccountID } ?? cachedAccounts.first
+            guard let selected else { throw MicrosoftGraphAuthError.noAccount }
 
-        do {
-            let result = try await application.acquireTokenSilentAsync(scopes: scopes, account: selected, forceRefresh: forceRefresh)
-            let mapped = Self.tokenSnapshot(from: result, scopes: scopes)
-            token = mapped
-            account = Self.snapshot(from: result.account)
-            return mapped.accessToken
-        } catch let error as NSError where Self.isInteractionRequired(error) {
-            token = nil
-            lastError = MicrosoftGraphAuthError.interactionRequired
-            throw MicrosoftGraphAuthError.interactionRequired
-        } catch {
-            lastError = error
-            throw error
-        }
-        #else
-        do {
-            let nativeToken = try await nativeOAuth.acquireToken(scopes: scopes, forceRefresh: forceRefresh)
-            let mapped = Self.tokenSnapshot(from: nativeToken, scopes: scopes)
-            token = mapped
-            if let session = nativeOAuth.loadCachedSession() {
-                account = session.account
-                accounts = [session.account]
+            do {
+                let result = try await application.acquireTokenSilentAsync(scopes: scopes, account: selected, forceRefresh: forceRefresh)
+                let mapped = Self.tokenSnapshot(from: result, scopes: scopes)
+                token = mapped
+                account = Self.snapshot(from: result.account)
+                return mapped.accessToken
+            } catch let error as NSError where Self.isInteractionRequired(error) {
+                token = nil
+                lastError = MicrosoftGraphAuthError.interactionRequired
+                throw MicrosoftGraphAuthError.interactionRequired
+            } catch {
+                lastError = error
+                throw error
             }
-            return mapped.accessToken
-        } catch {
-            lastError = error
-            throw error
+            #endif
+        } else {
+            do {
+                let nativeToken = try await nativeOAuth.acquireToken(scopes: scopes, forceRefresh: forceRefresh)
+                let mapped = Self.tokenSnapshot(from: nativeToken, scopes: scopes)
+                token = mapped
+                if let session = nativeOAuth.loadCachedSession() {
+                    account = session.account
+                    accounts = [session.account]
+                }
+                return mapped.accessToken
+            } catch {
+                lastError = error
+                throw error
+            }
         }
-        #endif
+        // Compiler-only fallback; real return/throw paths are inside the #if-auth branches above.
+        throw MicrosoftGraphAuthError.interactionRequired
     }
 
     func registerExternalError(_ error: Error) {
@@ -127,27 +140,29 @@ final class MicrosoftGraphAuthManager {
     }
 
     func signOutCurrentAccount() async {
-        #if canImport(MSAL)
-        do {
-            let application = try makeMSALApplication()
-            let cached = try application.allAccounts()
-            if let currentID = account?.id, let match = cached.first(where: { Self.snapshot(from: $0).id == currentID }) {
-                try application.remove(match)
+        if canUseMSAL {
+            #if canImport(MSAL)
+            do {
+                let application = try makeMSALApplication()
+                let cached = try application.allAccounts()
+                if let currentID = account?.id, let match = cached.first(where: { Self.snapshot(from: $0).id == currentID }) {
+                    try application.remove(match)
+                }
+            } catch {
+                lastError = error
             }
-        } catch {
-            lastError = error
+            token = nil
+            account = nil
+            await reloadCachedAccounts()
+            MicrosoftGraphMailCacheStore.shared.clearAll()
+            #endif
+        } else {
+            nativeOAuth.signOut()
+            token = nil
+            account = nil
+            accounts = []
+            MicrosoftGraphMailCacheStore.shared.clearAll()
         }
-        token = nil
-        account = nil
-        await reloadCachedAccounts()
-        MicrosoftGraphMailCacheStore.shared.clearAll()
-        #else
-        nativeOAuth.signOut()
-        token = nil
-        account = nil
-        accounts = []
-        MicrosoftGraphMailCacheStore.shared.clearAll()
-        #endif
     }
 
     func handleOpenURL(_ url: URL) -> Bool {
@@ -159,17 +174,21 @@ final class MicrosoftGraphAuthManager {
     }
 
     private func interactiveToken(scopes: [String], presentationViewController: UIViewController) async throws -> (token: MicrosoftGraphTokenSnapshot, account: MicrosoftGraphAccountSnapshot) {
-        #if canImport(MSAL)
-        let application = try makeMSALApplication()
-        let webParams = MSALWebviewParameters(authPresentationViewController: presentationViewController)
-        let params = MSALInteractiveTokenParameters(scopes: scopes, webviewParameters: webParams)
-        params.promptType = .selectAccount
-        let result = try await application.acquireTokenAsync(with: params)
-        return (Self.tokenSnapshot(from: result, scopes: scopes), Self.snapshot(from: result.account))
-        #else
-        let session = try await nativeOAuth.signIn(scopes: scopes, presentationViewController: presentationViewController)
-        return (Self.tokenSnapshot(from: session.token, scopes: scopes), session.account)
-        #endif
+        if canUseMSAL {
+            #if canImport(MSAL)
+            let application = try makeMSALApplication()
+            let webParams = MSALWebviewParameters(authPresentationViewController: presentationViewController)
+            let params = MSALInteractiveTokenParameters(scopes: scopes, webviewParameters: webParams)
+            params.promptType = .selectAccount
+            let result = try await application.acquireTokenAsync(with: params)
+            return (Self.tokenSnapshot(from: result, scopes: scopes), Self.snapshot(from: result.account))
+            #endif
+        } else {
+            let session = try await nativeOAuth.signIn(scopes: scopes, presentationViewController: presentationViewController)
+            return (Self.tokenSnapshot(from: session.token, scopes: scopes), session.account)
+        }
+        // Compiler-only fallback; auth flow is fully resolved in the conditional compilation branches above.
+        throw MicrosoftGraphAuthError.interactionRequired
     }
 
     private nonisolated static func tokenSnapshot(from token: NativeMicrosoftOAuthTokenSet, scopes: [String]) -> MicrosoftGraphTokenSnapshot {

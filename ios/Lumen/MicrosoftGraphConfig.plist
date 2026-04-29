@@ -10,5 +10,7 @@
 	<string>com.microsoft.adalcache</string>
 	<key>MSALRedirectURI</key>
 	<string>msauth.com.27pm.lumen://auth</string>
+	<key>MSALForceNativeOAuth</key>
+	<false/>
 </dict>
 </plist>

@@ -242,6 +242,7 @@ nonisolated struct MicrosoftGraphConfiguration: Sendable {
     let authorityURL: URL
     let keychainSharingGroup: String
     let redirectURI: String?
+    let forceNativeOAuth: Bool
 
     static func load(bundle: Bundle = .main) throws -> MicrosoftGraphConfiguration {
         let resourceConfig = bundle.url(forResource: "MicrosoftGraphConfig", withExtension: "plist")
@@ -263,12 +264,14 @@ nonisolated struct MicrosoftGraphConfiguration: Sendable {
         }
         let keychainGroup = value("MSALKeychainGroup") ?? "com.microsoft.adalcache"
         let redirect = value("MSALRedirectURI")
+        let forceNativeOAuth = ((resourceConfig["MSALForceNativeOAuth"] as? NSNumber)?.boolValue ?? false)
 
         return MicrosoftGraphConfiguration(
             clientID: clientID,
             authorityURL: authorityURL,
             keychainSharingGroup: keychainGroup,
-            redirectURI: redirect
+            redirectURI: redirect,
+            forceNativeOAuth: forceNativeOAuth
         )
     }
 }

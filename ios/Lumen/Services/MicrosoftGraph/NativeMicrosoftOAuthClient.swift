@@ -53,12 +53,16 @@ final class NativeMicrosoftOAuthClient: NSObject, ASWebAuthenticationPresentatio
 
     func signIn(scopes: [String], presentationViewController: UIViewController) async throws -> NativeMicrosoftOAuthSession {
         let config = try MicrosoftGraphConfiguration.load()
-        let verifier = Self.makeCodeVerifier()
+        let verifier = try Self.makeCodeVerifier()
         let challenge = Self.makeCodeChallenge(verifier: verifier)
         let state = UUID().uuidString
         let redirectURI = config.redirectURI ?? "msauth.\(Bundle.main.bundleIdentifier ?? "com.27pm.lumen")://auth"
         let authURL = try authorizationURL(config: config, scopes: scopes, redirectURI: redirectURI, state: state, codeChallenge: challenge)
-        let callbackURL = try await authenticate(url: authURL, callbackScheme: callbackScheme, presentationViewController: presentationViewController)
+        let callbackURL = try await authenticate(
+            url: authURL,
+            callbackScheme: URL(string: redirectURI)?.scheme ?? callbackScheme,
+            presentationViewController: presentationViewController
+        )
         let code = try Self.authorizationCode(from: callbackURL, expectedState: state)
         let token = try await exchangeCode(config: config, code: code, redirectURI: redirectURI, verifier: verifier, scopes: scopes)
         let account = try await fetchAccount(accessToken: token.accessToken)
@@ -69,7 +73,7 @@ final class NativeMicrosoftOAuthClient: NSObject, ASWebAuthenticationPresentatio
 
     func acquireToken(scopes: [String], forceRefresh: Bool) async throws -> NativeMicrosoftOAuthTokenSet {
         guard let session = loadCachedSession() else { throw MicrosoftGraphAuthError.noAccount }
-        if !forceRefresh && !session.token.shouldRefreshProactively {
+        if !forceRefresh && !session.token.shouldRefreshProactively && token(session.token, satisfies: scopes) {
             return session.token
         }
         guard let refreshToken = session.token.refreshToken else { throw MicrosoftGraphAuthError.interactionRequired }
@@ -217,10 +221,18 @@ final class NativeMicrosoftOAuthClient: NSObject, ASWebAuthenticationPresentatio
         return code
     }
 
-    private static func makeCodeVerifier() -> String {
+    private static func makeCodeVerifier() throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            throw MicrosoftGraphAuthError.interactionRequired
+        }
         return Data(bytes).base64URLEncodedString()
+    }
+
+    private func token(_ token: NativeMicrosoftOAuthTokenSet, satisfies scopes: [String]) -> Bool {
+        let requested = Set(normalizedScopes(scopes).split(separator: " ").map(String.init))
+        let granted = Set((token.scope ?? "").split(separator: " ").map(String.init))
+        return requested.isSubset(of: granted)
     }
 
     private static func makeCodeChallenge(verifier: String) -> String {

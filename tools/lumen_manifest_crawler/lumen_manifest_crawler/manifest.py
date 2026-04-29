@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -53,6 +53,8 @@ class ToolManifest(BaseModel):
     permissionKey: str | None = None
     arguments: list[ToolArgumentManifest] = Field(default_factory=list)
     source: str | None = None
+    inferred: bool = False
+    inferredSource: str | None = None
 
 
 class IntentManifest(BaseModel):

@@ -28,7 +28,7 @@ private struct WebRichPayloadCard: View {
 
             if !payload.results.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(payload.results.prefix(6)) { result in
+                    ForEach(Array(payload.results.prefix(6).enumerated()), id: \.offset) { _, result in
                         WebSearchResultCard(result: result)
                     }
                 }

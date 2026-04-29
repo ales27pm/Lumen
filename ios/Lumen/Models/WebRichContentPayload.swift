@@ -75,8 +75,7 @@ struct WebRichContentPayload: Codable, Hashable {
     }
 }
 
-struct WebSearchResultPayload: Codable, Hashable, Identifiable {
-    var id: String { url ?? title }
+struct WebSearchResultPayload: Codable, Hashable {
     let title: String
     let url: String?
     let snippet: String?

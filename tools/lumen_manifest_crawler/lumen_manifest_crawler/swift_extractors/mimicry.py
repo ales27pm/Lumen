@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import re
+
 from lumen_manifest_crawler.swift_extractors.base import SwiftExtractor, SwiftFile, enum_cases, string_literals
+
+MIMICRY_HINT_PATTERN = re.compile(r"\b(?:tone|style|direct|concise)\b", flags=re.I)
 
 
 class MimicryExtractor(SwiftExtractor):
@@ -10,8 +14,7 @@ class MimicryExtractor(SwiftExtractor):
         states = set(enum_cases(file.text, "MimicryState")) | set(enum_cases(file.text, "DetectedUserTone"))
         hints = []
         for literal in string_literals(file.text):
-            lowered = literal.lower()
-            if "tone" in lowered or "style" in lowered or "direct" in lowered or "concise" in lowered:
+            if MIMICRY_HINT_PATTERN.search(literal):
                 hints.append(literal)
         if states or hints:
             manifest.agentProtocols.cortexOutput["mimicryProfile"] = {

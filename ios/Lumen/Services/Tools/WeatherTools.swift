@@ -36,8 +36,8 @@ enum WeatherTools {
 
         let result = await executeRequest(endpoint: "openmeteo.current", request: request, timeout: 10, retryPolicy: retryPolicy, context: "Weather service")
         switch result {
-        case .failure(let message):
-            return message
+        case .failure(let error):
+            return error.localizedDescription
         case .success(let data, _):
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let current = json["current"] as? [String: Any] else {
@@ -70,9 +70,9 @@ enum WeatherTools {
         }
     }
 
-    private static func executeRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), String> {
+    private static func executeRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), any Error> {
         if !(await ToolNetworkResilience.circuitBreaker.allowRequest(endpoint: endpoint)) {
-            return .failure(ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context))
+            return .failure(NSError(domain: "WeatherTools", code: 1, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context)]))
         }
 
         var req = request
@@ -93,7 +93,7 @@ enum WeatherTools {
                     }
                     await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                     ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: status))
-                    return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                    return .failure(NSError(domain: "WeatherTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: true)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: true, errorClass: nil, retryCount: retries, statusCode: http?.statusCode))
@@ -107,10 +107,10 @@ enum WeatherTools {
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
-                return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                return .failure(NSError(domain: "WeatherTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context), NSUnderlyingErrorKey: error]))
             }
         }
-        return .failure(ToolNetworkResilience.fallbackMessage(for: .unknown, context: context))
+        return .failure(NSError(domain: "WeatherTools", code: 3, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .unknown, context: context)]))
     }
 
     private static func geocode(_ text: String) async -> CLLocationCoordinate2D? {

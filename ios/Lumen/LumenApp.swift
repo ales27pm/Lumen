@@ -32,8 +32,8 @@ struct AppStartupCoordinator {
 
     mutating func initialize(
         appState: AppState,
-        createContainer: () throws -> ModelContainer = Self.defaultContainerFactory,
-        bootstrap: (AppState, ModelContext) async throws -> Void = Self.defaultBootstrap
+        createContainer: @MainActor @Sendable () throws -> ModelContainer = Self.defaultContainerFactory,
+        bootstrap: @MainActor @Sendable (AppState, ModelContext) async throws -> Void = Self.defaultBootstrap
     ) async {
         state = .loading
         appState.runtime.startBoot()

@@ -229,7 +229,7 @@ struct VoiceModeView: View {
             let gatedMemories = MemoryGate.filter(intent: routing.intent, items: memories, userMessage: text)
             let req = AgentRequest(
                 systemPrompt: appState.systemPrompt,
-                history: [],
+                history: safeShortTermContext(in: convo, excludingCurrentUserMessageID: userMsg.id),
                 userMessage: text,
                 temperature: appState.temperature,
                 topP: appState.topP,
@@ -286,6 +286,20 @@ struct VoiceModeView: View {
 
             activeVoiceTurnID = nil
         }
+    }
+
+    private func safeShortTermContext(in conversation: Conversation, excludingCurrentUserMessageID currentID: UUID) -> [(role: MessageRole, content: String)] {
+        conversation.sortedMessages
+            .filter { $0.id != currentID }
+            .suffix(4)
+            .compactMap { message in
+                guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
+                let clean = message.content
+                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !clean.isEmpty else { return nil }
+                return (message.messageRole, String(clean.prefix(500)))
+            }
     }
 
     private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [MemoryContextItem] {

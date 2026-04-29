@@ -63,7 +63,7 @@ nonisolated enum ReferenceResolver {
     private static func containsPronoun(_ text: String) -> Bool {
         let lower = text.lowercased()
         return [" call her", " text her", " message her", "call him", "text him", "message him", "her ", " him "]
-            .contains { lower.contains($0) } || lower.hasPrefix("call her") || lower.hasPrefix("call him") || lower.hasPrefix("text her") || lower.hasPrefix("text him")
+            .contains { lower.contains($0) } || lower.hasPrefix("call her") || lower.hasPrefix("call him") || lower.hasPrefix("text her") || lower.hasPrefix("text him") || lower == "call her" || lower == "call him"
     }
 
     private static func containsPreviousReference(_ text: String) -> Bool {
@@ -89,27 +89,57 @@ nonisolated enum ReferenceResolver {
     }
 
     private static func recentPersonCandidates(history: [(role: MessageRole, content: String)], relevantMemories: [MemoryContextItem]) -> [String] {
-        let historyTail = history.suffix(8).map(\.content)
-        let memoryTail = relevantMemories
-            .filter { $0.scope == .person || ($0.topic?.lowercased().contains("contact") ?? false) }
+        var candidates: [String] = []
+        var seen: Set<String> = []
+
+        for content in history.suffix(8).reversed().map(\.content) {
+            if let name = extractPersonName(content), seen.insert(name.lowercased()).inserted {
+                candidates.append(name)
+            }
+        }
+
+        let memories = relevantMemories
+            .filter { $0.scope == .person || ($0.topic?.lowercased().contains("contact") ?? false) || ($0.topic?.lowercased().contains("people") ?? false) }
+            .sorted { lhs, rhs in
+                (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
+            }
             .prefix(8)
             .map(\.content)
 
-        let raw = Array(historyTail) + Array(memoryTail)
-        return raw.compactMap(extractPersonName)
+        for content in memories {
+            if let name = extractPersonName(content), seen.insert(name.lowercased()).inserted {
+                candidates.append(name)
+            }
+        }
+
+        return candidates
     }
 
     private static func extractPersonName(_ text: String) -> String? {
-        let pattern = #"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b"#
+        let bulletPattern = #"•\s*([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3})\s*[—-]"#
+        if let match = firstMatch(text, pattern: bulletPattern) { return match }
+
+        let contactPattern = #"\b([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3})\s*[—-]\s*\+?[0-9]"#
+        if let match = firstMatch(text, pattern: contactPattern) { return match }
+
+        let pattern = #"\b([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,2})\b"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        let blocked: Set<String> = ["Call", "Text", "Message", "Use", "Previous", "Search Contacts", "No", "Contacts", "Assistant", "User"]
         for match in matches.reversed() {
-            let candidate = ns.substring(with: match.range(at: 1))
-            if candidate.count >= 3, !["Call", "Text", "Message", "Use", "Previous"].contains(candidate) {
+            let candidate = ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if candidate.count >= 3, !blocked.contains(candidate) {
                 return candidate
             }
         }
         return nil
+    }
+
+    private static func firstMatch(_ text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)), match.numberOfRanges > 1 else { return nil }
+        return ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

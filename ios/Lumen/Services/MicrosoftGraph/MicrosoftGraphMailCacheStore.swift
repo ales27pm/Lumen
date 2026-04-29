@@ -116,12 +116,15 @@ final class MicrosoftGraphInboxViewModel {
         do {
             var snapshot = cache.load(accountID: account.id)
             let accessToken = try await auth.acquireToken(scopes: MicrosoftGraphScope.inboxRead, preferredAccountID: account.id, forceRefresh: auth.token?.shouldRefreshProactively == true)
+            if resetDelta && unreadOnly {
+                snapshot = .init(messages: [], deltaLink: nil, updatedAt: .distantPast)
+            }
             var nextLink: String? = resetDelta ? nil : snapshot.deltaLink
             var deltaLink: String?
             var changed: [GraphMailMessage] = []
 
             repeat {
-                let page = try await client.fetchInboxPage(accessToken: accessToken, pageSize: 25, nextOrDeltaLink: nextLink, unreadOnly: unreadOnly && nextLink == nil)
+                let page = try await client.fetchInboxPage(accessToken: accessToken, pageSize: 25, nextOrDeltaLink: nextLink)
                 changed.append(contentsOf: page.value)
                 if let pageDelta = page.odataDeltaLink {
                     deltaLink = pageDelta
@@ -133,7 +136,7 @@ final class MicrosoftGraphInboxViewModel {
 
             snapshot = cache.merge(existing: snapshot, incoming: changed, deltaLink: deltaLink)
             cache.save(snapshot, accountID: account.id)
-            messages = snapshot.messages
+            messages = unreadOnly ? snapshot.messages.filter { !$0.isRead } : snapshot.messages
             lastSyncDate = snapshot.updatedAt
             error = nil
         } catch {

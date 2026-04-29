@@ -14,7 +14,7 @@ actor MicrosoftGraphMailClient {
         self.encoder = JSONEncoder()
     }
 
-    func fetchInboxPage(accessToken: String, pageSize: Int = 25, nextOrDeltaLink: String? = nil, unreadOnly: Bool = false) async throws -> GraphMailPage {
+    func fetchInboxPage(accessToken: String, pageSize: Int = 25, nextOrDeltaLink: String? = nil) async throws -> GraphMailPage {
         let url: URL
         if let nextOrDeltaLink, let continuationURL = URL(string: nextOrDeltaLink) {
             url = continuationURL
@@ -25,7 +25,6 @@ actor MicrosoftGraphMailClient {
                 URLQueryItem(name: "$orderby", value: "receivedDateTime desc"),
                 URLQueryItem(name: "$top", value: String(min(max(pageSize, 1), 100)))
             ]
-            if unreadOnly { queryItems.append(URLQueryItem(name: "$filter", value: "isRead eq false")) }
             components.queryItems = queryItems
             guard let builtURL = components.url else { throw GraphHTTPError.missingURL }
             url = builtURL

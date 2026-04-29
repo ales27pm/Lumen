@@ -16,10 +16,11 @@ final class MicrosoftGraphAuthManager {
     private(set) var accounts: [MicrosoftGraphAccountSnapshot] = []
     private(set) var isAuthenticating = false
     private(set) var lastError: Error?
+    private let cachedForceNativeOAuth: Bool
 
     var isSignedIn: Bool { account != nil }
     private var shouldUseNativeOAuth: Bool {
-        (try? MicrosoftGraphConfiguration.load().forceNativeOAuth) ?? false
+        cachedForceNativeOAuth
     }
     var canUseMSAL: Bool {
         guard !shouldUseNativeOAuth else { return false }
@@ -31,7 +32,9 @@ final class MicrosoftGraphAuthManager {
     }
     var authProviderDescription: String { canUseMSAL ? "MSAL" : "Native OAuth PKCE" }
 
-    init() {}
+    init() {
+        cachedForceNativeOAuth = (try? MicrosoftGraphConfiguration.load().forceNativeOAuth) ?? false
+    }
 
     func bootstrap() async {
         await reloadCachedAccounts()
@@ -128,6 +131,7 @@ final class MicrosoftGraphAuthManager {
                 throw error
             }
         }
+        // Compiler-only fallback; real return/throw paths are inside the #if-auth branches above.
         throw MicrosoftGraphAuthError.interactionRequired
     }
 
@@ -183,6 +187,7 @@ final class MicrosoftGraphAuthManager {
             let session = try await nativeOAuth.signIn(scopes: scopes, presentationViewController: presentationViewController)
             return (Self.tokenSnapshot(from: session.token, scopes: scopes), session.account)
         }
+        // Compiler-only fallback; auth flow is fully resolved in the conditional compilation branches above.
         throw MicrosoftGraphAuthError.interactionRequired
     }
 

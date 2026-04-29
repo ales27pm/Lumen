@@ -18,6 +18,12 @@ public struct RuntimeManifestFailure: Codable, Hashable, Identifiable {
     public let problem: String
 }
 
+public struct RuntimeManifestLoadResult: Hashable {
+    public let manifest: AgentBehaviorManifest
+    public let source: String
+    public let usedRuntimeFallback: Bool
+}
+
 public final class RuntimeManifestAuditor {
     private let registryProvider: RuntimeToolRegistryProviding
     private let supportedTypes: Set<String> = ["string", "number", "bool", "array", "object", "null"]
@@ -32,6 +38,57 @@ public final class RuntimeManifestAuditor {
         }
         let data = try Data(contentsOf: url)
         return try JSONDecoder().decode(AgentBehaviorManifest.self, from: data)
+    }
+
+    public func loadBundledManifestOrRuntimeFallback(resourceName: String = "AgentBehaviorManifest", bundle: Bundle = .main) -> RuntimeManifestLoadResult {
+        do {
+            return RuntimeManifestLoadResult(
+                manifest: try loadBundledManifest(resourceName: resourceName, bundle: bundle),
+                source: "bundled:\(resourceName).json",
+                usedRuntimeFallback: false
+            )
+        } catch {
+            return RuntimeManifestLoadResult(
+                manifest: syntheticManifestFromRuntimeRegistry(missingResourceName: resourceName),
+                source: "runtime-fallback:missing-\(resourceName).json",
+                usedRuntimeFallback: true
+            )
+        }
+    }
+
+    public func syntheticManifestFromRuntimeRegistry(missingResourceName: String = "AgentBehaviorManifest") -> AgentBehaviorManifest {
+        let tools = registryProvider.currentToolDefinitions()
+        return AgentBehaviorManifest(
+            schemaVersion: "runtime-fallback-v1",
+            app: ManifestAppInfo(
+                name: "Lumen",
+                bundleIdentifier: Bundle.main.bundleIdentifier,
+                buildVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                generatedAt: ISO8601DateFormatter().string(from: Date())
+            ),
+            sourceIntegrity: ManifestSourceIntegrity(
+                commit: "runtime-fallback-missing-\(missingResourceName).json",
+                files: []
+            ),
+            fleet: ManifestFleet(
+                contractVersion: "runtime-fallback",
+                slots: []
+            ),
+            tools: tools,
+            intents: [],
+            routingMatrix: [],
+            memory: nil,
+            sentinels: ManifestSentinels(
+                forbiddenInUserOutput: [
+                    "<user_final_text>",
+                    "<private_reasoning>",
+                    "<tool_json>",
+                    "<internal_state>",
+                    "<scratchpad>",
+                    "<hidden_reasoning>",
+                ]
+            )
+        )
     }
 
     public func audit(manifest: AgentBehaviorManifest) -> RuntimeAgentManifestAuditReport {

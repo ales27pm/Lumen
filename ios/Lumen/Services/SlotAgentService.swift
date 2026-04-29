@@ -258,13 +258,21 @@ final class SlotAgentService {
     }
 
     private func appendRichPayloadMarkersIfNeeded(to text: String, from sources: [String]) -> String {
-        let existing = WebRichContentPayload.decodeAll(from: text)
+        let existingKeys = Set(WebRichContentPayload.decodeAll(from: text).map(payloadKey))
         let payloads = sources.flatMap { WebRichContentPayload.decodeAll(from: $0) }
         guard !payloads.isEmpty else { return text }
-        let existingKeys = Set(existing.map(payloadKey))
-        let missing = payloads.filter { !existingKeys.contains(payloadKey($0)) }
-        guard !missing.isEmpty else { return text }
-        return text + missing.map { $0.encodedMarker() }.joined()
+
+        var seen = existingKeys
+        var missingMarkers: [String] = []
+
+        for payload in payloads {
+            let key = payloadKey(payload)
+            guard seen.insert(key).inserted else { continue }
+            missingMarkers.append(payload.encodedMarker())
+        }
+
+        guard !missingMarkers.isEmpty else { return text }
+        return text + missingMarkers.joined()
     }
 
     private func payloadKey(_ payload: WebRichContentPayload) -> String {

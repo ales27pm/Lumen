@@ -28,7 +28,7 @@ private struct WebRichPayloadCard: View {
 
             if !payload.results.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(payload.results.prefix(6)) { result in
+                    ForEach(Array(payload.results.prefix(6).enumerated()), id: \.offset) { _, result in
                         WebSearchResultCard(result: result)
                     }
                 }
@@ -76,7 +76,7 @@ private struct WebSearchResultCard: View {
 
     var body: some View {
         Group {
-            if let urlString = result.url, let url = URL(string: urlString) {
+            if let urlString = result.url, let url = safeExternalURL(urlString) {
                 Link(destination: url) { content(url: url) }
             } else {
                 content(url: nil)
@@ -169,7 +169,7 @@ private struct WebFetchedPageCard: View {
                 .lineLimit(8)
                 .textSelection(.enabled)
 
-            if let url = URL(string: page.url) {
+            if let url = safeExternalURL(page.url) {
                 Link(destination: url) {
                     Label("Open page", systemImage: "safari")
                         .font(.caption.weight(.semibold))
@@ -212,7 +212,7 @@ private struct WebMediaCard: View {
 
     var body: some View {
         Group {
-            if let url = URL(string: item.url) {
+            if let url = safeExternalURL(item.url) {
                 Link(destination: url) { card }
             } else {
                 card
@@ -274,4 +274,11 @@ private struct WebMediaCard: View {
         case .page: "globe"
         }
     }
+}
+
+
+private func safeExternalURL(_ raw: String) -> URL? {
+    guard let url = URL(string: raw), let scheme = url.scheme?.lowercased() else { return nil }
+    guard scheme == "http" || scheme == "https" else { return nil }
+    return url
 }

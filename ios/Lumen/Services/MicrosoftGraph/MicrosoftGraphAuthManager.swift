@@ -196,8 +196,9 @@ final class MicrosoftGraphAuthManager {
     }
 
     private nonisolated static func snapshot(from account: MSALAccount) -> MicrosoftGraphAccountSnapshot {
-        MicrosoftGraphAccountSnapshot(
-            id: account.identifier,
+        let identifier = account.identifier ?? account.username ?? "unknown-msal-account"
+        return MicrosoftGraphAccountSnapshot(
+            id: identifier,
             username: account.username,
             name: account.accountClaims?["name"] as? String,
             environment: account.environment,

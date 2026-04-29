@@ -9,11 +9,12 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
     enum MenuItem: Hashable, Identifiable, CaseIterable {
-        case chat, models, memory, sources, triggers, tools, settings
+        case chat, outlook, models, memory, sources, triggers, tools, settings
         var id: Self { self }
         var title: String {
             switch self {
             case .chat: return "Chat"
+            case .outlook: return "Outlook"
             case .models: return "Models"
             case .memory: return "Memory"
             case .sources: return "Sources"
@@ -25,6 +26,7 @@ struct RootView: View {
         var systemImage: String {
             switch self {
             case .chat: return "bubble.left.and.text.bubble.right"
+            case .outlook: return "envelope.badge.shield.half.filled"
             case .models: return "cpu"
             case .memory: return "brain"
             case .sources: return "externaldrive"
@@ -78,6 +80,7 @@ struct RootView: View {
     private func detailView(for item: MenuItem) -> some View {
         switch item {
         case .chat: ChatHomeView()
+        case .outlook: OutlookMailView()
         case .models: ModelsView()
         case .memory: MemoryView()
         case .sources: SourcesView()

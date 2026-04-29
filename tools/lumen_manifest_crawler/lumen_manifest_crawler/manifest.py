@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, ConfigDict
+
+DETERMINISTIC_GENERATED_AT = "1970-01-01T00:00:00+00:00"
 
 
 class SourceFileHash(BaseModel):
@@ -21,7 +22,7 @@ class AppManifestInfo(BaseModel):
     name: str = "Lumen"
     bundleIdentifier: str | None = None
     buildVersion: str | None = None
-    generatedAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    generatedAt: str = DETERMINISTIC_GENERATED_AT
 
 
 class ModelSlotManifest(BaseModel):

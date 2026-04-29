@@ -76,3 +76,43 @@ def test_args_contract_derives_arguments_from_description():
         "intervalSeconds": "number",
         "beforeMinutes": "number",
     }
+
+
+def test_args_contract_handles_optional_group_and_type_hints():
+    text = '''
+    enum ToolRegistry {
+      static let all: [ToolDefinition] = [
+        ToolDefinition(
+          id: "alarm.schedule",
+          name: "Schedule Alarm",
+          description: "Schedule an AlarmKit alarm. Args: title, inMinutes or timestamp, optional repeats, snoozeMinutes.",
+          requiresApproval: true,
+          permissionKey: "NSAlarmKitUsageDescription"
+        ),
+        ToolDefinition(
+          id: "alarm.cancel",
+          name: "Cancel Alarm",
+          description: "Cancel a scheduled alarm. Args: id UUID or title fallback.",
+          requiresApproval: true,
+          permissionKey: "NSAlarmKitUsageDescription"
+        )
+      ]
+    }
+    '''
+    manifest = AgentBehaviorManifest()
+    ToolDefinitionExtractor().extract(SwiftFile(Path("ToolDefinition.swift"), "ToolDefinition.swift", text), manifest)
+
+    alarm_schedule = next(tool for tool in manifest.tools if tool.id == "alarm.schedule")
+    assert [(arg.name, arg.type, arg.required) for arg in alarm_schedule.arguments] == [
+        ("title", "string", True),
+        ("inMinutes", "number", True),
+        ("timestamp", "string", True),
+        ("repeats", "bool", False),
+        ("snoozeMinutes", "number", False),
+    ]
+
+    alarm_cancel = next(tool for tool in manifest.tools if tool.id == "alarm.cancel")
+    assert [(arg.name, arg.type) for arg in alarm_cancel.arguments] == [
+        ("id", "string"),
+        ("title", "string"),
+    ]

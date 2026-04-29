@@ -40,6 +40,9 @@ nonisolated enum WebTools {
     @MainActor
     static func webFetch(url: String) async -> String {
         guard let u = URL(string: url) else { return "Invalid URL." }
+        guard let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return "Invalid or unsupported URL scheme."
+        }
         var req = URLRequest(url: u)
         req.setValue("Mozilla/5.0 (iPhone; Lumen/2.0)", forHTTPHeaderField: "User-Agent")
 

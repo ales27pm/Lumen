@@ -107,7 +107,7 @@ enum WeatherTools {
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
-                return .failure(NSError(domain: "WeatherTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
+                return .failure(NSError(domain: "WeatherTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context), NSUnderlyingErrorKey: error]))
             }
         }
         return .failure(NSError(domain: "WeatherTools", code: 3, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .unknown, context: context)]))

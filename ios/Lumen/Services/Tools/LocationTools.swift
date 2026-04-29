@@ -11,14 +11,28 @@ enum LocationTools {
     static func openDirections(destination: String) -> String {
         let trimmed = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "No destination provided." }
-        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let url = URL(string: "http://maps.apple.com/?daddr=\(encoded)") else {
+        guard let url = directionsURL(destination: trimmed) else {
             return "Couldn't build maps URL."
         }
         Task { await UIApplication.shared.open(url) }
         return "Opening Maps with directions to \(trimmed)."
     }
 
+
+
+    static func directionsURL(destination: String) -> URL? {
+        // Policy: maps.apple.com deep links must use HTTPS. Plain HTTP links are
+        // prohibited to avoid mixed-content/security regressions and are covered
+        // by tests in LocationToolsTests.
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "maps.apple.com"
+        components.path = "/"
+        components.queryItems = [
+            URLQueryItem(name: "daddr", value: destination),
+        ]
+        return components.url
+    }
     static func searchNearby(query: String) async -> String {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "Need a nearby-place search query, for example `coffee near me`." }

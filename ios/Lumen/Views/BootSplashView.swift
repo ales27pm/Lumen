@@ -4,7 +4,7 @@ struct BootSplashView: View {
     @Environment(AppState.self) private var appState
     @State private var downloader = ModelDownloader.shared
 
-    private var fleetModels: [CatalogModel] { ModelCatalog.featured.filter { $0.tags.contains("fleet-v0") || $0.tags.contains("memory") } }
+    private var fleetModels: [CatalogModel] { ModelCatalog.featured.filter { $0.tags.contains("fleet-v1") || $0.tags.contains("memory") } }
 
     private var activeDownloads: [(CatalogModel, DownloadProgress)] {
         fleetModels.compactMap { model in

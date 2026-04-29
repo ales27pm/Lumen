@@ -73,15 +73,6 @@ enum ModelLaunchBootstrap {
         appState.runtime.updateBootStep(id: "models", detail: detail, state: startedDownloads > 0 ? .running : .complete)
     }
 
-    // Compatibility wrappers for older call sites during the v0 -> v1 transition.
-    static func ensureV0FleetDownloaded(appState: AppState, context: ModelContext) async {
-        await ensureFleetDownloaded(appState: appState, context: context)
-    }
-
-    static func repairV0Fleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
-        await repairFleet(appState: appState, context: context, source: source)
-    }
-
     enum RepairSource: Sendable {
         case launch
         case manual

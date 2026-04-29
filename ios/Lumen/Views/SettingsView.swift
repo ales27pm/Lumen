@@ -44,12 +44,12 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Auto-download v0 fleet", isOn: Binding(get: { state.autoDownloadFleetModels }, set: { state.autoDownloadFleetModels = $0 }))
+                    Toggle("Auto-download fleet", isOn: Binding(get: { state.autoDownloadFleetModels }, set: { state.autoDownloadFleetModels = $0 }))
                     Toggle("Ask before fleet downloads", isOn: Binding(get: { state.confirmFleetDownloads }, set: { state.confirmFleetDownloads = $0 }))
                 } header: {
                     Text("Fleet")
                 } footer: {
-                    Text("Auto-download installs the small recommended v0 model fleet on launch when artifacts are missing and storage is available.")
+                    Text("Auto-download installs the recommended v1 model fleet on launch when artifacts are missing and storage is available.")
                 }
 
                 Section("Voice") {

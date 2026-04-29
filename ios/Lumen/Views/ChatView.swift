@@ -238,7 +238,9 @@ struct ChatView: View {
             maxSteps: appState.maxAgentSteps,
             availableTools: routedTools,
             relevantMemories: gatedMemories,
-            attachments: attachments
+            attachments: attachments,
+            conversationID: conversation.id,
+            turnID: turnID
         )
 
         var steps: [AgentStep] = []
@@ -282,7 +284,8 @@ struct ChatView: View {
 
         if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
             await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
-            await MemoryStore.extractAndStore(userText: text, assistantText: finalText, context: modelContext)
+            let transient = sanitizedSteps.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
+            await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
         }
 
         conversation.updatedAt = Date()

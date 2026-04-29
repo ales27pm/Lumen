@@ -13,6 +13,8 @@ nonisolated struct AgentRequest: Sendable {
     let availableTools: [ToolDefinition]
     let relevantMemories: [MemoryContextItem]
     let attachments: [ChatAttachment]
+    let conversationID: UUID?
+    let turnID: UUID?
 
     init(
         systemPrompt: String,
@@ -25,7 +27,9 @@ nonisolated struct AgentRequest: Sendable {
         maxSteps: Int,
         availableTools: [ToolDefinition],
         relevantMemories: [MemoryContextItem],
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        conversationID: UUID? = nil,
+        turnID: UUID? = nil
     ) {
         self.systemPrompt = systemPrompt
         self.history = history
@@ -38,6 +42,8 @@ nonisolated struct AgentRequest: Sendable {
         self.availableTools = availableTools
         self.relevantMemories = relevantMemories
         self.attachments = attachments
+        self.conversationID = conversationID
+        self.turnID = turnID
     }
 
     init(
@@ -51,7 +57,9 @@ nonisolated struct AgentRequest: Sendable {
         maxSteps: Int,
         availableTools: [ToolDefinition],
         legacyRelevantMemories: [String],
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        conversationID: UUID? = nil,
+        turnID: UUID? = nil
     ) {
         self.init(
             systemPrompt: systemPrompt,
@@ -64,7 +72,9 @@ nonisolated struct AgentRequest: Sendable {
             maxSteps: maxSteps,
             availableTools: availableTools,
             relevantMemories: MemoryContextAdapter.fromLegacyStrings(legacyRelevantMemories),
-            attachments: attachments
+            attachments: attachments,
+            conversationID: conversationID,
+            turnID: turnID
         )
     }
 }

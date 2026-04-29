@@ -237,7 +237,9 @@ struct VoiceModeView: View {
                 maxTokens: appState.maxTokens,
                 maxSteps: appState.maxAgentSteps,
                 availableTools: tools,
-                relevantMemories: gatedMemories
+                relevantMemories: gatedMemories,
+                conversationID: convo.id,
+                turnID: turnID
             )
 
             var finalText = ""
@@ -278,7 +280,8 @@ struct VoiceModeView: View {
                     "User asked: \(text). Assistant: \(String(finalText.prefix(160)))",
                     kind: .conversation, source: "voice", context: modelContext
                 )
-                await MemoryStore.extractAndStore(userText: text, assistantText: finalText, context: modelContext)
+                let transient = stepsBuffer.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
+                await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
             }
 
             activeVoiceTurnID = nil

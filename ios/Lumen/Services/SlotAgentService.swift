@@ -171,6 +171,14 @@ final class SlotAgentService {
             approval: approvalForExplicitUserIntent(toolID: canonicalTool, routing: routing)
         )
         observations.append("\(canonicalTool): \(observation)")
+        ToolLedger.shared.record(
+            conversationID: req.conversationID,
+            turnID: req.turnID,
+            intent: routing.intent,
+            toolID: canonicalTool,
+            query: action.displayContent,
+            result: observation
+        )
         let observationStep = AgentStep(kind: .observation, content: observation, toolID: canonicalTool, toolArgs: normalizedArgs)
         steps.append(observationStep)
         continuation.yield(.step(observationStep))

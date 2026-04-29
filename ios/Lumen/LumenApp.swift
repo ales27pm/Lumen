@@ -84,20 +84,20 @@ struct AppStartupCoordinator {
     }
 
     private static func inMemoryContainerFactory() throws -> ModelContainer {
-        let schema = Schema([
-            Conversation.self,
-            ChatMessage.self,
-            MemoryItem.self,
-            StoredModel.self,
-            RAGChunk.self,
-            Trigger.self,
-        ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        return try ModelContainer(for: schema, configurations: [config])
+        try makeContainer(isStoredInMemoryOnly: true)
     }
 
     private static func defaultContainerFactory() throws -> ModelContainer {
-        let schema = Schema([
+        try makeContainer(isStoredInMemoryOnly: false)
+    }
+
+    private static func makeContainer(isStoredInMemoryOnly: Bool) throws -> ModelContainer {
+        let config = ModelConfiguration(schema: appSchema, isStoredInMemoryOnly: isStoredInMemoryOnly)
+        return try ModelContainer(for: appSchema, configurations: [config])
+    }
+
+    private static var appSchema: Schema {
+        Schema([
             Conversation.self,
             ChatMessage.self,
             MemoryItem.self,
@@ -105,8 +105,6 @@ struct AppStartupCoordinator {
             RAGChunk.self,
             Trigger.self,
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        return try ModelContainer(for: schema, configurations: [config])
     }
 
     private static func defaultBootstrap(appState: AppState, ctx: ModelContext) async throws {

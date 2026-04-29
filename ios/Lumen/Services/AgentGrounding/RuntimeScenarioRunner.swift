@@ -20,7 +20,7 @@ public final class RuntimeScenarioRunner {
 
     public func scenarios(from manifest: AgentBehaviorManifest) -> [RuntimeScenario] {
         var output: [RuntimeScenario] = []
-        let approvalByTool = Dictionary(uniqueKeysWithValues: manifest.tools.map { ($0.id, $0.requiresApproval) })
+        let approvalByTool = Dictionary(manifest.tools.map { ($0.id, $0.requiresApproval) }, uniquingKeysWith: { first, _ in first })
         for entry in manifest.routingMatrix {
             for toolID in entry.allowedTools {
                 output.append(RuntimeScenario(

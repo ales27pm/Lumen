@@ -109,6 +109,8 @@ def _sample_arguments(tool: ToolManifest) -> dict:
 
 def _sample_value(arg_type: str, name: str):
     normalized = arg_type.lower()
+    if normalized in {"null", "none", "nil"}:
+        return None
     if normalized in {"double", "float", "number"}:
         return 10.0 if "start" in name.lower() else 30.0
     if normalized in {"int", "integer"}:

@@ -167,7 +167,7 @@ public struct AgentGroundingAuditView: View {
     }
 
     private func runAudit() {
-        let currentMessages = messages
+        let currentMessages = Array(messages.suffix(200))
         DispatchQueue.global(qos: .userInitiated).async {
             let loadResult = auditor.loadManifestFromStoreBundleOrRuntimeFallback()
             let auditReport = auditor.audit(manifest: loadResult.manifest)

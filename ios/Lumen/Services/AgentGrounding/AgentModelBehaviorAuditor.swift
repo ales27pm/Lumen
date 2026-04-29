@@ -1,10 +1,10 @@
 import Foundation
 
 @MainActor
-public final class AgentModelBehaviorAuditor {
-    public init() {}
+final class AgentModelBehaviorAuditor {
+    init() {}
 
-    public func audit(manifest: AgentBehaviorManifest, messages: [ChatMessage], limit: Int = 80) -> AgentBehaviorAuditReport {
+    func audit(manifest: AgentBehaviorManifest, messages: [ChatMessage], limit: Int = 80) -> AgentBehaviorAuditReport {
         let ordered = messages.sorted { $0.createdAt < $1.createdAt }
         let recent = Array(ordered.suffix(limit))
         let toolsByID = Dictionary(manifest.tools.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

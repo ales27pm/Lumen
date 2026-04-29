@@ -109,6 +109,7 @@ struct AppStartupCoordinator {
 
     private static func defaultBootstrap(appState: AppState, ctx: ModelContext) async throws {
         try await withStage(.bootstrap) {
+            try LumenModelSlotContract.validateCompletenessAtStartup()
             await ModelLaunchBootstrap.ensureV0FleetDownloaded(appState: appState, context: ctx)
         }
 

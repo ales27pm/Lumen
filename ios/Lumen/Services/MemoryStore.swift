@@ -37,8 +37,9 @@ enum MemoryStore {
         MemoryVectorIndex.shared.append(id: item.persistentModelID, isPinned: item.isPinned, vector: embedding)
     }
 
-    static func extractAndStore(userText: String, assistantText: String, context: ModelContext) async {
-        let combined = userText + "\n" + assistantText
+    static func extractAndStore(userText: String, assistantText: String, transientTexts: [String] = [], context: ModelContext) async {
+        let durableAssistant = durableAssistantText(assistantText, transientTexts: transientTexts)
+        let combined = userText + "\n" + durableAssistant
         for extracted in extractFacts(from: combined) {
             await remember(extracted.content, kind: extracted.kind, source: "auto", topic: extracted.topic, context: context)
         }
@@ -87,6 +88,8 @@ enum MemoryStore {
             .filter { !$0.isEmpty }
 
         let prefLove = ["i love", "i like", "i enjoy", "i prefer", "my favorite", "i'm a fan of", "i am a fan of"]
+        let durableAllowlist = ["prefer", "favorite", "i am", "i'm", "my name is", "i live", "i work", "working on", "building", "my project", "my app", "my startup"]
+        let volatileDenylist = ["weather", "temperature", "forecast", "current location", "located", "search result", "live result", "breaking", "reminder", "alarm", "calendar", "busy", "free", "availability", "tomorrow", "today"]
         let prefHate = ["i hate", "i dislike", "i don't like", "i do not like", "i can't stand"]
         let factSelf = ["i am", "i'm", "i live", "i work", "my name is", "i was born", "i have", "my birthday"]
         let projectMarkers = ["working on", "building", "my project", "my app", "my startup"]
@@ -103,6 +106,8 @@ enum MemoryStore {
         }
         for s in sentences {
             let lower = s.lowercased()
+            guard durableAllowlist.contains(where: { lower.contains($0) }) else { continue }
+            if volatileDenylist.contains(where: { lower.contains($0) }) { continue }
             if prefLove.contains(where: { lower.contains($0) }) {
                 push(Extracted(content: "User preference: \(cleaned(s))", kind: .preference, topic: nil))
                 continue
@@ -133,6 +138,22 @@ enum MemoryStore {
             }
         }
         return Array(results.prefix(8))
+    }
+
+
+    nonisolated private static func durableAssistantText(_ assistantText: String, transientTexts: [String]) -> String {
+        let base = assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { return "" }
+        var filtered = base
+        for transient in transientTexts where !transient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            filtered = filtered.replacingOccurrences(of: transient, with: "", options: [.caseInsensitive])
+        }
+        let blockedMarkers = ["tool", "observation", "search results", "temporary status"]
+        let lines = filtered
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { line in !line.isEmpty && !blockedMarkers.contains(where: { line.lowercased().contains($0) }) }
+        return lines.joined(separator: " ")
     }
 
     nonisolated private static func cleaned(_ s: String) -> String {

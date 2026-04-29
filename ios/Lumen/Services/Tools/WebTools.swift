@@ -18,7 +18,7 @@ nonisolated enum WebTools {
 
         let result = await executeAPIRequest(endpoint: "duckduckgo.search", request: request, timeout: 8, retryPolicy: searchPolicy, context: "Web search")
         switch result {
-        case .failure(let message): return message
+        case .failure(let error): return error.localizedDescription
         case .success(let data, _):
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return ToolNetworkResilience.fallbackMessage(for: .parsing, context: "Web search")
@@ -45,7 +45,7 @@ nonisolated enum WebTools {
 
         let result = await executeWebRequest(endpoint: "web.fetch", request: req, timeout: 12, retryPolicy: fetchPolicy, context: "Web page fetch")
         switch result {
-        case .failure(let message): return message
+        case .failure(let error): return error.localizedDescription
         case .success(let html, _):
             let text = stripHTML(html)
             let trimmed = String(text.prefix(2000))
@@ -53,9 +53,9 @@ nonisolated enum WebTools {
         }
     }
 
-    private static func executeAPIRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), String> {
+    private static func executeAPIRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), any Error> {
         if !(await ToolNetworkResilience.circuitBreaker.allowRequest(endpoint: endpoint)) {
-            return .failure(ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context))
+            return .failure(NSError(domain: "WebTools", code: 1, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context)]))
         }
 
         var req = request
@@ -75,7 +75,7 @@ nonisolated enum WebTools {
                     }
                     await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                     ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: status))
-                    return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                    return .failure(NSError(domain: "WebTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: true)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: true, errorClass: nil, retryCount: retries, statusCode: http?.statusCode))
@@ -89,15 +89,15 @@ nonisolated enum WebTools {
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
-                return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                return .failure(NSError(domain: "WebTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
             }
         }
-        return .failure(ToolNetworkResilience.fallbackMessage(for: .unknown, context: context))
+        return .failure(NSError(domain: "WebTools", code: 3, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .unknown, context: context)]))
     }
 
-    private static func executeWebRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(String, HTTPURLResponse?), String> {
+    private static func executeWebRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(String, HTTPURLResponse?), any Error> {
         if !(await ToolNetworkResilience.circuitBreaker.allowRequest(endpoint: endpoint)) {
-            return .failure(ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context))
+            return .failure(NSError(domain: "WebTools", code: 1, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .circuitOpen, context: context)]))
         }
 
         var retries = 0
@@ -114,7 +114,7 @@ nonisolated enum WebTools {
                     }
                     await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                     ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: status))
-                    return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                    return .failure(NSError(domain: "WebTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
                 }
 
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: true)
@@ -129,10 +129,10 @@ nonisolated enum WebTools {
                 }
                 await ToolNetworkResilience.circuitBreaker.record(endpoint: endpoint, success: false)
                 ToolNetworkTelemetry.emit(.init(endpoint: endpoint, latencyMs: Date().timeIntervalSince(started) * 1000, success: false, errorClass: errorClass, retryCount: retries, statusCode: nil))
-                return .failure(ToolNetworkResilience.fallbackMessage(for: errorClass, context: context))
+                return .failure(NSError(domain: "WebTools", code: 2, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: errorClass, context: context)]))
             }
         }
-        return .failure(ToolNetworkResilience.fallbackMessage(for: .unknown, context: context))
+        return .failure(NSError(domain: "WebTools", code: 3, userInfo: [NSLocalizedDescriptionKey: ToolNetworkResilience.fallbackMessage(for: .unknown, context: context)]))
     }
 
     private static func stripHTML(_ html: String) -> String {
@@ -152,7 +152,6 @@ nonisolated enum WebTools {
     }
 }
 
-@MainActor
 @MainActor
 private final class WebViewRequestLoader: NSObject, WKNavigationDelegate {
     private var continuation: CheckedContinuation<(String, HTTPURLResponse?), Error>?

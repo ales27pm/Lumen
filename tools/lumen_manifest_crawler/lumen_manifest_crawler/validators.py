@@ -5,7 +5,7 @@ from collections import Counter
 
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationFailure, ValidationReport, ValidationWarning
 
-DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "object", "null"}
+DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "object", "null", "number"}
 VAGUE_TYPES = {"any", "unknown", "dictionary", "dict"}
 
 
@@ -28,6 +28,14 @@ def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str
     supported_types = set(manifest.agentProtocols.executorOutput.get("supportedJSONTypes", [])) or DEFAULT_SUPPORTED_JSON_TYPES
     normalized_supported = {str(t).lower() for t in supported_types}.union(DEFAULT_SUPPORTED_JSON_TYPES)
     for tool in manifest.tools:
+        if getattr(tool, "inferred", False):
+            warnings.append(
+                ValidationWarning(
+                    code="inferred_tool_definition",
+                    message=f"Tool {tool.id} was inferred from a {tool.inferredSource or 'literal'} and may be missing approval, permission, argument, and description metadata.",
+                    path=f"tools.{tool.id}",
+                )
+            )
         if not tool.description:
             warnings.append(ValidationWarning(code="tool_missing_description", message=f"Tool {tool.id} has no description", path=f"tools.{tool.id}"))
         for arg in tool.arguments:
@@ -59,7 +67,6 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
     forbidden = set(manifest.sentinels.forbiddenInUserOutput)
     known_tools = {tool.id for tool in manifest.tools}
     approval_tools = {tool.id for tool in manifest.tools if tool.requiresApproval}
-    executor_records = records.get("executor_tool_calls", []) + records.get("approval_boundary_samples", [])
 
     covered_required_tools: set[str] = set()
     covered_approval_tools: set[str] = set()

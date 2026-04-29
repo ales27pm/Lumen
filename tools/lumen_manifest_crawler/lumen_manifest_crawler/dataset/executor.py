@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
-
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ToolManifest
 
 
@@ -142,4 +140,4 @@ def _invalid_variant(tool_id: str) -> str:
         "send": "deliver",
         "open": "launch",
     }.get(last, last + "2")
-    return ".".join(parts[:-1] + [replacement])
+    return ".".join([*parts[:-1], replacement])

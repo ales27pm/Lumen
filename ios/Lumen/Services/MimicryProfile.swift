@@ -8,7 +8,7 @@ nonisolated struct MimicryProfile: Sendable, Hashable {
     var promptFragment: String {
         let rules = constraints.map { "- \($0)" }.joined(separator: "\n")
         return """
-        Mimicry v0 tone profile:
+        Mimicry v1 tone profile:
         - user state: \(state)
         - response style: \(style)
         \(rules)

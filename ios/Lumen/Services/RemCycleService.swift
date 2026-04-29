@@ -17,7 +17,7 @@ enum RemCycleService {
 
     static func run(context: ModelContext, appState: AppState, reason: String, createdAt: Date = Date()) async {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
-        let fleet = LumenModelFleetResolver.resolveV0(appState: appState, storedModels: stored)
+        let fleet = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
         let parseSummary = await Task.detached(priority: .utility) {
             AgentParseFailureSummaryLoader.developerText(topN: 5)
         }.value
@@ -29,7 +29,7 @@ enum RemCycleService {
             id: UUID(),
             createdAt: createdAt,
             reason: reason,
-            runnableV0: fleet.isRunnableV0,
+            runnableV1: fleet.isRunnableV1,
             missingSlots: fleet.missingSlots.map(\.rawValue),
             assignedSlots: fleet.assignments.keys.map(\.rawValue).sorted(),
             storedModelCount: stored.count,
@@ -86,7 +86,7 @@ nonisolated struct RemCycleReport: Codable, Sendable {
     let id: UUID
     let createdAt: Date
     let reason: String
-    let runnableV0: Bool
+    let runnableV1: Bool
     let missingSlots: [String]
     let assignedSlots: [String]
     let storedModelCount: Int

@@ -5,9 +5,10 @@ from lumen_manifest_crawler.manifest import AgentBehaviorManifest
 
 def generate_rem_records(manifest: AgentBehaviorManifest) -> list[dict]:
     records: list[dict] = []
+    existing_tool_ids = {tool.id for tool in manifest.tools}
     if manifest.tools:
         valid_tool = manifest.tools[0].id
-        invalid_tool = _invalid_variant(valid_tool)
+        invalid_tool = _unique_invalid_variant(valid_tool, existing_tool_ids)
         records.append({
             "messages": [
                 {"role": "system", "content": "You are REM. Analyze traces, compress memory, and recommend training repairs from the manifest."},
@@ -41,8 +42,21 @@ def generate_rem_records(manifest: AgentBehaviorManifest) -> list[dict]:
     return records
 
 
+def _unique_invalid_variant(tool_id: str, existing_tool_ids: set[str]) -> str:
+    candidate = _invalid_variant(tool_id)
+    if candidate not in existing_tool_ids:
+        return candidate
+    suffix = 1
+    while True:
+        regenerated = f"{candidate}Invalid{suffix}"
+        if regenerated not in existing_tool_ids:
+            return regenerated
+        suffix += 1
+
+
 def _invalid_variant(tool_id: str) -> str:
     parts = tool_id.split(".")
     if len(parts) < 2:
         return tool_id + ".fake"
-    return ".".join(parts[:-1] + ["browse" if parts[-1] == "search" else parts[-1] + "Fake"])
+    replacement = "browse" if parts[-1] == "search" else parts[-1] + "Fake"
+    return ".".join([*parts[:-1], replacement])

@@ -1,9 +1,11 @@
 import Foundation
 import Observation
+import OSLog
 
 @Observable
 final class ModelDownloader: NSObject {
     static let shared = ModelDownloader()
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "model-downloader")
 
     var progresses: [String: DownloadProgress] = [:]
 
@@ -44,10 +46,11 @@ final class ModelDownloader: NSObject {
         sessions[model.id] != nil
     }
 
-    func start(_ model: CatalogModel, onComplete: @escaping (URL) -> Void) {
+    @discardableResult
+    func start(_ model: CatalogModel, onComplete: @escaping (URL) -> Void) -> Result<Void, CatalogModel.DownloadURLError> {
         if sessions[model.id] != nil {
             NotificationCenter.default.post(name: .modelDownloaderInfo, object: nil, userInfo: ["message": "\(model.name) is already downloading."])
-            return
+            return .success(())
         }
         completionHandlers[model.id] = onComplete
 
@@ -57,7 +60,16 @@ final class ModelDownloader: NSObject {
         if let data {
             task = session.downloadTask(withResumeData: data)
         } else {
-            task = session.downloadTask(with: model.downloadURL)
+            let urlResult = model.downloadURLResult
+            guard case .success(let downloadURL) = urlResult else {
+                let error: CatalogModel.DownloadURLError
+                if case .failure(let err) = urlResult { error = err } else { error = .invalidURLComponents }
+                Self.logger.error("download_start_failed model_id=\(model.id, privacy: .public) reason=\(String(describing: error), privacy: .public)")
+                completionHandlers[model.id] = nil
+                NotificationCenter.default.post(name: .modelDownloaderInfo, object: nil, userInfo: ["message": "Could not start download for \(model.name): \(error.localizedDescription)"])
+                return .failure(error)
+            }
+            task = session.downloadTask(with: downloadURL)
         }
         progresses[model.id] = DownloadProgress(
             fractionCompleted: progresses[model.id]?.fractionCompleted ?? 0,
@@ -69,6 +81,7 @@ final class ModelDownloader: NSObject {
         targets[task.taskIdentifier] = (model, localURL(for: model), onComplete)
         resumeData[model.id] = nil
         task.resume()
+        return .success(())
     }
 
     func pause(_ model: CatalogModel) {

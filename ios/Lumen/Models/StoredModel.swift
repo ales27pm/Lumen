@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @Model
 final class StoredModel {
@@ -33,6 +34,26 @@ enum ModelRole: String, Codable, CaseIterable, Sendable {
 }
 
 nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
+    nonisolated enum DownloadURLError: LocalizedError, Equatable {
+        case missingRepoPath
+        case missingFileName
+        case invalidRepoPathCharacters
+        case invalidFileNameCharacters
+        case invalidURLComponents
+
+        var errorDescription: String? {
+            switch self {
+            case .missingRepoPath: return "Repository path is missing."
+            case .missingFileName: return "File name is missing."
+            case .invalidRepoPathCharacters: return "Repository path contains invalid characters."
+            case .invalidFileNameCharacters: return "File name contains invalid characters."
+            case .invalidURLComponents: return "Could not build a valid download URL."
+            }
+        }
+    }
+
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "model-catalog")
+
     let id: String
     let name: String
     let repoId: String
@@ -44,8 +65,76 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
     let description: String
     let tags: [String]
 
-    var downloadURL: URL {
-        URL(string: "https://huggingface.co/\(repoId)/resolve/main/\(fileName)?download=true")!
+    var downloadURLResult: Result<URL, DownloadURLError> {
+        let sanitizedRepoPath: String
+        do {
+            sanitizedRepoPath = try Self.sanitizeRepoPath(repoId)
+        } catch let error as DownloadURLError {
+            Self.logInvalidMetadata(modelID: id, repoId: repoId, fileName: fileName, reason: error)
+            return .failure(error)
+        } catch {
+            Self.logInvalidMetadata(modelID: id, repoId: repoId, fileName: fileName, reason: .invalidRepoPathCharacters)
+            return .failure(.invalidRepoPathCharacters)
+        }
+
+        let sanitizedFileName: String
+        do {
+            sanitizedFileName = try Self.sanitizeFileName(fileName)
+        } catch let error as DownloadURLError {
+            Self.logInvalidMetadata(modelID: id, repoId: repoId, fileName: fileName, reason: error)
+            return .failure(error)
+        } catch {
+            Self.logInvalidMetadata(modelID: id, repoId: repoId, fileName: fileName, reason: .invalidFileNameCharacters)
+            return .failure(.invalidFileNameCharacters)
+        }
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "huggingface.co"
+        components.percentEncodedPath = "/\(sanitizedRepoPath)/resolve/main/\(sanitizedFileName)"
+        components.queryItems = [URLQueryItem(name: "download", value: "true")]
+
+        guard let url = components.url else {
+            Self.logInvalidMetadata(modelID: id, repoId: repoId, fileName: fileName, reason: .invalidURLComponents)
+            return .failure(.invalidURLComponents)
+        }
+        return .success(url)
+    }
+
+    var downloadURL: URL? {
+        if case .success(let url) = downloadURLResult {
+            return url
+        }
+        return nil
+    }
+
+    private static func sanitizeRepoPath(_ value: String) throws -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw DownloadURLError.missingRepoPath }
+        guard !trimmed.contains("//"), !trimmed.hasPrefix("/"), !trimmed.hasSuffix("/") else {
+            throw DownloadURLError.invalidRepoPathCharacters
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~/")
+        guard trimmed.unicodeScalars.allSatisfy(allowed.contains) else { throw DownloadURLError.invalidRepoPathCharacters }
+        guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)?
+            .replacingOccurrences(of: "%2F", with: "/")
+        else { throw DownloadURLError.invalidRepoPathCharacters }
+        return encoded
+    }
+
+    private static func sanitizeFileName(_ value: String) throws -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw DownloadURLError.missingFileName }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~/")
+        guard trimmed.unicodeScalars.allSatisfy(allowed.contains) else { throw DownloadURLError.invalidFileNameCharacters }
+        guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)?
+            .replacingOccurrences(of: "%2F", with: "/")
+        else { throw DownloadURLError.invalidFileNameCharacters }
+        return encoded
+    }
+
+    private static func logInvalidMetadata(modelID: String, repoId: String, fileName: String, reason: DownloadURLError) {
+        logger.error("invalid_catalog_metadata model_id=\(modelID, privacy: .public) repo_id=\(repoId, privacy: .public) file_name=\(fileName, privacy: .public) reason=\(String(describing: reason), privacy: .public)")
     }
 }
 

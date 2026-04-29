@@ -84,15 +84,23 @@ public struct AgentGroundingAuditView: View {
     }
 
     private func runAudit() {
-        do {
-            let manifest = try auditor.loadBundledManifest()
-            report = auditor.audit(manifest: manifest)
-            scenarioResults = scenarioRunner.validateStaticScenarios(manifest: manifest)
-            errorMessage = nil
-        } catch {
-            report = nil
-            scenarioResults = []
-            errorMessage = error.localizedDescription
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let manifest = try auditor.loadBundledManifest()
+                let auditReport = auditor.audit(manifest: manifest)
+                let scenarios = scenarioRunner.validateStaticScenarios(manifest: manifest)
+                DispatchQueue.main.async {
+                    report = auditReport
+                    scenarioResults = scenarios
+                    errorMessage = nil
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    report = nil
+                    scenarioResults = []
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
     }
 

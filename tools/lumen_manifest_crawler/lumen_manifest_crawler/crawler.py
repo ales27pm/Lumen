@@ -28,7 +28,7 @@ IGNORED_PLIST_DIRS = IGNORED_DIRS | {"Tests", "UITests", "UnitTests", "Fixtures"
 
 
 def generate_manifest(root: Path) -> AgentBehaviorManifest:
-    root = root.resolve()
+    root = _validated_scan_root(root)
     manifest = AgentBehaviorManifest(app=_read_app_info(root))
     manifest.sourceIntegrity.commit = _git_commit(root)
 
@@ -48,6 +48,20 @@ def generate_manifest(root: Path) -> AgentBehaviorManifest:
 
     _finalize_defaults(manifest)
     return manifest
+
+
+def _validated_scan_root(root: Path) -> Path:
+    resolved = root.resolve()
+    if resolved == resolved.anchor:
+        raise ValueError(
+            "Refusing to scan the filesystem root. Pass the repository root explicitly, "
+            "for example: --root /content/Lumen"
+        )
+    if not resolved.exists():
+        raise ValueError(f"Manifest crawler root does not exist: {resolved}")
+    if not resolved.is_dir():
+        raise ValueError(f"Manifest crawler root is not a directory: {resolved}")
+    return resolved
 
 
 def _iter_swift_files(root: Path):

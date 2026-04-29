@@ -14,6 +14,10 @@ struct ToolNetworkResilienceTests {
         let serverError = HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 503, httpVersion: nil, headerFields: nil)
         #expect(ToolNetworkResilience.classify(error: nil, response: serverError) == .server5xx)
         #expect(ToolNetworkResilience.shouldRetry(errorClass: .server5xx))
+
+        let cancelled = URLError(.cancelled)
+        #expect(ToolNetworkResilience.classify(error: cancelled, response: nil) == .cancelled)
+        #expect(ToolNetworkResilience.shouldRetry(errorClass: .cancelled) == false)
     }
 
     @Test func circuitBreakerSuppressesAfterRepeatedFailures() async {

@@ -8,6 +8,7 @@ nonisolated enum ToolNetworkErrorClass: String, Sendable {
     case server5xx
     case rateLimit
     case transport
+    case cancelled
     case parsing
     case circuitOpen
     case unknown
@@ -84,6 +85,7 @@ nonisolated enum ToolNetworkResilience {
             switch urlError.code {
             case .timedOut: return .timeout
             case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed: return .dns
+            case .cancelled: return .cancelled
             default: return .transport
             }
         }
@@ -99,6 +101,7 @@ nonisolated enum ToolNetworkResilience {
         case .server5xx: return "\(context) is having server issues. Please try again later."
         case .circuitOpen: return "\(context) is temporarily unavailable after repeated failures. Try again in about a minute."
         case .parsing: return "\(context) returned an unexpected response format."
+        case .cancelled: return "\(context) request was cancelled."
         case .transport, .unknown: return "\(context) is temporarily unavailable. Please retry."
         }
     }

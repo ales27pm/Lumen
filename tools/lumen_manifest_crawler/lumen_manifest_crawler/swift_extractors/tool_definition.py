@@ -38,11 +38,21 @@ class ToolDefinitionExtractor(SwiftExtractor):
                 )
             )
 
-        # Fallback for registry literals such as "calendar.create" not wrapped in full ToolDefinition blocks.
+        # Literal fallback keeps incomplete registry references visible but marks them as inferred.
         for literal in string_literals(file.text):
             if self._looks_like_tool_id(literal) and literal not in seen:
                 seen.add(literal)
-                manifest.tools.append(ToolManifest(id=literal, displayName=literal, source=file.relpath))
+                manifest.tools.append(
+                    ToolManifest(
+                        id=literal,
+                        displayName=literal,
+                        requiresApproval=False,
+                        arguments=[],
+                        source=file.relpath,
+                        inferred=True,
+                        inferredSource="literal",
+                    )
+                )
 
     def _extract_tool_id(self, block: str) -> str | None:
         for label in ("id", "toolID", "toolId", "identifier"):

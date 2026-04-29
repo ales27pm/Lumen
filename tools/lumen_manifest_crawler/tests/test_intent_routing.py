@@ -1,4 +1,5 @@
 from pathlib import Path
+from textwrap import dedent
 
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ToolManifest
 from lumen_manifest_crawler.swift_extractors.base import SwiftFile
@@ -6,7 +7,7 @@ from lumen_manifest_crawler.swift_extractors.intent_router import IntentRouterEx
 
 
 def test_intent_router_extracts_intents_and_tools():
-    text = '''
+    text = dedent('''
     enum UserIntent {
       case localSearch
       case webLookup
@@ -19,7 +20,7 @@ def test_intent_router_extracts_intents_and_tools():
         }
       }
     }
-    '''
+    ''')
     manifest = AgentBehaviorManifest(tools=[ToolManifest(id="maps.search"), ToolManifest(id="web.search")])
     IntentRouterExtractor().extract(SwiftFile(Path("IntentRouter.swift"), "IntentRouter.swift", text), manifest)
     intents = {intent.id: set(intent.allowedToolIDs) for intent in manifest.intents}

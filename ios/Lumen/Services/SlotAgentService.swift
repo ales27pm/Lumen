@@ -96,38 +96,26 @@ final class SlotAgentService {
                         return
                     }
 
-                    let canonicalTool = ToolRouteGuard.canonicalToolID(action.tool)
-                    let normalizedArgs = ToolRouteGuard.normalizedArguments(for: canonicalTool, rawToolID: action.tool, arguments: action.args.stringCoerced)
-                    let fingerprint = actionFingerprint(toolID: canonicalTool, arguments: normalizedArgs)
+                    let result = await executeAction(
+                        action,
+                        req: req,
+                        routing: routing,
+                        steps: &steps,
+                        observations: &observations,
+                        executedActionFingerprints: &executedActionFingerprints,
+                        continuation: continuation,
+                        stepIndex: stepIndex
+                    )
 
-                    if executedActionFingerprints.contains(fingerprint) {
-                        recordTrace(slot: slot, stage: "tool-loop", stepIndex: stepIndex, error: "duplicate_tool_action", raw: action.displayContent, prompt: req.userMessage)
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observations.last)
+                    switch result {
+                    case .continueLoop:
+                        continue
+                    case .finalizeNow(let draft):
+                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
-                    }
-
-                    let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
-                    steps.append(actionStep)
-                    continuation.yield(.step(actionStep))
-
-                    guard SlotAgentService.isActionAllowed(canonicalTool, routing: routing) else {
-                        recordTrace(slot: slot, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
-                        finalText = IntentRouter.blockedToolMessage(for: routing)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    }
-
-                    executedActionFingerprints.insert(fingerprint)
-                    let observation = await ToolExecutor.shared.execute(canonicalTool, arguments: normalizedArgs)
-                    observations.append("\(canonicalTool): \(observation)")
-                    let observationStep = AgentStep(kind: .observation, content: observation, toolID: canonicalTool, toolArgs: normalizedArgs)
-                    steps.append(observationStep)
-                    continuation.yield(.step(observationStep))
-
-                    if shouldFinalizeAfterObservation(observation, routing: routing) {
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observation)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                    case .blocked(let text):
+                        yieldFinal(text, steps: steps, continuation: continuation)
                         return
                     }
                 }
@@ -139,6 +127,93 @@ final class SlotAgentService {
             continuation.onTermination = { @Sendable _ in
                 task.cancel()
             }
+        }
+    }
+
+    private enum ActionExecutionResult {
+        case continueLoop
+        case finalizeNow(String?)
+        case blocked(String)
+    }
+
+    private func executeAction(
+        _ action: AgentAction,
+        req: AgentRequest,
+        routing: IntentRoutingDecision,
+        steps: inout [AgentStep],
+        observations: inout [String],
+        executedActionFingerprints: inout Set<String>,
+        continuation: AsyncStream<AgentEvent>.Continuation,
+        stepIndex: Int
+    ) async -> ActionExecutionResult {
+        let canonicalTool = ToolRouteGuard.canonicalToolID(action.tool)
+        let normalizedArgs = ToolRouteGuard.normalizedArguments(for: canonicalTool, rawToolID: action.tool, arguments: action.args.stringCoerced)
+        let fingerprint = actionFingerprint(toolID: canonicalTool, arguments: normalizedArgs)
+
+        if executedActionFingerprints.contains(fingerprint) {
+            recordTrace(slot: .executor, stage: "tool-loop", stepIndex: stepIndex, error: "duplicate_tool_action", raw: action.displayContent, prompt: req.userMessage)
+            return .finalizeNow(observations.last)
+        }
+
+        let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
+        steps.append(actionStep)
+        continuation.yield(.step(actionStep))
+
+        guard SlotAgentService.isActionAllowed(canonicalTool, routing: routing) else {
+            recordTrace(slot: .executor, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
+            return .blocked(IntentRouter.blockedToolMessage(for: routing))
+        }
+
+        executedActionFingerprints.insert(fingerprint)
+        let observation = await ToolExecutor.shared.execute(
+            canonicalTool,
+            arguments: normalizedArgs,
+            approval: approvalForExplicitUserIntent(toolID: canonicalTool, routing: routing)
+        )
+        observations.append("\(canonicalTool): \(observation)")
+        let observationStep = AgentStep(kind: .observation, content: observation, toolID: canonicalTool, toolArgs: normalizedArgs)
+        steps.append(observationStep)
+        continuation.yield(.step(observationStep))
+
+        if let chained = deterministicFollowUpAction(after: canonicalTool, observation: observation, req: req, routing: routing) {
+            return await executeAction(
+                chained,
+                req: req,
+                routing: routing,
+                steps: &steps,
+                observations: &observations,
+                executedActionFingerprints: &executedActionFingerprints,
+                continuation: continuation,
+                stepIndex: stepIndex + 1
+            )
+        }
+
+        if shouldFinalizeAfterObservation(observation, routing: routing, toolID: canonicalTool) {
+            return .finalizeNow(observation)
+        }
+        return .continueLoop
+    }
+
+    private func deterministicFollowUpAction(after toolID: String, observation: String, req: AgentRequest, routing: IntentRoutingDecision) -> AgentAction? {
+        guard toolID == "contacts.search" else { return nil }
+        guard let phone = firstPhoneNumber(in: observation) else { return nil }
+
+        switch routing.intent {
+        case .phoneCall:
+            return AgentAction(tool: "phone.call", args: ["number": .string(phone)])
+        case .messageDraft:
+            return AgentAction(tool: "messages.draft", args: ["number": .string(phone), "body": .string(extractCommunicationBody(from: req.userMessage))])
+        default:
+            return nil
+        }
+    }
+
+    private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
+        switch (routing.intent, toolID) {
+        case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
+            return .userApproved
+        default:
+            return .autonomous
         }
     }
 
@@ -207,16 +282,20 @@ final class SlotAgentService {
     private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition], mode: StructuredTurnMode) -> String {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
+        let contextBlock = shortTermContextBlock(req.history)
 
         switch mode {
         case .actionOnly:
             return """
             You are Lumen v1 tool router step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
-            User request:
+            Recent safe conversation context for pronoun/reference resolution only:
+            \(contextBlock)
+
+            Current user request:
             \(req.userMessage)
 
-            Previous observations for this request only:
+            Previous observations for this current request only:
             \(observationBlock)
 
             Available tools:
@@ -229,14 +308,20 @@ final class SlotAgentService {
             - Output an action object only.
             - Do not output final, answer, final_answer, prose, markdown, code fences, or explanations.
             - Use exactly one tool from Available tools.
+            - Use recent context only to resolve words like he, she, her, him, it, that, them, previous, last.
+            - Never reuse previous tool observations as current results.
             - Never call the same tool with the same arguments twice.
+            - For phone calls to a person by name or pronoun, use contacts.search first unless a phone number is already explicit.
             - If the tool needs the user's current place, use location="current location".
             """
         case .finalOnly:
             return """
             You are Lumen v1 finalizer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
-            User request:
+            Recent safe conversation context for pronoun/reference resolution only:
+            \(contextBlock)
+
+            Current user request:
             \(req.userMessage)
 
             Current request observations:
@@ -248,14 +333,18 @@ final class SlotAgentService {
             Hard rules:
             - Output a final object only.
             - Do not output action, tool, args, markdown, code fences, or explanations outside JSON.
-            - Use only the current request observations.
+            - Use current request observations as the source of truth.
+            - Use recent context only to resolve references, not as a fresh tool result.
             - Never claim an action that is not in the observations.
             """
         case .directFinal:
             return """
             You are Lumen v1 direct answer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
-            User request:
+            Recent safe conversation context:
+            \(contextBlock)
+
+            Current user request:
             \(req.userMessage)
 
             Required output schema:
@@ -272,8 +361,12 @@ final class SlotAgentService {
     private func makeMouthPrompt(req: AgentRequest, observations: [String], draft: String?) -> String {
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
         let draftBlock = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
+        let contextBlock = shortTermContextBlock(req.history)
         return """
         Write the final user-facing answer for the current user request only. Do not output JSON.
+
+        Recent safe conversation context for pronoun/reference resolution only:
+        \(contextBlock)
 
         Current user request:
         \(req.userMessage)
@@ -285,7 +378,9 @@ final class SlotAgentService {
         \(draftBlock)
 
         Rules:
-        - Never reuse a result from a previous user request.
+        - Current request observations are the source of truth.
+        - Use recent context only to resolve references like her/him/it/that.
+        - Never reuse a result from a previous user request as a current tool result.
         - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
         - Keep it concise, accurate, and do not claim actions that did not happen.
         """
@@ -308,14 +403,14 @@ final class SlotAgentService {
         case .weather, .webSearch, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .contactSearch:
             hardCap = 2
         case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm, .note:
-            hardCap = 3
+            hardCap = 4
         case .chat, .unknown:
             hardCap = 1
         }
         return max(1, min(requested, hardCap))
     }
 
-    private func shouldFinalizeAfterObservation(_ observation: String, routing: IntentRoutingDecision) -> Bool {
+    private func shouldFinalizeAfterObservation(_ observation: String, routing: IntentRoutingDecision, toolID: String) -> Bool {
         let text = observation.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = text.lowercased()
         guard !text.isEmpty else { return false }
@@ -347,11 +442,53 @@ final class SlotAgentService {
             return lower.contains("search") || lower.contains("index") || lower.contains("file") || lower.contains("photo")
         case .contactSearch:
             return lower.contains("contact") || lower.contains("phone") || lower.contains("email") || lower.contains("found")
-        case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm:
+        case .phoneCall:
+            return toolID == "phone.call"
+        case .messageDraft:
+            return toolID == "messages.draft"
+        case .emailDraft:
+            return toolID == "mail.draft"
+        case .calendar, .reminder, .trigger, .alarm:
             return true
         case .chat, .unknown:
             return false
         }
+    }
+
+    private func firstPhoneNumber(in text: String) -> String? {
+        let pattern = #"\+?[0-9][0-9\s\-\(\)]{6,}[0-9]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return ns.substring(with: match.range).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func extractCommunicationBody(from text: String) -> String {
+        let lower = text.lowercased()
+        for marker in [" saying ", " that says ", " message "] {
+            if let range = lower.range(of: marker) {
+                return String(text[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return ""
+    }
+
+    private func shortTermContextBlock(_ history: [(role: MessageRole, content: String)]) -> String {
+        guard !history.isEmpty else { return "none" }
+        return history.suffix(4).map { item in
+            let role: String
+            switch item.role {
+            case .user: role = "user"
+            case .assistant: role = "assistant"
+            case .tool: role = "tool"
+            case .system: role = "system"
+            }
+            let clean = item.content
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return "- \(role): \(String(clean.prefix(500)))"
+        }.joined(separator: "\n")
     }
 
     private func actionFingerprint(toolID: String, arguments: [String: String]) -> String {

@@ -11,6 +11,7 @@ struct OutlookMailView: View {
     @State private var composeBody = ""
     @State private var composeError: String?
     @State private var isSending = false
+    @State private var microsoftClientID = MicrosoftGraphRuntimeConfig.loadClientIDOverride() ?? ""
 
     var body: some View {
         Group {
@@ -76,6 +77,32 @@ struct OutlookMailView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Microsoft Entra client ID")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Enter app client ID", text: $microsoftClientID)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button("Use this client ID") {
+                        MicrosoftGraphRuntimeConfig.saveClientIDOverride(microsoftClientID)
+                        auth.registerExternalError(MicrosoftGraphAuthError.invalidConfiguration("Saved client ID for this device. Tap Sign in with Microsoft to continue."))
+                    }
+                    .buttonStyle(.bordered)
+
+                    if MicrosoftGraphRuntimeConfig.loadClientIDOverride() != nil {
+                        Button("Reset", role: .destructive) {
+                            microsoftClientID = ""
+                            MicrosoftGraphRuntimeConfig.saveClientIDOverride(nil)
+                            auth.registerExternalError(MicrosoftGraphAuthError.invalidConfiguration("Cleared saved client ID override."))
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             }
 
             Button {

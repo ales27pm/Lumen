@@ -14,7 +14,14 @@ final class SlotAgentService {
                 var finalText = ""
                 var executedActionFingerprints: Set<String> = []
 
-                let routing = IntentRouter.classify(req.userMessage)
+                let resolution = ReferenceResolver.resolve(
+                    prompt: req.userMessage,
+                    history: req.history,
+                    relevantMemories: req.relevantMemories,
+                    currentTurnLedger: ToolLedger.shared.currentTurnEntries(conversationID: req.conversationID, turnID: req.turnID)
+                )
+                let executionPrompt = resolution.rewrittenPrompt
+                let routing = IntentRouter.classify(executionPrompt)
                 let scopedTools = req.availableTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
                 let requiresTool = IntentRouter.intentRequiresTool(routing)
 
@@ -37,6 +44,7 @@ final class SlotAgentService {
                     let slot: LumenModelSlot = structuredMode == .finalOnly ? .mouth : (stepIndex == 0 ? .cortex : .executor)
                     let turnPrompt = makeStructuredTurnPrompt(
                         req: req,
+                        resolution: resolution,
                         observations: observations,
                         stepIndex: stepIndex,
                         scopedTools: scopedTools,
@@ -54,7 +62,7 @@ final class SlotAgentService {
 
                     let parsed = AgentTurnParser.parse(turnOutput)
                     if let error = parsed.parseError {
-                        recordTrace(slot: slot, stage: "structured-turn-\(structuredMode.rawValue)", stepIndex: stepIndex, error: error.rawValue, raw: turnOutput, prompt: req.userMessage)
+                        recordTrace(slot: slot, stage: "structured-turn-\(structuredMode.rawValue)", stepIndex: stepIndex, error: error.rawValue, raw: turnOutput, prompt: executionPrompt)
                     }
 
                     if let thought = parsed.thought, !thought.isEmpty {
@@ -64,8 +72,8 @@ final class SlotAgentService {
                     }
 
                     if structuredMode == .actionOnly, let final = parsed.final, !final.isEmpty {
-                        recordTrace(slot: slot, stage: "structured-turn-action-only", stepIndex: stepIndex, error: "unexpected_final_in_action_turn", raw: turnOutput, prompt: req.userMessage)
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: nil)
+                        recordTrace(slot: slot, stage: "structured-turn-action-only", stepIndex: stepIndex, error: "unexpected_final_in_action_turn", raw: turnOutput, prompt: executionPrompt)
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -77,7 +85,7 @@ final class SlotAgentService {
                     }
 
                     if structuredMode == .finalOnly {
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observations.last ?? turnOutput)
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last ?? turnOutput)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -91,7 +99,7 @@ final class SlotAgentService {
                         )
                         steps.append(repairStep)
                         continuation.yield(.step(repairStep))
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: nil)
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -111,7 +119,7 @@ final class SlotAgentService {
                     case .continueLoop:
                         continue
                     case .finalizeNow(let draft):
-                        finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: draft)
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     case .blocked(let text):
@@ -120,7 +128,7 @@ final class SlotAgentService {
                     }
                 }
 
-                finalText = await generateFinal(req: req, routing: routing, observations: observations, draft: observations.last)
+                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
                 yieldFinal(finalText, steps: steps, continuation: continuation)
             }
 
@@ -225,8 +233,8 @@ final class SlotAgentService {
         }
     }
 
-    private func generateFinal(req: AgentRequest, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
-        let prompt = makeMouthPrompt(req: req, observations: observations, draft: draft)
+    private func generateFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
+        let prompt = makeMouthPrompt(req: req, resolution: resolution, observations: observations, draft: draft)
         let text = await generateText(
             slot: .mouth,
             req: req,
@@ -287,7 +295,7 @@ final class SlotAgentService {
         return output
     }
 
-    private func makeStructuredTurnPrompt(req: AgentRequest, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition], mode: StructuredTurnMode) -> String {
+    private func makeStructuredTurnPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition], mode: StructuredTurnMode) -> String {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
         let contextBlock = shortTermContextBlock(req.history)
@@ -300,8 +308,11 @@ final class SlotAgentService {
             Recent safe conversation context for pronoun/reference resolution only:
             \(contextBlock)
 
-            Current user request:
-            \(req.userMessage)
+            Original user request:
+            \(resolution.originalPrompt)
+
+            Rewritten execution request (source of truth):
+            \(resolution.rewrittenPrompt)
 
             Previous observations for this current request only:
             \(observationBlock)
@@ -329,8 +340,11 @@ final class SlotAgentService {
             Recent safe conversation context for pronoun/reference resolution only:
             \(contextBlock)
 
-            Current user request:
-            \(req.userMessage)
+            Original user request:
+            \(resolution.originalPrompt)
+
+            Rewritten execution request (source of truth):
+            \(resolution.rewrittenPrompt)
 
             Current request observations:
             \(observationBlock)
@@ -352,8 +366,11 @@ final class SlotAgentService {
             Recent safe conversation context:
             \(contextBlock)
 
-            Current user request:
-            \(req.userMessage)
+            Original user request:
+            \(resolution.originalPrompt)
+
+            Rewritten execution request (source of truth):
+            \(resolution.rewrittenPrompt)
 
             Required output schema:
             {"thought":"short answer note","final":"answer shown to the user"}
@@ -366,7 +383,7 @@ final class SlotAgentService {
         }
     }
 
-    private func makeMouthPrompt(req: AgentRequest, observations: [String], draft: String?) -> String {
+    private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
         let observationBlock = observations.isEmpty ? "none" : observations.joined(separator: "\n")
         let draftBlock = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
         let contextBlock = shortTermContextBlock(req.history)
@@ -376,8 +393,14 @@ final class SlotAgentService {
         Recent safe conversation context for pronoun/reference resolution only:
         \(contextBlock)
 
-        Current user request:
-        \(req.userMessage)
+        Original user request:
+        \(resolution.originalPrompt)
+
+        Rewritten execution request (source of truth):
+        \(resolution.rewrittenPrompt)
+
+        Reference resolution diagnostics:
+        confidence=\(String(format: "%.2f", resolution.confidence)); map=\(resolution.resolvedReferences); notes=\(resolution.diagnostics)
 
         Current request tool observations:
         \(observationBlock)

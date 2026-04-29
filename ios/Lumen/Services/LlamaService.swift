@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftLlama
 import llama
 
@@ -83,6 +84,20 @@ private struct ChatRuntime {
     var modelPath: String
     var contextSize: Int
     var batchSize: UInt32
+}
+
+private enum LlamaLog {
+    static let subsystem = "com.lumen.runtime"
+    static let category = "llama.service"
+    static let service = Logger(subsystem: subsystem, category: category)
+}
+
+private enum LlamaErrorCode: String {
+    case network = "network"
+    case decode = "decode"
+    case modelLoad = "model-load"
+    case timeout = "timeout"
+    case runtime = "runtime"
 }
 
 final actor AppLlamaService {
@@ -472,10 +487,14 @@ final actor AppLlamaService {
     }
 
     func embed(text: String, dimensions: Int = 256) async -> [Double] {
+        let requestID = UUID().uuidString
         do {
             return try await embed(text)
         } catch {
-            print("Embedding error: \(error.localizedDescription)")
+            let errorCode = classifyError(error)
+            LlamaLog.service.error(
+                "event=llama.embedding.failure severity=error error_code=\(errorCode.rawValue, privacy: .public) request_id=\(requestID, privacy: .public) dimensions=\(dimensions, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+            )
             return []
         }
     }
@@ -569,5 +588,29 @@ final actor AppLlamaService {
 
         messages.append(LlamaChatMessage(role: .user, content: assembly.userMessage))
         return messages
+    }
+
+    private func classifyError(_ error: Error) -> LlamaErrorCode {
+        if let llamaError = error as? LlamaError {
+            switch llamaError {
+            case .modelFileNotFound, .failedToInitializeContext, .noModelLoaded, .slotModelNotLoaded, .embeddingModelNotLoaded:
+                return .modelLoad
+            case .embeddingFailed:
+                return .decode
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut:
+                return .timeout
+            case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost, NSURLErrorNotConnectedToInternet:
+                return .network
+            default:
+                return .runtime
+            }
+        }
+        return .runtime
     }
 }

@@ -62,8 +62,11 @@ struct WebRichContentPayload: Codable, Hashable {
 
     static func removingMarkers(from text: String) -> String {
         var output = text
-        while let start = output.range(of: startMarker),
-              let end = output.range(of: endMarker, range: start.upperBound..<output.endIndex) {
+        while let start = output.range(of: startMarker) {
+            guard let end = output.range(of: endMarker, range: start.upperBound..<output.endIndex) else {
+                output.removeSubrange(start.lowerBound..<output.endIndex)
+                break
+            }
             output.removeSubrange(start.lowerBound..<end.upperBound)
         }
         return output
@@ -72,8 +75,7 @@ struct WebRichContentPayload: Codable, Hashable {
     }
 }
 
-struct WebSearchResultPayload: Codable, Hashable, Identifiable {
-    var id: String { url ?? title }
+struct WebSearchResultPayload: Codable, Hashable {
     let title: String
     let url: String?
     let snippet: String?

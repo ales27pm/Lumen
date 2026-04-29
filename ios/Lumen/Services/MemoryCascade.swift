@@ -151,7 +151,7 @@ enum MemoryCascade {
             }
         }
 
-        try? context.save()
+        try context.save()
     }
 
     private static func compactAndTrim(_ text: String, maxLength: Int) -> String {

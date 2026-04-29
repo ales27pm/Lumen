@@ -15,17 +15,30 @@ enum MemoryStore {
         guard !queryVec.isEmpty else { return [] }
 
         MemoryVectorIndex.shared.ensureLoaded(context: context)
-        let overfetchLimit = max(limit * 3, limit + 8)
-        let hits = MemoryVectorIndex.shared.search(query: queryVec, topK: overfetchLimit, pinBonus: 0.15)
         var results: [MemoryItem] = []
         results.reserveCapacity(limit)
-        for h in hits {
-            if results.count >= limit { break }
-            if let item = context.model(for: h.id) as? MemoryItem {
-                migrateExpiryIfNeeded(for: item)
-                guard !isExpired(item) else { continue }
-                results.append(item)
+        var seenIds: Set<PersistentIdentifier> = []
+        var topK = max(limit * 3, limit + 8)
+        let maxTopK = max(topK, 256)
+
+        while results.count < limit {
+            let hits = MemoryVectorIndex.shared.search(query: queryVec, topK: topK, pinBonus: 0.15)
+            if hits.isEmpty { break }
+
+            for h in hits {
+                if results.count >= limit { break }
+                guard seenIds.insert(h.id).inserted else { continue }
+                if let item = context.model(for: h.id) as? MemoryItem {
+                    migrateExpiryIfNeeded(for: item)
+                    guard !isExpired(item) else { continue }
+                    results.append(item)
+                }
             }
+
+            if results.count >= limit || hits.count < topK || topK >= maxTopK {
+                break
+            }
+            topK = min(topK * 2, maxTopK)
         }
         try? context.save()
         return results

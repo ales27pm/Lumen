@@ -55,7 +55,7 @@ nonisolated enum MemoryContextAdapter {
     }
 }
 
-private extension String {
+nonisolated private extension String {
     func stripPrefix(_ prefix: String) -> String? {
         guard hasPrefix(prefix) else { return nil }
         return String(dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)

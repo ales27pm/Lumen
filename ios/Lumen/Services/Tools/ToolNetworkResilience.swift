@@ -68,7 +68,7 @@ nonisolated enum ToolNetworkTelemetry {
     }
 }
 
-extension Notification.Name {
+nonisolated extension Notification.Name {
     static let toolNetworkMetrics = Notification.Name("toolNetworkMetrics")
 }
 

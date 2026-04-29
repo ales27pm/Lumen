@@ -464,7 +464,7 @@ nonisolated enum WebTools {
     }
 }
 
-private extension String {
+nonisolated private extension String {
     var nilIfEmpty: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

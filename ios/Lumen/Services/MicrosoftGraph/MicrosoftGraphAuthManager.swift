@@ -13,6 +13,7 @@ final class MicrosoftGraphAuthManager {
     private let nativeOAuth = NativeMicrosoftOAuthClient()
     private(set) var account: MicrosoftGraphAccountSnapshot?
     private(set) var token: MicrosoftGraphTokenSnapshot?
+    private(set) var tokensByScopeSet: [String: MicrosoftGraphTokenSnapshot] = [:]
     private(set) var accounts: [MicrosoftGraphAccountSnapshot] = []
     private(set) var isAuthenticating = false
     private(set) var lastError: Error?
@@ -73,7 +74,9 @@ final class MicrosoftGraphAuthManager {
                 account = accounts.first
             }
             if let session = nativeOAuth.loadCachedSession() {
-                token = Self.tokenSnapshot(from: session.token, scopes: MicrosoftGraphScope.inboxRead)
+                let restored = Self.tokenSnapshot(from: session.token, scopes: MicrosoftGraphScope.inboxRead)
+                token = restored
+                tokensByScopeSet[Self.scopeCacheKey(for: MicrosoftGraphScope.inboxRead)] = restored
                 lastError = nil
             }
         }
@@ -85,6 +88,7 @@ final class MicrosoftGraphAuthManager {
         do {
             let result = try await interactiveToken(scopes: scopes, presentationViewController: presentationViewController)
             token = result.token
+            tokensByScopeSet[Self.scopeCacheKey(for: scopes)] = result.token
             account = result.account
             await reloadCachedAccounts()
         } catch {
@@ -106,10 +110,12 @@ final class MicrosoftGraphAuthManager {
                 let result = try await application.acquireTokenSilentAsync(scopes: scopes, account: selected, forceRefresh: forceRefresh)
                 let mapped = Self.tokenSnapshot(from: result, scopes: scopes)
                 token = mapped
+                tokensByScopeSet[Self.scopeCacheKey(for: scopes)] = mapped
                 account = Self.snapshot(from: result.account)
                 return mapped.accessToken
             } catch let error as NSError where Self.isInteractionRequired(error) {
                 token = nil
+                tokensByScopeSet = [:]
                 lastError = MicrosoftGraphAuthError.interactionRequired
                 throw MicrosoftGraphAuthError.interactionRequired
             } catch {
@@ -122,6 +128,7 @@ final class MicrosoftGraphAuthManager {
                 let nativeToken = try await nativeOAuth.acquireToken(scopes: scopes, forceRefresh: forceRefresh)
                 let mapped = Self.tokenSnapshot(from: nativeToken, scopes: scopes)
                 token = mapped
+                tokensByScopeSet[Self.scopeCacheKey(for: scopes)] = mapped
                 if let session = nativeOAuth.loadCachedSession() {
                     account = session.account
                     accounts = [session.account]
@@ -134,6 +141,9 @@ final class MicrosoftGraphAuthManager {
         }
         // Compiler-only fallback; real return/throw paths are inside the #if-auth branches above.
         throw MicrosoftGraphAuthError.interactionRequired
+    }
+    func cachedToken(for scopes: [String]) -> MicrosoftGraphTokenSnapshot? {
+        tokensByScopeSet[Self.scopeCacheKey(for: scopes)]
     }
 
     func registerExternalError(_ error: Error) {
@@ -153,6 +163,7 @@ final class MicrosoftGraphAuthManager {
                 lastError = error
             }
             token = nil
+            tokensByScopeSet = [:]
             account = nil
             await reloadCachedAccounts()
             MicrosoftGraphMailCacheStore.shared.clearAll()
@@ -160,6 +171,7 @@ final class MicrosoftGraphAuthManager {
         } else {
             nativeOAuth.signOut()
             token = nil
+            tokensByScopeSet = [:]
             account = nil
             accounts = []
             MicrosoftGraphMailCacheStore.shared.clearAll()
@@ -240,6 +252,10 @@ final class MicrosoftGraphAuthManager {
         MicrosoftGraphTokenSnapshot(accessToken: result.accessToken, expiresOn: result.expiresOn, scopes: scopes)
     }
     #endif
+
+    private nonisolated static func scopeCacheKey(for scopes: [String]) -> String {
+        scopes.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.sorted().joined(separator: " ")
+    }
 
     private func normalize(_ error: Error) -> Error {
         #if canImport(MSAL)

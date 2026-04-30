@@ -76,3 +76,23 @@ With generated Info.plist targets, add equivalent generated keys in Build Settin
 
 - Graph webhooks require a server-side relay and APNs; this branch intentionally keeps the iOS app client-only.
 - Kiota can be added later for generated typed clients. The current implementation keeps binary size low and avoids the abandoned monolithic ObjC Graph SDK.
+
+## CI / pre-release validation
+
+Before TestFlight handoff, run:
+
+```bash
+python3 scripts/validate-msal-ios-release-config.py
+```
+
+The validator enforces:
+
+- Expected `MSAL_CLIENT_ID` / `MSALClientID` value presence.
+- `MSALRedirectURI` format: `msauth.<bundle-id>://auth`.
+- Bundle identifier alignment between redirect URI and `PRODUCT_BUNDLE_IDENTIFIER` (`com.27pm.lumen`).
+
+### TestFlight release handoff checklist
+
+- [ ] Validation script passes from repo root.
+- [ ] Entra registration still includes `msauth.com.27pm.lumen://auth` under iOS/macOS platform.
+- [ ] Outlook sign-in + inbox fetch smoke-tested on TestFlight candidate.

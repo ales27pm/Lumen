@@ -93,6 +93,23 @@ final class SlotAgentService {
 
                     guard let action = parsed.action else {
                         if structuredMode == .actionOnly, let fallbackAction = deterministicActionFallback(for: routing, prompt: executionPrompt) {
+                            let canonicalFallbackTool = ToolRouteGuard.canonicalToolID(fallbackAction.tool)
+                            let isFallbackToolAvailable = scopedTools.contains { ToolRouteGuard.canonicalToolID($0.id) == canonicalFallbackTool }
+                            let isFallbackToolAllowed = SlotAgentService.isActionAllowed(canonicalFallbackTool, routing: routing)
+                            guard isFallbackToolAvailable && isFallbackToolAllowed else {
+                                let skipStep = AgentStep(
+                                    kind: .reflection,
+                                    content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Deterministic fallback skipped because \(canonicalFallbackTool) is not available for this turn.",
+                                    toolID: nil,
+                                    toolArgs: nil
+                                )
+                                steps.append(skipStep)
+                                continuation.yield(.step(skipStep))
+                                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
+                            }
+
                             let repairStep = AgentStep(
                                 kind: .reflection,
                                 content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Using deterministic fallback action.",

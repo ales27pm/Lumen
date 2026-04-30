@@ -32,6 +32,19 @@ final class MicrosoftGraphAuthManager {
         #endif
     }
     var authProviderDescription: String { canUseMSAL ? "MSAL" : "Native OAuth PKCE" }
+    var authProviderPath: String { canUseMSAL ? "MSAL" : "Native fallback (ASWebAuthenticationSession + PKCE)" }
+    var activeClientID: String {
+        (try? MicrosoftGraphConfiguration.load().clientID) ?? "Unavailable"
+    }
+    var activeRedirectURI: String {
+        if let configured = try? MicrosoftGraphConfiguration.load().redirectURI, let configured {
+            return configured
+        }
+        return "msauth.\(Bundle.main.bundleIdentifier ?? "com.27pm.lumen")://auth"
+    }
+    var bundleIdentifier: String {
+        Bundle.main.bundleIdentifier ?? "Unavailable"
+    }
 
     init() {
         cachedForceNativeOAuth = (try? MicrosoftGraphConfiguration.load().forceNativeOAuth) ?? false
@@ -264,6 +277,11 @@ final class MicrosoftGraphAuthManager {
         if nsError.code == MSALError.internal.rawValue {
             let message = """
             Microsoft sign-in failed with an internal MSAL error (\(nsError.code)). This usually means the Entra app configuration does not match this iOS build. Verify the Client ID, Redirect URI, and iOS bundle ID in Azure App Registration.
+            Diagnostics:
+            - Active client ID: \(activeClientID)
+            - Redirect URI: \(activeRedirectURI)
+            - Bundle ID: \(bundleIdentifier)
+            - Auth provider path: \(authProviderPath)
             """
             return MicrosoftGraphAuthError.invalidConfiguration(message)
         }

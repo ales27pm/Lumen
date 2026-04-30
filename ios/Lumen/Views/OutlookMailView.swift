@@ -79,6 +79,8 @@ struct OutlookMailView: View {
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
             }
+            
+            debugConfigurationSection
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Microsoft Entra client ID")
@@ -137,6 +139,34 @@ struct OutlookMailView: View {
 
     private var defaultRedirectURI: String {
         "msauth.\(Bundle.main.bundleIdentifier ?? "com.27pm.lumen")://auth"
+    }
+
+    private var shouldShowDebugConfiguration: Bool {
+        #if DEBUG
+        return true
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #endif
+    }
+
+    @ViewBuilder
+    private var debugConfigurationSection: some View {
+        if shouldShowDebugConfiguration {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Debug configuration")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Auth provider path: \(auth.authProviderPath)")
+                    Text("Client ID: \(auth.activeClientID)")
+                    Text("Redirect URI: \(auth.activeRedirectURI)")
+                    Text("Bundle ID: \(auth.bundleIdentifier)")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            }
+        }
     }
 
     private var inboxContent: some View {

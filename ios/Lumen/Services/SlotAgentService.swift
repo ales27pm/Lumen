@@ -615,10 +615,15 @@ final class SlotAgentService {
 
         let politePrefixes = ["please ", "can you ", "could you ", "would you ", "kindly "]
         var anchoredQuery = query
-        let lowerAnchored = anchoredQuery.lowercased()
-        for prefix in politePrefixes where lowerAnchored.hasPrefix(prefix) {
-            anchoredQuery = String(anchoredQuery.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            break
+        var didStripPrefix = true
+        while didStripPrefix {
+            didStripPrefix = false
+            let lowerAnchored = anchoredQuery.lowercased()
+            for prefix in politePrefixes where lowerAnchored.hasPrefix(prefix) {
+                anchoredQuery = String(anchoredQuery.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                didStripPrefix = true
+                break
+            }
         }
 
         for marker in leadingMarkers where anchoredQuery.lowercased().hasPrefix(marker) {

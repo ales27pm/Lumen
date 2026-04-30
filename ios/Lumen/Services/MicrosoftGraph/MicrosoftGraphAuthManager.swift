@@ -37,7 +37,7 @@ final class MicrosoftGraphAuthManager {
         (try? MicrosoftGraphConfiguration.load().clientID) ?? "Unavailable"
     }
     var activeRedirectURI: String {
-        if let configured = try? MicrosoftGraphConfiguration.load().redirectURI, let configured {
+        if let configured = try? MicrosoftGraphConfiguration.load().redirectURI {
             return configured
         }
         return "msauth.\(Bundle.main.bundleIdentifier ?? "com.27pm.lumen")://auth"

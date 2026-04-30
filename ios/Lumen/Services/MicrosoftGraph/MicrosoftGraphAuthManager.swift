@@ -206,13 +206,21 @@ final class MicrosoftGraphAuthManager {
         let appConfig = MSALPublicClientApplicationConfig(clientId: config.clientID, redirectUri: config.redirectURI, authority: authority)
         appConfig.cacheConfig.keychainSharingGroup = config.keychainSharingGroup
 
+        configureMSALLoggingIfNeeded()
+        return try MSALPublicClientApplication(configuration: appConfig)
+    }
+
+    private func configureMSALLoggingIfNeeded() {
+        guard !Self.hasConfiguredMSALLogging else { return }
         MSALGlobalConfig.loggerConfig.logLevel = .warning
         MSALGlobalConfig.loggerConfig.setLogCallback { level, message, containsPII in
             guard !containsPII else { return }
             Logger(subsystem: "ai.lumen.microsoftgraph", category: "msal").debug("[MSAL \(level.rawValue, privacy: .public)] \(message ?? "", privacy: .public)")
         }
-        return try MSALPublicClientApplication(configuration: appConfig)
+        Self.hasConfiguredMSALLogging = true
     }
+
+    private static var hasConfiguredMSALLogging = false
 
     private nonisolated static func snapshot(from account: MSALAccount) -> MicrosoftGraphAccountSnapshot {
         let identifier = account.identifier ?? account.username ?? "unknown-msal-account"

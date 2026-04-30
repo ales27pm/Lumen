@@ -102,25 +102,28 @@ def replace_or_insert_setting(block: str, key: str, value: str) -> str:
 
 def discover_target_config_ids(text: str, target_name: str) -> list[str]:
     config_list_pattern = re.compile(
-        rf'(?P<config_list>[A-F0-9]{{24}}) /\* Build configuration list for PBXNativeTarget "{re.escape(target_name)}" \*/ = \{{'
+        rf'(?P<config_list>[A-Fa-f0-9]{{24}})\s+/\*\s+Build configuration list for PBXNativeTarget "{re.escape(target_name)}"\s+\*/\s*=\s*\{{',
+        re.IGNORECASE,
     )
     config_list_match = config_list_pattern.search(text)
     if not config_list_match:
         raise RuntimeError(f"Missing configuration list for target {target_name}")
 
     config_list_id = config_list_match.group("config_list")
-    list_marker = f"\t\t{config_list_id} /* Build configuration list for PBXNativeTarget \"{target_name}\" */ = {{"
-    list_start = text.find(list_marker)
-    if list_start < 0:
-        raise RuntimeError(f"Could not locate configuration list block for target {target_name}")
-    list_open = text.find("{", list_start)
+    list_open = text.find("{", config_list_match.end() - 1)
+    if list_open < 0:
+        raise RuntimeError(f"Could not locate opening brace for configuration list {config_list_id}")
     list_close = find_matching_brace(text, list_open)
     list_block = text[list_open : list_close + 1]
 
     build_configs_match = re.search(r"buildConfigurations = \((?P<body>.*?)\);", list_block, re.DOTALL)
     if not build_configs_match:
         raise RuntimeError(f"Missing buildConfigurations for target {target_name}")
-    config_ids = re.findall(r"\b([A-F0-9]{24})\b", build_configs_match.group("body"))
+    config_ids = re.findall(
+        r"\b([A-Fa-f0-9]{24})\b\s*/\*\s*[^*]+\*/",
+        build_configs_match.group("body"),
+        re.MULTILINE,
+    )
     if not config_ids:
         raise RuntimeError(f"No build configurations found for target {target_name}")
     return config_ids

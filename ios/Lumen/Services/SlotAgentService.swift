@@ -620,12 +620,12 @@ final class SlotAgentService {
             }
         }
 
-        let trailingPhrases = [" on web", " on the web", " from the web", " online", " on internet"]
+        let trailingPhrases = [" on web", " on the web", " from the web", " on internet", " on the internet"]
         for phrase in trailingPhrases where query.lowercased().hasSuffix(phrase) {
             query = String(query.dropLast(phrase.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        query = query.replacingOccurrences(of: #"^(for|about)\s+"#, with: "", options: .regularExpression)
+        query = query.replacingOccurrences(of: #"^about\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
         return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 

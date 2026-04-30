@@ -77,7 +77,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .weather, allowedToolIDs: weatherToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["search web", "search the web", "look online", "find online", "web search", "google", "internet search", "fetch url", "open url", "read this url", "read this website"]) {
+        if isLikelyWebSearchIntent(text) {
             return IntentRoutingDecision(intent: .webSearch, allowedToolIDs: webSearchToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
@@ -229,6 +229,18 @@ nonisolated enum IntentRouter {
 
     private static func matchesAny(_ text: String, _ patterns: [String]) -> Bool {
         patterns.contains { text.contains($0) }
+    }
+
+    private static func isLikelyWebSearchIntent(_ text: String) -> Bool {
+        let explicitWebCommands = [
+            "search web", "search the web", "search on web", "web search", "internet search",
+            "look online", "find online", "fetch url", "open url", "read this url", "read this website"
+        ]
+        if matchesAny(text, explicitWebCommands) { return true }
+
+        let hasWebChannel = matchesAny(text, ["web", "internet", "online"])
+        let hasDiscoveryVerb = matchesAny(text, ["search", "find", "look up", "research", "fetch information", "fetch info"])
+        return hasWebChannel && hasDiscoveryVerb
     }
 
     private static func inferredRecipient(_ text: String) -> Bool {

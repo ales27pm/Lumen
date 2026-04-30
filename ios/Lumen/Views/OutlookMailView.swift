@@ -12,6 +12,7 @@ struct OutlookMailView: View {
     @State private var composeError: String?
     @State private var isSending = false
     @State private var microsoftClientID = MicrosoftGraphRuntimeConfig.loadClientIDOverride() ?? ""
+    @State private var effectiveConfig = try? MicrosoftGraphConfiguration.load()
 
     var body: some View {
         Group {
@@ -90,6 +91,7 @@ struct OutlookMailView: View {
                 HStack {
                     Button("Use this client ID") {
                         MicrosoftGraphRuntimeConfig.saveClientIDOverride(microsoftClientID)
+                        effectiveConfig = try? MicrosoftGraphConfiguration.load()
                         auth.registerExternalError(MicrosoftGraphAuthError.invalidConfiguration("Saved client ID for this device. Tap Sign in with Microsoft to continue."))
                     }
                     .buttonStyle(.bordered)
@@ -98,10 +100,21 @@ struct OutlookMailView: View {
                         Button("Reset", role: .destructive) {
                             microsoftClientID = ""
                             MicrosoftGraphRuntimeConfig.saveClientIDOverride(nil)
+                            effectiveConfig = try? MicrosoftGraphConfiguration.load()
                             auth.registerExternalError(MicrosoftGraphAuthError.invalidConfiguration("Cleared saved client ID override."))
                         }
                         .buttonStyle(.bordered)
                     }
+                }
+                if let effectiveConfig {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Effective client ID: \(effectiveConfig.clientID)")
+                        Text("Effective redirect URI: \(effectiveConfig.redirectURI ?? defaultRedirectURI)")
+                        Text("Effective authority URL: \(effectiveConfig.authorityURL.absoluteString)")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
                 }
             }
 
@@ -120,6 +133,10 @@ struct OutlookMailView: View {
         .padding(24)
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var defaultRedirectURI: String {
+        "msauth.\(Bundle.main.bundleIdentifier ?? "com.27pm.lumen")://auth"
     }
 
     private var inboxContent: some View {

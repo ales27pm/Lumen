@@ -92,7 +92,12 @@ final class SlotAgentService {
                     }
 
                     guard let action = parsed.action else {
-                        if structuredMode == .actionOnly, let fallbackAction = deterministicActionFallback(for: routing, prompt: executionPrompt) {
+                        if structuredMode == .actionOnly,
+                           let fallbackAction = deterministicActionFallback(
+                               for: routing,
+                               prompt: executionPrompt,
+                               availableToolIDs: Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                           ) {
                             let canonicalFallbackTool = ToolRouteGuard.canonicalToolID(fallbackAction.tool)
                             let isFallbackToolAvailable = scopedTools.contains { ToolRouteGuard.canonicalToolID($0.id) == canonicalFallbackTool }
                             let isFallbackToolAllowed = SlotAgentService.isActionAllowed(canonicalFallbackTool, routing: routing)
@@ -274,12 +279,13 @@ final class SlotAgentService {
         }
     }
 
-    private func deterministicActionFallback(for routing: IntentRoutingDecision, prompt: String) -> AgentAction? {
+    private func deterministicActionFallback(for routing: IntentRoutingDecision, prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
         switch routing.intent {
         case .webSearch:
-            if let url = firstURL(in: prompt) {
+            if availableToolIDs.contains("web.fetch"), let url = firstURL(in: prompt) {
                 return AgentAction(tool: "web.fetch", args: ["url": .string(url)])
             }
+            guard availableToolIDs.contains("web.search") else { return nil }
             let query = extractWebQuery(from: prompt)
             guard !query.isEmpty else { return nil }
             return AgentAction(tool: "web.search", args: ["query": .string(query)])
@@ -600,9 +606,8 @@ final class SlotAgentService {
 
     private func extractWebQuery(from text: String) -> String {
         var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lower = query.lowercased()
         for marker in ["search web for", "search the web for", "search for", "look up", "find online", "research"] {
-            if let range = lower.range(of: marker) {
+            if let range = query.range(of: marker, options: [.caseInsensitive, .diacriticInsensitive]) {
                 query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 break
             }

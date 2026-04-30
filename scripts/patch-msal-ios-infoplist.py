@@ -110,9 +110,7 @@ def discover_target_config_ids(text: str, target_name: str) -> list[str]:
         raise RuntimeError(f"Missing configuration list for target {target_name}")
 
     config_list_id = config_list_match.group("config_list")
-    list_open = text.find("{", config_list_match.end() - 1)
-    if list_open < 0:
-        raise RuntimeError(f"Could not locate opening brace for configuration list {config_list_id}")
+    list_open = config_list_match.end() - 1
     list_close = find_matching_brace(text, list_open)
     list_block = text[list_open : list_close + 1]
 

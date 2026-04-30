@@ -88,8 +88,9 @@ final class MicrosoftGraphAuthManager {
             account = result.account
             await reloadCachedAccounts()
         } catch {
-            lastError = error
-            throw error
+            let normalizedError = normalize(error)
+            lastError = normalizedError
+            throw normalizedError
         }
     }
 
@@ -136,7 +137,7 @@ final class MicrosoftGraphAuthManager {
     }
 
     func registerExternalError(_ error: Error) {
-        lastError = error
+        lastError = normalize(error)
     }
 
     func signOutCurrentAccount() async {
@@ -239,6 +240,20 @@ final class MicrosoftGraphAuthManager {
         MicrosoftGraphTokenSnapshot(accessToken: result.accessToken, expiresOn: result.expiresOn, scopes: scopes)
     }
     #endif
+
+    private func normalize(_ error: Error) -> Error {
+        #if canImport(MSAL)
+        guard let nsError = error as NSError?, nsError.domain == MSALErrorDomain else { return error }
+
+        if nsError.code == MSALError.internal.rawValue {
+            let message = """
+            Microsoft sign-in failed with an internal MSAL error (\(nsError.code)). This usually means the Entra app configuration does not match this iOS build. Verify the Client ID, Redirect URI, and iOS bundle ID in Azure App Registration.
+            """
+            return MicrosoftGraphAuthError.invalidConfiguration(message)
+        }
+        #endif
+        return error
+    }
 }
 
 #if canImport(MSAL)

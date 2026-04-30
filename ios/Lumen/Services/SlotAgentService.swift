@@ -613,14 +613,21 @@ final class SlotAgentService {
             "fetch information about", "fetch info about", "find information on", "find info on"
         ]
 
-        for marker in leadingMarkers {
-            if let range = query.range(of: marker, options: [.caseInsensitive, .diacriticInsensitive]) {
-                query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                break
-            }
+        let politePrefixes = ["please ", "can you ", "could you ", "would you ", "kindly "]
+        var anchoredQuery = query
+        let lowerAnchored = anchoredQuery.lowercased()
+        for prefix in politePrefixes where lowerAnchored.hasPrefix(prefix) {
+            anchoredQuery = String(anchoredQuery.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            break
         }
 
-        let trailingPhrases = [" on web", " on the web", " from the web", " on internet", " on the internet"]
+        for marker in leadingMarkers where anchoredQuery.lowercased().hasPrefix(marker) {
+            anchoredQuery = String(anchoredQuery.dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            query = anchoredQuery
+            break
+        }
+
+        let trailingPhrases = [" on web", " on the web", " from the web", " on internet", " on the internet", " online"]
         for phrase in trailingPhrases where query.lowercased().hasSuffix(phrase) {
             query = String(query.dropLast(phrase.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }

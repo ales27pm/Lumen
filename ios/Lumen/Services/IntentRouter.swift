@@ -239,7 +239,13 @@ nonisolated enum IntentRouter {
         if matchesAny(text, explicitWebCommands) { return true }
 
         let hasWebChannel = matchesAny(text, ["web", "internet", "online"])
-        let hasDiscoveryVerb = matchesAny(text, ["search", "find", "look up", "research", "fetch information", "fetch info"])
+        let hasDiscoveryVerb = matchesAny(
+            text,
+            [
+                "search", "find", "look up", "research", "fetch information", "fetch info",
+                "how to", "how do i", "tutorial", "guide", "diy", "steps to", "instructions"
+            ]
+        )
         return hasWebChannel && hasDiscoveryVerb
     }
 

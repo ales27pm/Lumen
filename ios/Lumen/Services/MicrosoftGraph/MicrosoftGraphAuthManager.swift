@@ -211,16 +211,18 @@ final class MicrosoftGraphAuthManager {
     }
 
     private func configureMSALLoggingIfNeeded() {
-        guard !Self.hasConfiguredMSALLogging else { return }
+        // MSAL exposes global logger configuration per process. We intentionally configure
+        // it once and share it across all MicrosoftGraphAuthManager instances.
+        _ = Self.configureMSALLoggingOnce
+    }
+
+    private nonisolated static let configureMSALLoggingOnce: Void = {
         MSALGlobalConfig.loggerConfig.logLevel = .warning
         MSALGlobalConfig.loggerConfig.setLogCallback { level, message, containsPII in
             guard !containsPII else { return }
             Logger(subsystem: "ai.lumen.microsoftgraph", category: "msal").debug("[MSAL \(level.rawValue, privacy: .public)] \(message ?? "", privacy: .public)")
         }
-        Self.hasConfiguredMSALLogging = true
-    }
-
-    private static var hasConfiguredMSALLogging = false
+    }()
 
     private nonisolated static func snapshot(from account: MSALAccount) -> MicrosoftGraphAccountSnapshot {
         let identifier = account.identifier ?? account.username ?? "unknown-msal-account"

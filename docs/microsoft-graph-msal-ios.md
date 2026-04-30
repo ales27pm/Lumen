@@ -42,6 +42,20 @@ INFOPLIST_KEY_LSApplicationQueriesSchemes = (
 );
 ```
 
+## CI / pre-release validation
+
+Run from repo root:
+
+```bash
+python3 scripts/validate-msal-ios-release-config.py
+```
+
+This validates the documented source-of-truth values for:
+
+- `MSAL_CLIENT_ID` / `MSALClientID` presence + expected ID.
+- `MSALRedirectURI` format (`msauth.<bundle-id>://auth`) and expected value.
+- App bundle identifier alignment (`PRODUCT_BUNDLE_IDENTIFIER` ↔ redirect URI bundle id).
+
 ## Callback handling
 
 SwiftUI already forwards URLs in `LumenApp.swift`:
@@ -105,3 +119,11 @@ After running the patch script, clean build and inspect the generated app plist.
 ```
 
 Then test Microsoft sign-in on device or simulator.
+
+## TestFlight release handoff checklist
+
+- [ ] Run `python3 scripts/validate-msal-ios-release-config.py` and confirm pass output.
+- [ ] Confirm `ios/Lumen/MicrosoftGraphConfig.plist` has expected `MSALClientID` and `MSALRedirectURI`.
+- [ ] Confirm Lumen target bundle identifier is `com.27pm.lumen` in `ios/Lumen.xcodeproj/project.pbxproj`.
+- [ ] Confirm Entra app registration redirect URI is `msauth.com.27pm.lumen://auth`.
+- [ ] Perform sign-in smoke test on a TestFlight candidate build before handoff.

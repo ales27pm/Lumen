@@ -92,6 +92,60 @@ final class SlotAgentService {
                     }
 
                     guard let action = parsed.action else {
+                        if structuredMode == .actionOnly,
+                           let fallbackAction = deterministicActionFallback(
+                               for: routing,
+                               prompt: executionPrompt,
+                               availableToolIDs: Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                           ) {
+                            let canonicalFallbackTool = ToolRouteGuard.canonicalToolID(fallbackAction.tool)
+                            let isFallbackToolAvailable = scopedTools.contains { ToolRouteGuard.canonicalToolID($0.id) == canonicalFallbackTool }
+                            let isFallbackToolAllowed = SlotAgentService.isActionAllowed(canonicalFallbackTool, routing: routing)
+                            guard isFallbackToolAvailable && isFallbackToolAllowed else {
+                                let skipStep = AgentStep(
+                                    kind: .reflection,
+                                    content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Deterministic fallback skipped because \(canonicalFallbackTool) is not available for this turn.",
+                                    toolID: nil,
+                                    toolArgs: nil
+                                )
+                                steps.append(skipStep)
+                                continuation.yield(.step(skipStep))
+                                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
+                            }
+
+                            let repairStep = AgentStep(
+                                kind: .reflection,
+                                content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Using deterministic fallback action.",
+                                toolID: nil,
+                                toolArgs: nil
+                            )
+                            steps.append(repairStep)
+                            continuation.yield(.step(repairStep))
+                            let result = await executeAction(
+                                fallbackAction,
+                                req: req,
+                                routing: routing,
+                                steps: &steps,
+                                observations: &observations,
+                                executedActionFingerprints: &executedActionFingerprints,
+                                continuation: continuation,
+                                stepIndex: stepIndex
+                            )
+                            switch result {
+                            case .continueLoop:
+                                continue
+                            case .finalizeNow(let draft):
+                                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
+                            case .blocked(let text):
+                                yieldFinal(text, steps: steps, continuation: continuation)
+                                return
+                            }
+                        }
+
                         let repairStep = AgentStep(
                             kind: .reflection,
                             content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Falling back to final answer.",
@@ -220,6 +274,21 @@ final class SlotAgentService {
             return AgentAction(tool: "phone.call", args: ["number": .string(phone)])
         case .messageDraft:
             return AgentAction(tool: "messages.draft", args: ["number": .string(phone), "body": .string(extractCommunicationBody(from: req.userMessage))])
+        default:
+            return nil
+        }
+    }
+
+    private func deterministicActionFallback(for routing: IntentRoutingDecision, prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
+        switch routing.intent {
+        case .webSearch:
+            if availableToolIDs.contains("web.fetch"), let url = firstURL(in: prompt) {
+                return AgentAction(tool: "web.fetch", args: ["url": .string(url)])
+            }
+            guard availableToolIDs.contains("web.search") else { return nil }
+            let query = extractWebQuery(from: prompt)
+            guard !query.isEmpty else { return nil }
+            return AgentAction(tool: "web.search", args: ["query": .string(query)])
         default:
             return nil
         }
@@ -533,6 +602,25 @@ final class SlotAgentService {
             }
         }
         return ""
+    }
+
+    private func extractWebQuery(from text: String) -> String {
+        var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for marker in ["search web for", "search the web for", "search for", "look up", "find online", "research"] {
+            if let range = query.range(of: marker, options: [.caseInsensitive, .diacriticInsensitive]) {
+                query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+    }
+
+    private func firstURL(in text: String) -> String? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = detector.firstMatch(in: text, options: [], range: range),
+              let url = match.url else { return nil }
+        return url.absoluteString
     }
 
     private func shortTermContextBlock(_ history: [(role: MessageRole, content: String)]) -> String {

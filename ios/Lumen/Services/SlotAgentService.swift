@@ -606,13 +606,41 @@ final class SlotAgentService {
 
     private func extractWebQuery(from text: String) -> String {
         var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        for marker in ["search web for", "search the web for", "search for", "look up", "find online", "research"] {
-            if let range = query.range(of: marker, options: [.caseInsensitive, .diacriticInsensitive]) {
-                query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let leadingMarkers = [
+            "search web for", "search the web for", "search on web for", "search for",
+            "look up", "find online", "research", "fetch information on", "fetch info on",
+            "fetch information about", "fetch info about", "find information on", "find info on"
+        ]
+
+        let politePrefixes = ["please ", "can you ", "could you ", "would you ", "kindly "]
+        var anchoredQuery = query
+        var didStripPrefix = true
+        while didStripPrefix {
+            didStripPrefix = false
+            let lowerAnchored = anchoredQuery.lowercased()
+            for prefix in politePrefixes where lowerAnchored.hasPrefix(prefix) {
+                anchoredQuery = String(anchoredQuery.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                didStripPrefix = true
                 break
             }
         }
-        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+
+        for marker in leadingMarkers where anchoredQuery.lowercased().hasPrefix(marker) {
+            anchoredQuery = String(anchoredQuery.dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            query = anchoredQuery
+            break
+        }
+        query = anchoredQuery
+
+        let trailingPhrases = [" on web", " on the web", " from the web", " on internet", " on the internet", " online"]
+        query = query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
+        for phrase in trailingPhrases where query.lowercased().hasSuffix(phrase) {
+            query = String(query.dropLast(phrase.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        query = query.replacingOccurrences(of: #"^about\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 
     private func firstURL(in text: String) -> String? {

@@ -626,8 +626,10 @@ final class SlotAgentService {
             query = anchoredQuery
             break
         }
+        query = anchoredQuery
 
         let trailingPhrases = [" on web", " on the web", " from the web", " on internet", " on the internet", " online"]
+        query = query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
         for phrase in trailingPhrases where query.lowercased().hasSuffix(phrase) {
             query = String(query.dropLast(phrase.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }

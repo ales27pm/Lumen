@@ -11,6 +11,7 @@ Lumen target Debug/Release build settings idempotently.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "ios" / "Lumen.xcodeproj" / "project.pbxproj"
@@ -31,12 +32,6 @@ QUERY_SCHEMES = '''\t\t\t\tINFOPLIST_KEY_LSApplicationQueriesSchemes = (
 \t\t\t\t\tmsauthv3,
 \t\t\t\t);
 '''
-
-TARGET_CONFIG_IDS = (
-    "105FC59E2E9EAD3200EA8BCF",  # Lumen Debug
-    "105FC59F2E9EAD3200EA8BCF",  # Lumen Release
-)
-
 
 def find_matching_brace(text: str, open_index: int) -> int:
     depth = 0
@@ -89,14 +84,47 @@ def replace_or_insert_setting(block: str, key: str, value: str) -> str:
                 elif char in ")}":
                     depth -= 1
                 elif char == ";" and depth == 0:
-                    return block[:value_start] + value + block[cursor + 2 :]
+                    remainder_start = cursor + 1
+                    while remainder_start < len(block) and block[remainder_start] in "\r\n":
+                        remainder_start += 1
+                    return block[:value_start] + value + block[remainder_start:]
             cursor += 1
         raise RuntimeError(f"Could not replace existing {key}")
 
-    marker = "\t\t\t\tINFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;\n"
-    if marker not in block:
-        raise RuntimeError(f"Could not find insertion marker for {key}")
-    return block.replace(marker, value + marker, 1)
+    build_settings_open = block.find("buildSettings = {")
+    if build_settings_open < 0:
+        raise RuntimeError(f"Missing buildSettings block for {key}")
+    insertion_point = block.find("\n", build_settings_open)
+    if insertion_point < 0:
+        raise RuntimeError(f"Could not find insertion point for {key}")
+    return block[: insertion_point + 1] + value + block[insertion_point + 1 :]
+
+
+def discover_target_config_ids(text: str, target_name: str) -> list[str]:
+    config_list_pattern = re.compile(
+        rf'(?P<config_list>[A-Fa-f0-9]{{24}})\s+/\*\s+Build configuration list for PBXNativeTarget "{re.escape(target_name)}"\s+\*/\s*=\s*\{{',
+        re.IGNORECASE,
+    )
+    config_list_match = config_list_pattern.search(text)
+    if not config_list_match:
+        raise RuntimeError(f"Missing configuration list for target {target_name}")
+
+    config_list_id = config_list_match.group("config_list")
+    list_open = config_list_match.end() - 1
+    list_close = find_matching_brace(text, list_open)
+    list_block = text[list_open : list_close + 1]
+
+    build_configs_match = re.search(r"buildConfigurations = \((?P<body>.*?)\);", list_block, re.DOTALL)
+    if not build_configs_match:
+        raise RuntimeError(f"Missing buildConfigurations for target {target_name}")
+    config_ids = re.findall(
+        r"\b([A-Fa-f0-9]{24})\b\s*/\*\s*[^*]+\*/",
+        build_configs_match.group("body"),
+        re.MULTILINE,
+    )
+    if not config_ids:
+        raise RuntimeError(f"No build configurations found for target {target_name}")
+    return config_ids
 
 
 def patch_config(text: str, config_id: str) -> str:
@@ -115,7 +143,7 @@ def patch_config(text: str, config_id: str) -> str:
 def main() -> None:
     text = PROJECT.read_text(encoding="utf-8")
     original = text
-    for config_id in TARGET_CONFIG_IDS:
+    for config_id in discover_target_config_ids(text, "Lumen"):
         text = patch_config(text, config_id)
 
     if text != original:

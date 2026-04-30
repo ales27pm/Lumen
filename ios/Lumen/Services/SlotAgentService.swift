@@ -606,13 +606,27 @@ final class SlotAgentService {
 
     private func extractWebQuery(from text: String) -> String {
         var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        for marker in ["search web for", "search the web for", "search for", "look up", "find online", "research"] {
+
+        let leadingMarkers = [
+            "search web for", "search the web for", "search on web for", "search for",
+            "look up", "find online", "research", "fetch information on", "fetch info on",
+            "fetch information about", "fetch info about", "find information on", "find info on"
+        ]
+
+        for marker in leadingMarkers {
             if let range = query.range(of: marker, options: [.caseInsensitive, .diacriticInsensitive]) {
                 query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 break
             }
         }
-        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+
+        let trailingPhrases = [" on web", " on the web", " from the web", " online", " on internet"]
+        for phrase in trailingPhrases where query.lowercased().hasSuffix(phrase) {
+            query = String(query.dropLast(phrase.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        query = query.replacingOccurrences(of: #"^(for|about)\s+"#, with: "", options: .regularExpression)
+        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 
     private func firstURL(in text: String) -> String? {

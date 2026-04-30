@@ -77,7 +77,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .weather, allowedToolIDs: weatherToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["search web", "search the web", "look online", "find online", "web search", "google", "internet search", "fetch url", "open url", "read this url", "read this website"]) {
+        if matchesAny(text, ["search web", "search the web", "search on web", "look online", "find online", "web search", "google", "internet search", "fetch url", "open url", "read this url", "read this website", "fetch information", "fetch info", "on the web", "on web", "from the web", "on internet", "research", "tutorial", "how to", "guide", "diy"]) {
             return IntentRoutingDecision(intent: .webSearch, allowedToolIDs: webSearchToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 

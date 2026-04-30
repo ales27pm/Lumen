@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>MSALClientID</key>
-	<string>YOUR_MICROSOFT_ENTRA_APPLICATION_CLIENT_ID</string>
+	<string>51aa8fd9-16b2-4f8e-8b97-b8618ceb6c40</string>
 	<key>MSALAuthorityURL</key>
 	<string>https://login.microsoftonline.com/common</string>
 	<key>MSALKeychainGroup</key>

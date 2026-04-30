@@ -49,6 +49,11 @@
     },
     {
       "code": "freshness_missing_ttl",
+      "message": "Freshness class timeless has no TTL or durable marker",
+      "path": "memory.freshnessClasses.timeless"
+    },
+    {
+      "code": "freshness_missing_ttl",
       "message": "Freshness class shortLived has no TTL or durable marker",
       "path": "memory.freshnessClasses.shortLived"
     },
@@ -56,11 +61,6 @@
       "code": "freshness_missing_ttl",
       "message": "Freshness class volatile has no TTL or durable marker",
       "path": "memory.freshnessClasses.volatile"
-    },
-    {
-      "code": "freshness_missing_ttl",
-      "message": "Freshness class timeless has no TTL or durable marker",
-      "path": "memory.freshnessClasses.timeless"
     }
   ]
 }

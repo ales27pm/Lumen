@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "98b079a8934da612069e70c5d5a686d4f3222c6c",
+    "commit": "0f95df0fc542005f2acb76c5c82948864da6746c",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -15,7 +15,7 @@
       },
       {
         "path": "ios/Lumen/Models/MemoryContextItem.swift",
-        "sha256": "2a1c6ba2f63a93de2ce79535b3cae63020c4d16d8ee97a6911e6183cb529a287"
+        "sha256": "0b0ea5c4b38d3adfa1b0f30d4d776215d82627f961bb359bacb0ea038bf910da"
       },
       {
         "path": "ios/Lumen/Models/MemoryItem.swift",
@@ -43,15 +43,15 @@
       },
       {
         "path": "ios/Lumen/Services/MimicryProfile.swift",
-        "sha256": "6038bdaa252deaafcc1d70f37f45266e42574246721c66c19a437d98be497ccc"
+        "sha256": "bd962a70b3347949d23b066ca6797f48e1f6b7b2b0f9d4b0946af8ec3634add7"
       },
       {
         "path": "ios/Lumen/Services/ModelFleet.swift",
-        "sha256": "6055767eeb842059cb180b1bb0b079d3808e6831b26e267afacfbf9588841e83"
+        "sha256": "0a4b0a769daceaecdc8eef2850e08641b92776630ef29966cbe3d6bd918723f2"
       },
       {
         "path": "ios/Lumen/Services/RemCycleService.swift",
-        "sha256": "061037e9d3bcdf0a3afc4394b15690afecc92a5f547027cfdc3ad2f894b74bb2"
+        "sha256": "c5af82545ddcf82feadf98a99d9430ab4f625358c23fa891199c577b7875ce4c"
       },
       {
         "path": "ios/Lumen/Services/Tools/AlarmTools.swift",
@@ -1826,19 +1826,13 @@
     ],
     "freshnessClasses": [
       {
-        "id": "shortLived",
-        "ttlSeconds": null,
-        "durable": false,
-        "source": "ios/Lumen/Models/MemoryItem.swift"
-      },
-      {
-        "id": "volatile",
-        "ttlSeconds": null,
-        "durable": false,
-        "source": "ios/Lumen/Models/MemoryItem.swift"
-      },
-      {
         "id": "timeless",
+        "ttlSeconds": null,
+        "durable": false,
+        "source": "ios/Lumen/Models/MemoryItem.swift"
+      },
+      {
+        "id": "shortLived",
         "ttlSeconds": null,
         "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
@@ -1847,6 +1841,12 @@
         "id": "durable",
         "ttlSeconds": null,
         "durable": true,
+        "source": "ios/Lumen/Models/MemoryItem.swift"
+      },
+      {
+        "id": "volatile",
+        "ttlSeconds": null,
+        "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       }
     ]
@@ -1875,7 +1875,7 @@
       "mimicryProfile": {
         "states": [],
         "constraints": [
-          "\n        Mimicry v0 tone profile:\n        - user state: \\(state)\n        - response style: \\(style)\n        \\(rules)\n        ",
+          "\n        Mimicry v1 tone profile:\n        - user state: \\(state)\n        - response style: \\(style)\n        \\(rules)\n        ",
           "calm-direct",
           "concise",
           "direct",

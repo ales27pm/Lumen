@@ -65,7 +65,7 @@ nonisolated enum IntentRouter {
 
     static let mapFollowUpPhrases: [String] = [
         "show me on map", "show it on map", "open it in maps", "open on map",
-        "show this location on map", "navigate there", "directions there", "take me there", "show it"
+        "show this location on map", "navigate there", "directions there", "take me there"
     ]
 
     static func isMapFollowUpPrompt(_ text: String) -> Bool {

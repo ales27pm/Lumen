@@ -22,6 +22,10 @@ def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: Val
 
     dataset_dir = output_dir / "dataset"
     dataset_dir.mkdir(parents=True, exist_ok=True)
+    legacy_dataset_manifest_jsonl = dataset_dir / "dataset_manifest.jsonl"
+    if legacy_dataset_manifest_jsonl.exists():
+        legacy_dataset_manifest_jsonl.unlink()
+
     dataset_manifest_records = datasets.get("dataset_manifest", [])
     if len(dataset_manifest_records) > 1:
         raise ValueError(

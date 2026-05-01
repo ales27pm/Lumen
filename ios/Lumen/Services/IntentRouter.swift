@@ -19,6 +19,7 @@ nonisolated enum UserIntent: String, Codable, Sendable, CaseIterable, Hashable {
     case rag
     case trigger
     case alarm
+    case outlook
     case note
     case chat
     case unknown
@@ -53,12 +54,23 @@ nonisolated enum IntentRouter {
         "alarm.authorization_status", "alarm.request_authorization", "alarm.schedule", "alarm.countdown",
         "alarm.list", "alarm.pause", "alarm.resume", "alarm.stop", "alarm.snooze", "alarm.cancel"
     ]
+    private static let outlookToolIDs: Set<String> = [
+        "outlook.status", "outlook.folders.list", "outlook.messages.list", "outlook.messages.search",
+        "outlook.message.read", "outlook.attachments.list", "outlook.draft.create", "outlook.mail.send",
+        "outlook.message.mark_read", "outlook.message.mark_unread", "outlook.message.move", "outlook.message.archive",
+        "outlook.message.delete", "outlook.message.reply", "outlook.message.reply_all", "outlook.message.forward",
+        "contacts.search"
+    ]
     private static let noteToolIDs: Set<String> = ["memory.save", "memory.recall"]
 
     static func classify(_ userMessage: String) -> IntentRoutingDecision {
         let text = normalized(userMessage)
         guard !text.isEmpty else {
             return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if isLikelyOutlookIntent(text) {
+            return IntentRoutingDecision(intent: .outlook, allowedToolIDs: outlookToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
         if matchesAny(text, ["alarm", "set an alarm", "set alarm", "countdown", "timer", "snooze", "pause alarm", "resume alarm", "stop alarm", "cancel alarm", "alarm authorization"]) {
@@ -168,7 +180,7 @@ nonisolated enum IntentRouter {
 
     static func intentRequiresTool(_ decision: IntentRoutingDecision) -> Bool {
         switch decision.intent {
-        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .note:
+        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .outlook, .note:
             return true
         case .chat, .unknown:
             return false
@@ -195,6 +207,7 @@ nonisolated enum IntentRouter {
         case .rag: return "Local search/indexing tools are unavailable in this build right now."
         case .trigger: return "Scheduled agent tools are unavailable in this build right now."
         case .alarm: return "Alarm tools are unavailable in this build right now."
+        case .outlook: return "Outlook tools are unavailable in this build right now."
         case .chat, .unknown: return "I can answer directly, but no matching tool is available for that action."
         }
     }
@@ -219,6 +232,7 @@ nonisolated enum IntentRouter {
         case .rag: return "That request is local-search/indexing related. I can only use RAG/local index tools for it."
         case .trigger: return "That request is scheduled-agent related. I can only use trigger tools for it."
         case .alarm: return "That request is alarm-related. I can only use alarm tools for it."
+        case .outlook: return "That request is Outlook/Hotmail mail-related. I can only use Outlook Microsoft Graph tools for it."
         case .chat, .unknown: return "That tool doesn't match your request. Could you clarify what you want to do?"
         }
     }
@@ -229,6 +243,17 @@ nonisolated enum IntentRouter {
 
     private static func matchesAny(_ text: String, _ patterns: [String]) -> Bool {
         patterns.contains { text.contains($0) }
+    }
+
+    private static func isLikelyOutlookIntent(_ text: String) -> Bool {
+        let outlookMarkers = ["outlook", "hotmail", "live mail", "msn mail", "microsoft mail", "microsoft graph", "graph mail"]
+        let mailActions = [
+            "inbox", "email", "emails", "mail", "message", "messages", "unread", "folders", "attachments",
+            "search", "find", "read", "open", "draft", "send", "reply", "reply all", "forward", "archive", "delete", "trash", "mark read", "mark unread", "move"
+        ]
+        if matchesAny(text, outlookMarkers) && matchesAny(text, mailActions) { return true }
+        if matchesAny(text, ["check my unread email", "check my unread emails", "check my inbox", "show my unread email", "show my unread emails", "read the latest email", "read latest email"]) { return true }
+        return false
     }
 
     private static func isLikelyWebSearchIntent(_ text: String) -> Bool {

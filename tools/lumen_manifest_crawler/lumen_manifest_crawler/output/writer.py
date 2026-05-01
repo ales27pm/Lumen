@@ -18,6 +18,7 @@ def write_outputs(
     *,
     pretty: bool,
     fleet_artifacts: FleetArtifacts | None = None,
+    manifest_markdown: str | None = None,
     cross_model_train_dir: Path | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +33,8 @@ def write_outputs(
 
     if fleet_artifacts is not None:
         _write_fleet_artifacts(output_dir, fleet_artifacts, cross_model_train_dir)
+    elif manifest_markdown is not None:
+        (output_dir / "AgentBehaviorManifest.md").write_text(manifest_markdown, encoding="utf-8")
 
     dataset_dir = output_dir / "dataset"
     dataset_dir.mkdir(parents=True, exist_ok=True)

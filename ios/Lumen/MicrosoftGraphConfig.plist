@@ -11,6 +11,6 @@
 	<key>MSALRedirectURI</key>
 	<string>msauth.com.27pm.lumen://auth</string>
 	<key>MSALForceNativeOAuth</key>
-	<false/>
+	<true/>
 </dict>
 </plist>

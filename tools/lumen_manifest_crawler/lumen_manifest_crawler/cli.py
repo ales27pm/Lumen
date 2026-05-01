@@ -8,6 +8,7 @@ from rich.console import Console
 
 from lumen_manifest_crawler.crawler import generate_manifest
 from lumen_manifest_crawler.dataset import generate_all_datasets
+from lumen_manifest_crawler.fleet_artifacts import generate_fleet_artifacts
 from lumen_manifest_crawler.output.writer import write_outputs
 from lumen_manifest_crawler.validators import validate_manifest
 
@@ -24,13 +25,25 @@ def generate(
     pretty: bool = typer.Option(False, "--pretty", help="Also write pretty formatted manifest."),
     runtime_audit: Annotated[list[Path] | None, typer.Option("--runtime-audit", help="RuntimeManifestAuditor JSON report file or directory. Can be passed multiple times.")] = None,
     deterministic: bool = typer.Option(True, "--deterministic/--non-deterministic", help="Use deterministic timestamps and splits for CI-stable generated files."),
+    generate_system_prompts: bool = typer.Option(False, "--generate-system-prompts", help="Generate fleet_system_prompts.json, AgentBehaviorManifest.md, and cross-model training artifacts."),
+    export_md: bool = typer.Option(False, "--export-md", help="Generate AgentBehaviorManifest.md. Implies fleet artifact generation."),
+    cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross_model_training.jsonl. Defaults to <output>/cross_model_training."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
 ) -> None:
     """Generate AgentBehaviorManifest.json and state-of-the-art grounded datasets."""
     manifest = generate_manifest(root)
     datasets = generate_all_datasets(manifest, runtime_audit_paths=runtime_audit, deterministic=deterministic)
     report = validate_manifest(manifest, datasets)
-    write_outputs(output, manifest, report, datasets, pretty=pretty)
+    fleet_artifacts = generate_fleet_artifacts(manifest) if generate_system_prompts or export_md or cross_model_train_dir else None
+    write_outputs(
+        output,
+        manifest,
+        report,
+        datasets,
+        pretty=pretty,
+        fleet_artifacts=fleet_artifacts,
+        cross_model_train_dir=cross_model_train_dir,
+    )
 
     compiled_count = sum(len(records) for name, records in datasets.items() if name != "dataset_manifest")
     families_count = sum(1 for name in datasets if name != "dataset_manifest")
@@ -38,6 +51,8 @@ def generate(
     console.print(f"[bold]Intents:[/bold] {len(manifest.intents)}")
     console.print(f"[bold]Model slots:[/bold] {len(manifest.fleet.slots)}")
     console.print(f"[bold]Datasets:[/bold] {compiled_count} records across {families_count} families")
+    if fleet_artifacts:
+        console.print(f"[bold]Fleet self-knowledge:[/bold] {len(fleet_artifacts.system_prompts)} prompts and {len(fleet_artifacts.cross_model_training)} cross-model records")
     if runtime_audit:
         console.print(f"[bold]Runtime audit inputs:[/bold] {len(runtime_audit)} path(s)")
     if report.failures:

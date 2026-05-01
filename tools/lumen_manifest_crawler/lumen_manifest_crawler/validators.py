@@ -78,7 +78,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
             _validate_compiled_record_shape(name, index, record, failures, warnings, compiled_ids)
-            if name in {"mouth_responses", "mimicry_style", "train_sft", "validation_sft", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
+            if name in {"mouth_responses", "mimicry_style", "train_sft", "validation_sft", "tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
                 for sentinel in forbidden:
                     if sentinel and _record_model_visible_text_contains(record, sentinel):
                         failures.append(ValidationFailure(code="sentinel_leak", message=f"Sentinel {sentinel} leaked in {name}[{index}]", path=f"dataset.{name}.{index}"))

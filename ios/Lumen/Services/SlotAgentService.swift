@@ -345,7 +345,7 @@ final class SlotAgentService {
         let recentEntries = ToolLedger.shared.shortTermEntries(conversationID: conversationID).reversed()
         guard let entry = recentEntries.first(where: { ToolRouteGuard.canonicalToolID($0.toolID) == canonicalLocationToolID }) else { return nil }
         guard let coords = LocationReferenceExtractor.coordinates(from: entry.result) else { return nil }
-        let coordinateString = String(format: "%.4f,%.4f", coords.latitude, coords.longitude)
+        let coordinateString = String(format: "%.4f,%.4f", locale: Locale(identifier: "en_US_POSIX"), coords.latitude, coords.longitude)
 
         if availableToolIDs.contains("maps.directions") {
             return AgentAction(tool: "maps.directions", args: ["destination": .string(coordinateString)])

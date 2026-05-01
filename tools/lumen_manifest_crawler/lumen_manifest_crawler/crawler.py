@@ -239,8 +239,7 @@ def _infer_slot_calls(slot_id: str, all_slot_ids: list[str]) -> list[str]:
 
 def _infer_handoff_tools(manifest: AgentBehaviorManifest) -> list[str]:
     names = {tool.id for tool in manifest.tools}
-    candidates = sorted(tool_id for tool_id in names if any(token in tool_id.lower() for token in ["delegate", "handoff", "route", "intent", "slot", "model"]))
-    return candidates or ["delegate_to_slot", "intent_router_call"]
+    return sorted(tool_id for tool_id in names if any(token in tool_id.lower() for token in ["delegate", "handoff", "route", "intent", "slot", "model"]))
 
 
 def _slot_purpose(slot_id: str, role: str, responsibilities: list[str]) -> str:

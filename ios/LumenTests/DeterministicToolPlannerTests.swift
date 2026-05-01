@@ -41,4 +41,11 @@ struct DeterministicToolPlannerTests {
         #expect(action?.tool == "maps.search")
         #expect(action?.args["query"]?.stringValue == "restaurants")
     }
+
+    @Test func moveIntentIncludesDestination() async throws {
+        let routing = IntentRoutingDecision(intent: .outlook, allowedToolIDs: ["outlook.message.move"], requiresClarification: false, clarificationPrompt: nil)
+        let action = DeterministicToolPlanner.plan(routing: routing, prompt: "move latest email to inbox", availableToolIDs: ["outlook.message.move"])
+        #expect(action?.tool == "outlook.message.move")
+        #expect(action?.args["destination"]?.stringValue == "inbox")
+    }
 }

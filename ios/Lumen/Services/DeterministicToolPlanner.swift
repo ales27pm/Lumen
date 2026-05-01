@@ -103,7 +103,13 @@ nonisolated enum DeterministicToolPlanner {
         if containsAny(text, ["delete", "trash"]) { return action("outlook.message.delete", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]) }
         if text.contains("mark") && text.contains("unread") { return action("outlook.message.mark_unread", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]) }
         if text.contains("mark") && text.contains("read") { return action("outlook.message.mark_read", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]) }
-        if text.contains("move") { return action("outlook.message.move", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]) }
+        if text.contains("move") {
+            guard let destination = extractOutlookDestinationFolder(from: text) else { return nil }
+            return action("outlook.message.move", [
+                "message": .string(extractOutlookMessageReference(from: text) ?? "latest"),
+                "destination": .string(destination)
+            ])
+        }
         if containsAny(text, ["status", "connected", "signed in", "auth"]) { return action("outlook.status") }
         if containsAny(text, ["folder", "folders"]) { return action("outlook.folders.list") }
         if containsAny(text, ["attachment", "attachments", "paperclip"]) { return action("outlook.attachments.list", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]) }
@@ -175,6 +181,16 @@ nonisolated enum DeterministicToolPlanner {
             }
         }
         return ""
+    }
+    static func extractOutlookDestinationFolder(from text: String) -> String? {
+        let lower = normalized(text)
+        if lower.contains("junk") || lower.contains("spam") { return "junkemail" }
+        if lower.contains("trash") || lower.contains("deleted") { return "deleteditems" }
+        if lower.contains("archive") { return "archive" }
+        if lower.contains("inbox") { return "inbox" }
+        if lower.contains("sent") { return "sentitems" }
+        if lower.contains("draft") { return "drafts" }
+        return nil
     }
     static func extractFileName(from text: String) -> String? {
         let pattern = #"[A-Za-z0-9_\- ]+\.[A-Za-z0-9]{2,6}"#

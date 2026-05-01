@@ -107,7 +107,9 @@ def _normalize_record(
     messages = _normalize_messages(record)
     role = _infer_role(family, record, messages)
     task = _infer_task(family, record)
-    tool_ids = sorted(_extract_tool_ids(record))
+    known_tool_ids = {tool.id for tool in manifest.tools}
+    all_tool_ids = sorted(_extract_tool_ids(record))
+    tool_ids = [tool_id for tool_id in all_tool_ids if tool_id in known_tool_ids]
     risk = _risk_label(manifest, record, tool_ids)
     record_id = _stable_id({"family": family, "index": index, "messages": messages, "task": task})
     return {
@@ -138,6 +140,7 @@ def _normalize_record(
             "manifestSchemaVersion": manifest.schemaVersion,
             "manifestCommit": manifest.sourceIntegrity.commit,
             "sourceIndex": index,
+            "invalidContrastToolIDs": [tool_id for tool_id in all_tool_ids if tool_id not in known_tool_ids],
         },
     }
 

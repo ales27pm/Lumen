@@ -144,11 +144,16 @@ def _system_prompt_text(manifest: AgentBehaviorManifest, slot: ModelSlotManifest
     route_lines = [f"- {route['intent']} -> {', '.join(route['allowedTools']) or 'no tool'}" for route in payload["routingRules"]]
     responsibility_lines = [f"- {item}" for item in payload["responsibilities"]] or ["- Follow the role contract extracted from the Swift source."]
     sentinel_lines = [f"- {sentinel}" for sentinel in payload["sentinelPolicy"].get("forbiddenInUserOutput", [])] or ["- none extracted"]
+    handoff_tools = payload.get("topology", {}).get("externalHandoffTools", []) if isinstance(payload.get("topology"), dict) else []
+    handoff_line = "Use manifest-listed handoff tools when available; otherwise return a structured routing instruction for the host orchestrator, not a fake tool call."
+    if handoff_tools:
+        handoff_line = f"Use only these manifest-listed handoff tools for explicit slot delegation: {', '.join(handoff_tools)}."
     lines = [
         f"You are `{slot.id}`, the `{slot.role}` slot inside the unified {manifest.app.name} agent fleet.",
         "You are one component of a single logical agent named Lumen; do not act like a separate assistant.",
         f"Your purpose: {payload['purpose']}",
         "If a task is outside your scope, delegate or route using the fleet topology and approved manifest tools. Never invent a slot, tool, permission, or memory scope.",
+        handoff_line,
         "",
         "Your responsibilities:",
         *responsibility_lines,
@@ -220,22 +225,32 @@ def _peer_knowledge_records(manifest: AgentBehaviorManifest, source: ModelSlotMa
 
 
 def _delegation_records(manifest: AgentBehaviorManifest, source: ModelSlotManifest, target: ModelSlotManifest) -> list[dict[str, Any]]:
-    handoff_tool = (manifest.fleetTopology.externalHandoffTools or ["delegate_to_slot"])[0]
     task = _delegation_task_for(target)
-    chosen = {
-        "tool": handoff_tool,
-        "arguments": {
-            "targetSlotID": target.id,
-            "reason": f"This task matches {target.id}'s manifest-defined purpose.",
-            "request": task,
-        },
-    }
+    handoff_tools = manifest.fleetTopology.externalHandoffTools
+    if handoff_tools:
+        handoff_tool = handoff_tools[0]
+        chosen = {
+            "tool": handoff_tool,
+            "arguments": {
+                "targetSlotID": target.id,
+                "reason": f"This task matches {target.id}'s manifest-defined purpose.",
+                "request": task,
+            },
+        }
+    else:
+        chosen = {
+            "handoff": {
+                "targetSlotID": target.id,
+                "reason": f"This task matches {target.id}'s manifest-defined purpose, but no manifest-approved handoff tool exists. Return this routing instruction to the host orchestrator instead of emitting a synthetic tool call.",
+                "request": task,
+            }
+        }
     rejected = {
         "tool": f"{target.id}.direct_private_call",
         "arguments": {"request": task},
     }
     base_prompt = [
-        {"role": "system", "content": f"You are {source.id}. Delegate out-of-scope work using only manifest-approved handoff tools."},
+        {"role": "system", "content": f"You are {source.id}. Delegate out-of-scope work without inventing tools. Use manifest-approved handoff tools only when they exist."},
         {"role": "user", "content": task},
     ]
     return [

@@ -187,7 +187,7 @@ actor OutlookGraphToolClient {
 }
 
 @MainActor
-nonisolated enum OutlookTools {
+enum OutlookTools {
     private static let client = OutlookGraphToolClient()
 
     static func status() async -> String {

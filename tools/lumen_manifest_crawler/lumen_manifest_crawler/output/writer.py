@@ -20,6 +20,7 @@ def write_outputs(
     fleet_artifacts: FleetArtifacts | None = None,
     manifest_markdown: str | None = None,
     cross_model_train_dir: Path | None = None,
+    incremental_fingerprint: str | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     canonical_path = output_dir / "AgentBehaviorManifest.json"
@@ -27,6 +28,8 @@ def write_outputs(
     if pretty:
         manifest.write_json(output_dir / "AgentBehaviorManifest.pretty.json", pretty=True)
     (output_dir / "AgentBehaviorManifest.sha256").write_text(sha256_file(canonical_path) + "\n", encoding="utf-8")
+    if incremental_fingerprint is not None:
+        (output_dir / "AgentBehaviorManifest.incremental.sha256").write_text(incremental_fingerprint + "\n", encoding="utf-8")
     (output_dir / "manifest_validation_report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
     _write_tool_registry_csv(output_dir / "tool_registry.csv", manifest)
     _write_routing_matrix_csv(output_dir / "routing_matrix.csv", manifest)

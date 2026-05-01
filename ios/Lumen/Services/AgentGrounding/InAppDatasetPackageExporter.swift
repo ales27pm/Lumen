@@ -87,7 +87,7 @@ nonisolated enum InAppDatasetPackageExporter {
             traceLimit: traceLimit
         )
         let directory = try exportDirectory()
-        let fileName = "lumen-in-app-dataset-\(Self.safeTimestamp(package.generatedAt)).json"
+        let fileName = "lumen-in-app-dataset-\(Self.safeTimestamp(package.generatedAt))-\(UUID().uuidString.lowercased()).json"
         let url = directory.appendingPathComponent(fileName, isDirectory: false)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

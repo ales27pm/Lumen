@@ -38,6 +38,22 @@ nonisolated enum AgentIntentRouter {
         case alarmRequestAuthorization
         case alarmSchedule
         case alarmControl
+        case outlookStatus
+        case outlookFoldersList
+        case outlookMessagesList
+        case outlookMessagesSearch
+        case outlookMessageRead
+        case outlookAttachmentsList
+        case outlookDraftCreate
+        case outlookMailSend
+        case outlookMessageMarkRead
+        case outlookMessageMarkUnread
+        case outlookMessageMove
+        case outlookMessageArchive
+        case outlookMessageDelete
+        case outlookMessageReply
+        case outlookMessageReplyAll
+        case outlookMessageForward
     }
 
     struct Decision: Sendable, Equatable {
@@ -107,6 +123,27 @@ nonisolated enum AgentIntentRouter {
         add(.draftMail, score(text, strong: ["draft email", "compose email", "send email", "write an email"], weak: ["email", "mail"]), "email draft intent")
         add(.phoneCall, score(text, strong: ["call ", "phone ", "dial "], weak: ["ring"]), "phone call intent")
         add(.contactSearch, score(text, strong: ["contact", "address book", "phone number of", "email address of"], weak: ["number for", "email for"]), "contact lookup intent")
+
+        let outlookContext = containsAny(text, ["outlook", "hotmail", "live mail", "msn mail", "microsoft mail", "microsoft graph", "graph mail"])
+        let outlookMailContext = outlookContext || containsAny(text, ["my inbox", "inbox", "unread email", "unread mail", "email inbox", "mail inbox"])
+        if outlookMailContext {
+            add(.outlookStatus, score(text, strong: ["outlook status", "signed in", "connected", "connection", "auth status", "account status"], weak: ["outlook", "hotmail", "microsoft"]), "Outlook account status intent")
+            add(.outlookFoldersList, score(text, strong: ["folders", "mail folders", "list folders", "show folders"], weak: ["folder", "labels"]), "Outlook folder list intent")
+            add(.outlookMessagesList, score(text, strong: ["inbox", "latest emails", "recent emails", "recent mail", "list emails", "show emails", "check email", "check mail", "unread emails", "unread mail"], weak: ["messages", "mail", "email"]) + (outlookContext ? 5 : 0), "Outlook message list intent")
+            add(.outlookMessagesSearch, score(text, strong: ["search email", "search mail", "find email", "find mail", "look for email", "look for mail", "email about", "mail about"], weak: ["search", "find", "from", "subject", "invoice", "receipt"]) + (outlookContext ? 5 : 0), "Outlook message search intent")
+            add(.outlookMessageRead, score(text, strong: ["read email", "read mail", "open email", "open mail", "show message", "read message"], weak: ["message id", "email id", "body"]), "Outlook message read intent")
+            add(.outlookAttachmentsList, score(text, strong: ["attachments", "attachment", "paperclip", "files attached"], weak: ["attached", "file"]), "Outlook attachment list intent")
+            add(.outlookDraftCreate, score(text, strong: ["draft outlook", "draft hotmail", "create outlook draft", "save draft", "draft an outlook email"], weak: ["draft email", "compose email"]), "Outlook draft create intent")
+            add(.outlookMailSend, score(text, strong: ["send outlook", "send hotmail", "send email from outlook", "send email through outlook", "send an outlook email"], weak: ["send email", "email to"]), "Outlook send mail intent")
+            add(.outlookMessageMarkRead, score(text, strong: ["mark read", "mark as read"], weak: ["read"]), "Outlook mark read intent")
+            add(.outlookMessageMarkUnread, score(text, strong: ["mark unread", "mark as unread"], weak: ["unread"]), "Outlook mark unread intent")
+            add(.outlookMessageMove, score(text, strong: ["move email", "move mail", "move message", "put email in folder"], weak: ["move", "folder"]), "Outlook move message intent")
+            add(.outlookMessageArchive, score(text, strong: ["archive email", "archive mail", "archive message"], weak: ["archive"]), "Outlook archive intent")
+            add(.outlookMessageDelete, score(text, strong: ["delete email", "delete mail", "delete message", "trash email", "trash mail"], weak: ["delete", "trash"]), "Outlook delete intent")
+            add(.outlookMessageReply, score(text, strong: ["reply to email", "reply to mail", "reply outlook", "respond to email"], weak: ["reply", "respond"]), "Outlook reply intent")
+            add(.outlookMessageReplyAll, score(text, strong: ["reply all", "reply-all", "respond to all"], weak: ["everyone"]), "Outlook reply-all intent")
+            add(.outlookMessageForward, score(text, strong: ["forward email", "forward mail", "forward message"], weak: ["forward"]), "Outlook forward intent")
+        }
 
         let photoScore = score(text, strong: ["photo", "picture", "camera roll", "image library"], weak: ["image", "album"])
         if photoScore > 0 {
@@ -234,6 +271,22 @@ nonisolated enum AgentIntentRouter {
         case .alarmRequestAuthorization: ["alarm.request_authorization", "alarm.authorization_status"]
         case .alarmSchedule: ["alarm.schedule", "alarm.countdown", "alarm.list"]
         case .alarmControl: ["alarm.list", "alarm.pause", "alarm.resume", "alarm.stop", "alarm.snooze", "alarm.cancel"]
+        case .outlookStatus: ["outlook.status"]
+        case .outlookFoldersList: ["outlook.folders.list"]
+        case .outlookMessagesList: ["outlook.messages.list", "outlook.folders.list"]
+        case .outlookMessagesSearch: ["outlook.messages.search", "outlook.messages.list"]
+        case .outlookMessageRead: ["outlook.message.read", "outlook.messages.search", "outlook.messages.list"]
+        case .outlookAttachmentsList: ["outlook.attachments.list", "outlook.message.read"]
+        case .outlookDraftCreate: ["outlook.draft.create", "contacts.search"]
+        case .outlookMailSend: ["outlook.mail.send", "contacts.search"]
+        case .outlookMessageMarkRead: ["outlook.message.mark_read", "outlook.message.read"]
+        case .outlookMessageMarkUnread: ["outlook.message.mark_unread", "outlook.message.read"]
+        case .outlookMessageMove: ["outlook.message.move", "outlook.folders.list"]
+        case .outlookMessageArchive: ["outlook.message.archive"]
+        case .outlookMessageDelete: ["outlook.message.delete"]
+        case .outlookMessageReply: ["outlook.message.reply", "outlook.message.read"]
+        case .outlookMessageReplyAll: ["outlook.message.reply_all", "outlook.message.read"]
+        case .outlookMessageForward: ["outlook.message.forward", "contacts.search"]
         }
     }
 
@@ -250,6 +303,7 @@ nonisolated enum AgentIntentRouter {
     private static func normalizeConflicts(_ intent: Intent, text: String) -> Intent {
         if intent == .mapsSearch, containsAny(text, ["how to", "tutorial", "guide", "plans", "blueprint", "documentation"]) { return .webSearch }
         if intent == .calendarCreate, !containsAny(text, ["calendar", "event", "meeting", "appointment", "schedule", "book"]) { return .answerWithContext }
+        if intent == .draftMail, containsAny(text, ["outlook", "hotmail", "microsoft graph", "microsoft mail"]) { return .outlookDraftCreate }
         return intent
     }
 
@@ -271,6 +325,14 @@ nonisolated enum AgentIntentRouter {
             if text.split(separator: " ").count <= 2 { return "Who do you want to call?" }
         case .mapsDirections:
             if text.split(separator: " ").count <= 3 { return "Where do you want directions to?" }
+        case .outlookMessagesSearch:
+            if !containsAny(text, ["search", "find", "about", "from", "subject", "invoice", "receipt"]) { return "What should I search for in Outlook?" }
+        case .outlookMessageRead, .outlookAttachmentsList, .outlookMessageMarkRead, .outlookMessageMarkUnread, .outlookMessageMove, .outlookMessageArchive, .outlookMessageDelete, .outlookMessageReply, .outlookMessageReplyAll, .outlookMessageForward:
+            if !containsAny(text, ["message id", "email id", "id:", "this email", "that email", "selected email", "latest", "last email"]) {
+                return "Which Outlook message should I use? Give me the message id, or ask me to search/list messages first."
+            }
+        case .outlookDraftCreate, .outlookMailSend:
+            if !containsAny(text, [" to ", "email ", "@"]) { return "Who should the Outlook email go to, and what should it say?" }
         default:
             break
         }
@@ -279,7 +341,11 @@ nonisolated enum AgentIntentRouter {
 
     private static func shouldClarifyAmbiguity(best: Candidate, alternatives: [Intent], text: String) -> Bool {
         guard !alternatives.isEmpty else { return false }
-        let actionIntents: Set<Intent> = [.calendarCreate, .reminderCreate, .draftMail, .draftMessage, .phoneCall, .triggerCreate, .alarmSchedule, .mapsDirections]
+        let actionIntents: Set<Intent> = [
+            .calendarCreate, .reminderCreate, .draftMail, .draftMessage, .phoneCall, .triggerCreate, .alarmSchedule, .mapsDirections,
+            .outlookDraftCreate, .outlookMailSend, .outlookMessageMarkRead, .outlookMessageMarkUnread, .outlookMessageMove,
+            .outlookMessageArchive, .outlookMessageDelete, .outlookMessageReply, .outlookMessageReplyAll, .outlookMessageForward
+        ]
         if actionIntents.contains(best.intent) || alternatives.contains(where: { actionIntents.contains($0) }) { return true }
         return best.score < 12 && text.split(separator: " ").count < 5
     }
@@ -302,6 +368,22 @@ nonisolated enum AgentIntentRouter {
         case .mapsSearch: "search nearby places"
         case .webSearch: "search the web"
         case .weather: "check the weather"
+        case .outlookStatus: "check Outlook sign-in"
+        case .outlookFoldersList: "list Outlook folders"
+        case .outlookMessagesList: "check your Outlook inbox"
+        case .outlookMessagesSearch: "search Outlook mail"
+        case .outlookMessageRead: "read an Outlook email"
+        case .outlookAttachmentsList: "list Outlook attachments"
+        case .outlookDraftCreate: "create an Outlook draft"
+        case .outlookMailSend: "send an Outlook email"
+        case .outlookMessageMarkRead: "mark an Outlook email as read"
+        case .outlookMessageMarkUnread: "mark an Outlook email as unread"
+        case .outlookMessageMove: "move an Outlook email"
+        case .outlookMessageArchive: "archive an Outlook email"
+        case .outlookMessageDelete: "delete an Outlook email"
+        case .outlookMessageReply: "reply to an Outlook email"
+        case .outlookMessageReplyAll: "reply-all to an Outlook email"
+        case .outlookMessageForward: "forward an Outlook email"
         default: "continue"
         }
     }
@@ -324,6 +406,8 @@ nonisolated enum AgentIntentRouter {
         switch intent {
         case .conversation: 100
         case .calendarCreate, .reminderCreate, .alarmSchedule, .triggerCreate: 80
+        case .outlookMailSend, .outlookDraftCreate, .outlookMessageReply, .outlookMessageReplyAll, .outlookMessageForward, .outlookMessageDelete, .outlookMessageArchive, .outlookMessageMove: 78
+        case .outlookMessagesList, .outlookMessagesSearch, .outlookMessageRead, .outlookAttachmentsList, .outlookFoldersList, .outlookStatus: 76
         case .mapsDirections, .draftMail, .draftMessage, .phoneCall: 70
         case .weather, .webSearch, .fetchURL: 60
         default: 50

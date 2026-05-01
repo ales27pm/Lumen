@@ -351,7 +351,10 @@ final class SlotAgentService {
         Recent safe conversation context for pronoun/reference resolution only:
         \(contextBlock)
 
-        User request:
+        Original user request:
+        \(resolution.originalPrompt)
+
+        Interpreted request to answer:
         \(resolution.rewrittenPrompt)
         """
         let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: req.maxTokens, modelName: "mouth-direct")

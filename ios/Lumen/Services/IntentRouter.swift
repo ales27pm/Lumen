@@ -63,6 +63,18 @@ nonisolated enum IntentRouter {
     ]
     private static let noteToolIDs: Set<String> = ["memory.save", "memory.recall"]
 
+    static let mapFollowUpPhrases: [String] = [
+        "show me on map", "show it on map", "open it in maps", "open on map",
+        "show this location on map", "navigate there", "directions there", "take me there"
+    ]
+
+    static func isMapFollowUpPrompt(_ text: String) -> Bool {
+        let normalizedText = normalized(text)
+        return mapFollowUpPhrases.contains { phrase in
+            normalizedText.contains(phrase) || normalizedText.contains(phrase.replacingOccurrences(of: " map", with: " maps"))
+        }
+    }
+
     static func classify(_ userMessage: String) -> IntentRoutingDecision {
         let text = normalized(userMessage)
         guard !text.isEmpty else {
@@ -139,6 +151,10 @@ nonisolated enum IntentRouter {
 
         if matchesAny(text, ["schedule", "calendar", "create event", "meeting", "appointment", "at 5", "tomorrow at", "list events", "upcoming events"]) {
             return IntentRoutingDecision(intent: .calendar, allowedToolIDs: calendarToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if isMapFollowUpPrompt(text) {
+            return IntentRoutingDecision(intent: .maps, allowedToolIDs: mapsToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
         if matchesAny(text, ["directions", "navigate", "route to", "maps", "near me", "nearby", "closest", "search nearby", "find a place", "find places"]) {

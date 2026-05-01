@@ -10,9 +10,10 @@ from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationFai
 DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "object", "null", "number"}
 VAGUE_TYPES = {"any", "unknown", "dictionary", "dict"}
 STRICT_TOOL_ID_DATASET_FAMILIES = {"tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}
+STRICT_WARNING_CODES = {"tool_missing_description", "vague_argument_type", "inferred_tool_definition", "ambiguous_intent_tools", "freshness_missing_ttl"}
 
 
-def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str, list[dict]] | None = None) -> ValidationReport:
+def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str, list[dict]] | None = None, *, strict: bool = False) -> ValidationReport:
     failures: list[ValidationFailure] = []
     warnings: list[ValidationWarning] = []
 
@@ -63,6 +64,14 @@ def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str
 
     if dataset_records:
         _validate_dataset_records(manifest, dataset_records, failures, warnings)
+
+    if strict:
+        strict_failures = [
+            ValidationFailure(code=f"strict_{warning.code}", message=warning.message, path=warning.path)
+            for warning in warnings
+            if warning.code in STRICT_WARNING_CODES
+        ]
+        failures.extend(strict_failures)
 
     return ValidationReport(passed=not failures, failures=failures, warnings=warnings)
 

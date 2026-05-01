@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest
 
 DETERMINISTIC_DATASET_GENERATED_AT = "1970-01-01T00:00:00+00:00"
@@ -468,48 +469,50 @@ def _build_runtime_audit_repair_records(
                 "id": f"runtime-repair-{record_id[:16]}",
                 "schemaVersion": DATASET_SCHEMA_VERSION,
                 "split": TRAIN_SPLIT,
-                "agentRole": "rem",
+                "agentRole": str(failure.get("agent") or "rem"),
                 "taskType": "runtime_manifest_drift_repair",
                 "messages": [
-                    {"role": "system", "content": "You are REM. Convert runtime manifest audit failures into precise dataset repair instructions."},
+                    {"role": "system", "content": "You are REM. Convert runtime manifest and in-app behavior audit failures into precise dataset repair instructions."},
                     {"role": "user", "content": _content_to_string(failure)},
                     {"role": "assistant", "content": _content_to_string(payload)},
                 ],
-                "metadata": {"generatedAt": config.generated_at, "source": "RuntimeManifestAuditor"},
+                "metadata": {
+                    "generatedAt": config.generated_at,
+                    "source": report.get("_sourceFormat") or "RuntimeManifestAuditor",
+                    "sourceLayer": failure.get("sourceLayer"),
+                    "sourceFile": report.get("_source"),
+                },
             })
     return records
 
 
 def _repair_for_runtime_failure(failure: dict[str, Any], known_tools: list[str]) -> dict[str, Any]:
+    repair_sample = failure.get("repairSample")
+    if isinstance(repair_sample, dict):
+        return {
+            "action": "train_from_in_app_repair_sample",
+            "agent": repair_sample.get("agent"),
+            "violationCode": repair_sample.get("violationCode"),
+            "correctedOutput": repair_sample.get("correctedOutput"),
+            "lesson": repair_sample.get("lesson"),
+            "curriculum": repair_sample.get("curriculum"),
+        }
     failure_type = str(failure.get("type", "unknown"))
     scenario = failure.get("scenario")
     actual = failure.get("actual")
     if failure_type in {"unmanifested_live_tool", "missing_live_tool", "duplicate_runtime_tool_id", "duplicate_manifest_tool_id"}:
         return {"action": "regenerate_manifest_and_schema_cards", "focusToolID": actual or scenario, "knownToolIDs": known_tools}
-    if failure_type in {"argument_mismatch", "missing_live_argument", "unmanifested_live_argument"}:
+    if failure_type in {"argument_mismatch", "missing_live_argument", "unmanifested_live_argument", "missing_required_tool_argument"}:
         return {"action": "regenerate_executor_tool_call_samples", "focusToolID": scenario, "expectedArguments": failure.get("expected"), "actualArgument": actual}
-    if failure_type == "approval_mismatch":
+    if failure_type in {"approval_mismatch", "approval_sensitive_tool_selected"}:
         return {"action": "regenerate_approval_boundary_samples", "focusToolID": scenario}
+    if "sentinel" in failure_type:
+        return {"action": "add_sentinel_suppression_samples", "focus": scenario}
+    if "tool" in failure_type:
+        return {"action": "add_tool_routing_contrast_samples", "focusToolID": actual or scenario, "knownToolIDs": known_tools}
+    if "parse" in failure_type:
+        return {"action": "add_strict_json_format_samples", "failure": actual}
     return {"action": "add_rem_reflection_sample", "focusToolID": scenario or actual}
-
-
-def load_runtime_audit_reports(paths: list[Path] | None) -> list[dict[str, Any]]:
-    reports: list[dict[str, Any]] = []
-    for path in paths or []:
-        if path.is_dir():
-            candidates = sorted(path.rglob("*.json"))
-        else:
-            candidates = [path]
-        for candidate in candidates:
-            try:
-                value = json.loads(candidate.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if isinstance(value, dict):
-                reports.append(value)
-            elif isinstance(value, list):
-                reports.extend(item for item in value if isinstance(item, dict))
-    return reports
 
 
 def _build_dataset_manifest(
@@ -521,6 +524,7 @@ def _build_dataset_manifest(
 ) -> dict[str, Any]:
     counts = {name: len(records) for name, records in {**raw_role_records, **compiled_records}.items()}
     compiled_hashes = {name: _records_hash(records) for name, records in compiled_records.items()}
+    runtime_formats = sorted({str(report.get("_sourceFormat")) for report in runtime_audit_reports if report.get("_sourceFormat")})
     return {
         "schemaVersion": DATASET_SCHEMA_VERSION,
         "generatedAt": config.generated_at,
@@ -535,6 +539,7 @@ def _build_dataset_manifest(
         "sources": {
             "staticSwiftSourceFiles": len(manifest.sourceIntegrity.files),
             "runtimeAuditReports": len(runtime_audit_reports),
+            "runtimeAuditFormats": runtime_formats,
             "rawDatasetFamilies": sorted(raw_role_records.keys()),
         },
         "counts": counts,
@@ -543,7 +548,7 @@ def _build_dataset_manifest(
             "format": "chat_messages_jsonl",
             "splitStrategy": "stable_hash_by_record_id",
             "validationRatio": config.validation_ratio,
-            "privateDataPolicy": "static manifest + explicit runtime audit JSON only; no free-form user logs ingested",
+            "privateDataPolicy": "static manifest + explicit in-app dataset package JSON only; no unrestricted logs ingested",
             "sentinelLeakPolicy": "fail validation on model-visible leaks",
         },
     }

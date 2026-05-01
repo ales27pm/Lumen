@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -21,18 +22,23 @@ def generate(
     root: Path = typer.Option(Path("."), "--root", help="Repository root to scan."),
     output: Path = typer.Option(Path("generated/agent_manifest"), "--output", help="Output directory."),
     pretty: bool = typer.Option(False, "--pretty", help="Also write pretty formatted manifest."),
+    runtime_audit: Annotated[list[Path] | None, typer.Option("--runtime-audit", help="RuntimeManifestAuditor JSON report file or directory. Can be passed multiple times.")] = None,
+    deterministic: bool = typer.Option(True, "--deterministic/--non-deterministic", help="Use deterministic timestamps and splits for CI-stable generated files."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
 ) -> None:
-    """Generate AgentBehaviorManifest.json and grounded datasets."""
+    """Generate AgentBehaviorManifest.json and state-of-the-art grounded datasets."""
     manifest = generate_manifest(root)
-    datasets = generate_all_datasets(manifest)
+    datasets = generate_all_datasets(manifest, runtime_audit_paths=runtime_audit, deterministic=deterministic)
     report = validate_manifest(manifest, datasets)
     write_outputs(output, manifest, report, datasets, pretty=pretty)
 
+    compiled_count = sum(len(records) for name, records in datasets.items() if name != "dataset_manifest")
     console.print(f"[bold]Tools:[/bold] {len(manifest.tools)}")
     console.print(f"[bold]Intents:[/bold] {len(manifest.intents)}")
     console.print(f"[bold]Model slots:[/bold] {len(manifest.fleet.slots)}")
-    console.print(f"[bold]Datasets:[/bold] {sum(len(v) for v in datasets.values())} records")
+    console.print(f"[bold]Datasets:[/bold] {compiled_count} records across {len(datasets)} families")
+    if runtime_audit:
+        console.print(f"[bold]Runtime audit inputs:[/bold] {len(runtime_audit)} path(s)")
     if report.failures:
         console.print(f"[red]Validation failed with {len(report.failures)} hard failure(s).[/red]")
         for failure in report.failures:
@@ -43,7 +49,7 @@ def generate(
         console.print(f"[yellow]Warnings:[/yellow] {len(report.warnings)}")
         for warning in report.warnings[:20]:
             console.print(f"  [yellow]- {warning.code}:[/yellow] {warning.message}")
-    console.print(f"[green]Wrote manifest outputs to {output}[/green]")
+    console.print(f"[green]Wrote manifest and dataset outputs to {output}[/green]")
 
 
 if __name__ == "__main__":

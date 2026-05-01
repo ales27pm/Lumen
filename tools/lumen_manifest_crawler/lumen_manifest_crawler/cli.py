@@ -33,10 +33,11 @@ def generate(
     write_outputs(output, manifest, report, datasets, pretty=pretty)
 
     compiled_count = sum(len(records) for name, records in datasets.items() if name != "dataset_manifest")
+    families_count = sum(1 for name in datasets if name != "dataset_manifest")
     console.print(f"[bold]Tools:[/bold] {len(manifest.tools)}")
     console.print(f"[bold]Intents:[/bold] {len(manifest.intents)}")
     console.print(f"[bold]Model slots:[/bold] {len(manifest.fleet.slots)}")
-    console.print(f"[bold]Datasets:[/bold] {compiled_count} records across {len(datasets)} families")
+    console.print(f"[bold]Datasets:[/bold] {compiled_count} records across {families_count} families")
     if runtime_audit:
         console.print(f"[bold]Runtime audit inputs:[/bold] {len(runtime_audit)} path(s)")
     if report.failures:

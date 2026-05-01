@@ -551,7 +551,7 @@ def _build_dataset_manifest(
             "format": "chat_messages_jsonl",
             "splitStrategy": "stable_hash_by_record_id",
             "validationRatio": config.validation_ratio,
-            "privateDataPolicy": "static manifest + explicit in-app dataset package JSON only; no unrestricted logs ingested",
+            "privateDataPolicy": "static Swift source manifest, role datasets, explicit runtime audit JSON, explicit in-app dataset packages, behavior repair samples, deterministic scenario results, and bounded diagnostic trace prefixes only; no unrestricted logs, full conversations, contacts, calendar bodies, files, photos, or tool payload bodies are ingested",
             "sentinelLeakPolicy": "fail validation on model-visible leaks",
         },
     }

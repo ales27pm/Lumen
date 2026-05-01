@@ -9,6 +9,7 @@ from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationFai
 
 DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "object", "null", "number"}
 VAGUE_TYPES = {"any", "unknown", "dictionary", "dict"}
+STRICT_TOOL_ID_DATASET_FAMILIES = {"tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}
 
 
 def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str, list[dict]] | None = None) -> ValidationReport:
@@ -90,7 +91,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
                     covered_required_tools.add(tool_id)
                     if tool_id in approval_tools:
                         covered_approval_tools.add(tool_id)
-            if name in {"train_sft", "validation_sft", "tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
+            if name in STRICT_TOOL_ID_DATASET_FAMILIES:
                 for tool_id in _extract_declared_tool_ids(record):
                     if tool_id not in known_tools and not _looks_like_intentionally_invalid_tool(tool_id):
                         failures.append(ValidationFailure(code="unknown_compiled_tool", message=f"Compiled dataset references unknown tool {tool_id}", path=f"dataset.{name}.{index}"))

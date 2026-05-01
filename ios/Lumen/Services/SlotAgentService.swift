@@ -289,14 +289,117 @@ final class SlotAgentService {
             let query = extractWebQuery(from: prompt)
             guard !query.isEmpty else { return nil }
             return AgentAction(tool: "web.search", args: ["query": .string(query)])
+        case .outlook:
+            return deterministicOutlookAction(prompt: prompt, availableToolIDs: availableToolIDs)
         default:
             return nil
         }
     }
 
+    private func deterministicOutlookAction(prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
+        let text = prompt.lowercased().replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+
+        func can(_ tool: String) -> Bool { availableToolIDs.contains(tool) }
+        func action(_ tool: String, _ args: AgentJSONArguments = [:]) -> AgentAction? {
+            guard can(tool) else { return nil }
+            return AgentAction(tool: tool, args: args)
+        }
+
+        if text.contains("status") || text.contains("connected") || text.contains("signed in") || text.contains("auth") {
+            return action("outlook.status")
+        }
+        if text.contains("folder") || text.contains("folders") {
+            return action("outlook.folders.list")
+        }
+
+        if text.contains("attachment") || text.contains("attached") || text.contains("paperclip") {
+            return action("outlook.attachments.list", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+
+        if text.contains("reply all") || text.contains("reply-all") || text.contains("respond to all") {
+            return action("outlook.message.reply_all", [
+                "message": .string(extractOutlookMessageReference(from: text) ?? "latest"),
+                "body": .string(extractOutlookBody(from: prompt))
+            ])
+        }
+        if text.contains("reply") || text.contains("respond") {
+            return action("outlook.message.reply", [
+                "message": .string(extractOutlookMessageReference(from: text) ?? "latest"),
+                "body": .string(extractOutlookBody(from: prompt))
+            ])
+        }
+        if text.contains("forward") {
+            var args: AgentJSONArguments = ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]
+            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
+            let body = extractOutlookBody(from: prompt)
+            if !body.isEmpty { args["body"] = .string(body) }
+            return action("outlook.message.forward", args)
+        }
+        if text.contains("archive") {
+            return action("outlook.message.archive", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+        if text.contains("delete") || text.contains("trash") {
+            return action("outlook.message.delete", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+        if text.contains("mark") && text.contains("unread") {
+            return action("outlook.message.mark_unread", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+        if text.contains("mark") && text.contains("read") {
+            return action("outlook.message.mark_read", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+        if text.contains("move") {
+            var args: AgentJSONArguments = ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]
+            if let folder = extractOutlookDestinationFolder(from: text) { args["destination"] = .string(folder) }
+            return action("outlook.message.move", args)
+        }
+
+        if text.contains("send") && (text.contains("email") || text.contains("mail") || text.contains("outlook") || text.contains("hotmail")) {
+            var args: AgentJSONArguments = [
+                "subject": .string(extractOutlookSubject(from: prompt)),
+                "body": .string(extractOutlookBody(from: prompt))
+            ]
+            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
+            return action("outlook.mail.send", args)
+        }
+        if text.contains("draft") || text.contains("compose") || text.contains("write an email") {
+            var args: AgentJSONArguments = [
+                "subject": .string(extractOutlookSubject(from: prompt)),
+                "body": .string(extractOutlookBody(from: prompt))
+            ]
+            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
+            return action("outlook.draft.create", args)
+        }
+
+        if text.contains("read") || text.contains("open") || text.contains("latest email") || text.contains("latest mail") || text.contains("last email") || text.contains("last mail") {
+            return action("outlook.message.read", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        }
+
+        if text.contains("search") || text.contains("find") || text.contains("look for") || text.contains("about") || text.contains("invoice") || text.contains("receipt") || text.contains("from ") || text.contains("subject") {
+            let query = extractOutlookSearchQuery(from: prompt)
+            if !query.isEmpty {
+                return action("outlook.messages.search", ["query": .string(query), "limit": .string("10")])
+            }
+        }
+
+        var args: AgentJSONArguments = ["limit": .string("10")]
+        if text.contains("unread") { args["unreadOnly"] = .string("true") }
+        return action("outlook.messages.list", args)
+    }
+
     private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
         switch (routing.intent, toolID) {
         case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
+            return .userApproved
+        case (.outlook, "outlook.draft.create"),
+             (.outlook, "outlook.mail.send"),
+             (.outlook, "outlook.message.mark_read"),
+             (.outlook, "outlook.message.mark_unread"),
+             (.outlook, "outlook.message.move"),
+             (.outlook, "outlook.message.archive"),
+             (.outlook, "outlook.message.delete"),
+             (.outlook, "outlook.message.reply"),
+             (.outlook, "outlook.message.reply_all"),
+             (.outlook, "outlook.message.forward"):
             return .userApproved
         default:
             return .autonomous
@@ -429,6 +532,8 @@ final class SlotAgentService {
             - Never reuse previous tool observations as current results.
             - Never call the same tool with the same arguments twice.
             - For phone calls to a person by name or pronoun, use contacts.search first unless a phone number is already explicit.
+            - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
+            - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
             """
         case .finalOnly:
@@ -532,7 +637,7 @@ final class SlotAgentService {
         switch routing.intent {
         case .weather, .webSearch, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .contactSearch:
             hardCap = 2
-        case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm, .note:
+        case .emailDraft, .messageDraft, .phoneCall, .calendar, .reminder, .trigger, .alarm, .note, .outlook:
             hardCap = 4
         case .chat, .unknown:
             hardCap = 1
@@ -578,6 +683,8 @@ final class SlotAgentService {
             return toolID == "messages.draft"
         case .emailDraft:
             return toolID == "mail.draft"
+        case .outlook:
+            return toolID.hasPrefix("outlook.")
         case .calendar, .reminder, .trigger, .alarm:
             return true
         case .chat, .unknown:
@@ -641,6 +748,81 @@ final class SlotAgentService {
 
         query = query.replacingOccurrences(of: #"^about\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
         return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
+    }
+
+    private func extractOutlookSearchQuery(from text: String) -> String {
+        var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            "search outlook for", "search hotmail for", "search email for", "search emails for", "search mail for",
+            "find outlook", "find email", "find emails", "look for email", "look for emails", "email about", "mail about"
+        ]
+        let lower = query.lowercased()
+        for prefix in prefixes where lower.contains(prefix) {
+            if let range = lower.range(of: prefix) {
+                query = String(query[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        query = query.replacingOccurrences(of: "outlook", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "hotmail", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "email", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "emails", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "mail", with: "", options: .caseInsensitive)
+        return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
+    }
+
+    private func extractOutlookMessageReference(from text: String) -> String? {
+        let refs = ["latest", "last", "first", "second", "third", "fourth", "fifth", "this", "that", "selected", "current"]
+        for ref in refs where text.contains(ref) { return ref }
+        let pattern = #"#?\b([1-9]|10)\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return ns.substring(with: match.range).replacingOccurrences(of: "#", with: "")
+    }
+
+    private func extractOutlookDestinationFolder(from text: String) -> String? {
+        if text.contains("junk") || text.contains("spam") { return "junkemail" }
+        if text.contains("trash") || text.contains("deleted") { return "deleteditems" }
+        if text.contains("archive") { return "archive" }
+        if text.contains("inbox") { return "inbox" }
+        if text.contains("sent") { return "sentitems" }
+        if text.contains("draft") { return "drafts" }
+        return nil
+    }
+
+    private func extractOutlookSubject(from text: String) -> String {
+        let lower = text.lowercased()
+        for marker in [" subject ", " subject:"] {
+            if let range = lower.range(of: marker) {
+                let remainder = String(text[range.upperBound...])
+                if let bodyRange = remainder.lowercased().range(of: " body ") {
+                    return String(remainder[..<bodyRange.lowerBound]).trimmingCharacters(in: CharacterSet(charactersIn: "\"' :.,!?"))
+                }
+                return remainder.trimmingCharacters(in: CharacterSet(charactersIn: "\"' :.,!?"))
+            }
+        }
+        return ""
+    }
+
+    private func extractOutlookBody(from text: String) -> String {
+        let lower = text.lowercased()
+        for marker in [" saying ", " that says ", " body ", " body:", " message ", " comment ", " reply "] {
+            if let range = lower.range(of: marker) {
+                return String(text[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "\"' :.,!?"))
+            }
+        }
+        return ""
+    }
+
+    private func extractEmailAddress(from text: String) -> String? {
+        let pattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return ns.substring(with: match.range)
     }
 
     private func firstURL(in text: String) -> String? {

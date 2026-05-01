@@ -37,6 +37,39 @@ final class SlotAgentService {
                     return
                 }
 
+                if !requiresTool {
+                    let final = await generateDirectFinal(req: req, resolution: resolution, routing: routing)
+                    yieldFinal(final, steps: steps, continuation: continuation)
+                    return
+                }
+
+                let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                if let deterministic = DeterministicToolPlanner.plan(routing: routing, prompt: executionPrompt, availableToolIDs: availableToolIDs) {
+                    let result = await executeAction(
+                        deterministic,
+                        req: req,
+                        routing: routing,
+                        steps: &steps,
+                        observations: &observations,
+                        executedActionFingerprints: &executedActionFingerprints,
+                        continuation: continuation,
+                        stepIndex: 0
+                    )
+                    switch result {
+                    case .continueLoop:
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .finalizeNow(let draft):
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .blocked(let text):
+                        yieldFinal(text, steps: steps, continuation: continuation)
+                        return
+                    }
+                }
+
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
                     let hasObservation = !observations.isEmpty
@@ -93,10 +126,10 @@ final class SlotAgentService {
 
                     guard let action = parsed.action else {
                         if structuredMode == .actionOnly,
-                           let fallbackAction = deterministicActionFallback(
-                               for: routing,
+                           let fallbackAction = DeterministicToolPlanner.plan(
+                               routing: routing,
                                prompt: executionPrompt,
-                               availableToolIDs: Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                               availableToolIDs: availableToolIDs
                            ) {
                             let canonicalFallbackTool = ToolRouteGuard.canonicalToolID(fallbackAction.tool)
                             let isFallbackToolAvailable = scopedTools.contains { ToolRouteGuard.canonicalToolID($0.id) == canonicalFallbackTool }
@@ -115,14 +148,6 @@ final class SlotAgentService {
                                 return
                             }
 
-                            let repairStep = AgentStep(
-                                kind: .reflection,
-                                content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Using deterministic fallback action.",
-                                toolID: nil,
-                                toolArgs: nil
-                            )
-                            steps.append(repairStep)
-                            continuation.yield(.step(repairStep))
                             let result = await executeAction(
                                 fallbackAction,
                                 req: req,
@@ -146,14 +171,6 @@ final class SlotAgentService {
                             }
                         }
 
-                        let repairStep = AgentStep(
-                            kind: .reflection,
-                            content: "Structured action turn failed: \(parsed.parseError?.rawValue ?? "unknown"). Falling back to final answer.",
-                            toolID: nil,
-                            toolArgs: nil
-                        )
-                        steps.append(repairStep)
-                        continuation.yield(.step(repairStep))
                         finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
@@ -279,112 +296,9 @@ final class SlotAgentService {
         }
     }
 
-    private func deterministicActionFallback(for routing: IntentRoutingDecision, prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
-        switch routing.intent {
-        case .webSearch:
-            if availableToolIDs.contains("web.fetch"), let url = firstURL(in: prompt) {
-                return AgentAction(tool: "web.fetch", args: ["url": .string(url)])
-            }
-            guard availableToolIDs.contains("web.search") else { return nil }
-            let query = extractWebQuery(from: prompt)
-            guard !query.isEmpty else { return nil }
-            return AgentAction(tool: "web.search", args: ["query": .string(query)])
-        case .outlook:
-            return deterministicOutlookAction(prompt: prompt, availableToolIDs: availableToolIDs)
-        default:
-            return nil
-        }
-    }
+    
 
-    private func deterministicOutlookAction(prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
-        let text = prompt.lowercased().replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-
-        func can(_ tool: String) -> Bool { availableToolIDs.contains(tool) }
-        func action(_ tool: String, _ args: AgentJSONArguments = [:]) -> AgentAction? {
-            guard can(tool) else { return nil }
-            return AgentAction(tool: tool, args: args)
-        }
-
-        if text.contains("status") || text.contains("connected") || text.contains("signed in") || text.contains("auth") {
-            return action("outlook.status")
-        }
-        if text.contains("folder") || text.contains("folders") {
-            return action("outlook.folders.list")
-        }
-
-        if text.contains("attachment") || text.contains("attached") || text.contains("paperclip") {
-            return action("outlook.attachments.list", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-
-        if text.contains("reply all") || text.contains("reply-all") || text.contains("respond to all") {
-            return action("outlook.message.reply_all", [
-                "message": .string(extractOutlookMessageReference(from: text) ?? "latest"),
-                "body": .string(extractOutlookBody(from: prompt))
-            ])
-        }
-        if text.contains("reply") || text.contains("respond") {
-            return action("outlook.message.reply", [
-                "message": .string(extractOutlookMessageReference(from: text) ?? "latest"),
-                "body": .string(extractOutlookBody(from: prompt))
-            ])
-        }
-        if text.contains("forward") {
-            var args: AgentJSONArguments = ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]
-            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
-            let body = extractOutlookBody(from: prompt)
-            if !body.isEmpty { args["body"] = .string(body) }
-            return action("outlook.message.forward", args)
-        }
-        if text.contains("archive") {
-            return action("outlook.message.archive", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-        if text.contains("delete") || text.contains("trash") {
-            return action("outlook.message.delete", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-        if text.contains("mark") && text.contains("unread") {
-            return action("outlook.message.mark_unread", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-        if text.contains("mark") && text.contains("read") {
-            return action("outlook.message.mark_read", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-        if text.contains("move") {
-            var args: AgentJSONArguments = ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")]
-            if let folder = extractOutlookDestinationFolder(from: text) { args["destination"] = .string(folder) }
-            return action("outlook.message.move", args)
-        }
-
-        if text.contains("send") && (text.contains("email") || text.contains("mail") || text.contains("outlook") || text.contains("hotmail")) {
-            var args: AgentJSONArguments = [
-                "subject": .string(extractOutlookSubject(from: prompt)),
-                "body": .string(extractOutlookBody(from: prompt))
-            ]
-            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
-            return action("outlook.mail.send", args)
-        }
-        if text.contains("draft") || text.contains("compose") || text.contains("write an email") {
-            var args: AgentJSONArguments = [
-                "subject": .string(extractOutlookSubject(from: prompt)),
-                "body": .string(extractOutlookBody(from: prompt))
-            ]
-            if let to = extractEmailAddress(from: prompt) { args["to"] = .string(to) }
-            return action("outlook.draft.create", args)
-        }
-
-        if text.contains("read") || text.contains("open") || text.contains("latest email") || text.contains("latest mail") || text.contains("last email") || text.contains("last mail") {
-            return action("outlook.message.read", ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
-        }
-
-        if text.contains("search") || text.contains("find") || text.contains("look for") || text.contains("about") || text.contains("invoice") || text.contains("receipt") || text.contains("from ") || text.contains("subject") {
-            let query = extractOutlookSearchQuery(from: prompt)
-            if !query.isEmpty {
-                return action("outlook.messages.search", ["query": .string(query), "limit": .string("10")])
-            }
-        }
-
-        var args: AgentJSONArguments = ["limit": .string("10")]
-        if text.contains("unread") { args["unreadOnly"] = .string("true") }
-        return action("outlook.messages.list", args)
-    }
+    
 
     private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
         switch (routing.intent, toolID) {
@@ -427,6 +341,26 @@ final class SlotAgentService {
         }
         let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
         return appendRichPayloadMarkersIfNeeded(to: validated, from: observations + [draft ?? ""])
+    }
+
+    private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
+        let contextBlock = shortTermContextBlock(req.history)
+        let prompt = """
+        You are Lumen. Answer naturally and helpfully. Do not output JSON.
+
+        Recent safe conversation context for pronoun/reference resolution only:
+        \(contextBlock)
+
+        Original user request:
+        \(resolution.originalPrompt)
+
+        Interpreted request to answer:
+        \(resolution.rewrittenPrompt)
+        """
+        let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: req.maxTokens, modelName: "mouth-direct")
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate = trimmed.isEmpty ? "I’m here." : trimmed
+        return FinalIntentValidator.validate(candidate, routing: routing, fallback: nil)
     }
 
     private func appendRichPayloadMarkersIfNeeded(to text: String, from sources: [String]) -> String {
@@ -711,7 +645,7 @@ final class SlotAgentService {
         return ""
     }
 
-    private func extractWebQuery(from text: String) -> String {
+    nonisolated static func shared_extractWebQuery(_ text: String) -> String {
         var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let leadingMarkers = [
@@ -750,7 +684,7 @@ final class SlotAgentService {
         return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 
-    private func extractOutlookSearchQuery(from text: String) -> String {
+    nonisolated static func shared_extractOutlookSearchQuery(_ text: String) -> String {
         var query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let prefixes = [
             "search outlook for", "search hotmail for", "search email for", "search emails for", "search mail for",
@@ -765,13 +699,12 @@ final class SlotAgentService {
         }
         query = query.replacingOccurrences(of: "outlook", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "hotmail", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "email", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "emails", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "mail", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: #"(?i)\bemails?\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)\bmails?\b"#, with: "", options: .regularExpression)
         return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 
-    private func extractOutlookMessageReference(from text: String) -> String? {
+    nonisolated static func shared_extractOutlookMessageReference(_ text: String) -> String? {
         let refs = ["latest", "last", "first", "second", "third", "fourth", "fifth", "this", "that", "selected", "current"]
         for ref in refs where text.contains(ref) { return ref }
         let pattern = #"#?\b([1-9]|10)\b"#
@@ -806,7 +739,7 @@ final class SlotAgentService {
         return ""
     }
 
-    private func extractOutlookBody(from text: String) -> String {
+    nonisolated static func shared_extractOutlookBody(_ text: String) -> String {
         let lower = text.lowercased()
         for marker in [" saying ", " that says ", " body ", " body:", " message ", " comment ", " reply "] {
             if let range = lower.range(of: marker) {
@@ -825,7 +758,7 @@ final class SlotAgentService {
         return ns.substring(with: match.range)
     }
 
-    private func firstURL(in text: String) -> String? {
+    nonisolated static func shared_firstURL(_ text: String) -> String? {
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         guard let match = detector.firstMatch(in: text, options: [], range: range),

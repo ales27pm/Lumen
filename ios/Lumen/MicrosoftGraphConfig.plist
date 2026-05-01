@@ -5,7 +5,7 @@
 	<key>MSALClientID</key>
 	<string>51aa8fd9-16b2-4f8e-8b97-b8618ceb6c40</string>
 	<key>MSALAuthorityURL</key>
-	<string>https://login.microsoftonline.com/common</string>
+	<string>https://login.microsoftonline.com/consumers</string>
 	<key>MSALKeychainGroup</key>
 	<string>com.microsoft.adalcache</string>
 	<key>MSALRedirectURI</key>

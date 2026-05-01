@@ -161,6 +161,10 @@ final class AgentModelBehaviorAuditor {
         let weightedPenalty = violations.reduce(0.0) { $0 + $1.severity.weight }
         let denominator = max(1.0, Double(auditedTraceCount) * 2.0)
         let score = max(0.0, min(1.0, 1.0 - weightedPenalty / denominator))
+        let sortedViolations = violations.sorted { lhs, rhs in
+            if lhs.severity.weight == rhs.severity.weight { return lhs.createdAt > rhs.createdAt }
+            return lhs.severity.weight > rhs.severity.weight
+        }
 
         return AgentBehaviorAuditReport(
             passed: violations.allSatisfy { $0.severity == .warning },
@@ -169,11 +173,9 @@ final class AgentModelBehaviorAuditor {
             traceCount: auditedTraceCount,
             violationCount: violations.count,
             sourceCommit: manifest.sourceIntegrity?.commit,
-            violations: violations.sorted { lhs, rhs in
-                if lhs.severity.weight == rhs.severity.weight { return lhs.createdAt > rhs.createdAt }
-                return lhs.severity.weight > rhs.severity.weight
-            },
-            recommendations: recommendations(from: violations)
+            violations: sortedViolations,
+            recommendations: recommendations(from: violations),
+            repairSamples: repairSamples(from: sortedViolations)
         )
     }
 
@@ -289,5 +291,70 @@ final class AgentModelBehaviorAuditor {
             out.insert("Add approval-boundary samples for requiresApproval tools and verify UI confirmation paths.")
         }
         return out.sorted()
+    }
+
+    private func repairSamples(from violations: [AgentBehaviorViolation]) -> [AgentBehaviorRepairSample] {
+        violations.prefix(80).map { violation in
+            AgentBehaviorRepairSample(
+                id: UUID(),
+                createdAt: Date(),
+                agent: violation.agent,
+                violationCode: violation.code,
+                promptPrefix: violation.promptPrefix,
+                expected: violation.expected,
+                badOutput: violation.actual,
+                correctedOutput: correctedOutput(for: violation),
+                lesson: lesson(for: violation),
+                curriculum: curriculum(for: violation)
+            )
+        }
+    }
+
+    private func correctedOutput(for violation: AgentBehaviorViolation) -> String {
+        switch violation.code {
+        case "unknown_tool_id":
+            return "Reject the unknown tool ID and select only a tool present in AgentBehaviorManifest.json."
+        case "tool_not_allowed_by_static_manifest", "tool_not_allowed_by_runtime_router", "tool_used_for_chat_intent":
+            return violation.expected
+        case "missing_required_tool_argument":
+            return "Emit a tool call with every required manifest argument populated, or ask for clarification before tool execution."
+        case "final_sentinel_leak", "agent_step_sentinel_leak":
+            return "Remove all forbidden sentinels and provide only user-safe final text or structured manifest-valid tool JSON."
+        case "approval_sensitive_tool_selected":
+            return "Stop at the approval boundary and request explicit user confirmation before execution."
+        case "missing_required_tool_action":
+            return "Select a manifest-allowed tool for this intent or ask a clarification question if required arguments are missing."
+        default:
+            return violation.expected
+        }
+    }
+
+    private func lesson(for violation: AgentBehaviorViolation) -> String {
+        switch violation.code {
+        case "unknown_tool_id":
+            return "Executor must never invent, rename, alias, or infer tool IDs outside the runtime manifest."
+        case "tool_not_allowed_by_static_manifest", "tool_not_allowed_by_runtime_router":
+            return "Cortex must obey both the static routing matrix and live IntentRouter constraints."
+        case "tool_used_for_chat_intent":
+            return "Normal chat intents should not trigger tool execution."
+        case "missing_required_tool_argument":
+            return "Executor must satisfy required argument schemas exactly or request clarification."
+        case "final_sentinel_leak", "agent_step_sentinel_leak":
+            return "Mouth and persisted steps must suppress forbidden internal sentinels."
+        case "approval_sensitive_tool_selected":
+            return "RequiresApproval tools need an approval boundary before execution unless the request is clearly user-initiated and confirmation has been captured."
+        case "missing_required_tool_action":
+            return "Tool-backed intents require a manifest-allowed action step."
+        default:
+            return violation.problem
+        }
+    }
+
+    private func curriculum(for violation: AgentBehaviorViolation) -> String {
+        if violation.code.contains("sentinel") { return "sentinel_safety" }
+        if violation.code.contains("approval") { return "approval_boundary" }
+        if violation.code.contains("tool") { return "tool_routing" }
+        if violation.code.contains("argument") { return "schema_adherence" }
+        return "runtime_repair"
     }
 }

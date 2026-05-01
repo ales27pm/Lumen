@@ -38,6 +38,22 @@ class FleetManifest(BaseModel):
     slots: list[ModelSlotManifest] = Field(default_factory=list)
 
 
+class FleetTopologySlotManifest(BaseModel):
+    role: str
+    purpose: str
+    inputSignature: str
+    outputSignature: str
+    calls: list[str] = Field(default_factory=list)
+    calledBy: list[str] = Field(default_factory=list)
+    memoryScopes: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+
+
+class FleetTopologyManifest(BaseModel):
+    slots: dict[str, FleetTopologySlotManifest] = Field(default_factory=dict)
+    externalHandoffTools: list[str] = Field(default_factory=list)
+
+
 class ToolArgumentManifest(BaseModel):
     name: str
     type: str
@@ -122,6 +138,7 @@ class AgentBehaviorManifest(BaseModel):
     app: AppManifestInfo = Field(default_factory=AppManifestInfo)
     sourceIntegrity: SourceIntegrity = Field(default_factory=SourceIntegrity)
     fleet: FleetManifest = Field(default_factory=FleetManifest)
+    fleetTopology: FleetTopologyManifest = Field(default_factory=FleetTopologyManifest)
     tools: list[ToolManifest] = Field(default_factory=list)
     intents: list[IntentManifest] = Field(default_factory=list)
     routingMatrix: list[RoutingMatrixEntry] = Field(default_factory=list)

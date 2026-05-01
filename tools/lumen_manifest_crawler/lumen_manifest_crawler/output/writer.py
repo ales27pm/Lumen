@@ -5,11 +5,22 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lumen_manifest_crawler.fleet_artifacts import FleetArtifacts
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationReport
 from lumen_manifest_crawler.output.hashing import sha256_file
 
 
-def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: ValidationReport, datasets: dict[str, list[dict[str, Any]]], *, pretty: bool) -> None:
+def write_outputs(
+    output_dir: Path,
+    manifest: AgentBehaviorManifest,
+    report: ValidationReport,
+    datasets: dict[str, list[dict[str, Any]]],
+    *,
+    pretty: bool,
+    fleet_artifacts: FleetArtifacts | None = None,
+    manifest_markdown: str | None = None,
+    cross_model_train_dir: Path | None = None,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     canonical_path = output_dir / "AgentBehaviorManifest.json"
     manifest.write_json(canonical_path, pretty=False)
@@ -19,6 +30,11 @@ def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: Val
     (output_dir / "manifest_validation_report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
     _write_tool_registry_csv(output_dir / "tool_registry.csv", manifest)
     _write_routing_matrix_csv(output_dir / "routing_matrix.csv", manifest)
+
+    if fleet_artifacts is not None:
+        _write_fleet_artifacts(output_dir, fleet_artifacts, cross_model_train_dir)
+    elif manifest_markdown is not None:
+        (output_dir / "AgentBehaviorManifest.md").write_text(manifest_markdown, encoding="utf-8")
 
     dataset_dir = output_dir / "dataset"
     dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -44,6 +60,36 @@ def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: Val
         with (dataset_dir / f"{name}.jsonl").open("w", encoding="utf-8") as handle:
             for record in records:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _write_fleet_artifacts(output_dir: Path, artifacts: FleetArtifacts, cross_model_train_dir: Path | None) -> None:
+    (output_dir / "fleet_system_prompts.json").write_text(
+        json.dumps(artifacts.system_prompts, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "AgentBehaviorManifest.md").write_text(artifacts.markdown, encoding="utf-8")
+    target_dir = cross_model_train_dir or (output_dir / "cross_model_training")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with (target_dir / "cross_model_training.jsonl").open("w", encoding="utf-8") as handle:
+        for record in artifacts.cross_model_training:
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    _write_cross_model_index(target_dir / "cross_model_training_index.csv", artifacts.cross_model_training)
+
+
+def _write_cross_model_index(path: Path, records: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["recordType", "agentRole", "taskType", "recordCount"])
+        counts: dict[tuple[str, str, str], int] = {}
+        for record in records:
+            key = (
+                str(record.get("recordType") or "unknown"),
+                str(record.get("agentRole") or "unknown"),
+                str(record.get("taskType") or "unknown"),
+            )
+            counts[key] = counts.get(key, 0) + 1
+        for (record_type, agent_role, task_type), count in sorted(counts.items()):
+            writer.writerow([record_type, agent_role, task_type, count])
 
 
 def _write_dataset_index(path: Path, datasets: dict[str, list[dict[str, Any]]]) -> None:

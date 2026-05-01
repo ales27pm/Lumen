@@ -20,7 +20,6 @@ nonisolated enum UserIntent: String, Codable, Sendable, CaseIterable, Hashable {
     case trigger
     case alarm
     case outlook
-    case location
     case note
     case chat
     case unknown
@@ -43,7 +42,6 @@ nonisolated enum IntentRouter {
     private static let calendarToolIDs: Set<String> = ["calendar.create", "calendar.list"]
     private static let reminderToolIDs: Set<String> = ["reminders.create", "reminders.list"]
     private static let mapsToolIDs: Set<String> = ["maps.search", "maps.directions", "location.current"]
-    private static let locationToolIDs: Set<String> = ["location.current"]
     private static let photosToolIDs: Set<String> = ["photos.search"]
     private static let cameraToolIDs: Set<String> = ["camera.capture"]
     private static let healthToolIDs: Set<String> = ["health.summary"]
@@ -80,7 +78,7 @@ nonisolated enum IntentRouter {
         }
 
         if isCurrentLocationIntent(text) {
-            return IntentRoutingDecision(intent: .location, allowedToolIDs: locationToolIDs, requiresClarification: false, clarificationPrompt: nil)
+            return IntentRoutingDecision(intent: .maps, allowedToolIDs: ["location.current"], requiresClarification: false, clarificationPrompt: nil)
         }
 
         if matchesAny(text, ["alarm", "set an alarm", "set alarm", "countdown", "timer", "snooze", "pause alarm", "resume alarm", "stop alarm", "cancel alarm", "alarm authorization"]) {
@@ -190,7 +188,7 @@ nonisolated enum IntentRouter {
 
     static func intentRequiresTool(_ decision: IntentRoutingDecision) -> Bool {
         switch decision.intent {
-        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .outlook, .location, .note:
+        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .outlook, .note:
             return true
         case .chat, .unknown:
             return false
@@ -208,7 +206,6 @@ nonisolated enum IntentRouter {
         case .calendar: return "Calendar tools are unavailable in this build right now."
         case .reminder: return "Reminder tools are unavailable in this build right now."
         case .maps: return "Maps/location tools are unavailable in this build right now."
-        case .location: return "Location tools are unavailable in this build right now."
         case .photos: return "Photo tools are unavailable in this build right now."
         case .camera: return "Camera tools are unavailable in this build right now."
         case .health: return "Health tools are unavailable in this build right now."
@@ -234,7 +231,6 @@ nonisolated enum IntentRouter {
         case .calendar: return "That request is calendar-related. I can only use calendar tools for it."
         case .reminder: return "That request is reminder-related. I can only use reminder tools for it."
         case .maps: return "That request is map/location-related. I can only use maps/location tools for it."
-        case .location: return "That request is location-related. I can only use current-location tools for it."
         case .photos: return "That request is photo-library related. I can only use photo tools for it."
         case .camera: return "That request is camera-related. I can only use camera tools for it."
         case .health: return "That request is health-related. I can only use health tools for it."

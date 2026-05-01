@@ -118,7 +118,7 @@ def generate(
 
 
 def _manifest_hash(manifest: Any) -> str:
-    payload = json.dumps(manifest.output_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(manifest.output_dict(), ensure_ascii=False, sort_keys=False) + "\n"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

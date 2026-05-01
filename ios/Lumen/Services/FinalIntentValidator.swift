@@ -47,7 +47,7 @@ nonisolated enum FinalIntentValidator {
         case .reminder:
             return containsAny(lower, ["reminder", "todo", "to-do", "requires explicit user approval", "did not create"])
         case .maps:
-            return containsAny(lower, ["map", "maps", "direction", "route", "near", "nearby", "location", "place", "unavailable", "couldn’t", "couldn't"])
+            return containsAny(lower, ["map", "maps", "direction", "route", "near", "nearby", "location", "current location", "coordinates", "latitude", "longitude", "place", "unavailable", "couldn’t", "couldn't"])
         case .photos:
             return containsAny(lower, ["photo", "photos", "picture", "image", "library", "unavailable", "couldn’t", "couldn't"])
         case .camera:

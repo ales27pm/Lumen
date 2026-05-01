@@ -43,4 +43,35 @@ struct IntentRouterTests {
         #expect(!SlotAgentService.isActionAllowed("calendar.create", routing: routing))
         #expect(SlotAgentService.isActionAllowed("web.search", routing: routing))
     }
+
+    @Test func explicitChatGreetingRoutesToChatNoTools() async throws {
+        let decision = IntentRouter.classify("Hi. How are you")
+        #expect(decision.intent == .chat)
+        #expect(decision.allowedToolIDs.isEmpty)
+        #expect(!IntentRouter.intentRequiresTool(decision))
+    }
+
+    @Test func currentLocationPromptsRouteToMapsLocationOnly() async throws {
+        let first = IntentRouter.classify("Where are we")
+        #expect(first.intent == .maps)
+        #expect(first.allowedToolIDs == ["location.current"])
+        #expect(IntentRouter.intentRequiresTool(first))
+        let second = IntentRouter.classify("Where am I")
+        #expect(second.intent == .maps)
+        #expect(second.allowedToolIDs == ["location.current"])
+        #expect(IntentRouter.intentRequiresTool(second))
+    }
+
+    @Test func mailboxReadPromptsRouteToOutlook() async throws {
+        for prompt in ["Read new emails", "Check unread emails", "Read the latest email", "Check my unread outlook emails", "Search Outlook for invoices"] {
+            let decision = IntentRouter.classify(prompt)
+            #expect(decision.intent == .outlook)
+            #expect(IntentRouter.intentRequiresTool(decision))
+        }
+    }
+
+    @Test func emailDraftAndOutlookSendDifferentiation() async throws {
+        #expect(IntentRouter.classify("Draft an email to bob@example.com saying hello").intent == .emailDraft)
+        #expect(IntentRouter.classify("Send an Outlook email to bob@example.com saying hello").intent == .outlook)
+    }
 }

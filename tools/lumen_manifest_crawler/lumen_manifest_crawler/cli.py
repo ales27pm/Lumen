@@ -37,7 +37,7 @@ def generate(
     cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross_model_training.jsonl. Defaults to <output>/cross_model_training."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Generate into a temporary directory and print a machine-readable diff without changing output."),
     diff: bool = typer.Option(False, "--diff", help="Alias for --dry-run."),
-    incremental: bool = typer.Option(False, "--incremental", help="Skip generation when the current manifest hash matches the previous output and no runtime audit is provided."),
+    incremental: bool = typer.Option(False, "--incremental", help="Skip generation when the current manifest fingerprint matches the previous output and no runtime audit is provided."),
     strict: bool = typer.Option(False, "--strict", help="Promote selected validation warnings to hard failures."),
     fail_on_change: bool = typer.Option(False, "--fail-on-change", help="Exit non-zero if generated outputs leave tracked or untracked git changes."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
@@ -48,10 +48,10 @@ def generate(
     dry_run = dry_run or diff
 
     manifest = generate_manifest(root)
-    manifest_hash = _manifest_hash(manifest)
+    manifest_fingerprint = _manifest_fingerprint(manifest)
 
-    if incremental and not runtime_audit and not dry_run and _is_incremental_hit(output, manifest_hash):
-        console.print(f"[green]Incremental generation skipped; manifest hash unchanged for {output}[/green]")
+    if incremental and not runtime_audit and not dry_run and _is_incremental_hit(output, manifest_fingerprint):
+        console.print(f"[green]Incremental generation skipped; manifest fingerprint unchanged for {output}[/green]")
         return
 
     datasets = generate_all_datasets(manifest, runtime_audit_paths=runtime_audit, deterministic=deterministic)
@@ -76,6 +76,7 @@ def generate(
         fleet_artifacts=fleet_artifacts,
         manifest_markdown=manifest_markdown,
         cross_model_train_dir=target_cross_dir,
+        incremental_fingerprint=manifest_fingerprint,
     )
 
     if dry_run:
@@ -117,18 +118,27 @@ def generate(
     console.print(f"[green]Wrote manifest and dataset outputs to {output}[/green]")
 
 
-def _manifest_hash(manifest: Any) -> str:
-    payload = json.dumps(manifest.output_dict(), ensure_ascii=False, sort_keys=False) + "\n"
+def _manifest_fingerprint(manifest: Any) -> str:
+    payload = json.dumps(_canonicalize(manifest.output_dict()), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _is_incremental_hit(output: Path, manifest_hash: str) -> bool:
-    existing_hash_path = output / "AgentBehaviorManifest.sha256"
+def _canonicalize(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _canonicalize(child) for key, child in sorted(value.items())}
+    if isinstance(value, list):
+        canonical_items = [_canonicalize(item) for item in value]
+        return sorted(canonical_items, key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    return value
+
+
+def _is_incremental_hit(output: Path, manifest_fingerprint: str) -> bool:
+    existing_hash_path = output / "AgentBehaviorManifest.incremental.sha256"
     dataset_manifest_path = output / "dataset_manifest.json"
     if not existing_hash_path.exists() or not dataset_manifest_path.exists():
         return False
     existing = existing_hash_path.read_text(encoding="utf-8").strip()
-    return existing == manifest_hash
+    return existing == manifest_fingerprint
 
 
 def _diff_directories(existing_dir: Path, generated_dir: Path) -> dict[str, Any]:

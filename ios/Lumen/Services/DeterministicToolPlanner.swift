@@ -138,7 +138,7 @@ nonisolated enum DeterministicToolPlanner {
 
     static func extractDestination(from text: String) -> String? {
         let lower = normalized(text)
-        for marker in [" to ", " near ", " for "] {
+        for marker in [" to ", " near ", " for ", " in ", " at "] {
             if let r = lower.range(of: marker) { return String(text[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines) }
         }
         return nil

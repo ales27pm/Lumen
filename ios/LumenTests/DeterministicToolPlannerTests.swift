@@ -48,4 +48,11 @@ struct DeterministicToolPlannerTests {
         #expect(action?.tool == "outlook.message.move")
         #expect(action?.args["destination"]?.stringValue == "inbox")
     }
+    @Test func weatherInCityKeepsExplicitLocation() async throws {
+        let routing = IntentRoutingDecision(intent: .weather, allowedToolIDs: ["weather"], requiresClarification: false, clarificationPrompt: nil)
+        let action = DeterministicToolPlanner.plan(routing: routing, prompt: "weather in Montreal", availableToolIDs: ["weather"])
+        #expect(action?.tool == "weather")
+        #expect(action?.args["location"]?.stringValue == "Montreal")
+    }
+
 }

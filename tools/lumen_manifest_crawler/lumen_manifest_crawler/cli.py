@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +29,7 @@ def generate(
     generate_system_prompts: bool = typer.Option(False, "--generate-system-prompts", help="Generate fleet_system_prompts.json, AgentBehaviorManifest.md, and cross-model training artifacts."),
     export_md: bool = typer.Option(False, "--export-md", help="Generate AgentBehaviorManifest.md. Implies fleet artifact generation."),
     cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross_model_training.jsonl. Defaults to <output>/cross_model_training."),
+    fail_on_change: bool = typer.Option(False, "--fail-on-change", help="Exit non-zero if generated outputs leave tracked or untracked git changes."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
 ) -> None:
     """Generate AgentBehaviorManifest.json and state-of-the-art grounded datasets."""
@@ -65,7 +67,25 @@ def generate(
         console.print(f"[yellow]Warnings:[/yellow] {len(report.warnings)}")
         for warning in report.warnings[:20]:
             console.print(f"  [yellow]- {warning.code}:[/yellow] {warning.message}")
+    if fail_on_change and _has_git_changes(root):
+        console.print("[red]Generated outputs differ from the git working tree. Commit regenerated artifacts or rerun after reverting changes.[/red]")
+        raise typer.Exit(code=1)
     console.print(f"[green]Wrote manifest and dataset outputs to {output}[/green]")
+
+
+def _has_git_changes(root: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return bool(completed.stdout.strip())
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

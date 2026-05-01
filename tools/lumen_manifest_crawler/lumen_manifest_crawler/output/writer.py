@@ -23,7 +23,12 @@ def write_outputs(output_dir: Path, manifest: AgentBehaviorManifest, report: Val
     dataset_dir = output_dir / "dataset"
     dataset_dir.mkdir(parents=True, exist_ok=True)
     dataset_manifest_records = datasets.get("dataset_manifest", [])
-    if dataset_manifest_records:
+    if len(dataset_manifest_records) > 1:
+        raise ValueError(
+            f"Expected at most one dataset_manifest record while writing outputs to {output_dir}, "
+            f"but got {len(dataset_manifest_records)}. Multiple dataset manifests would make lineage ambiguous."
+        )
+    if len(dataset_manifest_records) == 1:
         (output_dir / "dataset_manifest.json").write_text(
             json.dumps(dataset_manifest_records[0], ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

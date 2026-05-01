@@ -56,8 +56,12 @@ final class SlotAgentService {
                         stepIndex: 0
                     )
                     switch result {
-                    case .continueLoop, .finalizeNow:
+                    case .continueLoop:
                         finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .finalizeNow(let draft):
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     case .blocked(let text):
@@ -340,8 +344,12 @@ final class SlotAgentService {
     }
 
     private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
+        let contextBlock = shortTermContextBlock(req.history)
         let prompt = """
         You are Lumen. Answer naturally and helpfully. Do not output JSON.
+
+        Recent safe conversation context for pronoun/reference resolution only:
+        \(contextBlock)
 
         User request:
         \(resolution.rewrittenPrompt)
@@ -688,9 +696,8 @@ final class SlotAgentService {
         }
         query = query.replacingOccurrences(of: "outlook", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "hotmail", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "email", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "emails", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "mail", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: #"(?i)\bemails?\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)\bmails?\b"#, with: "", options: .regularExpression)
         return query.trimmingCharacters(in: CharacterSet(charactersIn: "\"' .,!?"))
     }
 

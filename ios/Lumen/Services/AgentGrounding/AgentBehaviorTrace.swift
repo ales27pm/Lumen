@@ -33,6 +33,7 @@ nonisolated struct AgentBehaviorAuditReport: Codable, Sendable, Hashable {
     let sourceCommit: String?
     let violations: [AgentBehaviorViolation]
     let recommendations: [String]
+    let repairSamples: [AgentBehaviorRepairSample]
 }
 
 nonisolated struct AgentBehaviorViolation: Codable, Sendable, Identifiable, Hashable {
@@ -59,6 +60,19 @@ nonisolated struct AgentBehaviorViolation: Codable, Sendable, Identifiable, Hash
             }
         }
     }
+}
+
+nonisolated struct AgentBehaviorRepairSample: Codable, Sendable, Identifiable, Hashable {
+    let id: UUID
+    let createdAt: Date
+    let agent: String
+    let violationCode: String
+    let promptPrefix: String
+    let expected: String
+    let badOutput: String
+    let correctedOutput: String
+    let lesson: String
+    let curriculum: String
 }
 
 nonisolated enum AgentBehaviorTraceRecorder {
@@ -105,6 +119,17 @@ nonisolated enum AgentBehaviorTraceRecorder {
             return Array(traces.suffix(boundedLimit))
         } catch {
             return []
+        }
+    }
+
+    static func clear() {
+        do {
+            let url = try diagnosticsDirectory().appendingPathComponent(fileName, isDirectory: false)
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            // Diagnostics cleanup must never break app execution.
         }
     }
 

@@ -25,7 +25,7 @@ nonisolated enum FinalIntentValidator {
         guard !AssistantOutputSanitizer.isLeakedToolJSONArtifact(text) else { return false }
         guard !looksLikeCalendarLeak(lower, unless: routing.intent == .calendar) else { return false }
         guard !looksLikeWeatherLeak(lower, unless: routing.intent == .weather) else { return false }
-        guard !looksLikeEmailLeak(lower, unless: routing.intent == .emailDraft) else { return false }
+        guard !looksLikeEmailLeak(lower, unless: routing.intent == .emailDraft || routing.intent == .outlook) else { return false }
         guard !looksLikeWebSearchLeak(lower, unless: routing.intent == .webSearch) else { return false }
 
         switch routing.intent {
@@ -66,6 +66,12 @@ nonisolated enum FinalIntentValidator {
             return containsAny(lower, ["trigger", "scheduled", "agent", "background", "cancel", "unavailable", "couldn’t", "couldn't"])
         case .alarm:
             return containsAny(lower, ["alarm", "timer", "countdown", "snooze", "pause", "resume", "stop", "authorization", "unavailable", "couldn’t", "couldn't"])
+        case .outlook:
+            return containsAny(lower, [
+                "outlook", "hotmail", "microsoft", "graph", "email", "mail", "message", "inbox", "subject:", "from:", "received:",
+                "unread", "attachment", "draft", "sent", "reply", "forward", "archive", "deleted", "moved", "marked", "folder",
+                "requires explicit user approval", "not signed in", "sign in", "unavailable", "couldn’t", "couldn't", "failed"
+            ])
         case .note:
             return !looksLikeCalendarLeak(lower, unless: false) && !looksLikeWeatherLeak(lower, unless: false)
         case .chat, .unknown:
@@ -111,6 +117,8 @@ nonisolated enum FinalIntentValidator {
             return "I couldn’t safely complete the scheduled-agent request."
         case .alarm:
             return "I couldn’t safely complete the alarm/timer request."
+        case .outlook:
+            return routing.clarificationPrompt ?? "I couldn’t safely complete the Outlook/Hotmail mail request. Make sure Outlook is signed in, then try again."
         case .note:
             return "I couldn’t safely complete the note request."
         case .chat, .unknown:

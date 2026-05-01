@@ -230,7 +230,10 @@ final class MicrosoftGraphAuthManager {
         let config = try MicrosoftGraphConfiguration.load()
         let authority = try MSALAuthority(url: config.authorityURL)
         let appConfig = MSALPublicClientApplicationConfig(clientId: config.clientID, redirectUri: config.redirectURI, authority: authority)
-        appConfig.cacheConfig.keychainSharingGroup = config.keychainSharingGroup
+        if !config.keychainSharingGroup.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           config.keychainSharingGroup != "com.microsoft.adalcache" {
+            appConfig.cacheConfig.keychainSharingGroup = config.keychainSharingGroup
+        }
 
         configureMSALLoggingIfNeeded()
         return try MSALPublicClientApplication(configuration: appConfig)

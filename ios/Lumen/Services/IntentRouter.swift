@@ -20,6 +20,7 @@ nonisolated enum UserIntent: String, Codable, Sendable, CaseIterable, Hashable {
     case trigger
     case alarm
     case outlook
+    case location
     case note
     case chat
     case unknown
@@ -42,6 +43,7 @@ nonisolated enum IntentRouter {
     private static let calendarToolIDs: Set<String> = ["calendar.create", "calendar.list"]
     private static let reminderToolIDs: Set<String> = ["reminders.create", "reminders.list"]
     private static let mapsToolIDs: Set<String> = ["maps.search", "maps.directions", "location.current"]
+    private static let locationToolIDs: Set<String> = ["location.current"]
     private static let photosToolIDs: Set<String> = ["photos.search"]
     private static let cameraToolIDs: Set<String> = ["camera.capture"]
     private static let healthToolIDs: Set<String> = ["health.summary"]
@@ -69,8 +71,16 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
         }
 
+        if isPureConversationalGreeting(text) {
+            return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
+        }
+
         if isLikelyOutlookIntent(text) {
             return IntentRoutingDecision(intent: .outlook, allowedToolIDs: outlookToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if isCurrentLocationIntent(text) {
+            return IntentRoutingDecision(intent: .location, allowedToolIDs: locationToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
         if matchesAny(text, ["alarm", "set an alarm", "set alarm", "countdown", "timer", "snooze", "pause alarm", "resume alarm", "stop alarm", "cancel alarm", "alarm authorization"]) {
@@ -180,7 +190,7 @@ nonisolated enum IntentRouter {
 
     static func intentRequiresTool(_ decision: IntentRoutingDecision) -> Bool {
         switch decision.intent {
-        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .outlook, .note:
+        case .weather, .webSearch, .emailDraft, .messageDraft, .phoneCall, .contactSearch, .calendar, .reminder, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .trigger, .alarm, .outlook, .location, .note:
             return true
         case .chat, .unknown:
             return false
@@ -198,6 +208,7 @@ nonisolated enum IntentRouter {
         case .calendar: return "Calendar tools are unavailable in this build right now."
         case .reminder: return "Reminder tools are unavailable in this build right now."
         case .maps: return "Maps/location tools are unavailable in this build right now."
+        case .location: return "Location tools are unavailable in this build right now."
         case .photos: return "Photo tools are unavailable in this build right now."
         case .camera: return "Camera tools are unavailable in this build right now."
         case .health: return "Health tools are unavailable in this build right now."
@@ -223,6 +234,7 @@ nonisolated enum IntentRouter {
         case .calendar: return "That request is calendar-related. I can only use calendar tools for it."
         case .reminder: return "That request is reminder-related. I can only use reminder tools for it."
         case .maps: return "That request is map/location-related. I can only use maps/location tools for it."
+        case .location: return "That request is location-related. I can only use current-location tools for it."
         case .photos: return "That request is photo-library related. I can only use photo tools for it."
         case .camera: return "That request is camera-related. I can only use camera tools for it."
         case .health: return "That request is health-related. I can only use health tools for it."
@@ -245,15 +257,34 @@ nonisolated enum IntentRouter {
         patterns.contains { text.contains($0) }
     }
 
+    private static func isPureConversationalGreeting(_ text: String) -> Bool {
+        ["hi", "hello", "hey", "yo", "sup", "bonjour", "salut", "allo", "hi how are you", "hi. how are you", "how are you"].contains(text)
+    }
+
+    private static func isCurrentLocationIntent(_ text: String) -> Bool {
+        matchesAny(text, [
+            "where are we", "where am i", "where are you", "current location", "my location", "our location", "gps location", "what is my location", "what's my location", "where exactly am i"
+        ])
+    }
+
     private static func isLikelyOutlookIntent(_ text: String) -> Bool {
         let outlookMarkers = ["outlook", "hotmail", "live mail", "msn mail", "microsoft mail", "microsoft graph", "graph mail"]
         let mailActions = [
-            "inbox", "email", "emails", "mail", "message", "messages", "unread", "folders", "attachments",
-            "search", "find", "read", "open", "draft", "send", "reply", "reply all", "forward", "archive", "delete", "trash", "mark read", "mark unread", "move"
+            "inbox", "email", "emails", "mail", "message", "messages", "unread", "new", "latest", "recent", "folders", "attachments",
+            "search", "find", "read", "open", "check", "show", "list", "draft", "send", "reply", "reply all", "forward", "archive", "delete", "trash", "mark read", "mark unread", "move"
         ]
         if matchesAny(text, outlookMarkers) && matchesAny(text, mailActions) { return true }
-        if matchesAny(text, ["check my unread email", "check my unread emails", "check my inbox", "show my unread email", "show my unread emails", "read the latest email", "read latest email"]) { return true }
-        return false
+        let genericReadMailCommands = [
+            "read new emails", "read new email", "read unread emails", "read unread email", "read latest email", "read the latest email",
+            "read recent emails", "read recent email", "check new emails", "check new email", "check unread emails", "check unread email",
+            "check my unread email", "check my unread emails", "check my inbox", "show my unread email", "show my unread emails",
+            "show new emails", "show latest emails", "show recent emails", "list new emails", "list unread emails", "open latest email", "open the latest email"
+        ]
+        if matchesAny(text, genericReadMailCommands) { return true }
+        let hasReadVerb = matchesAny(text, ["read", "check", "show", "list", "open"])
+        let hasMailboxObject = matchesAny(text, ["email", "emails", "mail", "inbox"])
+        let hasNonComposeQualifier = matchesAny(text, ["new", "unread", "latest", "recent", "inbox"])
+        return hasReadVerb && hasMailboxObject && hasNonComposeQualifier
     }
 
     private static func isLikelyWebSearchIntent(_ text: String) -> Bool {

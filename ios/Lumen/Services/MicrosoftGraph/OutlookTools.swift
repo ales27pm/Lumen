@@ -25,6 +25,20 @@ nonisolated struct OutlookToolAttachmentPage: Codable, Sendable {
     let value: [OutlookToolAttachment]
 }
 
+nonisolated struct OutlookMessageReference: Codable, Hashable, Sendable {
+    let ordinal: Int
+    let id: String
+    let subject: String
+    let sender: String
+    let receivedDateTime: String?
+    let source: String
+    let cachedAt: Date
+
+    var displayLine: String {
+        "#\(ordinal) — \(subject) — from \(sender) — id: \(id)"
+    }
+}
+
 actor OutlookGraphToolClient {
     private let baseURL = URL(string: "https://graph.microsoft.com/v1.0")!
     private let session: URLSession
@@ -189,6 +203,8 @@ actor OutlookGraphToolClient {
 @MainActor
 enum OutlookTools {
     private static let client = OutlookGraphToolClient()
+    private static let recentMessageReferencesKey = "OutlookTools.recentMessageReferences.v1"
+    private static let recentMessageTTL: TimeInterval = 30 * 60
 
     static func status() async -> String {
         do {
@@ -198,7 +214,9 @@ enum OutlookTools {
                 return "Outlook is not signed in. Open Outlook in Lumen and sign in first."
             }
             let username = auth.account?.username ?? auth.account?.name ?? "Microsoft account"
-            return "Outlook signed in as \(username). Auth provider: \(auth.authProviderDescription)."
+            let cached = loadRecentReferences()
+            let contextLine = cached.isEmpty ? "No cached message context." : "Cached message context: \(cached.count) recent message(s)."
+            return "Outlook signed in as \(username). Auth provider: \(auth.authProviderDescription). \(contextLine)"
         } catch {
             return "Outlook status failed: \(error.localizedDescription)"
         }
@@ -222,6 +240,7 @@ enum OutlookTools {
                 unreadOnly: bool(args["unreadOnly"] ?? args["unread"]),
                 accessToken: token
             )
+            remember(messages: messages, source: "list")
             return formatMessages(messages, includeBody: false)
         }
     }
@@ -236,20 +255,22 @@ enum OutlookTools {
                 pageSize: int(args["limit"] ?? args["top"], defaultValue: 10),
                 accessToken: token
             )
+            remember(messages: messages, source: "search: \(query)")
             return formatMessages(messages, includeBody: false)
         }
     }
 
     static func readMessage(args: [String: String]) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: "read") }
         return await perform(scopes: MicrosoftGraphScope.inboxRead) { token in
             let message = try await client.readMessage(messageID: id, accessToken: token)
+            remember(message: message, source: "read")
             return formatMessage(message, includeBody: true)
         }
     }
 
     static func listAttachments(args: [String: String]) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: "list attachments for") }
         return await perform(scopes: MicrosoftGraphScope.inboxRead) { token in
             let attachments = try await client.listAttachments(messageID: id, accessToken: token)
             if attachments.isEmpty { return "No attachments found for message \(id)." }
@@ -267,6 +288,7 @@ enum OutlookTools {
         guard !subject.isEmpty || !body.isEmpty else { return "Missing Outlook draft subject/body." }
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             let draft = try await client.createDraft(subject: subject, body: body, recipients: recipients, accessToken: token)
+            remember(message: draft, source: "draft")
             return "Created Outlook draft: \(draft.subject ?? "(No subject)")\nMessage id: \(draft.id)"
         }
     }
@@ -284,54 +306,63 @@ enum OutlookTools {
     }
 
     static func markRead(args: [String: String], isRead: Bool) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: isRead ? "mark read" : "mark unread") }
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             let message = try await client.markRead(messageID: id, isRead: isRead, accessToken: token)
+            remember(message: message, source: isRead ? "mark_read" : "mark_unread")
             return "Marked Outlook message as \(isRead ? "read" : "unread"): \(message.subject ?? id)"
         }
     }
 
     static func moveMessage(args: [String: String]) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: "move") }
         let destination = args["destinationId"] ?? args["destination"] ?? args["folderId"] ?? args["folder"] ?? ""
         guard !destination.isEmpty else { return "Missing destination folder id/name. Use archive, deleteditems, junkemail, inbox, or a folder id." }
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             let moved = try await client.moveMessage(messageID: id, destinationID: canonicalFolderID(destination), accessToken: token)
+            remember(message: moved, source: "move: \(destination)")
             return "Moved Outlook message to \(destination). New message id: \(moved.id)"
         }
     }
 
     static func deleteMessage(args: [String: String]) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: "delete") }
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             try await client.deleteMessage(messageID: id, accessToken: token)
+            removeFromRecentReferences(messageID: id)
             return "Deleted Outlook message: \(id)"
         }
     }
 
     static func reply(args: [String: String], replyAll: Bool) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: replyAll ? "reply-all to" : "reply to") }
         let comment = args["body"] ?? args["comment"] ?? args["message"] ?? args["text"] ?? ""
         guard !comment.isEmpty else { return "Missing reply body/comment." }
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             if replyAll { try await client.replyAll(messageID: id, comment: comment, accessToken: token) }
             else { try await client.reply(messageID: id, comment: comment, accessToken: token) }
-            return replyAll ? "Sent Outlook reply-all." : "Sent Outlook reply."
+            return replyAll ? "Sent Outlook reply-all to cached message \(id)." : "Sent Outlook reply to cached message \(id)."
         }
     }
 
     static func forward(args: [String: String]) async -> String {
-        guard let id = messageID(from: args) else { return "Missing Outlook message id." }
+        guard let id = messageID(from: args) else { return missingMessageContextMessage(action: "forward") }
         let to = recipients(from: args)
         guard !to.isEmpty else { return "Missing forward recipient." }
         let comment = args["body"] ?? args["comment"] ?? args["message"] ?? args["text"] ?? ""
         return await perform(scopes: MicrosoftGraphScope.readWriteMail) { token in
             try await client.forward(messageID: id, comment: comment, recipients: to, accessToken: token)
-            return "Forwarded Outlook message to \(to.joined(separator: ", "))."
+            return "Forwarded Outlook message \(id) to \(to.joined(separator: ", "))."
         }
     }
 
-    private static func perform(scopes: [String], operation: @escaping @Sendable (String) async throws -> String) async -> String {
+    static func recentContextSummary() -> String {
+        let refs = loadRecentReferences()
+        if refs.isEmpty { return "No cached Outlook message context. List or search messages first." }
+        return refs.map(\.displayLine).joined(separator: "\n")
+    }
+
+    private static func perform(scopes: [String], operation: @escaping (String) async throws -> String) async -> String {
         do {
             let auth = MicrosoftGraphAuthManager()
             await auth.bootstrap()
@@ -347,11 +378,16 @@ enum OutlookTools {
 
     private static func formatMessages(_ messages: [GraphMailMessage], includeBody: Bool) -> String {
         if messages.isEmpty { return "No Outlook messages found." }
-        return messages.map { formatMessage($0, includeBody: includeBody) }.joined(separator: "\n\n---\n\n")
+        let contextHint = "Cached references: use ordinal args like {\"message\":\"first\"}, {\"message\":\"#2\"}, {\"message\":\"latest\"}, or the raw Message ID for follow-up tools."
+        return ([contextHint] + messages.enumerated().map { index, message in
+            formatMessage(message, includeBody: includeBody, ordinal: index + 1)
+        }).joined(separator: "\n\n---\n\n")
     }
 
-    private static func formatMessage(_ message: GraphMailMessage, includeBody: Bool) -> String {
-        var lines = [
+    private static func formatMessage(_ message: GraphMailMessage, includeBody: Bool, ordinal: Int? = nil) -> String {
+        var lines: [String] = []
+        if let ordinal { lines.append("Index: \(ordinal)") }
+        lines.append(contentsOf: [
             "Subject: \(message.subject?.isEmpty == false ? message.subject! : "(No subject)")",
             "ID: \(message.id)",
             "From: \(message.senderLine)",
@@ -359,11 +395,92 @@ enum OutlookTools {
             "Unread: \((message.isRead ?? true) ? "false" : "true")",
             "Has attachments: \(message.hasAttachments ?? false)",
             "Preview: \(message.previewLine)"
-        ]
+        ])
         if includeBody, let body = message.body?.content, !body.isEmpty {
             lines.append("Body:\n\(body)")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private static func remember(messages: [GraphMailMessage], source: String) {
+        let refs = messages.prefix(50).enumerated().map { index, message in
+            OutlookMessageReference(
+                ordinal: index + 1,
+                id: message.id,
+                subject: message.subject?.isEmpty == false ? message.subject! : "(No subject)",
+                sender: message.senderLine,
+                receivedDateTime: message.receivedDateTime,
+                source: source,
+                cachedAt: Date()
+            )
+        }
+        saveRecentReferences(Array(refs))
+    }
+
+    private static func remember(message: GraphMailMessage, source: String) {
+        let current = loadRecentReferences().filter { $0.id != message.id }
+        let newRef = OutlookMessageReference(
+            ordinal: 1,
+            id: message.id,
+            subject: message.subject?.isEmpty == false ? message.subject! : "(No subject)",
+            sender: message.senderLine,
+            receivedDateTime: message.receivedDateTime,
+            source: source,
+            cachedAt: Date()
+        )
+        let merged = ([newRef] + current).prefix(50).enumerated().map { index, ref in
+            OutlookMessageReference(
+                ordinal: index + 1,
+                id: ref.id,
+                subject: ref.subject,
+                sender: ref.sender,
+                receivedDateTime: ref.receivedDateTime,
+                source: ref.source,
+                cachedAt: ref.cachedAt
+            )
+        }
+        saveRecentReferences(Array(merged))
+    }
+
+    private static func removeFromRecentReferences(messageID: String) {
+        let remaining = loadRecentReferences().filter { $0.id != messageID }.enumerated().map { index, ref in
+            OutlookMessageReference(
+                ordinal: index + 1,
+                id: ref.id,
+                subject: ref.subject,
+                sender: ref.sender,
+                receivedDateTime: ref.receivedDateTime,
+                source: ref.source,
+                cachedAt: ref.cachedAt
+            )
+        }
+        saveRecentReferences(remaining)
+    }
+
+    private static func loadRecentReferences() -> [OutlookMessageReference] {
+        guard let data = UserDefaults.standard.data(forKey: recentMessageReferencesKey),
+              let refs = try? JSONDecoder().decode([OutlookMessageReference].self, from: data) else { return [] }
+        let cutoff = Date().addingTimeInterval(-recentMessageTTL)
+        let fresh = refs.filter { $0.cachedAt >= cutoff }
+        if fresh.count != refs.count { saveRecentReferences(fresh) }
+        return fresh
+    }
+
+    private static func saveRecentReferences(_ refs: [OutlookMessageReference]) {
+        let normalized = refs.prefix(50).enumerated().map { index, ref in
+            OutlookMessageReference(
+                ordinal: index + 1,
+                id: ref.id,
+                subject: ref.subject,
+                sender: ref.sender,
+                receivedDateTime: ref.receivedDateTime,
+                source: ref.source,
+                cachedAt: ref.cachedAt
+            )
+        }
+        if let data = try? JSONEncoder().encode(Array(normalized)) {
+            UserDefaults.standard.set(data, forKey: recentMessageReferencesKey)
+        }
     }
 
     private static func recipients(from args: [String: String]) -> [String] {
@@ -374,9 +491,62 @@ enum OutlookTools {
     }
 
     private static func messageID(from args: [String: String]) -> String? {
-        let value = args["messageId"] ?? args["messageID"] ?? args["id"] ?? args["message"]
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed?.isEmpty == false ? trimmed : nil
+        let raw = args["messageId"] ?? args["messageID"] ?? args["id"] ?? args["message"] ?? args["reference"] ?? args["ordinal"]
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let resolved = resolveCachedMessageID(trimmed) { return resolved }
+
+        let lowered = trimmed.lowercased()
+        let contextWords: Set<String> = [
+            "this", "that", "it", "latest", "last", "newest", "recent", "first", "second", "third", "fourth", "fifth",
+            "selected", "current", "previous", "prior", "top", "#1", "#2", "#3", "#4", "#5"
+        ]
+        if contextWords.contains(lowered) { return nil }
+        return trimmed
+    }
+
+    private static func resolveCachedMessageID(_ reference: String) -> String? {
+        let refs = loadRecentReferences()
+        guard !refs.isEmpty else { return nil }
+        let normalized = reference.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .replacingOccurrences(of: "message", with: "")
+            .replacingOccurrences(of: "email", with: "")
+            .replacingOccurrences(of: "mail", with: "")
+            .replacingOccurrences(of: "number", with: "")
+            .replacingOccurrences(of: "no.", with: "")
+            .replacingOccurrences(of: "#", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if ["this", "that", "it", "selected", "current", "latest", "newest", "recent", "top", "first", "1", "one"].contains(normalized) {
+            return refs.first?.id
+        }
+        if ["last", "oldest"].contains(normalized) { return refs.last?.id }
+
+        let wordsToIndex: [String: Int] = [
+            "second": 2, "two": 2,
+            "third": 3, "three": 3,
+            "fourth": 4, "four": 4,
+            "fifth": 5, "five": 5,
+            "sixth": 6, "six": 6,
+            "seventh": 7, "seven": 7,
+            "eighth": 8, "eight": 8,
+            "ninth": 9, "nine": 9,
+            "tenth": 10, "ten": 10
+        ]
+        if let index = wordsToIndex[normalized], refs.indices.contains(index - 1) { return refs[index - 1].id }
+        if let index = Int(normalized), refs.indices.contains(index - 1) { return refs[index - 1].id }
+        if let exact = refs.first(where: { $0.id == reference }) { return exact.id }
+        return nil
+    }
+
+    private static func missingMessageContextMessage(action: String) -> String {
+        let refs = loadRecentReferences()
+        guard !refs.isEmpty else {
+            return "Missing Outlook message context. Ask me to list or search Outlook messages first, then say which one to \(action)."
+        }
+        return "Which Outlook message should I \(action)? Available cached messages:\n\(refs.prefix(10).map(\.displayLine).joined(separator: "\n"))"
     }
 
     private static func folderID(from args: [String: String]) -> String? {

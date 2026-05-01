@@ -105,8 +105,42 @@ final class ToolExecutor {
             return await AlarmTools.snooze(id: stringArguments["id"] ?? "")
         case "alarm.cancel":
             return await AlarmTools.cancel(id: stringArguments["id"] ?? stringArguments["title"] ?? "")
+        case "outlook.status":
+            return await OutlookTools.status()
+        case "outlook.folders.list":
+            return await OutlookTools.listFolders(args: stringArguments)
+        case "outlook.messages.list":
+            return await OutlookTools.listMessages(args: stringArguments)
+        case "outlook.messages.search":
+            return await OutlookTools.searchMessages(args: stringArguments)
+        case "outlook.message.read":
+            return await OutlookTools.readMessage(args: stringArguments)
+        case "outlook.attachments.list":
+            return await OutlookTools.listAttachments(args: stringArguments)
+        case "outlook.draft.create":
+            return await OutlookTools.createDraft(args: stringArguments)
+        case "outlook.mail.send":
+            return await OutlookTools.sendMail(args: stringArguments)
+        case "outlook.message.mark_read":
+            return await OutlookTools.markRead(args: stringArguments, isRead: true)
+        case "outlook.message.mark_unread":
+            return await OutlookTools.markRead(args: stringArguments, isRead: false)
+        case "outlook.message.move":
+            return await OutlookTools.moveMessage(args: stringArguments)
+        case "outlook.message.archive":
+            var args = stringArguments
+            args["destination"] = "archive"
+            return await OutlookTools.moveMessage(args: args)
+        case "outlook.message.delete":
+            return await OutlookTools.deleteMessage(args: stringArguments)
+        case "outlook.message.reply":
+            return await OutlookTools.reply(args: stringArguments, replyAll: false)
+        case "outlook.message.reply_all":
+            return await OutlookTools.reply(args: stringArguments, replyAll: true)
+        case "outlook.message.forward":
+            return await OutlookTools.forward(args: stringArguments)
         default:
-            return "Unknown tool: \(toolID). Available weather/search/map tools are: weather, web.search, maps.search, maps.directions, location.current."
+            return "Unknown tool: \(toolID). Available tools include weather, web.search, maps.search, maps.directions, location.current, outlook.messages.list, outlook.messages.search, outlook.message.read, outlook.draft.create, outlook.mail.send, outlook.message.reply, outlook.message.forward, outlook.message.archive."
         }
     }
 
@@ -156,6 +190,38 @@ nonisolated enum ToolRouteGuard {
             return "phone.call"
         case "contacts", "contacts.search", "contact.search", "search.contacts":
             return "contacts.search"
+        case "outlook", "outlook.status", "microsoft.outlook.status", "hotmail.status", "graph.status":
+            return "outlook.status"
+        case "outlook.folders", "outlook.folder.list", "outlook.folders.list", "hotmail.folders", "mail.folders.list":
+            return "outlook.folders.list"
+        case "outlook.messages", "outlook.inbox", "outlook.mail.list", "outlook.messages.list", "hotmail.inbox", "hotmail.messages", "graph.mail.list":
+            return "outlook.messages.list"
+        case "outlook.search", "outlook.messages.search", "outlook.mail.search", "hotmail.search", "search.outlook", "search.email", "email.search":
+            return "outlook.messages.search"
+        case "outlook.read", "outlook.message.read", "outlook.mail.read", "read.outlook", "read.email":
+            return "outlook.message.read"
+        case "outlook.attachments", "outlook.attachments.list", "outlook.message.attachments", "email.attachments":
+            return "outlook.attachments.list"
+        case "outlook.draft", "outlook.draft.create", "outlook.create.draft", "outlook.mail.draft", "hotmail.draft":
+            return "outlook.draft.create"
+        case "outlook.send", "outlook.mail.send", "hotmail.send", "send.outlook", "send.email.graph":
+            return "outlook.mail.send"
+        case "outlook.mark.read", "outlook.message.mark.read", "outlook.message.mark_read", "email.mark.read":
+            return "outlook.message.mark_read"
+        case "outlook.mark.unread", "outlook.message.mark.unread", "outlook.message.mark_unread", "email.mark.unread":
+            return "outlook.message.mark_unread"
+        case "outlook.move", "outlook.message.move", "email.move":
+            return "outlook.message.move"
+        case "outlook.archive", "outlook.message.archive", "email.archive":
+            return "outlook.message.archive"
+        case "outlook.delete", "outlook.message.delete", "email.delete":
+            return "outlook.message.delete"
+        case "outlook.reply", "outlook.message.reply", "email.reply":
+            return "outlook.message.reply"
+        case "outlook.reply.all", "outlook.replyall", "outlook.message.reply.all", "outlook.message.reply_all", "email.reply.all":
+            return "outlook.message.reply_all"
+        case "outlook.forward", "outlook.message.forward", "email.forward":
+            return "outlook.message.forward"
         default:
             return id
         }
@@ -192,6 +258,21 @@ nonisolated enum ToolRouteGuard {
         case "web.fetch":
             if out["url"] == nil {
                 out["url"] = arguments["uri"] ?? arguments["link"] ?? arguments["query"]
+            }
+        case "outlook.messages.search":
+            if out["query"] == nil {
+                out["query"] = arguments["q"] ?? arguments["term"] ?? arguments["search"] ?? arguments["subject"] ?? arguments["from"]
+            }
+        case "outlook.message.read", "outlook.attachments.list", "outlook.message.mark_read", "outlook.message.mark_unread", "outlook.message.move", "outlook.message.archive", "outlook.message.delete", "outlook.message.reply", "outlook.message.reply_all", "outlook.message.forward":
+            if out["messageId"] == nil {
+                out["messageId"] = arguments["id"] ?? arguments["messageID"] ?? arguments["message"]
+            }
+        case "outlook.draft.create", "outlook.mail.send", "outlook.message.forward":
+            if out["to"] == nil {
+                out["to"] = arguments["recipient"] ?? arguments["recipients"] ?? arguments["email"]
+            }
+            if out["body"] == nil {
+                out["body"] = arguments["message"] ?? arguments["text"] ?? arguments["content"] ?? arguments["comment"]
             }
         default:
             break

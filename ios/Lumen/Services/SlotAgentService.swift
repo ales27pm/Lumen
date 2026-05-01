@@ -339,12 +339,11 @@ final class SlotAgentService {
         availableToolIDs: Set<String>
     ) -> AgentAction? {
         guard routing.intent == .maps else { return nil }
-        let text = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let followUps = ["show me on map", "show it on map", "open it in maps", "open on map", "show this location on map", "navigate there", "directions there", "take me there", "show it"]
-        guard followUps.contains(where: { text.contains($0) }) else { return nil }
+        guard IntentRouter.isMapFollowUpPrompt(prompt) else { return nil }
 
+        let canonicalLocationToolID = ToolRouteGuard.canonicalToolID("location.current")
         let recentEntries = ToolLedger.shared.shortTermEntries(conversationID: conversationID).reversed()
-        guard let entry = recentEntries.first(where: { $0.toolID == "location.current" }) else { return nil }
+        guard let entry = recentEntries.first(where: { ToolRouteGuard.canonicalToolID($0.toolID) == canonicalLocationToolID }) else { return nil }
         guard let coords = LocationReferenceExtractor.coordinates(from: entry.result) else { return nil }
         let coordinateString = String(format: "%.4f,%.4f", coords.latitude, coords.longitude)
 

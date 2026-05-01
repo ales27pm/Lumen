@@ -15,6 +15,8 @@ public struct AgentGroundingAuditView: View {
     @State private var errorMessage: String?
     @State private var manifestSource: String?
     @State private var usedRuntimeFallback = false
+    @State private var lastExportURL: URL?
+    @State private var lastExportPackage: LumenInAppDatasetPackage?
 
     public init(registryProvider: RuntimeToolRegistryProviding) {
         self.auditor = RuntimeManifestAuditor(registryProvider: registryProvider)
@@ -26,13 +28,35 @@ public struct AgentGroundingAuditView: View {
                 Button("Run Agent Grounding Audit") {
                     runAudit()
                 }
+                Button("Export In-App Dataset Package") {
+                    exportDatasetPackage()
+                }
+                .disabled(report == nil && behaviorReport == nil && scenarioResults.isEmpty)
             } footer: {
-                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. The model-behaviour layer checks actual persisted agent steps against expected manifest routing, schemas, approval boundaries, and sentinel rules.")
+                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes a bounded JSON package for the offline dataset compiler: audit failures, behavior violations, static scenarios, and truncated diagnostic traces only.")
             }
 
             if let errorMessage {
                 Section("Error") {
                     Text(errorMessage).foregroundStyle(.red)
+                }
+            }
+
+            if let lastExportURL {
+                Section("Dataset Export") {
+                    LabeledContent("File", value: lastExportURL.lastPathComponent)
+                        .font(.caption)
+                    if let lastExportPackage {
+                        LabeledContent("Traces", value: "\(lastExportPackage.recentTraces.count)")
+                        LabeledContent("Runtime failures", value: "\(lastExportPackage.runtimeManifestAudit?.failures.count ?? 0)")
+                        LabeledContent("Behavior violations", value: "\(lastExportPackage.behaviorAudit?.violations.count ?? 0)")
+                    }
+                    ShareLink(item: lastExportURL) {
+                        Label("Share Dataset JSON", systemImage: "square.and.arrow.up")
+                    }
+                    Text("Feed this JSON into `python -m lumen_manifest_crawler generate --runtime-audit <file>`.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -181,6 +205,24 @@ public struct AgentGroundingAuditView: View {
                 usedRuntimeFallback = loadResult.usedRuntimeFallback
                 errorMessage = nil
             }
+        }
+    }
+
+    private func exportDatasetPackage() {
+        do {
+            let result = try InAppDatasetPackageExporter.writePackage(
+                manifestSource: manifestSource ?? "unknown",
+                usedRuntimeFallback: usedRuntimeFallback,
+                runtimeManifestAudit: report,
+                behaviorAudit: behaviorReport,
+                scenarioResults: scenarioResults,
+                traceLimit: 200
+            )
+            lastExportURL = result.url
+            lastExportPackage = result.package
+            errorMessage = nil
+        } catch {
+            errorMessage = "Dataset export failed: \(error.localizedDescription)"
         }
     }
 

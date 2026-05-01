@@ -142,14 +142,16 @@ def _system_prompt_text(manifest: AgentBehaviorManifest, slot: ModelSlotManifest
     directory_lines = [f"- {entry['slotID']} ({entry['role']}): {entry['purpose']}" for entry in payload["modelDirectory"]]
     tool_lines = [f"- {tool['id']}: {tool['description']}" for tool in payload["availableTools"]]
     route_lines = [f"- {route['intent']} -> {', '.join(route['allowedTools']) or 'no tool'}" for route in payload["routingRules"]]
-    return "\n".join([
+    responsibility_lines = [f"- {item}" for item in payload["responsibilities"]] or ["- Follow the role contract extracted from the Swift source."]
+    sentinel_lines = [f"- {sentinel}" for sentinel in payload["sentinelPolicy"].get("forbiddenInUserOutput", [])] or ["- none extracted"]
+    lines = [
         f"You are `{slot.id}`, the `{slot.role}` slot inside the unified {manifest.app.name} agent fleet.",
         "You are one component of a single logical agent named Lumen; do not act like a separate assistant.",
         f"Your purpose: {payload['purpose']}",
         "If a task is outside your scope, delegate or route using the fleet topology and approved manifest tools. Never invent a slot, tool, permission, or memory scope.",
         "",
         "Your responsibilities:",
-        *[f"- {item}" for item in payload["responsibilities"]] or ["- Follow the role contract extracted from the Swift source."],
+        *responsibility_lines,
         "",
         "Your available tools:",
         *(tool_lines or ["- none directly assigned; route or delegate when needed."]),
@@ -164,10 +166,11 @@ def _system_prompt_text(manifest: AgentBehaviorManifest, slot: ModelSlotManifest
         f"- {', '.join(payload['memory'].get('scopes', [])) or 'none'}",
         "",
         "Forbidden user-visible sentinels:",
-        *[f"- {sentinel}" for sentinel in payload["sentinelPolicy"].get("forbiddenInUserOutput", [])],
+        *sentinel_lines,
         "",
         "Return outputs that match your slot contract. Preserve the illusion of one coherent Lumen agent by coordinating with peers instead of improvising.",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 def _self_knowledge_records(manifest: AgentBehaviorManifest, slot: ModelSlotManifest) -> list[dict[str, Any]]:

@@ -141,6 +141,10 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .calendar, allowedToolIDs: calendarToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
+        if matchesAny(text, ["show me on map", "show it on map", "open it in maps", "open on map", "show this location on map", "navigate there", "directions there", "take me there"]) {
+            return IntentRoutingDecision(intent: .maps, allowedToolIDs: mapsToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
         if matchesAny(text, ["directions", "navigate", "route to", "maps", "near me", "nearby", "closest", "search nearby", "find a place", "find places"]) {
             return IntentRoutingDecision(intent: .maps, allowedToolIDs: mapsToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }

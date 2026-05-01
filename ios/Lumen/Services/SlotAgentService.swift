@@ -44,6 +44,37 @@ final class SlotAgentService {
                 }
 
                 let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                if let mapFollowUp = deterministicMapFollowUpAction(
+                    routing: routing,
+                    prompt: executionPrompt,
+                    conversationID: req.conversationID,
+                    availableToolIDs: availableToolIDs
+                ) {
+                    let result = await executeAction(
+                        mapFollowUp,
+                        req: req,
+                        routing: routing,
+                        steps: &steps,
+                        observations: &observations,
+                        executedActionFingerprints: &executedActionFingerprints,
+                        continuation: continuation,
+                        stepIndex: 0
+                    )
+                    switch result {
+                    case .continueLoop:
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .finalizeNow(let draft):
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .blocked(let text):
+                        yieldFinal(text, steps: steps, continuation: continuation)
+                        return
+                    }
+                }
+
                 if let deterministic = DeterministicToolPlanner.plan(routing: routing, prompt: executionPrompt, availableToolIDs: availableToolIDs) {
                     let result = await executeAction(
                         deterministic,
@@ -299,6 +330,32 @@ final class SlotAgentService {
     
 
     
+
+
+    private func deterministicMapFollowUpAction(
+        routing: IntentRoutingDecision,
+        prompt: String,
+        conversationID: UUID?,
+        availableToolIDs: Set<String>
+    ) -> AgentAction? {
+        guard routing.intent == .maps else { return nil }
+        let text = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let followUps = ["show me on map", "show it on map", "open it in maps", "open on map", "show this location on map", "navigate there", "directions there", "take me there", "show it"]
+        guard followUps.contains(where: { text.contains($0) }) else { return nil }
+
+        let recentEntries = ToolLedger.shared.shortTermEntries(conversationID: conversationID).reversed()
+        guard let entry = recentEntries.first(where: { $0.toolID == "location.current" }) else { return nil }
+        guard let coords = LocationReferenceExtractor.coordinates(from: entry.result) else { return nil }
+        let coordinateString = String(format: "%.4f,%.4f", coords.latitude, coords.longitude)
+
+        if availableToolIDs.contains("maps.directions") {
+            return AgentAction(tool: "maps.directions", args: ["destination": .string(coordinateString)])
+        }
+        if availableToolIDs.contains("maps.search") {
+            return AgentAction(tool: "maps.search", args: ["query": .string(coordinateString)])
+        }
+        return nil
+    }
 
     private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
         switch (routing.intent, toolID) {

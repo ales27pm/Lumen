@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Iterable
 from typing import Any
@@ -77,7 +78,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
             _validate_compiled_record_shape(name, index, record, failures, warnings, compiled_ids)
-            if name in {"mouth_responses", "mimicry_style", "train_sft", "validation_sft", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs"}:
+            if name in {"mouth_responses", "mimicry_style", "train_sft", "validation_sft", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
                 for sentinel in forbidden:
                     if sentinel and _record_model_visible_text_contains(record, sentinel):
                         failures.append(ValidationFailure(code="sentinel_leak", message=f"Sentinel {sentinel} leaked in {name}[{index}]", path=f"dataset.{name}.{index}"))
@@ -89,7 +90,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
                     covered_required_tools.add(tool_id)
                     if tool_id in approval_tools:
                         covered_approval_tools.add(tool_id)
-            if name in {"train_sft", "validation_sft", "tool_schema_cards", "runtime_audit_repairs"}:
+            if name in {"train_sft", "validation_sft", "tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
                 for tool_id in _extract_declared_tool_ids(record):
                     if tool_id not in known_tools and not _looks_like_intentionally_invalid_tool(tool_id):
                         failures.append(ValidationFailure(code="unknown_compiled_tool", message=f"Compiled dataset references unknown tool {tool_id}", path=f"dataset.{name}.{index}"))
@@ -108,7 +109,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
 def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], warnings: list[ValidationWarning], seen_ids: set[str]) -> None:
     if name == "dataset_manifest":
         return
-    if name in {"train_sft", "validation_sft", "eval_scenarios", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs"}:
+    if name in {"train_sft", "validation_sft", "eval_scenarios", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
         record_id = record.get("id")
         if not isinstance(record_id, str) or not record_id:
             failures.append(ValidationFailure(code="compiled_record_missing_id", message=f"{name}[{index}] has no stable id", path=f"dataset.{name}.{index}"))
@@ -116,6 +117,7 @@ def _validate_compiled_record_shape(name: str, index: int, record: dict, failure
             failures.append(ValidationFailure(code="duplicate_compiled_record_id", message=f"Duplicate compiled dataset id {record_id}", path=f"dataset.{name}.{index}"))
         else:
             seen_ids.add(record_id)
+    if name in {"train_sft", "validation_sft", "eval_scenarios", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs"}:
         messages = record.get("messages")
         if not isinstance(messages, list) or not messages:
             failures.append(ValidationFailure(code="compiled_record_missing_messages", message=f"{name}[{index}] has no messages array", path=f"dataset.{name}.{index}"))
@@ -205,4 +207,7 @@ def _extract_declared_tool_ids(record: dict) -> set[str]:
 
 def _looks_like_intentionally_invalid_tool(tool_id: str) -> bool:
     lowered = tool_id.lower()
-    return lowered.endswith(("fake", "invalid", "run", "2")) or "invalid" in lowered
+    if lowered.endswith(("fake", "invalid")):
+        return True
+    tokens = [token for token in re.split(r"[^a-z0-9]+", lowered) if token]
+    return "invalid" in tokens

@@ -78,7 +78,17 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
                 "problem": "A recorded in-app model trace contained a parse error.",
                 "sourceLayer": "agentBehaviorTraceRecorder",
             })
-        if selected_tool_id and allowed_tool_ids and selected_tool_id not in allowed_tool_ids:
+        if selected_tool_id and not allowed_tool_ids:
+            failures.append({
+                "type": "trace_tool_without_allowed_set",
+                "agent": trace.get("slot") or "cortex",
+                "expected": ["non-empty allowedToolIDs for tool-selection traces"],
+                "actual": selected_tool_id,
+                "scenario": trace.get("promptPrefix"),
+                "problem": "A recorded in-app trace selected a tool while the trace carried no allowed tool set for validation.",
+                "sourceLayer": "agentBehaviorTraceRecorder",
+            })
+        elif selected_tool_id and selected_tool_id not in allowed_tool_ids:
             failures.append({
                 "type": "trace_tool_outside_allowed_set",
                 "agent": trace.get("slot") or "cortex",

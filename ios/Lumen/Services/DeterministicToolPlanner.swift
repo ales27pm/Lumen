@@ -7,9 +7,9 @@ nonisolated enum DeterministicToolPlanner {
         let text = normalized(prompt)
         switch canonical {
         case "camera.capture":
-            return AgentAction(tool: canonical)
+            return AgentAction(tool: canonical, args: [:])
         case "location.current":
-            return AgentAction(tool: canonical)
+            return AgentAction(tool: canonical, args: [:])
         case "maps.search":
             let query = extractNearbySearchQuery(from: prompt) ?? extractDestination(from: prompt) ?? ""
             return AgentAction(tool: canonical, args: ["query": .string(query)])
@@ -17,7 +17,7 @@ nonisolated enum DeterministicToolPlanner {
             guard let destination = extractDestination(from: prompt), !destination.isEmpty else { return nil }
             return AgentAction(tool: canonical, args: ["destination": .string(destination)])
         case "outlook.status":
-            return AgentAction(tool: canonical)
+            return AgentAction(tool: canonical, args: [:])
         case "outlook.messages.list":
             var args: AgentJSONArguments = ["limit": .string("10")]
             if text.contains("unread") { args["unreadOnly"] = .string("true") }
@@ -25,7 +25,7 @@ nonisolated enum DeterministicToolPlanner {
         case "outlook.message.read":
             return AgentAction(tool: canonical, args: ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
         default:
-            return AgentAction(tool: canonical)
+            return AgentAction(tool: canonical, args: [:])
         }
     }
 

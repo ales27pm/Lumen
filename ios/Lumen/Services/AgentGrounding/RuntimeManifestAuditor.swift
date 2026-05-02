@@ -54,16 +54,12 @@ public final class RuntimeManifestAuditor {
             // Fall through to bundled manifest, then runtime fallback.
         }
 
-        do {
-            if let seeded = try? loadBundledManifest(resourceName: resourceName, bundle: bundle) {
-                return RuntimeManifestLoadResult(
-                    manifest: seeded,
-                    source: "bundled:\(AgentManifestStore.bundledRelativeDirectory)/\(resourceName).json",
-                    usedRuntimeFallback: false
-                )
-            }
-        } catch {
-            // Fall through to direct bundle read, then runtime fallback.
+        if let seeded = try? loadBundledManifest(resourceName: resourceName, bundle: bundle) {
+            return RuntimeManifestLoadResult(
+                manifest: seeded,
+                source: "bundled:\(AgentManifestStore.bundledRelativeDirectory)/\(resourceName).json",
+                usedRuntimeFallback: false
+            )
         }
 
         do {

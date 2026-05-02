@@ -83,6 +83,32 @@ Question: should I send this today?
 """
 
 
+JSON_E2E_REPORT = {
+    "kind": "lumen_e2e_test_report",
+    "passed": 0,
+    "failed": 2,
+    "scenarios": [
+        {
+            "name": "web lookup grounding",
+            "passed": False,
+            "prompt": "Look up the latest release notes and summarize them.",
+            "intent": "webLookup",
+            "expectedIntent": "webLookup",
+            "failures": "Required final hint missing: source",
+            "final": "I found the release notes.",
+        },
+        {
+            "name": "missing intent fallback",
+            "passed": False,
+            "prompt": "Search the web and give me a grounded summary.",
+            "expectedIntent": "webLookup",
+            "failures": "Required final hint missing: source",
+            "final": "Summary complete.",
+        },
+    ],
+}
+
+
 def test_load_runtime_audit_reports_ingests_text_e2e_report(tmp_path: Path):
     report_path = tmp_path / "e2e-report.txt"
     report_path.write_text(E2E_REPORT, encoding="utf-8")
@@ -167,3 +193,35 @@ def test_final_multiline_field_preserves_generic_capitalized_body_lines(tmp_path
     assert "Summary: progress is moving forward." in actual
     assert "Question: should I send this today?" in actual
     assert failure["repairSample"]["badOutput"] == actual
+
+
+def test_web_lookup_intent_routes_to_mouth_tool_boundary_curriculum(tmp_path: Path):
+    report_path = tmp_path / "web-lookup-report.json"
+    import json
+
+    report_path.write_text(json.dumps(JSON_E2E_REPORT), encoding="utf-8")
+
+    failures = load_runtime_audit_reports([report_path])[0]["failures"]
+    web_lookup = failures[0]
+
+    assert web_lookup["e2eScenario"]["intent"] == "webLookup"
+    assert web_lookup["agent"] == "mouth"
+    assert web_lookup["repairSample"]["agent"] == "mouth"
+    assert web_lookup["repairSample"]["curriculum"] == "tool_boundary_response_quality"
+    assert web_lookup["type"] == web_lookup["repairSample"]["violationCode"]
+
+
+def test_expected_intent_is_used_when_intent_is_missing(tmp_path: Path):
+    report_path = tmp_path / "missing-intent-report.json"
+    import json
+
+    report_path.write_text(json.dumps(JSON_E2E_REPORT), encoding="utf-8")
+
+    failures = load_runtime_audit_reports([report_path])[0]["failures"]
+    missing_intent = failures[1]
+
+    assert missing_intent["e2eScenario"]["intent"] == "webLookup"
+    assert missing_intent["e2eScenario"]["expectedIntent"] == "webLookup"
+    assert missing_intent["agent"] == "mouth"
+    assert missing_intent["repairSample"]["curriculum"] == "tool_boundary_response_quality"
+    assert "unknown" not in missing_intent["type"]

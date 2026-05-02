@@ -22,6 +22,8 @@ REQUIRED_CONFIG_KEYS = {
     "output_dir",
     "dataset_dir",
 }
+AGENTS = {"cortex", "executor", "mouth", "mimicry", "rem", "fleet"}
+FINETUNE_MARKERS = {"sft", "dpo", "orpo", "lora", "merged", "adapter", "finetune", "finetuned"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,7 +37,34 @@ def load_config(path: Path) -> dict[str, Any]:
     missing = [key for key in sorted(REQUIRED_CONFIG_KEYS) if key not in cfg]
     if missing:
         raise ValueError(f"Config is missing required keys: {', '.join(missing)}")
+    validate_artifact_path_config(cfg)
     return cfg
+
+
+def _tokenize_path(value: str) -> set[str]:
+    return set("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
+def validate_artifact_path_config(cfg: dict[str, Any]) -> None:
+    agent = str(cfg.get("agent", "")).strip().lower()
+    if agent not in AGENTS:
+        raise ValueError(f"Config has unsupported agent '{agent}'. Expected one of: {', '.join(sorted(AGENTS))}")
+
+    output_dir = str(cfg.get("output_dir", "")).strip()
+    if not output_dir:
+        raise ValueError("Config output_dir must be non-empty")
+
+    tokens = _tokenize_path(output_dir)
+    if agent not in tokens:
+        raise ValueError(
+            f"output_dir must include slot token '{agent}' in the artifact path. Got: {output_dir}"
+        )
+    if not FINETUNE_MARKERS.intersection(tokens):
+        raise ValueError(
+            "output_dir must include a finetune marker token (one of: "
+            + ", ".join(sorted(FINETUNE_MARKERS))
+            + f"). Got: {output_dir}"
+        )
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -66,10 +95,9 @@ def main() -> None:
         raise FileNotFoundError(f"Expected {train_path} and {val_path}")
 
     try:
-        from datasets import Dataset
-        from transformers import TrainingArguments
-        from trl import SFTTrainer
         from unsloth import FastLanguageModel
+        from datasets import Dataset
+        from trl import SFTConfig, SFTTrainer
     except ImportError as exc:
         raise RuntimeError(
             "Missing dependencies for Unsloth SFT training. Install: unsloth, trl, datasets, transformers, peft, accelerate, bitsandbytes."
@@ -104,7 +132,7 @@ def main() -> None:
     output_dir = Path(cfg["output_dir"]).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=str(output_dir),
         per_device_train_batch_size=int(cfg["batch_size"]),
         per_device_eval_batch_size=max(1, int(cfg["batch_size"])),
@@ -119,17 +147,17 @@ def main() -> None:
         save_total_limit=int(cfg.get("save_total_limit", 2)),
         bf16=bool(cfg.get("bf16", False)),
         fp16=bool(cfg.get("fp16", True)),
-        report_to=[],
+        report_to="none",
+        dataset_text_field="text",
+        max_length=int(cfg["max_seq_length"]),
+        packing=bool(cfg.get("packing", False)),
     )
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        dataset_text_field="text",
-        max_seq_length=int(cfg["max_seq_length"]),
-        packing=bool(cfg.get("packing", False)),
         args=training_args,
     )
 

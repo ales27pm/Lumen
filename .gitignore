@@ -5,3 +5,6 @@ tools/lumen_manifest_crawler/.venv/
 tools/lumen_manifest_crawler/lumen_manifest_crawler/__pycache__/
 .vscode/
 .venv-unsloth/
+models/lora/
+unsloth_compiled_cache/
+**/__pycache__/

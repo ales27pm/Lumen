@@ -127,3 +127,23 @@ def test_unsloth_configs_include_required_keys(compiled_fine_tuning: tuple) -> N
     for path in config_dir.glob("*.json"):
         cfg = json.loads(path.read_text(encoding="utf-8"))
         assert required.issubset(cfg.keys()), f"{path} missing required keys"
+
+
+def test_unsloth_output_dirs_include_agent_and_finetune_marker(compiled_fine_tuning: tuple) -> None:
+    markers = {"sft", "dpo", "orpo", "lora", "merged", "adapter", "finetune", "finetuned"}
+    _, _, fine_tuning = compiled_fine_tuning
+
+    for agent in AGENTS:
+        output_dir = str(fine_tuning[agent].unsloth_config["output_dir"])
+        tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in output_dir).split())
+        assert agent in tokens, f"{agent} output_dir missing slot token: {output_dir}"
+        assert markers.intersection(tokens), f"{agent} output_dir missing finetune marker: {output_dir}"
+
+    config_dir = Path("tools/fine_tuning/unsloth/configs")
+    for path in config_dir.glob("*.json"):
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        agent = str(cfg["agent"]).lower()
+        output_dir = str(cfg["output_dir"])
+        tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in output_dir).split())
+        assert agent in tokens, f"{path} output_dir missing slot token: {output_dir}"
+        assert markers.intersection(tokens), f"{path} output_dir missing finetune marker: {output_dir}"

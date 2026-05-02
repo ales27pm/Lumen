@@ -14,6 +14,9 @@
   "gradient_checkpointing": true,
   "packing": false,
   "output_dir": "models/lora/mouth",
+  "gguf_output_dir": "models/gguf_merged/mouth_merged_gguf",
+  "gguf_quantization": "q4_k_m",
+  "gguf_repo_id": "ales27pm/lumen-fleet-gguf",
   "dataset_dir": "generated/fine_tuning/mouth",
   "preference_trainer": "dpo"
 }

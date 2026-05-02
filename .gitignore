@@ -6,5 +6,6 @@ tools/lumen_manifest_crawler/lumen_manifest_crawler/__pycache__/
 .vscode/
 .venv-unsloth/
 models/lora/
+models/gguf_merged/
 unsloth_compiled_cache/
 **/__pycache__/

@@ -147,3 +147,16 @@ def test_unsloth_output_dirs_include_agent_and_finetune_marker(compiled_fine_tun
         tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in output_dir).split())
         assert agent in tokens, f"{path} output_dir missing slot token: {output_dir}"
         assert markers.intersection(tokens), f"{path} output_dir missing finetune marker: {output_dir}"
+
+
+def test_unsloth_gguf_output_dirs_include_agent_and_merged_marker() -> None:
+    markers = {"gguf", "merged", "finetune", "finetuned"}
+    config_dir = Path("tools/fine_tuning/unsloth/configs")
+    for path in config_dir.glob("*.json"):
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        agent = str(cfg["agent"]).lower()
+        gguf_output_dir = str(cfg.get("gguf_output_dir", ""))
+        assert gguf_output_dir, f"{path} missing gguf_output_dir"
+        tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in gguf_output_dir).split())
+        assert agent in tokens, f"{path} gguf_output_dir missing slot token: {gguf_output_dir}"
+        assert markers.intersection(tokens), f"{path} gguf_output_dir missing merged/gguf marker: {gguf_output_dir}"

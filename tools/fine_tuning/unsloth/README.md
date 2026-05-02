@@ -37,11 +37,30 @@ python tools/fine_tuning/unsloth/train_dpo.py --config tools/fine_tuning/unsloth
 python tools/fine_tuning/unsloth/merge_lora.py --config tools/fine_tuning/unsloth/configs/cortex.json
 ```
 
-6. Export to GGUF / Core ML later (`export_gguf.md`).
+6. Export merged GGUF per agent.
+```bash
+.venv-unsloth/bin/python tools/fine_tuning/unsloth/export_gguf.py \
+  --config-dir tools/fine_tuning/unsloth/configs \
+  --agents cortex,executor,mouth,mimicry,rem,fleet \
+  --quantization q4_k_m \
+  --output-root models/gguf_merged \
+  --manifest-output generated/fine_tuning/merged_gguf_manifest.json
+```
 
-7. Evaluate with `generated/fine_tuning/<agent>/eval.jsonl`.
+7. Optional: upload merged GGUFs to Hugging Face in one pass.
+```bash
+.venv-unsloth/bin/python tools/fine_tuning/unsloth/export_gguf.py \
+  --config-dir tools/fine_tuning/unsloth/configs \
+  --agents cortex,executor,mouth,mimicry,rem,fleet \
+  --quantization q4_k_m \
+  --output-root models/gguf_merged \
+  --hf-repo-id ales27pm/lumen-fleet-gguf \
+  --manifest-output generated/fine_tuning/merged_gguf_manifest.json
+```
 
-8. Never train on private app exports unless explicitly sanitized.
+8. Evaluate with `generated/fine_tuning/<agent>/eval.jsonl`.
+
+9. Never train on private app exports unless explicitly sanitized.
 
 ## Deployment Notes
 

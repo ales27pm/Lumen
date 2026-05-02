@@ -1,6 +1,69 @@
 import Foundation
 
 nonisolated enum LumenModelFleetCatalog {
+    static let v1FineTunedMerged: [CatalogModel] = [
+        CatalogModel(
+            id: "fleet-v1-ft-cortex-qwen1.5b-q4",
+            name: "Fleet v1 FT Cortex — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-cortex-merged-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Merged fine-tuned Cortex slot model for routing and planning.",
+            tags: ["fleet-v1", "finetuned", "merged-gguf", "cortex"]
+        ),
+        CatalogModel(
+            id: "fleet-v1-ft-executor-qwen1.5b-q4",
+            name: "Fleet v1 FT Executor — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-executor-merged-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Merged fine-tuned Executor slot model for strict tool JSON.",
+            tags: ["fleet-v1", "finetuned", "merged-gguf", "executor", "structured"]
+        ),
+        CatalogModel(
+            id: "fleet-v1-ft-mouth-qwen1.5b-q4",
+            name: "Fleet v1 FT Mouth — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-mouth-merged-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Merged fine-tuned Mouth slot model for user-facing responses.",
+            tags: ["fleet-v1", "finetuned", "merged-gguf", "mouth"]
+        ),
+        CatalogModel(
+            id: "fleet-v1-ft-mimicry-qwen1.5b-q4",
+            name: "Fleet v1 FT Mimicry — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-mimicry-merged-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Merged fine-tuned Mimicry slot model for safe style adaptation.",
+            tags: ["fleet-v1", "finetuned", "merged-gguf", "mimicry"]
+        ),
+        CatalogModel(
+            id: "fleet-v1-ft-rem-qwen1.5b-q4",
+            name: "Fleet v1 FT REM — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-rem-merged-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Merged fine-tuned REM slot model for reflection and repair.",
+            tags: ["fleet-v1", "finetuned", "merged-gguf", "rem", "idle"]
+        ),
+    ]
+
     static let v1Recommended: [CatalogModel] = [
         CatalogModel(
             id: "fleet-v1-core-qwen-coder-0.5b-q4",
@@ -79,5 +142,5 @@ nonisolated enum LumenModelFleetCatalog {
         )
     ]
 
-    static var allFleetModels: [CatalogModel] { v1Recommended + v1Candidates }
+    static var allFleetModels: [CatalogModel] { v1FineTunedMerged + v1Recommended + v1Candidates }
 }

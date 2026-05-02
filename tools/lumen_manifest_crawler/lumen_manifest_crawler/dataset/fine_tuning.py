@@ -845,6 +845,9 @@ def _agent_unsloth_config(agent: str, config: FineTuningDatasetConfig) -> dict[s
         "warmup_steps": 20,
         "dataset_dir": f"generated/fine_tuning/{agent}",
         "output_dir": f"models/lora/{agent}",
+        "gguf_output_dir": f"models/gguf_merged/{agent}_merged_gguf",
+        "gguf_quantization": "q4_k_m",
+        "gguf_repo_id": "ales27pm/lumen-fleet-gguf",
         "fleet_strategy": fleet_strategy,
         "merge_target": "cortex" if agent == "fleet" else None,
     }

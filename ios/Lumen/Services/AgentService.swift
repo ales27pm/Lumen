@@ -1852,7 +1852,7 @@ final class AgentService {
         prompt += "Ground every claim in the listed observations and avoid generic advice. No preamble, no JSON, no prefixes, no apology. If observations conflict, prefer the most recent."
 
         let genReq = GenerateRequest(
-            systemPrompt: "You summarize tool results into a concise user-facing answer. Output plain text only.",
+            systemPrompt: "You summarize tool results into a concise user-facing answer. Output plain text only. When summarizing local knowledge/tool retrieval results, include a section named Key modules and ground claims in the provided snippets/sources.",
             history: [],
             userMessage: prompt,
             temperature: 0.2,

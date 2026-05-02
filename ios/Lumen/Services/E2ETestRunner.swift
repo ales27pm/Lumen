@@ -51,7 +51,7 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         E2ETestScenario(id: "training-weather-grounded", title: "Training eval: weather stays grounded", kind: .training, prompt: "What is the weather here and should I carry an umbrella?", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "mail.draft"], requiredTextHints: ["weather"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
         E2ETestScenario(id: "training-web-research", title: "Training eval: web research synthesis", kind: .training, prompt: "Search the web for two recent Swift concurrency best practices and summarize them.", expectedIntent: .webSearch, requiredAllowedToolIDs: ["web.search", "web.fetch"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["swift"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
         E2ETestScenario(id: "training-memory-loop", title: "Training eval: memory save/recall", kind: .training, prompt: "Remember that I prefer concise bullet points, then tell me what you remembered.", expectedIntent: .memory, requiredAllowedToolIDs: ["memory.save", "memory.recall"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["remember"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
-        E2ETestScenario(id: "training-rag-grounding", title: "Training eval: local knowledge grounding", kind: .training, prompt: "Search my files for architecture notes and summarize key modules.", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.search", "files.read"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["module"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-rag-grounding", title: "Training eval: local knowledge grounding", kind: .training, prompt: "Search my files for architecture notes and summarize key modules.", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.search", "files.read"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["module", "[1]"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
         E2ETestScenario(id: "training-scheduler-agent", title: "Training eval: trigger scheduling quality", kind: .training, prompt: "Schedule a trigger to summarize reminders tonight and confirm what will run.", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.create", "trigger.list"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["trigger"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
         E2ETestScenario(id: "training-communication-draft", title: "Training eval: communication drafting", kind: .training, prompt: "Draft an email to Alex with a professional update and ask one clarifying question.", expectedIntent: .emailDraft, requiredAllowedToolIDs: ["mail.draft", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["question"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
         E2ETestScenario(id: "training-general-chat", title: "Training eval: pure chat quality", kind: .training, prompt: "Explain tradeoffs between precision and recall in retrieval systems in plain English.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "mail.draft"], requiredTextHints: ["precision", "recall"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true)
@@ -296,6 +296,15 @@ enum E2ETestRunner {
         let lowerFinal = finalText.lowercased()
         for hint in scenario.requiredTextHints where !lowerFinal.contains(hint.lowercased()) {
             failures.append("Required final hint missing: \(hint)")
+        }
+        if scenario.expectedIntent == .rag && scenario.requiresAgentRun {
+            if !lowerFinal.contains("module") && !lowerFinal.contains("modules") {
+                failures.append("RAG final response must mention module/modules")
+            }
+            let hasGroundingMarkers = finalText.contains("[") || lowerFinal.contains("snippet") || lowerFinal.contains("source")
+            if !hasGroundingMarkers {
+                failures.append("RAG final response must reference retrieved docs/snippets")
+            }
         }
         for hint in scenario.forbiddenTextHints where lowerFinal.contains(hint.lowercased()) {
             failures.append("Forbidden final hint present: \(hint)")

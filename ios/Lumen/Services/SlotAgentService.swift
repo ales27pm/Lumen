@@ -47,6 +47,11 @@ final class SlotAgentService {
                 }
 
                 let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                let requiredFallbackTool = Self.resolveRequiredToolFallback(
+                    intent: routing.intent,
+                    prompt: executionPrompt,
+                    allowedToolIDs: Array(availableToolIDs)
+                )
                 if let mapFollowUp = deterministicMapFollowUpAction(
                     routing: routing,
                     prompt: executionPrompt,
@@ -146,6 +151,35 @@ final class SlotAgentService {
                     }
 
                     if let final = parsed.final, !final.isEmpty {
+                        if observations.isEmpty,
+                           let fallbackTool = requiredFallbackTool,
+                           let fallbackAction = DeterministicToolPlanner.planForSpecificTool(
+                               toolID: fallbackTool,
+                               prompt: executionPrompt,
+                               availableToolIDs: availableToolIDs
+                           ) {
+                            let fallbackResult = await executeAction(
+                                fallbackAction,
+                                req: req,
+                                routing: routing,
+                                steps: &steps,
+                                observations: &observations,
+                                executedActionFingerprints: &executedActionFingerprints,
+                                continuation: continuation,
+                                stepIndex: stepIndex
+                            )
+                            switch fallbackResult {
+                            case .continueLoop:
+                                continue
+                            case .finalizeNow(let draft):
+                                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
+                            case .blocked(let text):
+                                yieldFinal(text, steps: steps, continuation: continuation)
+                                return
+                            }
+                        }
                         finalText = FinalIntentValidator.validate(final, routing: routing, fallback: observations.last)
                         finalText = appendRichPayloadMarkersIfNeeded(to: finalText, from: observations)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -182,6 +216,34 @@ final class SlotAgentService {
                                 return
                             }
 
+                            let result = await executeAction(
+                                fallbackAction,
+                                req: req,
+                                routing: routing,
+                                steps: &steps,
+                                observations: &observations,
+                                executedActionFingerprints: &executedActionFingerprints,
+                                continuation: continuation,
+                                stepIndex: stepIndex
+                            )
+                            switch result {
+                            case .continueLoop:
+                                continue
+                            case .finalizeNow(let draft):
+                                finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
+                            case .blocked(let text):
+                                yieldFinal(text, steps: steps, continuation: continuation)
+                                return
+                            }
+                        }
+                        if let fallbackTool = requiredFallbackTool,
+                           let fallbackAction = DeterministicToolPlanner.planForSpecificTool(
+                               toolID: fallbackTool,
+                               prompt: executionPrompt,
+                               availableToolIDs: availableToolIDs
+                           ) {
                             let result = await executeAction(
                                 fallbackAction,
                                 req: req,
@@ -852,6 +914,42 @@ final class SlotAgentService {
 
     nonisolated static func isActionAllowed(_ toolID: String, routing: IntentRoutingDecision) -> Bool {
         IntentRouter.isToolAllowed(toolID, for: routing)
+    }
+
+    nonisolated static func resolveRequiredToolFallback(intent: UserIntent, prompt: String, allowedToolIDs: [String]) -> String? {
+        let allowed = Set(allowedToolIDs.map { ToolRouteGuard.canonicalToolID($0) })
+        guard !allowed.isEmpty else { return nil }
+        if allowed.count == 1 { return allowed.first }
+
+        let lower = prompt.lowercased()
+        func pick(_ toolID: String) -> String? { allowed.contains(toolID) ? toolID : nil }
+
+        switch intent {
+        case .camera:
+            if ["camera", "photo", "picture", "capture", "take"].contains(where: lower.contains) {
+                return pick("camera.capture")
+            }
+        case .maps:
+            if ["where are we", "where am i", "current location", "my location"].contains(where: lower.contains) {
+                return pick("location.current")
+            }
+            if lower.contains("show me on map") { return pick("location.current") ?? pick("maps.search") }
+            if ["directions", "navigate", "route"].contains(where: lower.contains) { return pick("maps.directions") }
+            if ["nearby", "find", "search", "hardware store", "restaurant"].contains(where: lower.contains) { return pick("maps.search") }
+        case .outlook:
+            if ["auth", "status", "sign in", "signin", "log in", "login"].contains(where: lower.contains) {
+                return pick("outlook.status")
+            }
+            if ["unread", "new emails", "latest email", "check email", "read email", "outlook email"].contains(where: lower.contains) {
+                return pick("outlook.messages.list") ?? pick("outlook.message.read")
+            }
+        default:
+            break
+        }
+
+        if intent == .maps { return pick("location.current") ?? pick("maps.search") ?? pick("maps.directions") }
+        if intent == .outlook { return pick("outlook.messages.list") ?? pick("outlook.status") }
+        return nil
     }
 
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {

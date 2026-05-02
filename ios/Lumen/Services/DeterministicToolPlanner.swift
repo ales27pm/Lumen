@@ -1,6 +1,34 @@
 import Foundation
 
 nonisolated enum DeterministicToolPlanner {
+    static func planForSpecificTool(toolID: String, prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
+        let canonical = ToolRouteGuard.canonicalToolID(toolID)
+        guard availableToolIDs.contains(canonical) else { return nil }
+        let text = normalized(prompt)
+        switch canonical {
+        case "camera.capture":
+            return AgentAction(tool: canonical)
+        case "location.current":
+            return AgentAction(tool: canonical)
+        case "maps.search":
+            let query = extractNearbySearchQuery(from: prompt) ?? extractDestination(from: prompt) ?? ""
+            return AgentAction(tool: canonical, args: ["query": .string(query)])
+        case "maps.directions":
+            guard let destination = extractDestination(from: prompt), !destination.isEmpty else { return nil }
+            return AgentAction(tool: canonical, args: ["destination": .string(destination)])
+        case "outlook.status":
+            return AgentAction(tool: canonical)
+        case "outlook.messages.list":
+            var args: AgentJSONArguments = ["limit": .string("10")]
+            if text.contains("unread") { args["unreadOnly"] = .string("true") }
+            return AgentAction(tool: canonical, args: args)
+        case "outlook.message.read":
+            return AgentAction(tool: canonical, args: ["message": .string(extractOutlookMessageReference(from: text) ?? "latest")])
+        default:
+            return AgentAction(tool: canonical)
+        }
+    }
+
     static func plan(routing: IntentRoutingDecision, prompt: String, availableToolIDs: Set<String>) -> AgentAction? {
         let text = normalized(prompt)
 

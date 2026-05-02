@@ -29,7 +29,7 @@ def e2e_failure_from_scenario(scenario: dict[str, Any], *, source_layer: str) ->
     failure_text = str(scenario.get("failures") or "E2E scenario failed.").strip()
     prompt = str(scenario.get("prompt") or "").strip()
     final = str(scenario.get("final") or "").strip()
-    intent = str(scenario.get("intent") or "unknown").strip() or "unknown"
+    intent = _scenario_intent(scenario)
     required_hint = _extract_required_hint(failure_text)
     policy = e2e_failure_policy(intent, required_hint)
     expected = _expected_for_e2e_failure(scenario, required_hint)
@@ -63,6 +63,14 @@ def e2e_failure_from_scenario(scenario: dict[str, Any], *, source_layer: str) ->
     }
 
 
+def _scenario_intent(scenario: dict[str, Any]) -> str:
+    intent = str(scenario.get("intent") or "").strip()
+    if intent:
+        return intent
+    expected_intent = str(scenario.get("expectedIntent") or "").strip()
+    return expected_intent or "unknown"
+
+
 def _expected_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
     if required_hint:
         return f"Final answer must include the required hint `{required_hint}` while preserving the requested intent and user-visible usefulness."
@@ -73,7 +81,7 @@ def _expected_for_e2e_failure(scenario: dict[str, Any], required_hint: str | Non
 def _corrected_output_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
     prompt = str(scenario.get("prompt") or "").strip()
     final = str(scenario.get("final") or "").strip()
-    intent = str(scenario.get("intent") or "unknown").strip()
+    intent = _scenario_intent(scenario)
     normalized_intent = intent.casefold()
     if required_hint and normalized_intent == "memory":
         remembered = _derive_memory_content_from_prompt(prompt)
@@ -211,7 +219,7 @@ def _clean_derived_fragment(value: str) -> str:
 
 
 def _lesson_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
-    intent = str(scenario.get("intent") or "unknown")
+    intent = _scenario_intent(scenario)
     if required_hint:
         return f"For `{intent}` E2E evals, the final answer must include required hint `{required_hint}` while remaining natural and useful."
     return f"Use failed `{intent}` E2E prompts and final outputs as next-cycle fine-tuning repair examples."

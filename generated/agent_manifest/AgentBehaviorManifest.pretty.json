@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "92151fb7ef4fd24d7e5d6356ec260caf9fb3e933",
+    "commit": "ec51d9d16d01e3b1d9d0cf1135b5b670289fadde",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -31,11 +31,11 @@
       },
       {
         "path": "ios/Lumen/Services/AgentService.swift",
-        "sha256": "63f3e4d66d06293ca1928829495e89651c784fa0b71d3015c6d273020d6f6c99"
+        "sha256": "dedcfe32eda3b3286118a35bdef88b080b18833a7441a12bd6cf9be34db19c71"
       },
       {
         "path": "ios/Lumen/Services/IntentRouter.swift",
-        "sha256": "799cc635fd9999a209976800315d275457ace9b30effb89a35b658c08253ab0e"
+        "sha256": "32bd32b163b0b6ba56329e8c59ec4d782049b62713d9f6c7854d749210c0a366"
       },
       {
         "path": "ios/Lumen/Services/MemoryStore.swift",
@@ -47,7 +47,7 @@
       },
       {
         "path": "ios/Lumen/Services/ModelFleet.swift",
-        "sha256": "0a4b0a769daceaecdc8eef2850e08641b92776630ef29966cbe3d6bd918723f2"
+        "sha256": "b4e4246da05c8ca833019f58a87b11e724578e10933b37c07ed304a120a8f1c3"
       },
       {
         "path": "ios/Lumen/Services/RemCycleService.swift",

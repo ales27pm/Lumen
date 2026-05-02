@@ -1,0 +1,112 @@
+{
+  "commands": [],
+  "completedAt": "1970-01-01T00:00:00+00:00",
+  "criticalGapCount": 0,
+  "dataset": {
+    "agentFineTuning": {
+      "cortex": {
+        "eval": 555,
+        "trainDPO": 8,
+        "trainSFT": 192,
+        "valDPO": 1,
+        "valSFT": 34
+      },
+      "executor": {
+        "eval": 111,
+        "trainDPO": 11,
+        "trainSFT": 457,
+        "valDPO": 2,
+        "valSFT": 81
+      },
+      "fleet": {
+        "eval": 93,
+        "trainDPO": 14,
+        "trainSFT": 669,
+        "valDPO": 3,
+        "valSFT": 118
+      },
+      "mimicry": {
+        "eval": 3,
+        "trainDPO": 9,
+        "trainSFT": 42,
+        "valDPO": 2,
+        "valSFT": 8
+      },
+      "mouth": {
+        "eval": 5,
+        "trainDPO": 10,
+        "trainSFT": 127,
+        "valDPO": 2,
+        "valSFT": 22
+      },
+      "rem": {
+        "eval": 4,
+        "trainDPO": 7,
+        "trainSFT": 62,
+        "valDPO": 1,
+        "valSFT": 11
+      }
+    },
+    "families": {
+      "approval_boundary_samples": 115,
+      "cortex_routing": 69,
+      "dpo_preference_pairs": 53,
+      "eval_scenarios": 550,
+      "executor_tool_calls": 53,
+      "manifest_grounding_cards": 4,
+      "mimicry_style": 3,
+      "mouth_responses": 53,
+      "negative_samples": 53,
+      "rem_reflection": 5,
+      "runtime_audit_repairs": 0,
+      "tool_schema_cards": 53,
+      "train_sft": 298,
+      "validation_sft": 53
+    },
+    "familyCount": 14,
+    "recordCount": 1362
+  },
+  "errorGapCount": 0,
+  "gapCount": 2,
+  "manifest": {
+    "commit": "ec51d9d16d01e3b1d9d0cf1135b5b670289fadde",
+    "fingerprint": "f3c4ea2be3d9eb554718eb83146df5206cd5049e6a93cd84f344768559a4d2ee",
+    "intentCount": 22,
+    "modelSlotCount": 6,
+    "routingEntryCount": 22,
+    "toolCount": 53
+  },
+  "nextActionPromptCount": 2,
+  "output": "/home/ales27pm/Lumen/generated/agent_manifest",
+  "passed": true,
+  "root": "/home/ales27pm/Lumen",
+  "runtime": {
+    "failureCount": 0,
+    "failureTypes": {},
+    "reportCount": 0,
+    "sourceLayers": {}
+  },
+  "runtimeAuditInputs": [],
+  "schemaVersion": "1.1.0",
+  "startedAt": "1970-01-01T00:00:00+00:00",
+  "testFlight": {
+    "buildLabel": "local-full-loop-2026-05-02",
+    "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
+    "manifestFingerprint": "f3c4ea2be3d9eb554718eb83146df5206cd5049e6a93cd84f344768559a4d2ee",
+    "mode": "testflight",
+    "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
+    "requireRuntimeAuditForPass": false,
+    "requiresTestFlightAppRun": true,
+    "runbookPath": "TESTFLIGHT_RUNBOOK.md",
+    "runtimeAuditProvided": false,
+    "scenarioCount": 120,
+    "scenarioQueuePath": "testflight_scenarios.jsonl",
+    "status": "awaiting-testflight-runtime-audit"
+  },
+  "validation": {
+    "failureCount": 0,
+    "failures": [],
+    "warningCount": 0,
+    "warnings": []
+  }
+}

@@ -63,6 +63,7 @@ class AgentImprovementLoopConfig:
     build_command: tuple[str, ...] = ()
     test_command: tuple[str, ...] = ()
     train_command: tuple[str, ...] = ()
+    fail_on_validation: bool = False
     max_tail_chars: int = 12000
     dry_run_commands: bool = False
     app_run_mode: str = "testflight"

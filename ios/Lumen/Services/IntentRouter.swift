@@ -147,7 +147,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .contactSearch, allowedToolIDs: contactToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) {
+        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) && !matchesAny(text, ["recall", "callback"]) {
             let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
             return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
         }
@@ -184,11 +184,11 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .files, allowedToolIDs: filesToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["remember this", "save memory", "recall memory", "what do you remember", "memory about", "save this fact"]) {
+        if matchesAny(text, ["remember that", "remember this", "save memory", "recall memory", "what do you remember", "memory about", "save this fact", "keep this in mind"]) {
             return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["search personal data", "search my files", "search local files", "reindex files", "index files", "reindex photos", "index photos", "rag search"]) {
+        if matchesAny(text, ["search personal data", "search my files", "search local files", "search my documents", "search my notes", "reindex files", "index files", "reindex photos", "index photos", "rag search", "architecture notes"]) {
             return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 

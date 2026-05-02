@@ -266,7 +266,7 @@ nonisolated enum IntentRouter {
 
 
     private static func isLikelyPhoneCallIntent(_ text: String) -> Bool {
-        if matchesAny(text, ["re-call", "callback", "call back", "called back"]) { return false }
+        if matchesAny(text, ["re-call"]) { return false }
 
         let directCallPatterns = [
             #"\bcall\s+(me|him|her|them|us|[a-z0-9@+\-().]+)\b"#,

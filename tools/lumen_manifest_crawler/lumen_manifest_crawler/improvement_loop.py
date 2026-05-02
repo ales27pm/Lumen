@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -416,7 +417,20 @@ def _build_testflight_plan(
         "runbookPath": "TESTFLIGHT_RUNBOOK.md",
         "scenarioCount": len(scenarios),
         "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-        "nextIngestCommand": f"python -m lumen_manifest_crawler improve-loop --root {config.root} --output {config.output} --loop-output {config.loop_output} --runtime-audit <exported-testflight-json>",
+        "nextIngestCommand": shlex.join([
+            "python",
+            "-m",
+            "lumen_manifest_crawler",
+            "improve-loop",
+            "--root",
+            str(config.root.resolve()),
+            "--output",
+            str(config.output.resolve()),
+            "--loop-output",
+            str(config.loop_output.resolve()),
+            "--runtime-audit",
+            "<exported-testflight-json>",
+        ]),
         "manifestFingerprint": _manifest_fingerprint(manifest),
     }
 
@@ -434,6 +448,7 @@ def _build_gap_report(
     gaps: list[dict[str, Any]] = []
 
     if config.app_run_mode.casefold() == "testflight" and not runtime_reports:
+        resolved_loop_output = config.loop_output.resolve()
         gaps.append({
             "id": _stable_id("testflight_runtime_pending", config.testflight_build_label or "unlabeled"),
             "severity": "error" if config.require_testflight_runtime_audit else "warning",
@@ -442,8 +457,8 @@ def _build_gap_report(
             "evidence": {
                 "expectedExport": "lumen-in-app-dataset-*.json",
                 "source": "Agent Grounding > Export In-App Dataset Package",
-                "scenarioQueue": str(config.loop_output / "testflight_scenarios.jsonl"),
-                "runbook": str(config.loop_output / "TESTFLIGHT_RUNBOOK.md"),
+                "scenarioQueue": str(resolved_loop_output / "testflight_scenarios.jsonl"),
+                "runbook": str(resolved_loop_output / "TESTFLIGHT_RUNBOOK.md"),
             },
             "recommendedAction": "Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit <json>.",
         })

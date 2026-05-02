@@ -29,47 +29,45 @@ public enum BundledAgentGroundingStoreError: LocalizedError, Sendable {
 }
 
 public final class BundledAgentGroundingStore: @unchecked Sendable {
-    public nonisolated(unsafe) static let shared = BundledAgentGroundingStore()
+    public static let shared = BundledAgentGroundingStore()
 
     private let bundle: Bundle
-    private let decoder: JSONDecoder
 
-    public init(bundle: Bundle = .main, decoder: JSONDecoder = JSONDecoder()) {
+    public nonisolated init(bundle: Bundle = .main) {
         self.bundle = bundle
-        self.decoder = decoder
     }
 
-    public var agentGroundingRootURL: URL {
+    public nonisolated var agentGroundingRootURL: URL {
         get throws {
             try directoryURL("AgentGrounding")
         }
     }
 
-    public var agentManifestDirectoryURL: URL {
+    public nonisolated var agentManifestDirectoryURL: URL {
         get throws {
             try directoryURL("AgentGrounding/agent_manifest")
         }
     }
 
-    public var crossModelTrainingDirectoryURL: URL {
+    public nonisolated var crossModelTrainingDirectoryURL: URL {
         get throws {
             try directoryURL("AgentGrounding/cross_model_training")
         }
     }
 
-    public func loadManifest() throws -> AgentBehaviorManifest {
+    public nonisolated func loadManifest() throws -> AgentBehaviorManifest {
         let url = try fileURL("AgentGrounding/agent_manifest/AgentBehaviorManifest", extension: "json")
         let data = try Data(contentsOf: url)
-        return try decoder.decode(AgentBehaviorManifest.self, from: data)
+        return try JSONDecoder().decode(AgentBehaviorManifest.self, from: data)
     }
 
-    public func loadFleetSystemPrompts() throws -> [String: BundledFleetSystemPrompt] {
+    public nonisolated func loadFleetSystemPrompts() throws -> [String: BundledFleetSystemPrompt] {
         let url = try fileURL("AgentGrounding/agent_manifest/fleet_system_prompts", extension: "json")
         let data = try Data(contentsOf: url)
-        return try decoder.decode([String: BundledFleetSystemPrompt].self, from: data)
+        return try JSONDecoder().decode([String: BundledFleetSystemPrompt].self, from: data)
     }
 
-    public func systemPrompt(for slotID: String) throws -> String {
+    public nonisolated func systemPrompt(for slotID: String) throws -> String {
         let prompts = try loadFleetSystemPrompts()
         guard let prompt = prompts[slotID], !prompt.resolvedSystemPrompt.isEmpty else {
             throw BundledAgentGroundingStoreError.missingPrompt(slotID: slotID)
@@ -77,17 +75,17 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
         return prompt.resolvedSystemPrompt
     }
 
-    public func loadManifestMarkdown() throws -> String {
+    public nonisolated func loadManifestMarkdown() throws -> String {
         let url = try fileURL("AgentGrounding/agent_manifest/AgentBehaviorManifest", extension: "md")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    public func loadValidationReportData() throws -> Data {
+    public nonisolated func loadValidationReportData() throws -> Data {
         let url = try fileURL("AgentGrounding/agent_manifest/manifest_validation_report", extension: "json")
         return try Data(contentsOf: url)
     }
 
-    public func crossModelTrainingFileURL(named fileName: String) throws -> URL {
+    public nonisolated func crossModelTrainingFileURL(named fileName: String) throws -> URL {
         let base = try crossModelTrainingDirectoryURL
         let url = base.appendingPathComponent(fileName)
         var isDirectory = ObjCBool(false)
@@ -100,7 +98,7 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
         return url
     }
 
-    public func verifyRequiredResources() throws {
+    public nonisolated func verifyRequiredResources() throws {
         _ = try agentGroundingRootURL
         _ = try agentManifestDirectoryURL
         _ = try crossModelTrainingDirectoryURL
@@ -115,7 +113,7 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
         _ = try crossModelTrainingFileURL(named: "dpo_val_cross.jsonl")
     }
 
-    private func directoryURL(_ relativePath: String) throws -> URL {
+    private nonisolated func directoryURL(_ relativePath: String) throws -> URL {
         guard let url = bundle.url(forResource: relativePath, withExtension: nil) else {
             throw BundledAgentGroundingStoreError.missingResource(relativePath)
         }
@@ -126,7 +124,7 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
         return url
     }
 
-    private func fileURL(_ relativePathWithoutExtension: String, extension fileExtension: String) throws -> URL {
+    private nonisolated func fileURL(_ relativePathWithoutExtension: String, extension fileExtension: String) throws -> URL {
         guard let url = bundle.url(forResource: relativePathWithoutExtension, withExtension: fileExtension) else {
             throw BundledAgentGroundingStoreError.missingResource("\(relativePathWithoutExtension).\(fileExtension)")
         }

@@ -42,10 +42,11 @@ public final class RuntimeManifestAuditor {
 
     public func loadManifestFromStoreBundleOrRuntimeFallback(resourceName: String = "AgentBehaviorManifest", bundle: Bundle = .main) -> RuntimeManifestLoadResult {
         do {
+            let syncLabel = try AgentManifestStore.synchronizeWithBundle(resourceName: resourceName, bundle: bundle)
             if let stored = try AgentManifestStore.load() {
                 return RuntimeManifestLoadResult(
                     manifest: stored,
-                    source: "application-support:\(AgentManifestStore.directoryName)/\(AgentManifestStore.fileName)",
+                    source: syncLabel,
                     usedRuntimeFallback: false
                 )
             }
@@ -54,11 +55,10 @@ public final class RuntimeManifestAuditor {
         }
 
         do {
-            if let seededURL = try AgentManifestStore.seedFromBundleIfNeeded(resourceName: resourceName, bundle: bundle),
-               let seeded = try AgentManifestStore.load() {
+            if let seeded = try? loadBundledManifest(resourceName: resourceName, bundle: bundle) {
                 return RuntimeManifestLoadResult(
                     manifest: seeded,
-                    source: "application-support:\(seededURL.lastPathComponent) seeded-from-bundle",
+                    source: "bundled:\(AgentManifestStore.bundledRelativeDirectory)/\(resourceName).json",
                     usedRuntimeFallback: false
                 )
             }
@@ -75,7 +75,7 @@ public final class RuntimeManifestAuditor {
         } catch {
             return RuntimeManifestLoadResult(
                 manifest: syntheticManifestFromRuntimeRegistry(missingResourceName: resourceName),
-                source: "runtime-fallback:missing-\(resourceName).json",
+                source: "bundled-missing-runtime-fallback",
                 usedRuntimeFallback: true
             )
         }

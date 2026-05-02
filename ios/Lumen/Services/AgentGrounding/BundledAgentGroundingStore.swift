@@ -5,8 +5,6 @@ public struct BundledFleetSystemPrompt: Codable, Hashable {
     public let role: String?
     public let systemPrompt: String?
     public let system_prompt: String?
-    public let model_directory: [JSONValue]?
-    public let routing_rules: [String: JSONValue]?
 
     public var resolvedSystemPrompt: String {
         system_prompt ?? systemPrompt ?? ""
@@ -30,7 +28,7 @@ public enum BundledAgentGroundingStoreError: LocalizedError {
     }
 }
 
-public final class BundledAgentGroundingStore: Sendable {
+public final class BundledAgentGroundingStore {
     public static let shared = BundledAgentGroundingStore()
 
     private let bundle: Bundle

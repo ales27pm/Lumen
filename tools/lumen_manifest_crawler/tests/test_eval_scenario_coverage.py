@@ -66,3 +66,15 @@ def test_validator_fails_for_missing_required_argument_coverage():
                 metadata["argumentCoverage"] = []
     report = validate_manifest(manifest, {"eval_scenarios": evals})
     assert any(f.code == "missing_argument_eval_coverage" for f in report.failures)
+
+
+def test_validator_does_not_treat_natural_language_weather_word_as_tool_id_leak():
+    manifest = AgentBehaviorManifest(
+        tools=[
+            ToolManifest(id="weather", displayName="Current Weather", description="Get weather", permissionKey="location"),
+        ]
+    )
+    evals = _build_eval_records(manifest, DatasetCompilerConfig())
+    report = validate_manifest(manifest, {"eval_scenarios": evals})
+    assert not any(f.code == "tool_id_leak_in_natural_eval" for f in report.failures)
+    assert not any(f.code == "missing_permission_eval_coverage" for f in report.failures)

@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "51b4f67fe27ed71ce89acf1a0265c9c79c49b4a5",
+    "commit": "73e01e7e2f053f4dcfa39d3a783bba4ffa38425d",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -35,7 +35,7 @@
       },
       {
         "path": "ios/Lumen/Services/IntentRouter.swift",
-        "sha256": "e34fa68f03ae39d170975697611415bd74718958dbe9bb72275c5f49c2923ab2"
+        "sha256": "799cc635fd9999a209976800315d275457ace9b30effb89a35b658c08253ab0e"
       },
       {
         "path": "ios/Lumen/Services/MemoryStore.swift",
@@ -2597,9 +2597,9 @@
     ],
     "freshnessClasses": [
       {
-        "id": "shortLived",
-        "ttlSeconds": 3600,
-        "durable": false,
+        "id": "timeless",
+        "ttlSeconds": null,
+        "durable": true,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
       {
@@ -2615,9 +2615,9 @@
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
       {
-        "id": "timeless",
-        "ttlSeconds": null,
-        "durable": true,
+        "id": "shortLived",
+        "ttlSeconds": 3600,
+        "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       }
     ]

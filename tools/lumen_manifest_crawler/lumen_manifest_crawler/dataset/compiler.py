@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -716,7 +717,7 @@ def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
         clean = {**scenario, "prompt": prompt}
         if clean["scenarioKind"] != "explicit_tool_schema":
             clean["toolIDVisibleInPrompt"] = False
-            if tool.id in prompt:
+            if _prompt_explicitly_references_tool_id(prompt, str(tool.id)):
                 continue
         deduped.append(clean)
 
@@ -724,6 +725,22 @@ def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
         deduped.append({"prompt": f"Help me with {phrase} in a safe and manifest-compliant way.", "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
 
     return deduped
+
+
+def _prompt_explicitly_references_tool_id(prompt_text: str, tool_id: str) -> bool:
+    if not prompt_text or not tool_id:
+        return False
+    if "." in tool_id:
+        return tool_id in prompt_text
+
+    escaped = re.escape(tool_id)
+    explicit_patterns = (
+        rf"`{escaped}`",
+        rf'[\'\"]{escaped}[\'\"]',
+        rf"\btool\s+{escaped}\b",
+        rf"\buse\s+{escaped}\b",
+    )
+    return any(re.search(pattern, prompt_text, flags=re.IGNORECASE) for pattern in explicit_patterns)
 
 
 def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:

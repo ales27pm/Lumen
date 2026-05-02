@@ -11,7 +11,7 @@ DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "obj
 VAGUE_TYPES = {"any", "unknown", "dictionary", "dict"}
 STRICT_TOOL_ID_DATASET_FAMILIES = {"tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}
 STRICT_WARNING_CODES = {"tool_missing_description", "vague_argument_type", "inferred_tool_definition", "ambiguous_intent_tools", "freshness_missing_ttl"}
-MIN_EVAL_SCENARIOS_PER_TOOL = 3
+MIN_EVAL_SCENARIOS_PER_TOOL = 5
 FANOUT_INTENTS = {
     "alarm",
     "calendar",
@@ -98,6 +98,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
     covered_approval_tools: set[str] = set()
     compiled_ids: set[str] = set()
     eval_scenarios_by_tool: Counter[str] = Counter()
+    eval_tool_records: dict[str, list[dict[str, Any]]] = {tool.id: [] for tool in manifest.tools}
 
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
@@ -129,6 +130,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
                         failures.append(ValidationFailure(code="unknown_eval_tool", message=f"Eval scenario references unknown tool {tool_id}", path=f"dataset.{name}.{index}"))
                     elif record.get("taskType") == "tool_runtime_scenario_selection":
                         eval_scenarios_by_tool[tool_id] += 1
+                        eval_tool_records.setdefault(tool_id, []).append(record)
 
     for tool in manifest.tools:
         if any(arg.required for arg in tool.arguments) and tool.id not in covered_required_tools:
@@ -137,6 +139,42 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
             failures.append(ValidationFailure(code="missing_approval_sample", message=f"Tool {tool.id} requires approval but has no approval dataset sample", path=f"tools.{tool.id}"))
         if eval_scenarios_by_tool[tool.id] < MIN_EVAL_SCENARIOS_PER_TOOL:
             failures.append(ValidationFailure(code="missing_tool_eval_scenarios", message=f"Tool {tool.id} has {eval_scenarios_by_tool[tool.id]} runtime eval scenarios; expected at least {MIN_EVAL_SCENARIOS_PER_TOOL}", path=f"dataset.eval_scenarios.{tool.id}"))
+        scenarios = eval_tool_records.get(tool.id, [])
+        natural = [r for r in scenarios if (r.get("metadata") or {}).get("scenarioKind") == "natural_intent"]
+        explicit = [r for r in scenarios if (r.get("metadata") or {}).get("scenarioKind") == "explicit_tool_schema"]
+        if len(natural) < 2:
+            failures.append(ValidationFailure(code="missing_natural_tool_eval_scenarios", message=f"Tool {tool.id} has {len(natural)} natural intent eval scenarios; expected at least 2", path=f"dataset.eval_scenarios.{tool.id}"))
+        if not explicit:
+            failures.append(ValidationFailure(code="missing_explicit_schema_eval", message=f"Tool {tool.id} is missing explicit schema eval scenarios", path=f"dataset.eval_scenarios.{tool.id}"))
+        covered_args: set[str] = set()
+        has_approval = False
+        has_permission = False
+        for record in scenarios:
+            metadata = record.get("metadata") or {}
+            scenario_kind = metadata.get("scenarioKind")
+            arg_cov = metadata.get("argumentCoverage")
+            if isinstance(arg_cov, list):
+                covered_args.update(arg for arg in arg_cov if isinstance(arg, str))
+            if metadata.get("approvalCoverage") is True:
+                has_approval = True
+            if metadata.get("permissionCoverage") is True:
+                has_permission = True
+            if scenario_kind == "natural_intent":
+                if metadata.get("toolIDVisibleInPrompt") is not False:
+                    failures.append(ValidationFailure(code="tool_id_leak_in_natural_eval", message=f"Tool {tool.id} natural eval metadata marks tool id visible", path=f"dataset.eval_scenarios.{tool.id}"))
+                prompt_text = "\n".join(
+                    message.get("content", "") for message in record.get("messages", []) if isinstance(message, dict)
+                )
+                if tool.id in prompt_text:
+                    failures.append(ValidationFailure(code="tool_id_leak_in_natural_eval", message=f"Tool {tool.id} leaked in natural intent prompt", path=f"dataset.eval_scenarios.{tool.id}"))
+        required_args = {arg.name for arg in tool.arguments if arg.required}
+        missing_args = sorted(required_args - covered_args)
+        if missing_args:
+            failures.append(ValidationFailure(code="missing_argument_eval_coverage", message=f"Tool {tool.id} missing argument coverage for: {', '.join(missing_args)}", path=f"dataset.eval_scenarios.{tool.id}"))
+        if tool.requiresApproval and not has_approval:
+            failures.append(ValidationFailure(code="missing_approval_eval_coverage", message=f"Tool {tool.id} requires approval coverage in eval scenarios", path=f"dataset.eval_scenarios.{tool.id}"))
+        if tool.permissionKey and not has_permission:
+            failures.append(ValidationFailure(code="missing_permission_eval_coverage", message=f"Tool {tool.id} requires permission coverage in eval scenarios", path=f"dataset.eval_scenarios.{tool.id}"))
 
 
 def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], warnings: list[ValidationWarning], seen_ids: set[str]) -> None:

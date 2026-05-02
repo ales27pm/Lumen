@@ -263,7 +263,7 @@ nonisolated enum ToolRouteGuard {
             if out["query"] == nil {
                 out["query"] = arguments["q"] ?? arguments["term"] ?? arguments["search"] ?? arguments["subject"] ?? arguments["from"]
             }
-        case "outlook.message.read", "outlook.attachments.list", "outlook.message.mark_read", "outlook.message.mark_unread", "outlook.message.move", "outlook.message.archive", "outlook.message.delete", "outlook.message.reply", "outlook.message.reply_all", "outlook.message.forward":
+        case "outlook.message.read", "outlook.attachments.list", "outlook.message.mark_read", "outlook.message.mark_unread", "outlook.message.move", "outlook.message.archive", "outlook.message.delete", "outlook.message.reply", "outlook.message.reply_all":
             if out["messageId"] == nil {
                 out["messageId"] = arguments["id"] ?? arguments["messageID"] ?? arguments["message"]
             }
@@ -273,6 +273,9 @@ nonisolated enum ToolRouteGuard {
             }
             if out["body"] == nil {
                 out["body"] = arguments["message"] ?? arguments["text"] ?? arguments["content"] ?? arguments["comment"]
+            }
+            if canonicalToolID == "outlook.message.forward", out["messageId"] == nil {
+                out["messageId"] = arguments["id"] ?? arguments["messageID"] ?? arguments["message"]
             }
         default:
             break

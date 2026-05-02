@@ -182,7 +182,7 @@ def _has_explicit_tool_id_reference(prompt_text: str, tool_id: str) -> bool:
     if not prompt_text or not tool_id:
         return False
     if "." in tool_id:
-        return tool_id in prompt_text
+        return tool_id.casefold() in prompt_text.casefold()
 
     escaped = re.escape(tool_id)
     explicit_patterns = (

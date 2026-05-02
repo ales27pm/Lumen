@@ -93,23 +93,24 @@ python -m lumen_manifest_crawler generate --root . --output generated/agent_mani
 
 ## Run one closed improvement-loop cycle
 
-The `improve-loop` command performs one auditable cycle of the static/runtime/training loop:
+The `improve-loop` command performs one auditable cycle of the static/TestFlight-runtime/training loop:
 
-1. optionally run a local test command;
+1. optionally run a local validation command;
 2. scan Swift source and regenerate the manifest;
-3. ingest one or more in-app dataset package JSON files;
+3. ingest one or more in-app dataset package JSON files from a previous TestFlight run;
 4. compile base datasets, fleet artifacts, and per-agent fine-tuning datasets;
-5. optionally run build/training commands;
-6. write a loop state file, gap report, Markdown report, and next-action prompts for the next code-change pass.
+5. optionally run build/archive/training commands;
+6. write a loop state file, gap report, Markdown report, TestFlight runbook, TestFlight scenario queue, and next-action prompts for the next pass.
 
 ```bash
 python -m lumen_manifest_crawler improve-loop \
   --root . \
   --output generated/agent_manifest \
   --loop-output generated/agent_improvement_loop \
-  --runtime-audit runtime-audits/latest-audit.json \
+  --runtime-audit runtime-audits/latest-testflight-export.json \
   --generate-system-prompts \
-  --generate-agent-fine-tuning
+  --generate-agent-fine-tuning \
+  --testflight-build-label "1.0.0-build-42"
 ```
 
 The loop writes:
@@ -119,10 +120,21 @@ generated/agent_improvement_loop/
 ├── loop_state.json
 ├── loop_gaps.json
 ├── next_action_prompts.jsonl
+├── testflight_scenarios.jsonl
+├── TESTFLIGHT_RUNBOOK.md
 └── LOOP_REPORT.md
 ```
 
-Use `next_action_prompts.jsonl` as the work queue for the next source-code improvement pass. Each record contains the gap evidence, severity, target subsystem, and required outcome.
+Use `TESTFLIGHT_RUNBOOK.md` and `testflight_scenarios.jsonl` for the real in-app phase. Install the TestFlight build, run scenario prompts through the normal app UI, open Agent Grounding, run the audit, export the in-app dataset package JSON, then feed that JSON into the next loop with `--runtime-audit`.
+
+To force the loop to fail when a TestFlight export has not yet been ingested:
+
+```bash
+python -m lumen_manifest_crawler improve-loop \
+  --root . \
+  --require-testflight-runtime-audit \
+  --fail-on-validation
+```
 
 To include commands without executing them:
 
@@ -135,7 +147,7 @@ python -m lumen_manifest_crawler improve-loop \
   --train-command "python tools/fine_tuning/unsloth/train.py"
 ```
 
-Run the command repeatedly from CI, a local shell loop, or a Codex pass. Each iteration should either remove a gap or expand coverage with a new runtime trace field, adversarial scenario family, or quality gate.
+Run the command repeatedly from CI, a local shell loop, or a Codex pass. Each iteration should either ingest a fresh TestFlight export, remove a gap, or expand runtime coverage with a new TestFlight scenario family, trace field, adversarial dataset family, or quality gate.
 
 ## Generate fleet self-knowledge artifacts
 

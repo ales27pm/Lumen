@@ -61,7 +61,10 @@ nonisolated enum FinalIntentValidator {
         case .memory:
             return containsAny(lower, ["memory", "remember", "recall", "saved", "unavailable", "couldn’t", "couldn't"])
         case .rag:
-            return containsAny(lower, ["search", "index", "indexed", "files", "photos", "local", "unavailable", "couldn’t", "couldn't"])
+            let hasRagTopic = containsAny(lower, ["search", "index", "indexed", "files", "photos", "local"])
+            let hasGrounding = containsAny(lower, ["[1]", "[2]", "snippet", "source", "retrieved", "file", "pdf", "note", "module", "modules"])
+            let explicitUnavailable = containsAny(lower, ["unavailable", "couldn’t", "couldn't", "no relevant", "no matching"]) 
+            return (hasRagTopic && hasGrounding) || explicitUnavailable
         case .trigger:
             return containsAny(lower, ["trigger", "scheduled", "agent", "background", "cancel", "unavailable", "couldn’t", "couldn't"])
         case .alarm:

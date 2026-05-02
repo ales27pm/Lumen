@@ -75,6 +75,8 @@ nonisolated enum AgentIntentRouter {
         let reason: String
     }
 
+    private static let modelConfidenceThreshold = 85
+
     static func decide(userMessage: String, attachments: [ChatAttachment] = []) -> Decision {
         let text = normalized(userMessage)
         let compact = compacted(userMessage)
@@ -89,6 +91,11 @@ nonisolated enum AgentIntentRouter {
 
         if !attachments.isEmpty {
             return makeDecision(.answerWithContext, confidence: 92, reason: "attachments are already in prompt context")
+        }
+
+        if let deterministic = deterministicDecision(for: text) {
+            logRouting(predictedIntent: deterministic.intent, usedFallback: false, fallbackReason: nil)
+            return deterministic
         }
 
         var candidates: [Candidate] = []
@@ -206,7 +213,14 @@ nonisolated enum AgentIntentRouter {
             return makeClarificationDecision(question: missing, reason: "missing required details for \(intent)", alternatives: [intent])
         }
 
-        return makeDecision(intent, confidence: min(100, best.score * 10), reason: best.reason)
+        let predictedDecision = makeDecision(intent, confidence: min(100, best.score * 10), reason: best.reason)
+        if predictedDecision.confidence < modelConfidenceThreshold, let fallback = deterministicDecision(for: text) {
+            logRouting(predictedIntent: predictedDecision.intent, usedFallback: true, fallbackReason: "low_confidence_\(predictedDecision.confidence)_below_\(modelConfidenceThreshold) -> \(fallback.intent)")
+            return fallback
+        }
+
+        logRouting(predictedIntent: predictedDecision.intent, usedFallback: false, fallbackReason: nil)
+        return predictedDecision
     }
 
     static func inferIntent(from userMessage: String, attachments: [ChatAttachment] = []) -> Intent {
@@ -337,6 +351,41 @@ nonisolated enum AgentIntentRouter {
             break
         }
         return nil
+    }
+
+
+    private static func deterministicDecision(for text: String) -> Decision? {
+        if containsAny(text, ["call ", "dial ", "phone "]) {
+            return makeDecision(.phoneCall, confidence: 100, reason: "deterministic action verb: call/dial/phone")
+        }
+        if containsAny(text, ["email", "mail "]) {
+            return makeDecision(.draftMail, confidence: 100, reason: "deterministic action verb: email")
+        }
+        if containsAny(text, ["message", "text ", "sms", "imessage"]) {
+            return makeDecision(.draftMessage, confidence: 100, reason: "deterministic action verb: message")
+        }
+        if containsAny(text, ["schedule", "book", "set up"]) {
+            return makeDecision(.calendarCreate, confidence: 100, reason: "deterministic action verb: schedule")
+        }
+
+        if containsAny(text, ["remember", "store", "what did i tell you", "what do you remember"]) {
+            let intent: Intent = containsAny(text, ["what did i tell you", "what do you remember"]) ? .memoryRecall : .memorySave
+            return makeDecision(intent, confidence: 100, reason: "deterministic memory rule")
+        }
+
+        if containsAny(text, ["explain", "compare", "summarize conceptually"]) {
+            return makeDecision(.conversation, confidence: 100, reason: "deterministic conceptual chat rule")
+        }
+
+        return nil
+    }
+
+    private static func logRouting(predictedIntent: Intent, usedFallback: Bool, fallbackReason: String?) {
+        if usedFallback {
+            print("[AgentIntentRouter] predicted=\(predictedIntent) fallback=deterministic reason=\(fallbackReason ?? "unknown")")
+        } else {
+            print("[AgentIntentRouter] predicted=\(predictedIntent) fallback=none")
+        }
     }
 
     private static func shouldClarifyAmbiguity(best: Candidate, alternatives: [Intent], text: String) -> Bool {

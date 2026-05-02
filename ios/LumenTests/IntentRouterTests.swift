@@ -75,3 +75,20 @@ struct IntentRouterTests {
         #expect(IntentRouter.classify("Send an Outlook email to bob@example.com saying hello").intent == .outlook)
     }
 }
+
+extension IntentRouterTests {
+    @Test func chatIntentCannotCallPhoneOrMailTools() async throws {
+        let decision = IntentRouter.classify("Tell me a joke")
+        #expect(decision.intent == .chat)
+        #expect(!SlotAgentService.isActionAllowed("phone.call", routing: decision))
+        #expect(!SlotAgentService.isActionAllowed("mail.draft", routing: decision))
+    }
+
+    @Test func memoryIntentRequiresSaveAndRecallTools() async throws {
+        let decision = IntentRouter.classify("Remember that my favorite color is blue")
+        #expect(decision.intent == .memory)
+        let required = SlotAgentService.requiredTools(for: decision.intent)
+        #expect(required == ["memory.save", "memory.recall"])
+        #expect(required.isSubset(of: decision.allowedToolIDs))
+    }
+}

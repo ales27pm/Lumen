@@ -147,7 +147,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .contactSearch, allowedToolIDs: contactToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) {
+        if isLikelyPhoneCallIntent(text) {
             let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
             return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
         }
@@ -184,11 +184,11 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .files, allowedToolIDs: filesToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["remember this", "save memory", "recall memory", "what do you remember", "memory about", "save this fact"]) {
+        if matchesAny(text, ["remember that", "remember this", "save memory", "recall memory", "what do you remember", "memory about", "save this fact", "keep this in mind"]) {
             return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["search personal data", "search my files", "search local files", "reindex files", "index files", "reindex photos", "index photos", "rag search"]) {
+        if matchesAny(text, ["search personal data", "search my files", "search local files", "search my documents", "search my notes", "reindex files", "index files", "reindex photos", "index photos", "rag search", "architecture notes"]) || isLikelyLocalKnowledgeQuery(text) {
             return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
@@ -262,6 +262,34 @@ nonisolated enum IntentRouter {
         case .outlook: return "That request is Outlook/Hotmail mail-related. I can only use Outlook Microsoft Graph tools for it."
         case .chat, .unknown: return "That tool doesn't match your request. Could you clarify what you want to do?"
         }
+    }
+
+
+    private static func isLikelyPhoneCallIntent(_ text: String) -> Bool {
+        if matchesAny(text, ["re-call"]) { return false }
+
+        let directCallPatterns = [
+            #"\bcall\s+(me|him|her|them|us|[a-z0-9@+\-().]+)\b"#,
+            #"\bdial\s+"#,
+            #"\bphone\s+"#,
+            #"\bstart\s+a?\s*call\b"#
+        ]
+        return directCallPatterns.contains { pattern in
+            text.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
+
+
+    private static func isLikelyLocalKnowledgeQuery(_ text: String) -> Bool {
+        let localScopeMarkers = ["my files", "my notes", "my documents", "local", "imported", "codebase", "repo"]
+        let lookupVerbs = ["search", "find", "look up", "summarize", "read", "show"]
+        let architectureTopics = ["architecture", "system design", "codebase structured", "codebase structure", "how is the codebase structured", "modules"]
+
+        if matchesAny(text, architectureTopics) && (matchesAny(text, localScopeMarkers) || matchesAny(text, lookupVerbs)) {
+            return true
+        }
+
+        return matchesAny(text, localScopeMarkers) && matchesAny(text, ["architecture", "system design", "structure", "module", "modules"])
     }
 
     private static func normalized(_ text: String) -> String {

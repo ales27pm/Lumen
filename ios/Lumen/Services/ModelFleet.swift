@@ -255,7 +255,10 @@ enum LumenModelFleetResolver {
         let fallbackText = activeText ?? preferredTextModel(from: textModels)
 
         for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
-            if let model = preferredModel(for: slot, storedModels: textModels) ?? fallbackText {
+            if let model = preferredFineTunedModel(for: slot, storedModels: textModels)
+                ?? preferredModel(for: slot, storedModels: textModels)
+                ?? fallbackText
+            {
                 assignments[slot] = assignment(slot: slot, model: model)
             }
         }
@@ -298,6 +301,19 @@ enum LumenModelFleetResolver {
             .model
     }
 
+    private static func preferredFineTunedModel(for slot: LumenModelSlot, storedModels: [StoredModel]) -> StoredModel? {
+        let slotTokens = slotHintTokens(for: slot)
+        return storedModels
+            .map { model in (model: model, score: fineTunedScore(model, slotTokens: slotTokens)) }
+            .filter { $0.score > 0 }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.model.downloadedAt > rhs.model.downloadedAt
+            }
+            .first?
+            .model
+    }
+
     private static func preferredTextModel(from models: [StoredModel]) -> StoredModel? {
         preferredModel(for: .cortex, storedModels: models)
         ?? preferredModel(for: .mouth, storedModels: models)
@@ -306,6 +322,23 @@ enum LumenModelFleetResolver {
 
     private static func mostRecentModel(from models: [StoredModel]) -> StoredModel? {
         models.sorted { $0.downloadedAt > $1.downloadedAt }.first
+    }
+
+    private static func slotHintTokens(for slot: LumenModelSlot) -> [String] {
+        switch slot {
+        case .cortex:
+            return ["cortex"]
+        case .executor:
+            return ["executor"]
+        case .mouth:
+            return ["mouth"]
+        case .mimicry:
+            return ["mimicry"]
+        case .rem:
+            return ["rem"]
+        case .embedding:
+            return ["embedding", "embed"]
+        }
     }
 
     private static func hintWeights(for slot: LumenModelSlot) -> [String: Int] {
@@ -340,6 +373,41 @@ enum LumenModelFleetResolver {
             if secondary.contains(hint) { return partial + max(1, weight / 2) }
             return partial
         }
+    }
+
+    private static func fineTunedScore(_ model: StoredModel, slotTokens: [String]) -> Int {
+        let primary = [model.name, model.repoId, model.fileName, model.localPath]
+            .joined(separator: " ")
+            .lowercased()
+        let secondary = [model.parameters, model.quantization, model.role]
+            .joined(separator: " ")
+            .lowercased()
+        let primaryTokens = tokenSet(primary)
+        let secondaryTokens = tokenSet(secondary)
+
+        let tunedMarkers = ["finetune", "finetuned", "sft", "dpo", "orpo", "lora", "adapter", "merged", "agent"]
+        let tunedPhrases = ["fine-tune", "fine_tune", "fine tuned"]
+
+        let slotMatchPrimary = slotTokens.contains { primaryTokens.contains($0) }
+        let slotMatchSecondary = slotTokens.contains { secondaryTokens.contains($0) }
+        guard slotMatchPrimary || slotMatchSecondary else { return 0 }
+
+        let tunedPrimary = tunedMarkers.contains { primaryTokens.contains($0) }
+            || tunedPhrases.contains { primary.contains($0) }
+        let tunedSecondary = tunedMarkers.contains { secondaryTokens.contains($0) }
+            || tunedPhrases.contains { secondary.contains($0) }
+
+        var score = 0
+        score += slotMatchPrimary ? 120 : 70
+        score += tunedPrimary ? 100 : 0
+        score += tunedSecondary ? 40 : 0
+        score += (tunedPrimary || tunedSecondary) ? 40 : 0
+
+        return score
+    }
+
+    private static func tokenSet(_ value: String) -> Set<String> {
+        Set(value.split { !$0.isLetter && !$0.isNumber }.map(String.init))
     }
 
     private static func assignment(slot: LumenModelSlot, model: StoredModel) -> LumenModelAssignment {

@@ -47,73 +47,25 @@ final class SlotAgentService {
                 }
 
                 let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                let missingRequiredTools = Self.requiredTools(for: routing.intent).subtracting(availableToolIDs)
+                if !missingRequiredTools.isEmpty {
+                    recordPolicyDiagnostics(selectedTool: nil, allowedForIntent: routing.allowedToolIDs, policyViolation: false, replanned: true, prompt: executionPrompt)
+                    let replanStep = AgentStep(kind: .reflection, content: "I need to replan because required tools are unavailable for this intent: \(missingRequiredTools.sorted().joined(separator: ", ")).", toolID: nil, toolArgs: nil)
+                    steps.append(replanStep)
+                    continuation.yield(.step(replanStep))
+                    let final = IntentRouter.unavailableMessage(for: routing)
+                    yieldFinal(final, steps: steps, continuation: continuation)
+                    return
+                }
                 let requiredFallbackTool = Self.resolveRequiredToolFallback(
                     intent: routing.intent,
                     prompt: executionPrompt,
                     allowedToolIDs: Array(availableToolIDs)
                 )
-                if let mapFollowUp = deterministicMapFollowUpAction(
-                    routing: routing,
-                    prompt: executionPrompt,
-                    conversationID: req.conversationID,
-                    availableToolIDs: availableToolIDs
-                ) {
-                    let result = await executeAction(
-                        mapFollowUp,
-                        req: req,
-                        routing: routing,
-                        steps: &steps,
-                        observations: &observations,
-                        executedActionFingerprints: &executedActionFingerprints,
-                        continuation: continuation,
-                        stepIndex: 0
-                    )
-                    switch result {
-                    case .continueLoop:
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .finalizeNow(let draft):
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .blocked(let text):
-                        yieldFinal(text, steps: steps, continuation: continuation)
-                        return
-                    }
-                }
-
-                if let deterministic = DeterministicToolPlanner.plan(routing: routing, prompt: executionPrompt, availableToolIDs: availableToolIDs) {
-                    let result = await executeAction(
-                        deterministic,
-                        req: req,
-                        routing: routing,
-                        steps: &steps,
-                        observations: &observations,
-                        executedActionFingerprints: &executedActionFingerprints,
-                        continuation: continuation,
-                        stepIndex: 0
-                    )
-                    switch result {
-                    case .continueLoop:
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .finalizeNow(let draft):
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .blocked(let text):
-                        yieldFinal(text, steps: steps, continuation: continuation)
-                        return
-                    }
-                }
-
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
-                    let hasObservation = !observations.isEmpty
-                    let structuredMode = structuredModeForTurn(requiresTool: requiresTool, hasObservation: hasObservation)
-                    let slot: LumenModelSlot = structuredMode == .finalOnly ? .mouth : (stepIndex == 0 ? .cortex : .executor)
+                    let structuredMode: StructuredTurnMode = observations.isEmpty ? .actionOnly : .actionOrFinal
+                    let slot: LumenModelSlot = .cortex
                     let turnPrompt = makeStructuredTurnPrompt(
                         req: req,
                         resolution: resolution,
@@ -126,10 +78,10 @@ final class SlotAgentService {
                         slot: slot,
                         req: req,
                         userMessage: turnPrompt,
-                        temperature: structuredMode == .finalOnly ? min(req.temperature, 0.35) : 0.0,
-                        topP: structuredMode == .finalOnly ? min(req.topP, 0.8) : 0.05,
+                        temperature: observations.isEmpty ? 0.0 : min(req.temperature, 0.35),
+                        topP: observations.isEmpty ? 0.05 : min(req.topP, 0.8),
                         maxTokens: min(req.maxTokens, structuredMode == .actionOnly ? 180 : 260),
-                        modelName: structuredMode == .finalOnly ? "mouth-final-json" : "executor-action-json"
+                        modelName: "cortex-orchestrator-json"
                     )
 
                     let parsed = AgentTurnParser.parse(turnOutput)
@@ -141,13 +93,6 @@ final class SlotAgentService {
                         let thoughtStep = AgentStep(kind: .thought, content: thought, toolID: nil, toolArgs: nil)
                         steps.append(thoughtStep)
                         continuation.yield(.step(thoughtStep))
-                    }
-
-                    if structuredMode == .actionOnly, let final = parsed.final, !final.isEmpty {
-                        recordTrace(slot: slot, stage: "structured-turn-action-only", stepIndex: stepIndex, error: "unexpected_final_in_action_turn", raw: turnOutput, prompt: executionPrompt)
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
                     }
 
                     if let final = parsed.final, !final.isEmpty {
@@ -180,14 +125,16 @@ final class SlotAgentService {
                                 return
                             }
                         }
+                        if observations.isEmpty {
+                            let clarification = clarificationPromptForMissingContext(routing: routing, resolution: resolution)
+                            let clarificationStep = AgentStep(kind: .reflection, content: clarification, toolID: nil, toolArgs: nil)
+                            steps.append(clarificationStep)
+                            continuation.yield(.step(clarificationStep))
+                            yieldFinal(clarification, steps: steps, continuation: continuation)
+                            return
+                        }
                         finalText = FinalIntentValidator.validate(final, routing: routing, fallback: observations.last)
                         finalText = appendRichPayloadMarkersIfNeeded(to: finalText, from: observations)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    }
-
-                    if structuredMode == .finalOnly {
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last ?? turnOutput)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -331,14 +278,16 @@ final class SlotAgentService {
             return .finalizeNow(observations.last)
         }
 
-        let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
-        steps.append(actionStep)
-        continuation.yield(.step(actionStep))
-
-        guard SlotAgentService.isActionAllowed(canonicalTool, routing: routing) else {
+        let isAllowed = SlotAgentService.isActionAllowed(canonicalTool, routing: routing)
+        recordPolicyDiagnostics(selectedTool: canonicalTool, allowedForIntent: routing.allowedToolIDs, policyViolation: !isAllowed, replanned: false, prompt: req.userMessage)
+        guard isAllowed else {
             recordTrace(slot: .executor, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
             return .blocked(IntentRouter.blockedToolMessage(for: routing))
         }
+
+        let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
+        steps.append(actionStep)
+        continuation.yield(.step(actionStep))
 
         executedActionFingerprints.insert(fingerprint)
         let observation = await ToolExecutor.shared.execute(
@@ -397,30 +346,6 @@ final class SlotAgentService {
     
 
 
-    private func deterministicMapFollowUpAction(
-        routing: IntentRoutingDecision,
-        prompt: String,
-        conversationID: UUID?,
-        availableToolIDs: Set<String>
-    ) -> AgentAction? {
-        guard routing.intent == .maps else { return nil }
-        guard IntentRouter.isMapFollowUpPrompt(prompt) else { return nil }
-
-        let canonicalLocationToolID = ToolRouteGuard.canonicalToolID("location.current")
-        let recentEntries = ToolLedger.shared.shortTermEntries(conversationID: conversationID).reversed()
-        guard let entry = recentEntries.first(where: { ToolRouteGuard.canonicalToolID($0.toolID) == canonicalLocationToolID }) else { return nil }
-        guard let coords = LocationReferenceExtractor.coordinates(from: entry.result) else { return nil }
-        let coordinateString = String(format: "%.4f,%.4f", locale: Locale(identifier: "en_US_POSIX"), coords.latitude, coords.longitude)
-
-        if availableToolIDs.contains("maps.directions") {
-            return AgentAction(tool: "maps.directions", args: ["destination": .string(coordinateString)])
-        }
-        if availableToolIDs.contains("maps.search") {
-            return AgentAction(tool: "maps.search", args: ["query": .string(coordinateString)])
-        }
-        return nil
-    }
-
     private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
         switch (routing.intent, toolID) {
         case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
@@ -466,6 +391,16 @@ final class SlotAgentService {
 
     private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
         let prompt = """
         You are Lumen. Answer naturally and helpfully. Do not output JSON.
 
@@ -555,11 +490,21 @@ final class SlotAgentService {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
 
         switch mode {
         case .actionOnly:
             return """
-            You are Lumen v1 tool router step \(stepIndex + 1). Return exactly one JSON object and no markdown.
+            You are Lumen Cortex orchestrator step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
             Recent safe conversation context for pronoun/reference resolution only:
             \(contextBlock)
@@ -580,8 +525,8 @@ final class SlotAgentService {
             {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
 
             Hard rules:
+            - You are the planner/orchestrator for this request.
             - Output an action object only.
-            - Do not output final, answer, final_answer, prose, markdown, code fences, or explanations.
             - Use exactly one tool from Available tools.
             - Use recent context only to resolve words like he, she, her, him, it, that, them, previous, last.
             - Never reuse previous tool observations as current results.
@@ -591,9 +536,9 @@ final class SlotAgentService {
             - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
             """
-        case .finalOnly:
+        case .actionOrFinal:
             return """
-            You are Lumen v1 finalizer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
+            You are Lumen Cortex orchestrator step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
             Recent safe conversation context for pronoun/reference resolution only:
             \(contextBlock)
@@ -604,41 +549,51 @@ final class SlotAgentService {
             Rewritten execution request (source of truth):
             \(resolution.rewrittenPrompt)
 
-            Current request observations:
+            Previous observations for this current request only:
             \(observationBlock)
 
-            Required output schema:
-            {"thought":"short finalization note","final":"answer shown to the user"}
+            Available tools:
+            \(tools)
+
+            Required output schema (choose one):
+            {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
+            {"thought":"short completion note","final":"final answer draft grounded in observations"}
 
             Hard rules:
-            - Output a final object only.
-            - Do not output action, tool, args, markdown, code fences, or explanations outside JSON.
-            - Use current request observations as the source of truth.
-            - Use recent context only to resolve references, not as a fresh tool result.
-            - Never claim an action that is not in the observations.
-            """
-        case .directFinal:
-            return """
-            You are Lumen v1 direct answer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
-
-            Recent safe conversation context:
-            \(contextBlock)
-
-            Original user request:
-            \(resolution.originalPrompt)
-
-            Rewritten execution request (source of truth):
-            \(resolution.rewrittenPrompt)
-
-            Required output schema:
-            {"thought":"short answer note","final":"answer shown to the user"}
-
-            Hard rules:
-            - Output a final object only.
-            - Do not output action, tool, args, markdown, code fences, or explanations outside JSON.
-            - Do not invent tool results.
+            - You are the planner/orchestrator for this request.
+            - If there are no observations yet, output an action object only.
+            - If observations exist, either output another action or output a grounded final draft for user delivery.
+            - If you output action, use exactly one tool from Available tools.
+            - If you output final, it must be grounded in Previous observations for this current request only.
+            - Gather enough context before finalizing: prefer querying memory/rag/web context tools when relevant, and ask a clarification question if core details are missing.
+            - For factual/current-events questions, prefer web search evidence before final.
+            - For user-preference or prior-personal-context questions, prefer memory lookup before final.
+            - For local knowledge/doc questions, prefer file/RAG tools before final.
+            - Use recent context only to resolve words like he, she, her, him, it, that, them, previous, last.
+            - Never reuse previous tool observations as current results.
+            - Never call the same tool with the same arguments twice.
+            - For phone calls to a person by name or pronoun, use contacts.search first unless a phone number is already explicit.
+            - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
+            - For "read latest email", use outlook.message.read with {"message":"latest"}.
+            - If the tool needs the user's current place, use location="current location".
             """
         }
+    }
+
+    private func clarificationPromptForMissingContext(routing: IntentRoutingDecision, resolution: ReferenceResolution) -> String {
+        let intentHint: String
+        switch routing.intent {
+        case .weather: intentHint = "location and timeframe"
+        case .webSearch, .rag, .files: intentHint = "topic scope and preferred sources"
+        case .maps: intentHint = "destination and travel context"
+        case .phoneCall, .messageDraft, .emailDraft, .outlook: intentHint = "recipient and the intended action"
+        case .calendar, .reminder, .trigger, .alarm: intentHint = "time and completion criteria"
+        case .memory, .note: intentHint = "which memory or note context to use"
+        default: intentHint = "the key missing detail needed to proceed"
+        }
+        let scopedRequest = resolution.rewrittenPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestSnippet = scopedRequest.isEmpty ? "" : " for this request (\(scopedRequest.prefix(80)))"
+        return "Before I finalize, could you clarify the \(intentHint)\(requestSnippet)?"
     }
 
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
@@ -646,6 +601,16 @@ final class SlotAgentService {
         let draftBlockRaw = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
         let draftBlock = WebRichContentPayload.removingMarkers(from: draftBlockRaw)
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
         return """
         Write the final user-facing answer for the current user request only. Do not output JSON.
 
@@ -673,18 +638,13 @@ final class SlotAgentService {
         - Never reuse a result from a previous user request as a current tool result.
         - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
         - Keep it concise, accurate, and do not claim actions that did not happen.
+        \(ragGroundingRules)
         """
     }
 
     private enum StructuredTurnMode: String {
         case actionOnly
-        case finalOnly
-        case directFinal
-    }
-
-    private func structuredModeForTurn(requiresTool: Bool, hasObservation: Bool) -> StructuredTurnMode {
-        if hasObservation { return .finalOnly }
-        return requiresTool ? .actionOnly : .directFinal
+        case actionOrFinal
     }
 
     private func boundedMaxSteps(for routing: IntentRoutingDecision, requested: Int) -> Int {
@@ -952,6 +912,29 @@ final class SlotAgentService {
         return nil
     }
 
+    nonisolated static func requiredTools(for intent: UserIntent) -> Set<String> {
+        switch intent {
+        case .memory:
+            return ["memory.save", "memory.recall"]
+        default:
+            return []
+        }
+    }
+
+    private func recordPolicyDiagnostics(selectedTool: String?, allowedForIntent: Set<String>, policyViolation: Bool, replanned: Bool, prompt: String) {
+        SlotAgentDiagnosticsRecorder.recordPolicy(
+            SlotAgentPolicyTrace(
+                id: UUID(),
+                createdAt: Date(),
+                selectedTool: selectedTool,
+                allowedForIntent: allowedForIntent.sorted(),
+                policyViolation: policyViolation,
+                replanned: replanned,
+                userPromptPrefix: String(prompt.prefix(2_000))
+            )
+        )
+    }
+
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
         for chunk in chunk(text) {
             continuation.yield(.finalDelta(chunk))
@@ -999,6 +982,16 @@ nonisolated struct SlotAgentTrace: Codable, Sendable {
     let userPromptPrefix: String
 }
 
+nonisolated struct SlotAgentPolicyTrace: Codable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let selectedTool: String?
+    let allowedForIntent: [String]
+    let policyViolation: Bool
+    let replanned: Bool
+    let userPromptPrefix: String
+}
+
 nonisolated enum SlotAgentDiagnosticsRecorder {
     static func record(_ trace: SlotAgentTrace) {
         do {
@@ -1020,6 +1013,28 @@ nonisolated enum SlotAgentDiagnosticsRecorder {
             }
         } catch {
             // Diagnostics must never break generation.
+        }
+    }
+
+    static func recordPolicy(_ trace: SlotAgentPolicyTrace) {
+        do {
+            let directory = try diagnosticsDirectory()
+            let url = directory.appendingPathComponent("slot-agent-policy.jsonl", isDirectory: false)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(trace)
+            var line = data
+            line.append(0x0A)
+
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } else {
+                try line.write(to: url, options: [.atomic])
+            }
+        } catch {
         }
     }
 

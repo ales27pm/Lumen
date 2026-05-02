@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
@@ -303,7 +304,7 @@ class DatasetCompilerConfig:
     def generated_at(self) -> str:
         if self.deterministic:
             return DETERMINISTIC_DATASET_GENERATED_AT
-        return datetime.now(tz=UTC).isoformat()
+        return datetime.now(tz=timezone.utc).isoformat()
 
 
 @dataclass(frozen=True)
@@ -372,6 +373,7 @@ def _normalize_record(
     record: dict[str, Any],
     config: DatasetCompilerConfig,
 ) -> dict[str, Any]:
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     messages = _normalize_messages(record)
     role = _infer_role(family, record, messages)
     task = _infer_task(family, record)
@@ -389,7 +391,7 @@ def _normalize_record(
         "taskType": task,
         "messages": messages,
         "toolIDs": tool_ids,
-        "grounding": _normalized_grounding(record, manifest),
+        "grounding": _normalized_grounding(record, manifest, config),
         "quality": {
             "includeInSFT": _has_assistant_target(messages),
             "risk": risk,
@@ -406,7 +408,7 @@ def _normalize_record(
         "metadata": {
             "generatedAt": config.generated_at,
             "manifestSchemaVersion": manifest.schemaVersion,
-            "manifestCommit": manifest.sourceIntegrity.commit,
+            "manifestCommit": lineage_commit,
             "sourceIndex": index,
             "invalidContrastToolIDs": [tool_id for tool_id in all_tool_ids if tool_id not in known_tool_ids],
         },
@@ -538,13 +540,14 @@ def _curriculum_label(family: str, risk: str) -> str:
     return "role_behaviour"
 
 
-def _normalized_grounding(record: dict[str, Any], manifest: AgentBehaviorManifest) -> dict[str, Any]:
+def _normalized_grounding(record: dict[str, Any], manifest: AgentBehaviorManifest, config: DatasetCompilerConfig) -> dict[str, Any]:
     grounding = record.get("grounding") if isinstance(record.get("grounding"), dict) else {}
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     return {
         **grounding,
         "manifestSchemaVersion": manifest.schemaVersion,
         "source": grounding.get("source", "AgentBehaviorManifest.json"),
-        "sourceIntegrityCommit": manifest.sourceIntegrity.commit,
+        "sourceIntegrityCommit": lineage_commit,
     }
 
 
@@ -716,7 +719,7 @@ def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
         clean = {**scenario, "prompt": prompt}
         if clean["scenarioKind"] != "explicit_tool_schema":
             clean["toolIDVisibleInPrompt"] = False
-            if tool.id in prompt:
+            if _prompt_explicitly_references_tool_id(prompt, str(tool.id)):
                 continue
         deduped.append(clean)
 
@@ -724,6 +727,22 @@ def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
         deduped.append({"prompt": f"Help me with {phrase} in a safe and manifest-compliant way.", "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
 
     return deduped
+
+
+def _prompt_explicitly_references_tool_id(prompt_text: str, tool_id: str) -> bool:
+    if not prompt_text or not tool_id:
+        return False
+    if "." in tool_id:
+        return tool_id.casefold() in prompt_text.casefold()
+
+    escaped = re.escape(tool_id)
+    explicit_patterns = (
+        rf"`{escaped}`",
+        rf'[\'\"]{escaped}[\'\"]',
+        rf"\btool\s+{escaped}\b",
+        rf"\buse\s+{escaped}\b",
+    )
+    return any(re.search(pattern, prompt_text, flags=re.IGNORECASE) for pattern in explicit_patterns)
 
 
 def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -902,6 +921,9 @@ def _build_dataset_manifest(
     runtime_audit_reports: list[dict[str, Any]],
     config: DatasetCompilerConfig,
 ) -> dict[str, Any]:
+    # Deterministic mode is used by CI drift checks, so avoid embedding HEAD-derived
+    # values that change every commit even when extracted behavior stays identical.
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     counts = {name: len(records) for name, records in {**raw_role_records, **compiled_records}.items()}
     compiled_hashes = {name: _records_hash(records) for name, records in compiled_records.items()}
     runtime_formats = sorted({str(report.get("_sourceFormat")) for report in runtime_audit_reports if report.get("_sourceFormat")})
@@ -911,7 +933,7 @@ def _build_dataset_manifest(
         "deterministic": config.deterministic,
         "manifest": {
             "schemaVersion": manifest.schemaVersion,
-            "commit": manifest.sourceIntegrity.commit,
+            "commit": lineage_commit,
             "toolCount": len(manifest.tools),
             "intentCount": len(manifest.intents),
             "modelSlotCount": len(manifest.fleet.slots),

@@ -6,11 +6,19 @@
   "lora_r": 16,
   "lora_alpha": 32,
   "lora_dropout": 0.0,
-  "learning_rate": 0.0001,
+  "learning_rate": 0.00008,
   "batch_size": 2,
   "gradient_accumulation_steps": 8,
   "num_train_epochs": 1,
   "warmup_steps": 20,
+  "gradient_checkpointing": true,
+  "packing": false,
   "output_dir": "models/lora/fleet",
-  "dataset_dir": "generated/fine_tuning/fleet"
+  "gguf_output_dir": "models/gguf_merged/fleet_merged_gguf",
+  "gguf_quantization": "q4_k_m",
+  "gguf_repo_id": "ales27pm/lumen-fleet-gguf",
+  "dataset_dir": "generated/fine_tuning/fleet",
+  "preference_trainer": "dpo",
+  "fleet_strategy": "train_first",
+  "merge_target": "cortex"
 }

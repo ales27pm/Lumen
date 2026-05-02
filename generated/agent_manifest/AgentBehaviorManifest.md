@@ -1,7 +1,7 @@
 # Lumen Agent Behavior Manifest
 
 ## Source Integrity
-- Commit: `51b4f67fe27ed71ce89acf1a0265c9c79c49b4a5`
+- Commit: `92151fb7ef4fd24d7e5d6356ec260caf9fb3e933`
 - Source files: 13
 
 ## Model Fleet Slots

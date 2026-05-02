@@ -79,9 +79,9 @@ From the repo root:
 
 ```bash
 cd tools/lumen_manifest_crawler
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+pip install -e '.[dev]'
 python -m lumen_manifest_crawler generate --root ../.. --output ../../generated/agent_manifest --pretty
 ```
 

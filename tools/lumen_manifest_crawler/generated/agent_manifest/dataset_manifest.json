@@ -1,37 +1,37 @@
 {
   "counts": {
-    "approval_boundary_samples": 115,
-    "cortex_routing": 69,
-    "dpo_preference_pairs": 53,
-    "eval_scenarios": 546,
-    "executor_tool_calls": 53,
+    "approval_boundary_samples": 0,
+    "cortex_routing": 0,
+    "dpo_preference_pairs": 0,
+    "eval_scenarios": 2,
+    "executor_tool_calls": 0,
     "manifest_grounding_cards": 4,
     "mimicry_style": 3,
-    "mouth_responses": 53,
-    "negative_samples": 53,
-    "rem_reflection": 5,
+    "mouth_responses": 0,
+    "negative_samples": 0,
+    "rem_reflection": 0,
     "runtime_audit_repairs": 0,
-    "tool_schema_cards": 53,
-    "train_sft": 298,
-    "validation_sft": 53
+    "tool_schema_cards": 0,
+    "train_sft": 2,
+    "validation_sft": 1
   },
   "deterministic": true,
   "generatedAt": "1970-01-01T00:00:00+00:00",
   "hashes": {
-    "dpo_preference_pairs": "fe30237492e17dfdeb3679726e4d4c887a156338004e7be17602d6f32163e191",
-    "eval_scenarios": "419e219b9ee188fb027568fccd952e38ec1d201ca989e768af28a6fd6862f24e",
-    "manifest_grounding_cards": "5d2bde9f0e72ba44c04853fb2bf5261d7368641b08e460811c432a619f944dba",
+    "dpo_preference_pairs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "eval_scenarios": "347a3e8ea270fa95a464b120932ede90682bf8782538db11471cde2ed2bdd2c8",
+    "manifest_grounding_cards": "634ea03ff61808159e1796f71fbdc475ac3e8f88e89f53f458fa40ab2c64e8ce",
     "runtime_audit_repairs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "tool_schema_cards": "9f8d3486e7a84c91e36fc5ca0f74aae4cb1f49e5279d9753e7b19749941bba8a",
-    "train_sft": "de230797f68de5b7b6f387449134a7f0840c849edc5d0135a744edfaa82f3f05",
-    "validation_sft": "780ee1d02f9f5621997e5417ac67b166522d71f83b6ba57eccc7b6a6d1fa577f"
+    "tool_schema_cards": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "train_sft": "d9ae43b80b4a50a5c8e53480efcad74c7e94a062b7b212afe958e0ef26ca96bd",
+    "validation_sft": "c6bb26cf7a032df03808e7e0567232b57db91733fd2496c108ff1572f45a7941"
   },
   "manifest": {
-    "commit": "f54d520d888452d24905536a75f5b1e216fc4c01",
-    "intentCount": 22,
-    "modelSlotCount": 6,
+    "commit": "92151fb7ef4fd24d7e5d6356ec260caf9fb3e933",
+    "intentCount": 0,
+    "modelSlotCount": 0,
     "schemaVersion": "1.0.0",
-    "toolCount": 53
+    "toolCount": 0
   },
   "schemaVersion": "2.0.0",
   "sources": {
@@ -46,7 +46,7 @@
     ],
     "runtimeAuditFormats": [],
     "runtimeAuditReports": 0,
-    "staticSwiftSourceFiles": 13
+    "staticSwiftSourceFiles": 0
   },
   "trainingPolicy": {
     "format": "chat_messages_jsonl",

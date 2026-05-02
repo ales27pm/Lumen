@@ -23,7 +23,7 @@ class MemoryExtractor(SwiftExtractor):
 
         existing = {f.id for f in manifest.memory.freshnessClasses}
         freshness_cases = set(enum_cases(file.text, "MemoryFreshnessClass")) | set(enum_cases(file.text, "FreshnessClass"))
-        for name in freshness_cases:
+        for name in sorted(freshness_cases):
             if name not in existing:
                 manifest.memory.freshnessClasses.append(
                     FreshnessClassManifest(

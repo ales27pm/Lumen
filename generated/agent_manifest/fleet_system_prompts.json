@@ -475,6 +475,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -482,7 +488,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -491,12 +497,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [
@@ -2171,6 +2171,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -2178,7 +2184,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -2187,12 +2193,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [
@@ -4545,6 +4545,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -4552,7 +4558,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -4561,12 +4567,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [
@@ -6237,6 +6237,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -6244,7 +6250,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -6253,12 +6259,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [
@@ -7927,6 +7927,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -7934,7 +7940,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -7943,12 +7949,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [
@@ -9617,6 +9617,12 @@
       "memory": {
         "freshnessClasses": [
           {
+            "durable": true,
+            "id": "durable",
+            "source": "ios/Lumen/Models/MemoryItem.swift",
+            "ttlSeconds": null
+          },
+          {
             "durable": false,
             "id": "shortLived",
             "source": "ios/Lumen/Models/MemoryItem.swift",
@@ -9624,7 +9630,7 @@
           },
           {
             "durable": true,
-            "id": "durable",
+            "id": "timeless",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": null
           },
@@ -9633,12 +9639,6 @@
             "id": "volatile",
             "source": "ios/Lumen/Models/MemoryItem.swift",
             "ttlSeconds": 300
-          },
-          {
-            "durable": true,
-            "id": "timeless",
-            "source": "ios/Lumen/Models/MemoryItem.swift",
-            "ttlSeconds": null
           }
         ],
         "scopes": [

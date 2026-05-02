@@ -1,26 +1,5 @@
 {
-  "passed": false,
-  "failures": [
-    {
-      "code": "tool_id_leak_in_natural_eval",
-      "message": "Tool weather leaked in natural intent prompt",
-      "path": "dataset.eval_scenarios.weather"
-    },
-    {
-      "code": "tool_id_leak_in_natural_eval",
-      "message": "Tool weather leaked in natural intent prompt",
-      "path": "dataset.eval_scenarios.weather"
-    },
-    {
-      "code": "tool_id_leak_in_natural_eval",
-      "message": "Tool weather leaked in natural intent prompt",
-      "path": "dataset.eval_scenarios.weather"
-    },
-    {
-      "code": "missing_permission_eval_coverage",
-      "message": "Tool weather requires permission coverage in eval scenarios",
-      "path": "dataset.eval_scenarios.weather"
-    }
-  ],
+  "passed": true,
+  "failures": [],
   "warnings": []
 }

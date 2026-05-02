@@ -144,7 +144,6 @@ nonisolated enum ModelCatalog {
         LumenModelFleetCatalog.v1FineTunedMerged
         + LumenModelFleetCatalog.v1Recommended
         + LumenModelFleetCatalog.v1Candidates
-        + legacyFeatured
     )
 
     // Keeps compatibility if a build expects the previous default identifier.

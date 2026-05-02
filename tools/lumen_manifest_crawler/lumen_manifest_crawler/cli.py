@@ -128,7 +128,7 @@ def _canonicalize(value: Any) -> Any:
         return {key: _canonicalize(child) for key, child in sorted(value.items())}
     if isinstance(value, list):
         canonical_items = [_canonicalize(item) for item in value]
-        return sorted(canonical_items, key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return canonical_items
     return value
 
 

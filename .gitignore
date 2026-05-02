@@ -4,3 +4,4 @@ node_modules
 tools/lumen_manifest_crawler/.venv/
 tools/lumen_manifest_crawler/lumen_manifest_crawler/__pycache__/
 .vscode/
+.venv-unsloth/

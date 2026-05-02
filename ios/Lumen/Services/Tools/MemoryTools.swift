@@ -26,13 +26,30 @@ enum MemoryTools {
         guard !trimmed.isEmpty else { return "Need a search query." }
         guard let container = SharedContainer.shared else { return "RAG store unavailable." }
         let ctx = ModelContext(container)
-        let results = await RAGStore.search(query: trimmed, context: ctx, limit: limit)
-        if results.isEmpty { return "No matches. Try reindexing files or photos first." }
+        let expandedQuery = expandRAGQueryIfNeeded(trimmed)
+        let results = await RAGStore.search(query: expandedQuery, context: ctx, limit: limit)
+        if results.isEmpty {
+            let counts = RAGStore.counts(context: ctx)
+            let totalIndexed = counts.values.reduce(0, +)
+            if totalIndexed == 0 {
+                return "No matching files found for '\(trimmed)'. Your local index appears empty. Import or create local files/notes, then run reindex files."
+            }
+            return "No matching files found for '\(trimmed)'. Try a narrower query (file name, module name, or service/component keywords), or add more project notes before searching again."
+        }
         return results.enumerated().map { idx, r in
             let src = "\(r.chunk.kind.label) · \(r.chunk.sourceName)"
             let snippet = r.chunk.content.prefix(300)
             return "[\(idx + 1)] \(src)\n\(snippet)"
         }.joined(separator: "\n\n")
+    }
+
+
+    private static func expandRAGQueryIfNeeded(_ query: String) -> String {
+        let lower = query.lowercased()
+        let shouldExpand = ["architecture notes", "architecture", "module", "service", "component", "package"].contains { lower.contains($0) }
+        guard shouldExpand else { return query }
+        let expansionTerms = ["architecture", "module", "service", "component", "package"]
+        return query + " " + expansionTerms.joined(separator: " ")
     }
 
     static func ragIndexFiles() async -> String {

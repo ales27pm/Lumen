@@ -90,6 +90,9 @@ nonisolated enum IntentRouter {
         }
 
         if isCurrentLocationIntent(text) {
+            if matchesAny(text, ["weather", "forecast", "temperature", "outside", "rain", "snow", "wind", "weather here"]) {
+                return IntentRoutingDecision(intent: .weather, allowedToolIDs: weatherToolIDs, requiresClarification: false, clarificationPrompt: nil)
+            }
             return IntentRoutingDecision(intent: .maps, allowedToolIDs: ["location.current"], requiresClarification: false, clarificationPrompt: nil)
         }
 

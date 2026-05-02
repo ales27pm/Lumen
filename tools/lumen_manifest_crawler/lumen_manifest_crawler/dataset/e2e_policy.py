@@ -31,12 +31,12 @@ def _slug(value: str) -> str:
 
 
 def _agent_for_intent(intent: str) -> str:
-    return "mouth" if intent in {"emaildraft", "email", "maildraft", "chat", "memory", "rag", "websearch", "weather", "trigger"} else "cortex"
+    return "mouth" if intent in {"emaildraft", "email", "maildraft", "chat", "memory", "rag", "websearch", "weblookup", "weather", "trigger"} else "cortex"
 
 
 def _curriculum_for_intent(intent: str) -> str:
     if intent in {"memory", "rag"}:
         return "grounded_response_quality"
-    if intent in {"emaildraft", "email", "maildraft", "trigger", "tool", "websearch"}:
+    if intent in {"emaildraft", "email", "maildraft", "trigger", "tool", "websearch", "weblookup"}:
         return "tool_boundary_response_quality"
     return "response_quality"

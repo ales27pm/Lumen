@@ -1,9 +1,11 @@
 import Foundation
 
 nonisolated enum AssistantOutputSanitizer {
-    static func sanitize(_ text: String, lastUserMessage: String? = nil) -> String {
+    static func sanitize(_ text: String, lastUserMessage: String? = nil, debugMode: Bool = false) -> String {
         let withoutWebPayload = WebRichContentPayload.removingMarkers(from: text)
-        let trimmed = withoutWebPayload.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutToolTraceJSON = debugMode ? withoutWebPayload : removingToolTraceJSONBlobs(from: withoutWebPayload)
+        let formattedSources = reformatSourcesSection(in: withoutToolTraceJSON)
+        let trimmed = formattedSources.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
 
         if isLeakedToolJSONArtifact(trimmed) {
@@ -19,6 +21,61 @@ nonisolated enum AssistantOutputSanitizer {
         }
 
         return trimmed
+    }
+
+    static func removingToolTraceJSONBlobs(from text: String) -> String {
+        var output = text
+
+        let fencedPattern = #"```json\s*\{[\s\S]*?(?:\"thought\"|\"action\"|\"tool\"|\"tool_trace\"|\"trace\"|\"args\")[\s\S]*?\}\s*```"#
+        output = output.replacingOccurrences(of: fencedPattern, with: "", options: .regularExpression)
+
+        let inlinePattern = #"(?mi)^\s*\{\s*\"(?:thought|action|tool|tool_trace|trace|args)\"[\s\S]*?\}\s*$"#
+        output = output.replacingOccurrences(of: inlinePattern, with: "", options: .regularExpression)
+
+        return output
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func reformatSourcesSection(in text: String) -> String {
+        guard let range = text.range(of: #"(?is)sources\s*:\s*(\[[\s\S]*?\])"#, options: .regularExpression) else {
+            return text
+        }
+        let match = String(text[range])
+        guard let arrayRange = match.range(of: #"\[[\s\S]*\]"#, options: .regularExpression) else {
+            return text
+        }
+        let jsonArray = String(match[arrayRange])
+        guard let data = jsonArray.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any],
+              !parsed.isEmpty else {
+            return text
+        }
+
+        let bullets: [String] = parsed.compactMap { item in
+            if let raw = item as? String {
+                return "- \(raw)"
+            }
+            if let object = item as? [String: Any] {
+                let title = object["title"] as? String
+                let url = object["url"] as? String
+                switch (title, url) {
+                case let (t?, u?) where !t.isEmpty && !u.isEmpty:
+                    return "- [\(t)](\(u))"
+                case let (_, u?) where !u.isEmpty:
+                    return "- \(u)"
+                case let (t?, _) where !t.isEmpty:
+                    return "- \(t)"
+                default:
+                    return nil
+                }
+            }
+            return nil
+        }
+
+        guard !bullets.isEmpty else { return text }
+        let replacement = "Sources:\n" + bullets.joined(separator: "\n")
+        return text.replacingCharacters(in: range, with: replacement)
     }
 
     static func isFalseToolClaim(_ text: String, lastUserMessage: String? = nil) -> Bool {

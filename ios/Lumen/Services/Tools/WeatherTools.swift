@@ -38,7 +38,7 @@ enum WeatherTools {
         switch result {
         case .failure(let error):
             return error.localizedDescription
-        case .success(let data, _):
+        case .success(let (data, _)):
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let current = json["current"] as? [String: Any] else {
                 return ToolNetworkResilience.fallbackMessage(for: .parsing, context: "Weather service")

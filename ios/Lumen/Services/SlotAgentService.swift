@@ -62,68 +62,10 @@ final class SlotAgentService {
                     prompt: executionPrompt,
                     allowedToolIDs: Array(availableToolIDs)
                 )
-                if let mapFollowUp = deterministicMapFollowUpAction(
-                    routing: routing,
-                    prompt: executionPrompt,
-                    conversationID: req.conversationID,
-                    availableToolIDs: availableToolIDs
-                ) {
-                    let result = await executeAction(
-                        mapFollowUp,
-                        req: req,
-                        routing: routing,
-                        steps: &steps,
-                        observations: &observations,
-                        executedActionFingerprints: &executedActionFingerprints,
-                        continuation: continuation,
-                        stepIndex: 0
-                    )
-                    switch result {
-                    case .continueLoop:
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .finalizeNow(let draft):
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .blocked(let text):
-                        yieldFinal(text, steps: steps, continuation: continuation)
-                        return
-                    }
-                }
-
-                if let deterministic = DeterministicToolPlanner.plan(routing: routing, prompt: executionPrompt, availableToolIDs: availableToolIDs) {
-                    let result = await executeAction(
-                        deterministic,
-                        req: req,
-                        routing: routing,
-                        steps: &steps,
-                        observations: &observations,
-                        executedActionFingerprints: &executedActionFingerprints,
-                        continuation: continuation,
-                        stepIndex: 0
-                    )
-                    switch result {
-                    case .continueLoop:
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .finalizeNow(let draft):
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    case .blocked(let text):
-                        yieldFinal(text, steps: steps, continuation: continuation)
-                        return
-                    }
-                }
-
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
-                    let hasObservation = !observations.isEmpty
-                    let structuredMode = structuredModeForTurn(requiresTool: requiresTool, hasObservation: hasObservation)
-                    let slot: LumenModelSlot = structuredMode == .finalOnly ? .mouth : (stepIndex == 0 ? .cortex : .executor)
+                    let structuredMode = structuredModeForTurn(requiresTool: requiresTool)
+                    let slot: LumenModelSlot = .cortex
                     let turnPrompt = makeStructuredTurnPrompt(
                         req: req,
                         resolution: resolution,
@@ -136,10 +78,10 @@ final class SlotAgentService {
                         slot: slot,
                         req: req,
                         userMessage: turnPrompt,
-                        temperature: structuredMode == .finalOnly ? min(req.temperature, 0.35) : 0.0,
-                        topP: structuredMode == .finalOnly ? min(req.topP, 0.8) : 0.05,
+                        temperature: observations.isEmpty ? 0.0 : min(req.temperature, 0.35),
+                        topP: observations.isEmpty ? 0.05 : min(req.topP, 0.8),
                         maxTokens: min(req.maxTokens, structuredMode == .actionOnly ? 180 : 260),
-                        modelName: structuredMode == .finalOnly ? "mouth-final-json" : "executor-action-json"
+                        modelName: "cortex-orchestrator-json"
                     )
 
                     let parsed = AgentTurnParser.parse(turnOutput)
@@ -190,14 +132,16 @@ final class SlotAgentService {
                                 return
                             }
                         }
+                        if observations.isEmpty {
+                            let clarification = "Before I finalize, I need one clarification to avoid assumptions. Could you share the missing detail (target scope, timeframe, or source preference)?"
+                            let clarificationStep = AgentStep(kind: .reflection, content: clarification, toolID: nil, toolArgs: nil)
+                            steps.append(clarificationStep)
+                            continuation.yield(.step(clarificationStep))
+                            yieldFinal(clarification, steps: steps, continuation: continuation)
+                            return
+                        }
                         finalText = FinalIntentValidator.validate(final, routing: routing, fallback: observations.last)
                         finalText = appendRichPayloadMarkersIfNeeded(to: finalText, from: observations)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    }
-
-                    if structuredMode == .finalOnly {
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: observations.last ?? turnOutput)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
                     }
@@ -409,30 +353,6 @@ final class SlotAgentService {
     
 
 
-    private func deterministicMapFollowUpAction(
-        routing: IntentRoutingDecision,
-        prompt: String,
-        conversationID: UUID?,
-        availableToolIDs: Set<String>
-    ) -> AgentAction? {
-        guard routing.intent == .maps else { return nil }
-        guard IntentRouter.isMapFollowUpPrompt(prompt) else { return nil }
-
-        let canonicalLocationToolID = ToolRouteGuard.canonicalToolID("location.current")
-        let recentEntries = ToolLedger.shared.shortTermEntries(conversationID: conversationID).reversed()
-        guard let entry = recentEntries.first(where: { ToolRouteGuard.canonicalToolID($0.toolID) == canonicalLocationToolID }) else { return nil }
-        guard let coords = LocationReferenceExtractor.coordinates(from: entry.result) else { return nil }
-        let coordinateString = String(format: "%.4f,%.4f", locale: Locale(identifier: "en_US_POSIX"), coords.latitude, coords.longitude)
-
-        if availableToolIDs.contains("maps.directions") {
-            return AgentAction(tool: "maps.directions", args: ["destination": .string(coordinateString)])
-        }
-        if availableToolIDs.contains("maps.search") {
-            return AgentAction(tool: "maps.search", args: ["query": .string(coordinateString)])
-        }
-        return nil
-    }
-
     private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
         switch (routing.intent, toolID) {
         case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
@@ -591,7 +511,7 @@ final class SlotAgentService {
         switch mode {
         case .actionOnly:
             return """
-            You are Lumen v1 tool router step \(stepIndex + 1). Return exactly one JSON object and no markdown.
+            You are Lumen Cortex orchestrator step \(stepIndex + 1). Return exactly one JSON object and no markdown.
 
             Recent safe conversation context for pronoun/reference resolution only:
             \(contextBlock)
@@ -608,13 +528,20 @@ final class SlotAgentService {
             Available tools:
             \(tools)
 
-            Required output schema:
+            Required output schema (choose one):
             {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
+            {"thought":"short completion note","final":"handoff draft for Mouth"}
 
             Hard rules:
-            - Output an action object only.
-            - Do not output final, answer, final_answer, prose, markdown, code fences, or explanations.
-            - Use exactly one tool from Available tools.
+            - You are the planner/orchestrator for this request.
+            - If there are no observations yet, output an action object only.
+            - If observations exist, either output another action or output final for the Mouth agent to deliver.
+            - If you output action, use exactly one tool from Available tools.
+            - If you output final, it must be grounded in Previous observations for this current request only.
+            - Gather enough context before finalizing: prefer querying memory/rag/web context tools when relevant, and ask a clarification question if core details are missing.
+            - For factual/current-events questions, prefer web search evidence before final.
+            - For user-preference or prior-personal-context questions, prefer memory lookup before final.
+            - For local knowledge/doc questions, prefer file/RAG tools before final.
             - Use recent context only to resolve words like he, she, her, him, it, that, them, previous, last.
             - Never reuse previous tool observations as current results.
             - Never call the same tool with the same arguments twice.
@@ -622,32 +549,6 @@ final class SlotAgentService {
             - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
             - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
-            """
-        case .finalOnly:
-            return """
-            You are Lumen v1 finalizer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
-
-            Recent safe conversation context for pronoun/reference resolution only:
-            \(contextBlock)
-
-            Original user request:
-            \(resolution.originalPrompt)
-
-            Rewritten execution request (source of truth):
-            \(resolution.rewrittenPrompt)
-
-            Current request observations:
-            \(observationBlock)
-
-            Required output schema:
-            {"thought":"short finalization note","final":"answer shown to the user"}
-
-            Hard rules:
-            - Output a final object only.
-            - Do not output action, tool, args, markdown, code fences, or explanations outside JSON.
-            - Use current request observations as the source of truth.
-            - Use recent context only to resolve references, not as a fresh tool result.
-            - Never claim an action that is not in the observations.
             """
         case .directFinal:
             return """
@@ -721,12 +622,10 @@ final class SlotAgentService {
 
     private enum StructuredTurnMode: String {
         case actionOnly
-        case finalOnly
         case directFinal
     }
 
-    private func structuredModeForTurn(requiresTool: Bool, hasObservation: Bool) -> StructuredTurnMode {
-        if hasObservation { return .finalOnly }
+    private func structuredModeForTurn(requiresTool: Bool) -> StructuredTurnMode {
         return requiresTool ? .actionOnly : .directFinal
     }
 

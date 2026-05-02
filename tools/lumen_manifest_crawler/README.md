@@ -91,6 +91,52 @@ Or from the repo root after installation:
 python -m lumen_manifest_crawler generate --root . --output generated/agent_manifest --pretty
 ```
 
+## Run one closed improvement-loop cycle
+
+The `improve-loop` command performs one auditable cycle of the static/runtime/training loop:
+
+1. optionally run a local test command;
+2. scan Swift source and regenerate the manifest;
+3. ingest one or more in-app dataset package JSON files;
+4. compile base datasets, fleet artifacts, and per-agent fine-tuning datasets;
+5. optionally run build/training commands;
+6. write a loop state file, gap report, Markdown report, and next-action prompts for the next code-change pass.
+
+```bash
+python -m lumen_manifest_crawler improve-loop \
+  --root . \
+  --output generated/agent_manifest \
+  --loop-output generated/agent_improvement_loop \
+  --runtime-audit runtime-audits/latest-audit.json \
+  --generate-system-prompts \
+  --generate-agent-fine-tuning
+```
+
+The loop writes:
+
+```text
+generated/agent_improvement_loop/
+├── loop_state.json
+├── loop_gaps.json
+├── next_action_prompts.jsonl
+└── LOOP_REPORT.md
+```
+
+Use `next_action_prompts.jsonl` as the work queue for the next source-code improvement pass. Each record contains the gap evidence, severity, target subsystem, and required outcome.
+
+To include commands without executing them:
+
+```bash
+python -m lumen_manifest_crawler improve-loop \
+  --root . \
+  --dry-run-commands \
+  --test-command "python -m pytest tools/lumen_manifest_crawler/tests" \
+  --build-command "xcodebuild -version" \
+  --train-command "python tools/fine_tuning/unsloth/train.py"
+```
+
+Run the command repeatedly from CI, a local shell loop, or a Codex pass. Each iteration should either remove a gap or expand coverage with a new runtime trace field, adversarial scenario family, or quality gate.
+
 ## Generate fleet self-knowledge artifacts
 
 ```bash

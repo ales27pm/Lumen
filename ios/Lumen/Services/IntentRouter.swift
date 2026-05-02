@@ -188,7 +188,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["search personal data", "search my files", "search local files", "search my documents", "search my notes", "reindex files", "index files", "reindex photos", "index photos", "rag search", "architecture notes"]) {
+        if matchesAny(text, ["search personal data", "search my files", "search local files", "search my documents", "search my notes", "reindex files", "index files", "reindex photos", "index photos", "rag search", "architecture notes"]) || isLikelyLocalKnowledgeQuery(text) {
             return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
@@ -277,6 +277,19 @@ nonisolated enum IntentRouter {
         return directCallPatterns.contains { pattern in
             text.range(of: pattern, options: .regularExpression) != nil
         }
+    }
+
+
+    private static func isLikelyLocalKnowledgeQuery(_ text: String) -> Bool {
+        let localScopeMarkers = ["my files", "my notes", "my documents", "local", "imported", "codebase", "repo"]
+        let lookupVerbs = ["search", "find", "look up", "summarize", "read", "show"]
+        let architectureTopics = ["architecture", "system design", "codebase structured", "codebase structure", "how is the codebase structured", "modules"]
+
+        if matchesAny(text, architectureTopics) && (matchesAny(text, localScopeMarkers) || matchesAny(text, lookupVerbs)) {
+            return true
+        }
+
+        return matchesAny(text, localScopeMarkers) && matchesAny(text, ["architecture", "system design", "structure", "module", "modules"])
     }
 
     private static func normalized(_ text: String) -> String {

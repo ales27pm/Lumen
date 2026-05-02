@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BundledFleetSystemPrompt: Codable, Hashable {
+public struct BundledFleetSystemPrompt: Codable, Hashable, Sendable {
     public let slotID: String?
     public let role: String?
     public let systemPrompt: String?
@@ -11,7 +11,7 @@ public struct BundledFleetSystemPrompt: Codable, Hashable {
     }
 }
 
-public enum BundledAgentGroundingStoreError: LocalizedError {
+public enum BundledAgentGroundingStoreError: LocalizedError, Sendable {
     case missingResource(String)
     case invalidResource(URL)
     case missingPrompt(slotID: String)
@@ -28,8 +28,8 @@ public enum BundledAgentGroundingStoreError: LocalizedError {
     }
 }
 
-public final class BundledAgentGroundingStore {
-    public static let shared = BundledAgentGroundingStore()
+public final class BundledAgentGroundingStore: @unchecked Sendable {
+    public nonisolated(unsafe) static let shared = BundledAgentGroundingStore()
 
     private let bundle: Bundle
     private let decoder: JSONDecoder

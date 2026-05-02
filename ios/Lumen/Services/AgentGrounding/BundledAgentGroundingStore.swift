@@ -90,8 +90,12 @@ public final class BundledAgentGroundingStore {
     public func crossModelTrainingFileURL(named fileName: String) throws -> URL {
         let base = try crossModelTrainingDirectoryURL
         let url = base.appendingPathComponent(fileName)
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
             throw BundledAgentGroundingStoreError.missingResource("AgentGrounding/cross_model_training/\(fileName)")
+        }
+        guard !isDirectory.boolValue else {
+            throw BundledAgentGroundingStoreError.invalidResource(url)
         }
         return url
     }

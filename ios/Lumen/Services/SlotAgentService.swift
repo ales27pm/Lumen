@@ -412,6 +412,9 @@ final class SlotAgentService {
 
         Interpreted request to answer:
         \(resolution.rewrittenPrompt)
+
+        Additional grounding rules:
+        \(ragGroundingRules)
         """
         let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: req.maxTokens, modelName: "mouth-direct")
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -535,6 +538,7 @@ final class SlotAgentService {
             - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
             - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
+            \(ragGroundingRules)
             """
         case .actionOrFinal:
             return """
@@ -576,6 +580,7 @@ final class SlotAgentService {
             - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
             - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
+            \(ragGroundingRules)
             """
         }
     }

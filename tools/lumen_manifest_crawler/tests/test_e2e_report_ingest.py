@@ -31,6 +31,42 @@ Final: emailDraft
 """
 
 
+GENERIC_E2E_REPORT = """E2E Test Report
+Passed: 0
+Failed: 2
+
+❌ Training eval: memory custom detail
+Prompt: Remember that my shop supplier is Delta Parts, then tell me what you remembered.
+Intent: memory / expected memory
+Failures: Required final hint missing: remember
+Final: Saved.
+
+❌ Training eval: email custom detail
+Prompt: Draft an email to Sam about the delayed shipment and ask one clarifying question.
+Intent: emailDraft / expected emailDraft
+Failures: Required final hint missing: question
+Final: emailDraft
+"""
+
+
+FINAL_WITH_EMAIL_HEADERS_REPORT = """E2E Test Report
+Passed: 0
+Failed: 1
+
+❌ Training eval: communication drafting
+Prompt: Draft an email to Alex with a professional update and ask one clarifying question.
+Intent: emailDraft / expected emailDraft
+Failures: Required final hint missing: question
+Final: Subject: Project update
+
+Hi Alex,
+
+Here is the update.
+
+Question: should I send this today?
+"""
+
+
 def test_load_runtime_audit_reports_ingests_text_e2e_report(tmp_path: Path):
     report_path = tmp_path / "e2e-report.txt"
     report_path.write_text(E2E_REPORT, encoding="utf-8")
@@ -69,3 +105,35 @@ def test_e2e_failures_become_repair_samples_with_corrected_outputs(tmp_path: Pat
     assert "question" in email["repairSample"]["correctedOutput"].casefold()
     assert "Alex" in email["repairSample"]["correctedOutput"]
     assert email["repairSample"]["curriculum"] == "tool_boundary_response_quality"
+
+
+def test_e2e_corrected_outputs_are_derived_from_prompt_not_fixed_templates(tmp_path: Path):
+    report_path = tmp_path / "generic-e2e-report.txt"
+    report_path.write_text(GENERIC_E2E_REPORT, encoding="utf-8")
+
+    failures = load_runtime_audit_reports([report_path])[0]["failures"]
+    by_intent = {failure["e2eScenario"]["intent"]: failure for failure in failures}
+
+    memory_output = by_intent["memory"]["repairSample"]["correctedOutput"]
+    assert "Delta Parts" in memory_output
+    assert "concise bullet points" not in memory_output
+    assert "remember" in memory_output.casefold()
+
+    email_output = by_intent["emailDraft"]["repairSample"]["correctedOutput"]
+    assert "Sam" in email_output
+    assert "delayed shipment" in email_output
+    assert "Alex" not in email_output
+    assert "question" in email_output.casefold()
+
+
+def test_final_multiline_field_preserves_email_subject_body_headers(tmp_path: Path):
+    report_path = tmp_path / "email-final-report.log"
+    report_path.write_text(FINAL_WITH_EMAIL_HEADERS_REPORT, encoding="utf-8")
+
+    failure = load_runtime_audit_reports([report_path])[0]["failures"][0]
+    actual = failure["actual"]
+
+    assert "Subject: Project update" in actual
+    assert "Hi Alex," in actual
+    assert "Question: should I send this today?" in actual
+    assert failure["repairSample"]["badOutput"] == actual

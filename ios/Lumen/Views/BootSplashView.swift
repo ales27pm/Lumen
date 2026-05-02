@@ -47,8 +47,8 @@ struct BootSplashView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
 
-                    VStack(spacing: 8) {
-                        ForEach(appState.runtime.bootSteps) { step in
+                    LazyVStack(spacing: 8) {
+                        ForEach(appState.runtime.bootSteps.prefix(8)) { step in
                             BootStepRow(step: step)
                         }
                     }
@@ -73,8 +73,8 @@ struct BootSplashView: View {
                             .foregroundStyle(Theme.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        VStack(spacing: 10) {
-                            ForEach(activeDownloads, id: \.0.id) { model, progress in
+                        LazyVStack(spacing: 10) {
+                            ForEach(activeDownloads.prefix(8), id: \.0.id) { model, progress in
                                 BootModelDownloadRow(model: model, progress: progress)
                             }
                         }

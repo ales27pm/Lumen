@@ -10,6 +10,18 @@ fail() {
   exit 1
 }
 
+require_file() {
+  path="$1"
+  label="$2"
+  [ -f "$path" ] || fail "Missing required file: $label ($path)"
+}
+
+require_dir() {
+  path="$1"
+  label="$2"
+  [ -d "$path" ] || fail "Missing required directory: $label ($path)"
+}
+
 PROJECT_DIR_VALUE="${PROJECT_DIR:-}"
 TARGET_BUILD_DIR_VALUE="${TARGET_BUILD_DIR:-}"
 UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE="${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}"
@@ -32,12 +44,35 @@ CROSS_MODEL_DIR="$REPO_ROOT/generated/cross_model_training"
 APP_RESOURCES_DIR="$TARGET_BUILD_DIR_VALUE/$UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE"
 DEST_DIR="$APP_RESOURCES_DIR/AgentGrounding"
 
-[ -d "$AGENT_MANIFEST_DIR" ] || fail "Missing generated agent manifest directory: $AGENT_MANIFEST_DIR"
-[ -d "$CROSS_MODEL_DIR" ] || fail "Missing generated cross-model training directory: $CROSS_MODEL_DIR"
-[ -f "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.json" ] || fail 'Missing AgentBehaviorManifest.json. Run lumen_manifest_crawler generate first.'
-[ -f "$AGENT_MANIFEST_DIR/fleet_system_prompts.json" ] || fail 'Missing fleet_system_prompts.json. Run generation with --generate-system-prompts.'
-[ -f "$AGENT_MANIFEST_DIR/manifest_validation_report.json" ] || fail 'Missing manifest_validation_report.json.'
-[ -f "$CROSS_MODEL_DIR/cross_model_training.jsonl" ] || fail 'Missing cross_model_training.jsonl. Run generation with --cross-model-train-dir.'
+require_dir "$AGENT_MANIFEST_DIR" 'generated agent manifest directory'
+require_dir "$CROSS_MODEL_DIR" 'generated cross-model training directory'
+
+require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.json" 'AgentBehaviorManifest.json'
+require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.md" 'AgentBehaviorManifest.md'
+require_file "$AGENT_MANIFEST_DIR/fleet_system_prompts.json" 'fleet_system_prompts.json'
+require_file "$AGENT_MANIFEST_DIR/manifest_validation_report.json" 'manifest_validation_report.json'
+require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.sha256" 'AgentBehaviorManifest.sha256'
+require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.incremental.sha256" 'AgentBehaviorManifest.incremental.sha256'
+require_file "$AGENT_MANIFEST_DIR/dataset_manifest.json" 'dataset_manifest.json'
+require_file "$AGENT_MANIFEST_DIR/dataset_index.csv" 'dataset_index.csv'
+require_file "$AGENT_MANIFEST_DIR/tool_registry.csv" 'tool_registry.csv'
+require_file "$AGENT_MANIFEST_DIR/routing_matrix.csv" 'routing_matrix.csv'
+
+require_dir "$AGENT_MANIFEST_DIR/dataset" 'generated dataset directory'
+require_file "$AGENT_MANIFEST_DIR/dataset/train_sft.jsonl" 'dataset/train_sft.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/validation_sft.jsonl" 'dataset/validation_sft.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/dpo_preference_pairs.jsonl" 'dataset/dpo_preference_pairs.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/eval_scenarios.jsonl" 'dataset/eval_scenarios.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/tool_schema_cards.jsonl" 'dataset/tool_schema_cards.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/manifest_grounding_cards.jsonl" 'dataset/manifest_grounding_cards.jsonl'
+require_file "$AGENT_MANIFEST_DIR/dataset/runtime_audit_repairs.jsonl" 'dataset/runtime_audit_repairs.jsonl'
+
+require_file "$CROSS_MODEL_DIR/cross_model_training.jsonl" 'cross_model_training.jsonl'
+require_file "$CROSS_MODEL_DIR/train_sft_cross.jsonl" 'train_sft_cross.jsonl'
+require_file "$CROSS_MODEL_DIR/val_sft_cross.jsonl" 'val_sft_cross.jsonl'
+require_file "$CROSS_MODEL_DIR/dpo_train_cross.jsonl" 'dpo_train_cross.jsonl'
+require_file "$CROSS_MODEL_DIR/dpo_val_cross.jsonl" 'dpo_val_cross.jsonl'
+require_file "$CROSS_MODEL_DIR/cross_model_training_index.csv" 'cross_model_training_index.csv'
 
 python3 - "$AGENT_MANIFEST_DIR/manifest_validation_report.json" <<'PY'
 import json

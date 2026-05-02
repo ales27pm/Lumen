@@ -11,6 +11,7 @@ DEFAULT_SUPPORTED_JSON_TYPES = {"string", "double", "int", "bool", "array", "obj
 VAGUE_TYPES = {"any", "unknown", "dictionary", "dict"}
 STRICT_TOOL_ID_DATASET_FAMILIES = {"tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}
 STRICT_WARNING_CODES = {"tool_missing_description", "vague_argument_type", "inferred_tool_definition", "ambiguous_intent_tools", "freshness_missing_ttl"}
+MIN_EVAL_SCENARIOS_PER_TOOL = 3
 FANOUT_INTENTS = {
     "alarm",
     "calendar",
@@ -96,6 +97,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
     covered_required_tools: set[str] = set()
     covered_approval_tools: set[str] = set()
     compiled_ids: set[str] = set()
+    eval_scenarios_by_tool: Counter[str] = Counter()
 
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
@@ -120,12 +122,21 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
                 tool_id = _find_selected_tool_id(record)
                 if tool_id and tool_id not in known_tools:
                     failures.append(ValidationFailure(code="unknown_cortex_tool", message=f"Cortex dataset references unknown tool {tool_id}", path=f"dataset.{name}.{index}"))
+            if name == "eval_scenarios":
+                tool_id = _find_eval_expected_tool_id(record)
+                if tool_id:
+                    if tool_id not in known_tools:
+                        failures.append(ValidationFailure(code="unknown_eval_tool", message=f"Eval scenario references unknown tool {tool_id}", path=f"dataset.{name}.{index}"))
+                    elif record.get("taskType") == "tool_runtime_scenario_selection":
+                        eval_scenarios_by_tool[tool_id] += 1
 
     for tool in manifest.tools:
         if any(arg.required for arg in tool.arguments) and tool.id not in covered_required_tools:
             failures.append(ValidationFailure(code="missing_executor_sample", message=f"Tool {tool.id} has required args but no executor sample", path=f"tools.{tool.id}"))
         if tool.requiresApproval and tool.id not in covered_approval_tools:
             failures.append(ValidationFailure(code="missing_approval_sample", message=f"Tool {tool.id} requires approval but has no approval dataset sample", path=f"tools.{tool.id}"))
+        if eval_scenarios_by_tool[tool.id] < MIN_EVAL_SCENARIOS_PER_TOOL:
+            failures.append(ValidationFailure(code="missing_tool_eval_scenarios", message=f"Tool {tool.id} has {eval_scenarios_by_tool[tool.id]} runtime eval scenarios; expected at least {MIN_EVAL_SCENARIOS_PER_TOOL}", path=f"dataset.eval_scenarios.{tool.id}"))
 
 
 def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], warnings: list[ValidationWarning], seen_ids: set[str]) -> None:
@@ -214,6 +225,16 @@ def _find_selected_tool_id(record: dict) -> str | None:
         content = message.get("content") if isinstance(message, dict) else None
         if isinstance(content, dict) and isinstance(content.get("selectedToolID"), str):
             return content["selectedToolID"]
+    return None
+
+
+def _find_eval_expected_tool_id(record: dict) -> str | None:
+    expected = record.get("expected")
+    if isinstance(expected, dict):
+        for key in ("selectedToolID", "tool"):
+            value = expected.get(key)
+            if isinstance(value, str):
+                return value
     return None
 
 

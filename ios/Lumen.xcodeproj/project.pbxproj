@@ -109,6 +109,7 @@
 				105FC5762E9EAD3100EA8BCF /* Sources */,
 				105FC5772E9EAD3100EA8BCF /* Frameworks */,
 				105FC5782E9EAD3100EA8BCF /* Resources */,
+				B7A1C2D3E4F5061728394A5B /* Bundle Agent Grounding Artifacts */,
 			);
 			buildRules = (
 			);
@@ -244,6 +245,35 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B7A1C2D3E4F5061728394A5B /* Bundle Agent Grounding Artifacts */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../generated/agent_manifest",
+				"$(SRCROOT)/../generated/cross_model_training",
+				"$(SRCROOT)/../generated/agent_manifest/cross_model_training",
+				"$(SRCROOT)/../generated/agent_improvement_loop",
+				"$(SRCROOT)/Lumen/Scripts/copy_agent_grounding_resources.sh",
+			);
+			name = "Bundle Agent Grounding Artifacts";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_manifest/fleet_system_prompts.json",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/cross_model_training/cross_model_training.jsonl",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PROJECT_DIR}/Lumen/Scripts/copy_agent_grounding_resources.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		105FC5762E9EAD3100EA8BCF /* Sources */ = {

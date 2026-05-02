@@ -40,9 +40,19 @@ fi
 
 REPO_ROOT="$(cd "$PROJECT_DIR_VALUE/.." && pwd)"
 AGENT_MANIFEST_DIR="$REPO_ROOT/generated/agent_manifest"
-CROSS_MODEL_DIR="$REPO_ROOT/generated/cross_model_training"
+LEGACY_CROSS_MODEL_DIR="$REPO_ROOT/generated/cross_model_training"
+NESTED_CROSS_MODEL_DIR="$AGENT_MANIFEST_DIR/cross_model_training"
+LOOP_OUTPUT_DIR="$REPO_ROOT/generated/agent_improvement_loop"
 APP_RESOURCES_DIR="$TARGET_BUILD_DIR_VALUE/$UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE"
 DEST_DIR="$APP_RESOURCES_DIR/AgentGrounding"
+
+if [ -d "$LEGACY_CROSS_MODEL_DIR" ]; then
+  CROSS_MODEL_DIR="$LEGACY_CROSS_MODEL_DIR"
+elif [ -d "$NESTED_CROSS_MODEL_DIR" ]; then
+  CROSS_MODEL_DIR="$NESTED_CROSS_MODEL_DIR"
+else
+  fail "Missing cross-model training directory. Expected either $LEGACY_CROSS_MODEL_DIR or $NESTED_CROSS_MODEL_DIR"
+fi
 
 require_dir "$AGENT_MANIFEST_DIR" 'generated agent manifest directory'
 require_dir "$CROSS_MODEL_DIR" 'generated cross-model training directory'
@@ -94,6 +104,13 @@ mkdir -p "$DEST_DIR"
 
 cp -R "$AGENT_MANIFEST_DIR" "$DEST_DIR/agent_manifest"
 cp -R "$CROSS_MODEL_DIR" "$DEST_DIR/cross_model_training"
+
+if [ -d "$LOOP_OUTPUT_DIR" ]; then
+  cp -R "$LOOP_OUTPUT_DIR" "$DEST_DIR/agent_improvement_loop"
+  log "Loop outputs: $DEST_DIR/agent_improvement_loop"
+else
+  log "Loop outputs not present at $LOOP_OUTPUT_DIR (skipped)"
+fi
 
 log "Installed resources at: $DEST_DIR"
 log "Manifest: $DEST_DIR/agent_manifest/AgentBehaviorManifest.json"

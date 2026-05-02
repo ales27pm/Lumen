@@ -557,12 +557,12 @@ final class SlotAgentService {
 
             Required output schema (choose one):
             {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
-            {"thought":"short completion note","final":"handoff draft for Mouth"}
+            {"thought":"short completion note","final":"final answer draft grounded in observations"}
 
             Hard rules:
             - You are the planner/orchestrator for this request.
             - If there are no observations yet, output an action object only.
-            - If observations exist, either output another action or output final for the Mouth agent to deliver.
+            - If observations exist, either output another action or output a grounded final draft for user delivery.
             - If you output action, use exactly one tool from Available tools.
             - If you output final, it must be grounded in Previous observations for this current request only.
             - Gather enough context before finalizing: prefer querying memory/rag/web context tools when relevant, and ask a clarification question if core details are missing.
@@ -591,7 +591,9 @@ final class SlotAgentService {
         case .memory, .note: intentHint = "which memory or note context to use"
         default: intentHint = "the key missing detail needed to proceed"
         }
-        return "I want to avoid assumptions before finalizing. Could you clarify \(intentHint) for: \"\(resolution.rewrittenPrompt)\"?"
+        let scopedRequest = resolution.rewrittenPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestSnippet = scopedRequest.isEmpty ? "" : " for this request (\(scopedRequest.prefix(80)))"
+        return "Before I finalize, could you clarify the \(intentHint)\(requestSnippet)?"
     }
 
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {

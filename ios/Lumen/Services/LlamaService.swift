@@ -117,9 +117,9 @@ private struct ChatRuntime {
 }
 
 private enum LlamaLog {
-    static let subsystem = "com.lumen.runtime"
-    static let category = "llama.service"
-    static let service = Logger(subsystem: subsystem, category: category)
+    nonisolated(unsafe) static let subsystem = "com.lumen.runtime"
+    nonisolated(unsafe) static let category = "llama.service"
+    nonisolated(unsafe) static let service = Logger(subsystem: subsystem, category: category)
 }
 
 private enum LlamaErrorCode: String {

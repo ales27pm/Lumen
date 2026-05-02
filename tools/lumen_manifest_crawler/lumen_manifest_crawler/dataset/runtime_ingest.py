@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 SUPPORTED_TEXT_REPORT_SUFFIXES = {".txt", ".md", ".markdown", ".log"}
+REPORT_FIELD_HEADERS = {"Prompt", "Intent", "Failures", "Final"}
 
 
 def load_runtime_audit_reports(paths: list[Path] | None) -> list[dict[str, Any]]:
@@ -306,13 +307,138 @@ def _corrected_output_for_e2e_failure(scenario: dict[str, Any], required_hint: s
     final = str(scenario.get("final") or "").strip()
     intent = str(scenario.get("intent") or "unknown").strip()
     if required_hint and intent == "memory":
-        return f"Remembered: I prefer concise bullet points. I will remember this preference and use concise bullet points when helpful."
+        remembered = _derive_memory_content_from_prompt(prompt)
+        base = final if _is_useful_final(final, intent=intent) else f"Remembered: {remembered}."
+        return _ensure_required_hint(base, required_hint)
     if required_hint and intent in {"emailDraft", "email", "mailDraft"}:
-        return "Draft: Hi Alex,\n\nHere is a professional update on the current work. Progress is moving forward, and I will send the next concrete milestone once the remaining details are confirmed.\n\nOne question: what specific deadline or priority should I align this update with?"
+        draft = _derive_email_draft_from_prompt(prompt, final)
+        return _ensure_required_hint(draft, required_hint)
     if required_hint:
-        base = final if final else f"I handled this `{intent}` request."
-        return base if required_hint.casefold() in base.casefold() else f"{base}\n\n{required_hint}"
+        base = final if _is_useful_final(final, intent=intent) else _generic_corrected_output_from_prompt(prompt, intent)
+        return _ensure_required_hint(base, required_hint)
     return final or f"Ask a clarification or produce a manifest-compliant final answer for: {prompt}"
+
+
+def _derive_memory_content_from_prompt(prompt: str) -> str:
+    clean = _clean_prompt(prompt)
+    patterns = [
+        r"\bremember\s+that\s+(.+?)(?:,?\s+then\b|\s+and\s+(?:tell|confirm|say)\b|[.!?]?$)",
+        r"\bremember\s+(.+?)(?:,?\s+then\b|\s+and\s+(?:tell|confirm|say)\b|[.!?]?$)",
+        r"\bkeep\s+this\s+in\s+mind\s*:?\s*(.+?)(?:,?\s+then\b|[.!?]?$)",
+        r"\bsave\s+(?:this|that)?\s*(?:as\s+)?(?:a\s+)?(?:preference|memory|note)?\s*:?\s*(.+?)(?:,?\s+then\b|[.!?]?$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, clean, flags=re.IGNORECASE)
+        if match:
+            candidate = _clean_derived_fragment(match.group(1))
+            if candidate:
+                return candidate
+    return clean or "the requested memory"
+
+
+def _derive_email_draft_from_prompt(prompt: str, final: str) -> str:
+    if _looks_like_email_draft(final):
+        return final.strip()
+    clean = _clean_prompt(prompt)
+    recipient = _extract_recipient(clean)
+    subject_hint = _extract_subject_hint(clean)
+    question = _derive_clarifying_question(clean)
+    greeting = f"Hi {recipient}," if recipient else "Hi,"
+    subject = f"Subject: {subject_hint}" if subject_hint else "Subject: Professional update"
+    body = _derive_email_body_sentence(clean)
+    return "\n".join([
+        subject,
+        "",
+        greeting,
+        "",
+        body,
+        "",
+        question,
+    ]).strip()
+
+
+def _derive_email_body_sentence(prompt: str) -> str:
+    lower = prompt.casefold()
+    if "professional update" in lower:
+        return "Here is a professional update on the current work: progress is moving forward, and I will share the next concrete milestone once the remaining details are confirmed."
+    if "update" in lower:
+        return "Here is the requested update: progress is moving forward, and I will confirm the next concrete details as soon as they are available."
+    if "draft" in lower or "email" in lower:
+        return "I wanted to send a clear professional note and confirm the next detail before moving forward."
+    return f"I am following up about: {prompt}"
+
+
+def _derive_clarifying_question(prompt: str) -> str:
+    if re.search(r"\b(one|1)\s+clarifying\s+question\b", prompt, flags=re.IGNORECASE):
+        return "One clarifying question: what specific deadline, priority, or next step should I align this update with?"
+    if re.search(r"\bask\b.*\bquestion\b", prompt, flags=re.IGNORECASE):
+        return "Question: what specific detail should I confirm before sending this?"
+    return "Question: what detail should I confirm before sending this?"
+
+
+def _extract_recipient(prompt: str) -> str | None:
+    match = re.search(r"\b(?:to|for)\s+([A-Z][A-Za-z0-9_.-]*)\b", prompt)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def _extract_subject_hint(prompt: str) -> str | None:
+    match = re.search(r"\babout\s+(.+?)(?:\s+and\s+ask\b|\s+with\b|[.!?]?$)", prompt, flags=re.IGNORECASE)
+    if not match:
+        return None
+    candidate = _clean_derived_fragment(match.group(1))
+    if not candidate:
+        return None
+    return candidate[:1].upper() + candidate[1:]
+
+
+def _looks_like_email_draft(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    lowered = text.casefold()
+    has_greeting = bool(re.search(r"(?m)^\s*(hi|hello|dear)\b", lowered))
+    has_subject = bool(re.search(r"(?m)^\s*subject\s*:", lowered))
+    has_question = "?" in text or "question" in lowered
+    return (has_greeting or has_subject) and has_question
+
+
+def _generic_corrected_output_from_prompt(prompt: str, intent: str) -> str:
+    clean = _clean_prompt(prompt)
+    if clean:
+        return f"I handled this `{intent}` request in a manifest-compliant way: {clean}"
+    return f"I handled this `{intent}` request in a manifest-compliant way."
+
+
+def _ensure_required_hint(text: str, required_hint: str | None) -> str:
+    cleaned = text.strip()
+    if not required_hint:
+        return cleaned
+    if required_hint.casefold() in cleaned.casefold():
+        return cleaned
+    if required_hint.casefold() == "question":
+        return f"{cleaned}\n\nQuestion: what detail should I confirm before proceeding?"
+    return f"{cleaned}\n\n{required_hint}"
+
+
+def _is_useful_final(final: str, *, intent: str) -> bool:
+    stripped = final.strip()
+    if not stripped:
+        return False
+    if stripped.casefold() == intent.casefold():
+        return False
+    return len(stripped.split()) >= 3
+
+
+def _clean_prompt(prompt: str) -> str:
+    return " ".join(str(prompt or "").strip().split())
+
+
+def _clean_derived_fragment(value: str) -> str:
+    cleaned = _clean_prompt(value).strip(" ,.;:!?\"'")
+    cleaned = re.sub(r"\bthen\s+(?:tell|confirm|say)\b.*$", "", cleaned, flags=re.IGNORECASE).strip(" ,.;:!?\"'")
+    return cleaned
 
 
 def _lesson_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
@@ -386,7 +512,8 @@ def _extract_multiline_field(body: str, field: str) -> str:
     if not match:
         return ""
     value = match.group(1).strip()
-    stop = re.search(r"(?m)^([A-Z][A-Za-z ]+|Failures|Intent|Prompt):\s*", value)
+    header_alternation = "|".join(re.escape(header) for header in sorted(REPORT_FIELD_HEADERS - {field}))
+    stop = re.search(rf"(?m)^({header_alternation}):\s*", value) if header_alternation else None
     return value[: stop.start()].strip() if stop else value
 
 

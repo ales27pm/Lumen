@@ -116,11 +116,7 @@ private struct ChatRuntime {
     var batchSize: UInt32
 }
 
-private enum LlamaLog {
-    nonisolated(unsafe) static let subsystem = "com.lumen.runtime"
-    nonisolated(unsafe) static let category = "llama.service"
-    nonisolated(unsafe) static let service = Logger(subsystem: subsystem, category: category)
-}
+private let llamaServiceLogger = Logger(subsystem: "com.lumen.runtime", category: "llama.service")
 
 private enum LlamaErrorCode: String {
     case network = "network"
@@ -523,7 +519,7 @@ final actor AppLlamaService {
             return try await embed(text)
         } catch {
             let errorCode = classifyError(error)
-            LlamaLog.service.error(
+            llamaServiceLogger.error(
                 "event=llama.embedding.failure severity=error error_code=\(errorCode.rawValue, privacy: .public) request_id=\(requestID, privacy: .public) dimensions=\(dimensions, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
             )
             return []

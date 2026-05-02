@@ -14,7 +14,7 @@ DATASET_SCHEMA_VERSION = "2.0.0"
 TRAIN_SPLIT = "train"
 VALIDATION_SPLIT = "validation"
 EVAL_SPLIT = "eval"
-MIN_EVAL_SCENARIOS_PER_TOOL = 3
+MIN_EVAL_SCENARIOS_PER_TOOL = 5
 
 TOOL_SCENARIO_PROMPTS: dict[str, list[str]] = {
     "alarm.authorization_status": [
@@ -597,7 +597,9 @@ def _build_eval_records(manifest: AgentBehaviorManifest, config: DatasetCompiler
             },
             config=config,
         ))
-        for index, prompt in enumerate(_tool_eval_prompts(tool), start=1):
+        for index, scenario in enumerate(_tool_eval_scenarios(tool), start=1):
+            prompt = scenario["prompt"]
+            scenario_kind = scenario["scenarioKind"]
             evals.append(_eval_record(
                 name=f"tool-scenario-{tool.id}-{index}",
                 task="tool_runtime_scenario_selection",
@@ -610,8 +612,17 @@ def _build_eval_records(manifest: AgentBehaviorManifest, config: DatasetCompiler
                     "permissionKey": tool.permissionKey,
                     "mustPersistActionStep": True,
                     "mustUseManifestToolIDsOnly": True,
+                    "scenarioKind": scenario_kind,
                 },
                 config=config,
+                metadata={
+                    "scenarioKind": scenario_kind,
+                    "toolIDVisibleInPrompt": scenario.get("toolIDVisibleInPrompt", tool.id in prompt),
+                    "coverageFamily": _coverage_family(tool.id),
+                    "argumentCoverage": scenario.get("argumentCoverage", []),
+                    "approvalCoverage": scenario.get("approvalCoverage", False),
+                    "permissionCoverage": scenario.get("permissionCoverage", False),
+                },
             ))
 
     if sentinel_list:
@@ -633,37 +644,89 @@ def _build_eval_records(manifest: AgentBehaviorManifest, config: DatasetCompiler
     return evals
 
 
-def _tool_eval_prompts(tool: Any) -> list[str]:
-    prompts = list(TOOL_SCENARIO_PROMPTS.get(tool.id, []))
-    prompts.extend(_generic_tool_eval_prompts(tool))
+def _coverage_family(tool_id: str) -> str:
+    return tool_id.split(".", 1)[0]
+
+
+def _tool_words(tool: Any) -> list[str]:
+    tokens: list[str] = []
+    for value in [getattr(tool, "displayName", ""), getattr(tool, "description", ""), str(getattr(tool, "id", ""))]:
+        text = str(value).replace("_", " ").replace(".", " ").lower()
+        tokens.extend(token for token in text.split() if token.isalpha() and len(token) > 2)
     deduped: list[str] = []
     seen: set[str] = set()
-    for prompt in prompts:
-        normalized = " ".join(str(prompt).split())
-        if not normalized or normalized.lower() in seen:
-            continue
-        seen.add(normalized.lower())
-        deduped.append(normalized)
-        if len(deduped) >= MIN_EVAL_SCENARIOS_PER_TOOL:
-            break
-    while len(deduped) < MIN_EVAL_SCENARIOS_PER_TOOL:
-        deduped.append(f"Use the manifest tool `{tool.id}` for scenario {len(deduped) + 1} without inventing another tool.")
+    for token in tokens:
+        if token not in seen:
+            seen.add(token)
+            deduped.append(token)
     return deduped
 
 
-def _generic_tool_eval_prompts(tool: Any) -> list[str]:
-    base = tool.id.replace(".", " ").replace("_", " ")
-    display = getattr(tool, "displayName", None) or tool.id
+def _humanize_tool_phrase(tool: Any) -> str:
+    display = str(getattr(tool, "displayName", "")).strip()
+    if display:
+        return display.lower()
+    description = str(getattr(tool, "description", "")).strip()
+    if description:
+        return description.lower().rstrip(".")
+    words = _tool_words(tool)[:4]
+    return " ".join(words) if words else "this app action"
+
+
+def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
     required_args = [arg.name for arg in getattr(tool, "arguments", []) if getattr(arg, "required", False)]
-    required_text = ", ".join(required_args) if required_args else "no required arguments"
-    return [
-        f"Handle this request with `{tool.id}`: {display}.",
-        f"Route a user request about {base} to the exact manifest tool `{tool.id}`.",
-        f"Create a valid action step for `{tool.id}` using {required_text}.",
+    optional_args = [arg.name for arg in getattr(tool, "arguments", []) if not getattr(arg, "required", False)]
+    phrase = _humanize_tool_phrase(tool)
+    curated = TOOL_SCENARIO_PROMPTS.get(tool.id, [])
+
+    scenarios: list[dict[str, Any]] = [
+        {"prompt": f"Generate a manifest-valid action step for `{tool.id}`.", "scenarioKind": "explicit_tool_schema", "toolIDVisibleInPrompt": True, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False},
     ]
+    for prompt in curated[:2]:
+        scenarios.append({"prompt": prompt, "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    if required_args:
+        arg_text = ", ".join(required_args)
+        scenarios.append({"prompt": f"Use {phrase} with these details: {arg_text} = sample value.", "scenarioKind": "argument_completion", "toolIDVisibleInPrompt": False, "argumentCoverage": required_args, "approvalCoverage": False, "permissionCoverage": False})
+    else:
+        arg_hint = optional_args[:2]
+        detail = f" and include {', '.join(arg_hint)}" if arg_hint else ""
+        scenarios.append({"prompt": f"Help me with {phrase}{detail}.", "scenarioKind": "argument_completion", "toolIDVisibleInPrompt": False, "argumentCoverage": arg_hint, "approvalCoverage": False, "permissionCoverage": False})
+
+    if getattr(tool, "requiresApproval", False):
+        scenarios.append({"prompt": f"Prepare to {phrase}, but ask for my approval before executing.", "scenarioKind": "approval_boundary", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": True, "permissionCoverage": False})
+    if getattr(tool, "permissionKey", None):
+        scenarios.append({"prompt": f"Before {phrase}, confirm required permissions or sign-in access.", "scenarioKind": "permission_boundary", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": True})
+
+    fallback_natural = [
+        f"Please help me {phrase}.",
+        f"I need assistance with {phrase} right now.",
+        f"Can you handle this app action: {phrase}?",
+    ]
+    for prompt in curated[2:] + fallback_natural:
+        scenarios.append({"prompt": prompt, "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for scenario in scenarios:
+        prompt = " ".join(str(scenario["prompt"]).split())
+        if not prompt or prompt.lower() in seen:
+            continue
+        seen.add(prompt.lower())
+        clean = {**scenario, "prompt": prompt}
+        if clean["scenarioKind"] != "explicit_tool_schema":
+            clean["toolIDVisibleInPrompt"] = False
+            if tool.id in prompt:
+                continue
+        deduped.append(clean)
+
+    while len(deduped) < MIN_EVAL_SCENARIOS_PER_TOOL:
+        deduped.append({"prompt": f"Help me with {phrase} in a safe and manifest-compliant way.", "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    return deduped
 
 
-def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig) -> dict[str, Any]:
+def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     record_id = _stable_id({"name": name, "task": task, "expected": expected})
     return {
         "id": f"eval-{record_id[:16]}",
@@ -675,7 +738,7 @@ def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], co
             {"role": "user", "content": prompt},
         ],
         "expected": expected,
-        "metadata": {"generatedAt": config.generated_at, "name": name},
+        "metadata": {"generatedAt": config.generated_at, "name": name, **(metadata or {})},
     }
 
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
@@ -304,7 +304,7 @@ class DatasetCompilerConfig:
     def generated_at(self) -> str:
         if self.deterministic:
             return DETERMINISTIC_DATASET_GENERATED_AT
-        return datetime.now(tz=UTC).isoformat()
+        return datetime.now(tz=timezone.utc).isoformat()
 
 
 @dataclass(frozen=True)
@@ -373,6 +373,7 @@ def _normalize_record(
     record: dict[str, Any],
     config: DatasetCompilerConfig,
 ) -> dict[str, Any]:
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     messages = _normalize_messages(record)
     role = _infer_role(family, record, messages)
     task = _infer_task(family, record)
@@ -390,7 +391,7 @@ def _normalize_record(
         "taskType": task,
         "messages": messages,
         "toolIDs": tool_ids,
-        "grounding": _normalized_grounding(record, manifest),
+        "grounding": _normalized_grounding(record, manifest, config),
         "quality": {
             "includeInSFT": _has_assistant_target(messages),
             "risk": risk,
@@ -407,7 +408,7 @@ def _normalize_record(
         "metadata": {
             "generatedAt": config.generated_at,
             "manifestSchemaVersion": manifest.schemaVersion,
-            "manifestCommit": manifest.sourceIntegrity.commit,
+            "manifestCommit": lineage_commit,
             "sourceIndex": index,
             "invalidContrastToolIDs": [tool_id for tool_id in all_tool_ids if tool_id not in known_tool_ids],
         },
@@ -539,13 +540,14 @@ def _curriculum_label(family: str, risk: str) -> str:
     return "role_behaviour"
 
 
-def _normalized_grounding(record: dict[str, Any], manifest: AgentBehaviorManifest) -> dict[str, Any]:
+def _normalized_grounding(record: dict[str, Any], manifest: AgentBehaviorManifest, config: DatasetCompilerConfig) -> dict[str, Any]:
     grounding = record.get("grounding") if isinstance(record.get("grounding"), dict) else {}
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     return {
         **grounding,
         "manifestSchemaVersion": manifest.schemaVersion,
         "source": grounding.get("source", "AgentBehaviorManifest.json"),
-        "sourceIntegrityCommit": manifest.sourceIntegrity.commit,
+        "sourceIntegrityCommit": lineage_commit,
     }
 
 
@@ -919,6 +921,9 @@ def _build_dataset_manifest(
     runtime_audit_reports: list[dict[str, Any]],
     config: DatasetCompilerConfig,
 ) -> dict[str, Any]:
+    # Deterministic mode is used by CI drift checks, so avoid embedding HEAD-derived
+    # values that change every commit even when extracted behavior stays identical.
+    lineage_commit = None if config.deterministic else manifest.sourceIntegrity.commit
     counts = {name: len(records) for name, records in {**raw_role_records, **compiled_records}.items()}
     compiled_hashes = {name: _records_hash(records) for name, records in compiled_records.items()}
     runtime_formats = sorted({str(report.get("_sourceFormat")) for report in runtime_audit_reports if report.get("_sourceFormat")})
@@ -928,7 +933,7 @@ def _build_dataset_manifest(
         "deterministic": config.deterministic,
         "manifest": {
             "schemaVersion": manifest.schemaVersion,
-            "commit": manifest.sourceIntegrity.commit,
+            "commit": lineage_commit,
             "toolCount": len(manifest.tools),
             "intentCount": len(manifest.intents),
             "modelSlotCount": len(manifest.fleet.slots),

@@ -3,14 +3,17 @@
   "base_model_name": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "max_seq_length": 4096,
   "load_in_4bit": true,
-  "lora_r": 16,
-  "lora_alpha": 32,
+  "lora_r": 24,
+  "lora_alpha": 48,
   "lora_dropout": 0.0,
   "learning_rate": 0.0002,
   "batch_size": 2,
   "gradient_accumulation_steps": 8,
   "num_train_epochs": 2,
   "warmup_steps": 20,
+  "gradient_checkpointing": true,
+  "packing": false,
   "output_dir": "models/lora/rem",
-  "dataset_dir": "generated/fine_tuning/rem"
+  "dataset_dir": "generated/fine_tuning/rem",
+  "preference_trainer": "dpo"
 }

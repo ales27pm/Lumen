@@ -60,6 +60,7 @@ def generate(
         console.print(f"[green]Incremental generation skipped; manifest fingerprint unchanged for {output}[/green]")
         return
 
+    runtime_audit_reports = load_runtime_audit_reports(runtime_audit)
     datasets = generate_all_datasets(manifest, runtime_audit_paths=runtime_audit, deterministic=deterministic)
     report = validate_manifest(manifest, datasets, strict=strict)
     should_generate_full_fleet_artifacts = generate_system_prompts or cross_model_train_dir is not None
@@ -68,11 +69,16 @@ def generate(
 
     fine_tuning_datasets = None
     if generate_agent_fine_tuning:
-        fine_tuning_datasets = compile_agent_fine_tuning_datasets(manifest, datasets, None, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+        fine_tuning_datasets = compile_agent_fine_tuning_datasets(
+            manifest,
+            datasets,
+            fleet_artifacts=fleet_artifacts,
+            runtime_audit_reports=runtime_audit_reports,
+        )
         if agent_filter:
             allowed={a.strip() for a in agent_filter.split(",") if a.strip()}
             fine_tuning_datasets={k:v for k,v in fine_tuning_datasets.items() if k in allowed}
-        ft_failures = validate_agent_fine_tuning_datasets(manifest, fine_tuning_datasets, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+        ft_failures = validate_agent_fine_tuning_datasets(manifest, fine_tuning_datasets, runtime_audit_reports=runtime_audit_reports)
         for failure in ft_failures:
             report.failures.append(failure)
 

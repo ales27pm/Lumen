@@ -147,7 +147,7 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .contactSearch, allowedToolIDs: contactToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["call ", "phone ", "dial ", "start call"]) && !matchesAny(text, ["recall", "callback"]) {
+        if isLikelyPhoneCallIntent(text) {
             let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
             return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
         }
@@ -261,6 +261,21 @@ nonisolated enum IntentRouter {
         case .alarm: return "That request is alarm-related. I can only use alarm tools for it."
         case .outlook: return "That request is Outlook/Hotmail mail-related. I can only use Outlook Microsoft Graph tools for it."
         case .chat, .unknown: return "That tool doesn't match your request. Could you clarify what you want to do?"
+        }
+    }
+
+
+    private static func isLikelyPhoneCallIntent(_ text: String) -> Bool {
+        if matchesAny(text, ["recall", "re-call", "callback", "call back", "called back"]) { return false }
+
+        let directCallPatterns = [
+            #"\bcall\s+(me|him|her|them|us|[a-z0-9@+\-().]+)\b"#,
+            #"\bdial\s+"#,
+            #"\bphone\s+"#,
+            #"\bstart\s+a?\s*call\b"#
+        ]
+        return directCallPatterns.contains { pattern in
+            text.range(of: pattern, options: .regularExpression) != nil
         }
     }
 

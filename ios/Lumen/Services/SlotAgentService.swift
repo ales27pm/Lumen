@@ -47,6 +47,16 @@ final class SlotAgentService {
                 }
 
                 let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
+                let missingRequiredTools = Self.requiredTools(for: routing.intent).subtracting(availableToolIDs)
+                if !missingRequiredTools.isEmpty {
+                    recordPolicyDiagnostics(selectedTool: nil, allowedForIntent: routing.allowedToolIDs, policyViolation: false, replanned: true, prompt: executionPrompt)
+                    let replanStep = AgentStep(kind: .reflection, content: "I need to replan because required tools are unavailable for this intent: \(missingRequiredTools.sorted().joined(separator: ", ")).", toolID: nil, toolArgs: nil)
+                    steps.append(replanStep)
+                    continuation.yield(.step(replanStep))
+                    let final = IntentRouter.unavailableMessage(for: routing)
+                    yieldFinal(final, steps: steps, continuation: continuation)
+                    return
+                }
                 let requiredFallbackTool = Self.resolveRequiredToolFallback(
                     intent: routing.intent,
                     prompt: executionPrompt,
@@ -331,14 +341,16 @@ final class SlotAgentService {
             return .finalizeNow(observations.last)
         }
 
-        let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
-        steps.append(actionStep)
-        continuation.yield(.step(actionStep))
-
-        guard SlotAgentService.isActionAllowed(canonicalTool, routing: routing) else {
+        let isAllowed = SlotAgentService.isActionAllowed(canonicalTool, routing: routing)
+        recordPolicyDiagnostics(selectedTool: canonicalTool, allowedForIntent: routing.allowedToolIDs, policyViolation: !isAllowed, replanned: false, prompt: req.userMessage)
+        guard isAllowed else {
             recordTrace(slot: .executor, stage: "tool-execution", stepIndex: stepIndex, error: "tool_not_allowed_for_intent", raw: action.displayContent, prompt: req.userMessage)
             return .blocked(IntentRouter.blockedToolMessage(for: routing))
         }
+
+        let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
+        steps.append(actionStep)
+        continuation.yield(.step(actionStep))
 
         executedActionFingerprints.insert(fingerprint)
         let observation = await ToolExecutor.shared.execute(
@@ -952,6 +964,29 @@ final class SlotAgentService {
         return nil
     }
 
+    nonisolated static func requiredTools(for intent: UserIntent) -> Set<String> {
+        switch intent {
+        case .memory:
+            return ["memory.save", "memory.recall"]
+        default:
+            return []
+        }
+    }
+
+    private func recordPolicyDiagnostics(selectedTool: String?, allowedForIntent: Set<String>, policyViolation: Bool, replanned: Bool, prompt: String) {
+        SlotAgentDiagnosticsRecorder.recordPolicy(
+            SlotAgentPolicyTrace(
+                id: UUID(),
+                createdAt: Date(),
+                selectedTool: selectedTool,
+                allowedForIntent: allowedForIntent.sorted(),
+                policyViolation: policyViolation,
+                replanned: replanned,
+                userPromptPrefix: String(prompt.prefix(2_000))
+            )
+        )
+    }
+
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
         for chunk in chunk(text) {
             continuation.yield(.finalDelta(chunk))
@@ -999,6 +1034,16 @@ nonisolated struct SlotAgentTrace: Codable, Sendable {
     let userPromptPrefix: String
 }
 
+nonisolated struct SlotAgentPolicyTrace: Codable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let selectedTool: String?
+    let allowedForIntent: [String]
+    let policyViolation: Bool
+    let replanned: Bool
+    let userPromptPrefix: String
+}
+
 nonisolated enum SlotAgentDiagnosticsRecorder {
     static func record(_ trace: SlotAgentTrace) {
         do {
@@ -1020,6 +1065,28 @@ nonisolated enum SlotAgentDiagnosticsRecorder {
             }
         } catch {
             // Diagnostics must never break generation.
+        }
+    }
+
+    static func recordPolicy(_ trace: SlotAgentPolicyTrace) {
+        do {
+            let directory = try diagnosticsDirectory()
+            let url = directory.appendingPathComponent("slot-agent-policy.jsonl", isDirectory: false)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(trace)
+            var line = data
+            line.append(0x0A)
+
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+            } else {
+                try line.write(to: url, options: [.atomic])
+            }
+        } catch {
         }
     }
 

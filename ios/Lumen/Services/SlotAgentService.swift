@@ -478,6 +478,16 @@ final class SlotAgentService {
 
     private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
         let prompt = """
         You are Lumen. Answer naturally and helpfully. Do not output JSON.
 
@@ -567,6 +577,16 @@ final class SlotAgentService {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
         let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
 
         switch mode {
         case .actionOnly:
@@ -658,6 +678,16 @@ final class SlotAgentService {
         let draftBlockRaw = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
         let draftBlock = WebRichContentPayload.removingMarkers(from: draftBlockRaw)
         let contextBlock = shortTermContextBlock(req.history)
+        let ragGroundingRules: String = {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
+            guard isRAGLike else { return "" }
+            return """
+        - For local file/RAG answers, explicitly cite retrieved evidence with markers like [1] tied to current observations.
+        - If asked to summarize architecture/modules, include a short "Key modules" section grounded in retrieved snippets.
+        - If no relevant observations were retrieved, state that clearly instead of restating the prompt.
+        """
+        }()
         return """
         Write the final user-facing answer for the current user request only. Do not output JSON.
 
@@ -685,6 +715,7 @@ final class SlotAgentService {
         - Never reuse a result from a previous user request as a current tool result.
         - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
         - Keep it concise, accurate, and do not claim actions that did not happen.
+        \(ragGroundingRules)
         """
     }
 

@@ -1849,6 +1849,7 @@ final class AgentService {
         prompt += "\n\(reason.hint)\n"
         prompt += "Write the final answer in plain text with exactly these sections: Summary, Key modules.\n"
         prompt += "In Key modules, name concrete modules/components/services/packages from the observations when available; if none are explicit, say that clearly.\n"
+        prompt += "Every bullet/sentence must include at least one bracketed source marker like [1], [2] that maps to the observation numbers above.\n"
         prompt += "Ground every claim in the listed observations and avoid generic advice. No preamble, no JSON, no prefixes, no apology. If observations conflict, prefer the most recent."
 
         let genReq = GenerateRequest(

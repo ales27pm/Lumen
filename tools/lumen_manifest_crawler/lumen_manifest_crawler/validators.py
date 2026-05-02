@@ -292,3 +292,36 @@ def _looks_like_intentionally_invalid_tool(tool_id: str) -> bool:
         return True
     tokens = [token for token in re.split(r"[^a-z0-9]+", lowered) if token]
     return "invalid" in tokens
+
+
+def validate_agent_fine_tuning_datasets(manifest: AgentBehaviorManifest, datasets: dict[str, Any], runtime_audit_reports: list[dict[str, Any]] | None = None) -> list[ValidationFailure]:
+    failures: list[ValidationFailure] = []
+    known_agents = {"cortex", "executor", "mouth", "mimicry", "rem", "fleet"}
+    known_tools = {tool.id for tool in manifest.tools}
+    slots = {slot.id for slot in manifest.fleet.slots}
+    forbidden = set(manifest.sentinels.forbiddenInUserOutput)
+    for agent, ds in datasets.items():
+        if agent not in known_agents:
+            failures.append(ValidationFailure(code="unknown_agent_role", message=f"Unknown agent role {agent}", path=f"fine_tuning.{agent}"))
+            continue
+        for rec in ds.train_sft + ds.val_sft:
+            assistant = next((m.get("content", "") for m in rec.get("messages", []) if m.get("role") == "assistant"), "")
+            if not assistant.strip():
+                failures.append(ValidationFailure(code="empty_assistant_output", message=f"{agent} has empty assistant output", path=f"fine_tuning.{agent}"))
+            if any(s and s in assistant for s in forbidden):
+                failures.append(ValidationFailure(code="sentinel_leak", message=f"{agent} leaked sentinel", path=f"fine_tuning.{agent}"))
+            for tool_id in rec.get("metadata", {}).get("toolIDs", []):
+                if tool_id not in known_tools:
+                    failures.append(ValidationFailure(code="unknown_tool_id", message=f"{agent} unknown tool {tool_id}", path=f"fine_tuning.{agent}"))
+        for rec in ds.train_dpo + ds.val_dpo:
+            if (rec.get("chosen") or {}).get("content") == (rec.get("rejected") or {}).get("content"):
+                failures.append(ValidationFailure(code="dpo_chosen_equals_rejected", message=f"{agent} DPO chosen equals rejected", path=f"fine_tuning.{agent}"))
+        for rec in ds.eval:
+            if rec.get("expected") is None:
+                failures.append(ValidationFailure(code="eval_missing_expected", message=f"{agent} eval missing expected", path=f"fine_tuning.{agent}"))
+        if agent == "fleet":
+            blob = "\n".join(json.dumps(r, ensure_ascii=False, sort_keys=True) for r in (ds.train_sft + ds.val_sft))
+            for slot in slots:
+                if slot not in blob:
+                    failures.append(ValidationFailure(code="fleet_slot_coverage_missing", message=f"fleet missing slot coverage {slot}", path="fine_tuning.fleet"))
+    return failures

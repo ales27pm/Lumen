@@ -13,9 +13,11 @@ from rich.console import Console
 
 from lumen_manifest_crawler.crawler import generate_manifest
 from lumen_manifest_crawler.dataset import generate_all_datasets
+from lumen_manifest_crawler.dataset.fine_tuning import compile_agent_fine_tuning_datasets
+from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
+from lumen_manifest_crawler.validators import validate_manifest, validate_agent_fine_tuning_datasets
 from lumen_manifest_crawler.fleet_artifacts import generate_fleet_artifacts, generate_manifest_markdown
 from lumen_manifest_crawler.output.writer import write_outputs
-from lumen_manifest_crawler.validators import validate_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,10 @@ def generate(
     strict: bool = typer.Option(False, "--strict", help="Promote selected validation warnings to hard failures."),
     fail_on_change: bool = typer.Option(False, "--fail-on-change", help="Exit non-zero if generated outputs leave tracked or untracked git changes."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
+    generate_agent_fine_tuning: bool = typer.Option(False, "--generate-agent-fine-tuning", help="Generate per-agent fine-tuning datasets."),
+    fine_tuning_output: Path | None = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
+    unsloth_output: Path | None = typer.Option(None, "--unsloth-output", help="Alias for --fine-tuning-output."),
+    agent_filter: str | None = typer.Option(None, "--agent-filter", help="Comma-separated agent names to output."),
 ) -> None:
     """Generate AgentBehaviorManifest.json and state-of-the-art grounded datasets."""
     root = root.resolve()
@@ -60,6 +66,16 @@ def generate(
     fleet_artifacts = generate_fleet_artifacts(manifest) if should_generate_full_fleet_artifacts else None
     manifest_markdown = None if fleet_artifacts else (generate_manifest_markdown(manifest) if export_md else None)
 
+    fine_tuning_datasets = None
+    if generate_agent_fine_tuning:
+        fine_tuning_datasets = compile_agent_fine_tuning_datasets(manifest, datasets, None, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+        if agent_filter:
+            allowed={a.strip() for a in agent_filter.split(",") if a.strip()}
+            fine_tuning_datasets={k:v for k,v in fine_tuning_datasets.items() if k in allowed}
+        ft_failures = validate_agent_fine_tuning_datasets(manifest, fine_tuning_datasets, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+        for failure in ft_failures:
+            report.failures.append(failure)
+
     target_output = output
     target_cross_dir = cross_model_train_dir.resolve() if cross_model_train_dir else None
     if dry_run:
@@ -77,6 +93,8 @@ def generate(
         manifest_markdown=manifest_markdown,
         cross_model_train_dir=target_cross_dir,
         incremental_fingerprint=manifest_fingerprint,
+        fine_tuning_datasets=fine_tuning_datasets,
+        fine_tuning_output_dir=(unsloth_output or fine_tuning_output),
     )
 
     if dry_run:

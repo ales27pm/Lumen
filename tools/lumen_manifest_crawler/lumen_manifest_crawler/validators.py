@@ -165,7 +165,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
                 prompt_text = "\n".join(
                     message.get("content", "") for message in record.get("messages", []) if isinstance(message, dict)
                 )
-                if tool.id in prompt_text:
+                if _has_explicit_tool_id_reference(prompt_text, tool.id):
                     failures.append(ValidationFailure(code="tool_id_leak_in_natural_eval", message=f"Tool {tool.id} leaked in natural intent prompt", path=f"dataset.eval_scenarios.{tool.id}"))
         required_args = {arg.name for arg in tool.arguments if arg.required}
         missing_args = sorted(required_args - covered_args)
@@ -176,6 +176,23 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
         if tool.permissionKey and not has_permission:
             failures.append(ValidationFailure(code="missing_permission_eval_coverage", message=f"Tool {tool.id} requires permission coverage in eval scenarios", path=f"dataset.eval_scenarios.{tool.id}"))
 
+
+
+def _has_explicit_tool_id_reference(prompt_text: str, tool_id: str) -> bool:
+    if not prompt_text or not tool_id:
+        return False
+    if "." in tool_id:
+        return tool_id.casefold() in prompt_text.casefold()
+
+    escaped = re.escape(tool_id)
+    explicit_patterns = (
+        rf"`{escaped}`",
+        rf'[\'\"]{escaped}[\'\"]',
+        rf"\btool\s+{escaped}\b",
+        rf"\buse\s+{escaped}\b",
+    )
+    lowered = prompt_text.lower()
+    return any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in explicit_patterns)
 
 def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], warnings: list[ValidationWarning], seen_ids: set[str]) -> None:
     if name == "dataset_manifest":

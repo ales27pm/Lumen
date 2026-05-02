@@ -166,13 +166,17 @@ def improve_loop(
     generate_agent_fine_tuning: bool = typer.Option(True, "--generate-agent-fine-tuning/--no-generate-agent-fine-tuning", help="Generate per-agent fine-tuning datasets."),
     fine_tuning_output: Path | None = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
     cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross-model training artifacts."),
-    build_command: str | None = typer.Option(None, "--build-command", help="Optional build command to run after generation. Space-separated."),
-    test_command: str | None = typer.Option(None, "--test-command", help="Optional test command to run before generation. Space-separated."),
+    build_command: str | None = typer.Option(None, "--build-command", help="Optional build/TestFlight archive command to run after generation. Space-separated."),
+    test_command: str | None = typer.Option(None, "--test-command", help="Optional local validation command to run before generation. Space-separated."),
     train_command: str | None = typer.Option(None, "--train-command", help="Optional training command to run after generation. Space-separated."),
     dry_run_commands: bool = typer.Option(False, "--dry-run-commands", help="Record build/test/train commands without executing them."),
+    app_run_mode: str = typer.Option("testflight", "--app-run-mode", help="Live app runtime mode. Default: testflight."),
+    testflight_build_label: str | None = typer.Option(None, "--testflight-build-label", help="Human-readable TestFlight build/version label for the runbook."),
+    require_testflight_runtime_audit: bool = typer.Option(False, "--require-testflight-runtime-audit", help="Treat missing TestFlight in-app audit JSON as an error gap."),
+    testflight_scenario_limit: int = typer.Option(120, "--testflight-scenario-limit", min=1, help="Maximum scenarios to write for TestFlight replay."),
     fail_on_validation: bool = typer.Option(False, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero if the loop finds critical/error gaps."),
 ) -> None:
-    """Run one closed improvement-loop cycle and emit machine-readable next actions."""
+    """Run one closed improvement-loop cycle and emit TestFlight runtime handoff artifacts."""
     result = run_agent_improvement_loop(
         AgentImprovementLoopConfig(
             root=root,
@@ -191,10 +195,15 @@ def improve_loop(
             train_command=_split_command(train_command),
             fail_on_validation=fail_on_validation,
             dry_run_commands=dry_run_commands,
+            app_run_mode=app_run_mode,
+            testflight_build_label=testflight_build_label,
+            require_testflight_runtime_audit=require_testflight_runtime_audit,
+            testflight_scenario_limit=testflight_scenario_limit,
         )
     )
     console.print(f"[bold]Loop passed:[/bold] {result.passed}")
     console.print(f"[bold]Gaps:[/bold] {len(result.gaps)}")
+    console.print(f"[bold]TestFlight scenarios:[/bold] {len(result.testflight_scenarios)}")
     console.print(f"[bold]Next-action prompts:[/bold] {len(result.next_prompts)}")
     console.print(f"[green]Wrote loop outputs to {loop_output.resolve()}[/green]")
     if fail_on_validation and not result.passed:

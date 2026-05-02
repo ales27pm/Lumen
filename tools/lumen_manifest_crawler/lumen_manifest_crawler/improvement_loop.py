@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -63,7 +64,6 @@ class AgentImprovementLoopConfig:
     test_command: tuple[str, ...] = ()
     train_command: tuple[str, ...] = ()
     max_tail_chars: int = 12000
-    fail_on_validation: bool = False
     dry_run_commands: bool = False
     app_run_mode: str = "testflight"
     testflight_build_label: str | None = None
@@ -219,8 +219,6 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
         command_results=command_results,
         testflight_scenarios=testflight_scenarios,
     )
-    if config.fail_on_validation and not result.passed:
-        raise RuntimeError(f"Agent improvement loop failed with {len(gaps)} gap(s). See {loop_output}")
     return result
 
 
@@ -236,13 +234,23 @@ def _run_optional_command(name: str, command: tuple[str, ...], cwd: Path, config
             stdout_tail="dry-run: command not executed",
             stderr_tail="",
         )
-    completed = subprocess.run(
-        list(command),
-        cwd=cwd,
-        text=True,
-        capture_output=True,
-        timeout=None,
-    )
+    try:
+        completed = subprocess.run(
+            list(command),
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            timeout=None,
+        )
+    except OSError as exc:
+        return LoopCommandResult(
+            name=name,
+            command=list(command),
+            cwd=str(cwd),
+            returncode=127,
+            stdout_tail="",
+            stderr_tail=_tail(str(exc), config.max_tail_chars),
+        )
     return LoopCommandResult(
         name=name,
         command=list(command),
@@ -260,8 +268,16 @@ def _tail(text: str, max_chars: int) -> str:
 
 
 def _manifest_fingerprint(manifest: Any) -> str:
-    payload = json.dumps(manifest.output_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(_canonicalize(manifest.output_dict()), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _canonicalize(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _canonicalize(child) for key, child in sorted(value.items())}
+    if isinstance(value, list):
+        return [_canonicalize(item) for item in value]
+    return value
 
 
 def _dataset_summary(datasets: dict[str, list[dict[str, Any]]], fine_tuning_datasets: Any) -> dict[str, Any]:
@@ -400,7 +416,20 @@ def _build_testflight_plan(
         "runbookPath": "TESTFLIGHT_RUNBOOK.md",
         "scenarioCount": len(scenarios),
         "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-        "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root . --output generated/agent_manifest --loop-output generated/agent_improvement_loop --runtime-audit <exported-testflight-json>",
+        "nextIngestCommand": shlex.join([
+            "python",
+            "-m",
+            "lumen_manifest_crawler",
+            "improve-loop",
+            "--root",
+            str(config.root.resolve()),
+            "--output",
+            str(config.output.resolve()),
+            "--loop-output",
+            str(config.loop_output.resolve()),
+            "--runtime-audit",
+            "<exported-testflight-json>",
+        ]),
         "manifestFingerprint": _manifest_fingerprint(manifest),
     }
 
@@ -418,6 +447,7 @@ def _build_gap_report(
     gaps: list[dict[str, Any]] = []
 
     if config.app_run_mode.casefold() == "testflight" and not runtime_reports:
+        resolved_loop_output = config.loop_output.resolve()
         gaps.append({
             "id": _stable_id("testflight_runtime_pending", config.testflight_build_label or "unlabeled"),
             "severity": "error" if config.require_testflight_runtime_audit else "warning",
@@ -426,8 +456,8 @@ def _build_gap_report(
             "evidence": {
                 "expectedExport": "lumen-in-app-dataset-*.json",
                 "source": "Agent Grounding > Export In-App Dataset Package",
-                "scenarioQueue": "generated/agent_improvement_loop/testflight_scenarios.jsonl",
-                "runbook": "generated/agent_improvement_loop/TESTFLIGHT_RUNBOOK.md",
+                "scenarioQueue": str(resolved_loop_output / "testflight_scenarios.jsonl"),
+                "runbook": str(resolved_loop_output / "TESTFLIGHT_RUNBOOK.md"),
             },
             "recommendedAction": "Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit <json>.",
         })

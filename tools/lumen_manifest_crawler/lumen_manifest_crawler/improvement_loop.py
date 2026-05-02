@@ -17,7 +17,7 @@ from lumen_manifest_crawler.output.writer import write_outputs
 from lumen_manifest_crawler.validators import validate_agent_fine_tuning_datasets, validate_manifest
 
 DETERMINISTIC_LOOP_TIMESTAMP = "1970-01-01T00:00:00+00:00"
-LOOP_SCHEMA_VERSION = "1.0.0"
+LOOP_SCHEMA_VERSION = "1.1.0"
 DEFAULT_LOOP_DIR = Path("generated/agent_improvement_loop")
 
 
@@ -65,6 +65,10 @@ class AgentImprovementLoopConfig:
     max_tail_chars: int = 12000
     fail_on_validation: bool = False
     dry_run_commands: bool = False
+    app_run_mode: str = "testflight"
+    testflight_build_label: str | None = None
+    require_testflight_runtime_audit: bool = False
+    testflight_scenario_limit: int = 120
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,7 @@ class AgentImprovementLoopResult:
     gaps: list[dict[str, Any]]
     next_prompts: list[dict[str, Any]]
     command_results: list[LoopCommandResult]
+    testflight_scenarios: list[dict[str, Any]]
 
     @property
     def passed(self) -> bool:
@@ -87,6 +92,12 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
     The loop intentionally performs one deterministic iteration, not an actual
     infinite process. External automation can repeat this command forever. This
     keeps every cycle auditable, diffable, and safe to stop or roll back.
+
+    The live runtime stage is represented explicitly as a TestFlight handoff:
+    this command writes a TestFlight runbook and scenario queue. The human or CI
+    build system compiles/distributes the app, the tester runs Agent Grounding in
+    the TestFlight build, exports the in-app dataset package JSON, and the next
+    loop iteration ingests that JSON with --runtime-audit.
     """
     root = config.root.resolve()
     output = config.output.resolve()
@@ -137,8 +148,16 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
         fine_tuning_output_dir=config.fine_tuning_output,
     )
 
-    command_results.append(_run_optional_command("build", config.build_command, root, config))
+    command_results.append(_run_optional_command("build_for_testflight", config.build_command, root, config))
     command_results.append(_run_optional_command("train", config.train_command, root, config))
+
+    testflight_scenarios = _build_testflight_scenario_queue(
+        manifest=manifest,
+        datasets=datasets,
+        fine_tuning_datasets=fine_tuning_datasets,
+        limit=config.testflight_scenario_limit,
+    )
+    testflight_plan = _build_testflight_plan(config, manifest, runtime_reports, testflight_scenarios)
 
     dataset_summary = _dataset_summary(datasets, fine_tuning_datasets)
     runtime_summary = _runtime_summary(runtime_reports)
@@ -150,8 +169,9 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
         fine_tuning_datasets=fine_tuning_datasets,
         runtime_reports=runtime_reports,
         command_results=command_results,
+        config=config,
     )
-    next_prompts = _build_next_action_prompts(gaps, runtime_reports, command_results)
+    next_prompts = _build_next_action_prompts(gaps, runtime_reports, command_results, testflight_plan)
 
     state = {
         "schemaVersion": LOOP_SCHEMA_VERSION,
@@ -170,6 +190,7 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
         },
         "dataset": dataset_summary,
         "runtime": runtime_summary,
+        "testFlight": testflight_plan,
         "validation": {
             "failureCount": len(validation_report.failures),
             "warningCount": len(validation_report.warnings),
@@ -187,13 +208,16 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
     _write_json(loop_output / "loop_state.json", state)
     _write_json(loop_output / "loop_gaps.json", {"gaps": gaps})
     _write_jsonl(loop_output / "next_action_prompts.jsonl", next_prompts)
+    _write_jsonl(loop_output / "testflight_scenarios.jsonl", testflight_scenarios)
     _write_markdown_report(loop_output / "LOOP_REPORT.md", state, gaps, next_prompts)
+    _write_testflight_runbook(loop_output / "TESTFLIGHT_RUNBOOK.md", state, testflight_scenarios)
 
     result = AgentImprovementLoopResult(
         state=state,
         gaps=gaps,
         next_prompts=next_prompts,
         command_results=command_results,
+        testflight_scenarios=testflight_scenarios,
     )
     if config.fail_on_validation and not result.passed:
         raise RuntimeError(f"Agent improvement loop failed with {len(gaps)} gap(s). See {loop_output}")
@@ -280,6 +304,107 @@ def _runtime_summary(runtime_reports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _build_testflight_scenario_queue(
+    *,
+    manifest: Any,
+    datasets: dict[str, list[dict[str, Any]]],
+    fine_tuning_datasets: Any,
+    limit: int,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for record in datasets.get("eval_scenarios", []):
+        candidates.append(_scenario_from_eval_record(record, source_family="eval_scenarios"))
+
+    if fine_tuning_datasets:
+        for agent, dataset in sorted(fine_tuning_datasets.items()):
+            for record in dataset.eval:
+                scenario = _scenario_from_eval_record(record, source_family=f"agent_eval:{agent}")
+                scenario["agent"] = agent
+                candidates.append(scenario)
+
+    for entry in manifest.routingMatrix:
+        candidates.append({
+            "id": _stable_id("routing", entry.intent, entry.allowedTools),
+            "sourceFamily": "routing_matrix",
+            "agent": "cortex",
+            "taskType": "routing_matrix_adherence",
+            "prompt": f"Test intent `{entry.intent}` in the TestFlight app and verify the selected tool is one of: {', '.join(entry.allowedTools) or 'none'}.",
+            "expected": {
+                "intent": entry.intent,
+                "allowedToolIDs": list(entry.allowedTools),
+                "mustUseManifestToolIDsOnly": True,
+            },
+            "testFlightInstructions": [
+                "Open the TestFlight build of Lumen.",
+                "Use the normal chat/app surface, not a mocked harness.",
+                "Enter or adapt the prompt naturally.",
+                "Run Agent Grounding Audit after the interaction batch.",
+                "Export the in-app dataset package JSON.",
+            ],
+        })
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate.get("id") or _stable_id(candidate))
+        if key in seen:
+            continue
+        seen.add(key)
+        candidate["id"] = key
+        deduped.append(candidate)
+    return deduped[: max(0, limit)]
+
+
+def _scenario_from_eval_record(record: dict[str, Any], *, source_family: str) -> dict[str, Any]:
+    messages = record.get("messages") if isinstance(record.get("messages"), list) else []
+    prompt = ""
+    for message in messages:
+        if isinstance(message, dict) and message.get("role") == "user":
+            prompt = str(message.get("content") or "")
+            break
+    expected = record.get("expected") if isinstance(record.get("expected"), dict) else {}
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    return {
+        "id": str(record.get("id") or _stable_id(source_family, prompt, expected)),
+        "sourceFamily": source_family,
+        "agent": str(metadata.get("agent") or record.get("agentRole") or "runtime"),
+        "taskType": str(record.get("taskType") or metadata.get("evalType") or "runtime_eval"),
+        "prompt": prompt,
+        "expected": expected,
+        "metadata": metadata,
+        "testFlightInstructions": [
+            "Install or update the current TestFlight build.",
+            "Run this prompt through the real app UI and current bundled model/runtime.",
+            "Do not use mocked developer harnesses for this pass.",
+            "After the batch, open Agent Grounding and export the in-app dataset package JSON.",
+            "Feed the exported JSON into the next loop with --runtime-audit.",
+        ],
+    }
+
+
+def _build_testflight_plan(
+    config: AgentImprovementLoopConfig,
+    manifest: Any,
+    runtime_reports: list[dict[str, Any]],
+    scenarios: list[dict[str, Any]],
+) -> dict[str, Any]:
+    has_runtime = bool(runtime_reports)
+    return {
+        "mode": config.app_run_mode,
+        "buildLabel": config.testflight_build_label,
+        "status": "runtime-audit-ingested" if has_runtime else "awaiting-testflight-runtime-audit",
+        "requiresTestFlightAppRun": config.app_run_mode.casefold() == "testflight",
+        "requireRuntimeAuditForPass": config.require_testflight_runtime_audit,
+        "runtimeAuditProvided": has_runtime,
+        "scenarioQueuePath": "testflight_scenarios.jsonl",
+        "runbookPath": "TESTFLIGHT_RUNBOOK.md",
+        "scenarioCount": len(scenarios),
+        "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
+        "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root . --output generated/agent_manifest --loop-output generated/agent_improvement_loop --runtime-audit <exported-testflight-json>",
+        "manifestFingerprint": _manifest_fingerprint(manifest),
+    }
+
+
 def _build_gap_report(
     *,
     manifest: Any,
@@ -288,8 +413,24 @@ def _build_gap_report(
     fine_tuning_datasets: Any,
     runtime_reports: list[dict[str, Any]],
     command_results: list[LoopCommandResult],
+    config: AgentImprovementLoopConfig,
 ) -> list[dict[str, Any]]:
     gaps: list[dict[str, Any]] = []
+
+    if config.app_run_mode.casefold() == "testflight" and not runtime_reports:
+        gaps.append({
+            "id": _stable_id("testflight_runtime_pending", config.testflight_build_label or "unlabeled"),
+            "severity": "error" if config.require_testflight_runtime_audit else "warning",
+            "category": "testflight_runtime_pending",
+            "title": "TestFlight in-app audit export has not been ingested yet",
+            "evidence": {
+                "expectedExport": "lumen-in-app-dataset-*.json",
+                "source": "Agent Grounding > Export In-App Dataset Package",
+                "scenarioQueue": "generated/agent_improvement_loop/testflight_scenarios.jsonl",
+                "runbook": "generated/agent_improvement_loop/TESTFLIGHT_RUNBOOK.md",
+            },
+            "recommendedAction": "Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit <json>.",
+        })
 
     for failure in validation_report.failures:
         dumped = _model_dump(failure)
@@ -411,12 +552,13 @@ def _build_next_action_prompts(
     gaps: list[dict[str, Any]],
     runtime_reports: list[dict[str, Any]],
     command_results: list[LoopCommandResult],
+    testflight_plan: dict[str, Any],
 ) -> list[dict[str, Any]]:
     prompts: list[dict[str, Any]] = []
     for gap in gaps[:80]:
         prompts.append({
             "id": _stable_id("prompt", gap),
-            "taskType": "codebase_improvement",
+            "taskType": "codebase_improvement" if gap.get("category") != "testflight_runtime_pending" else "testflight_runtime_audit",
             "priority": _priority_for_gap(gap),
             "messages": [
                 {
@@ -425,7 +567,7 @@ def _build_next_action_prompts(
                 },
                 {
                     "role": "user",
-                    "content": _gap_prompt(gap),
+                    "content": _gap_prompt(gap, testflight_plan),
                 },
             ],
             "metadata": {
@@ -434,6 +576,8 @@ def _build_next_action_prompts(
                 "severity": gap.get("severity"),
                 "runtimeReportCount": len(runtime_reports),
                 "failedCommandCount": sum(1 for result in command_results if result.command and not result.passed),
+                "testFlightStatus": testflight_plan.get("status"),
+                "testFlightScenarioQueue": testflight_plan.get("scenarioQueuePath"),
             },
         })
     if not prompts:
@@ -443,9 +587,9 @@ def _build_next_action_prompts(
             "priority": "medium",
             "messages": [
                 {"role": "system", "content": "You are improving the Lumen agent dataset loop."},
-                {"role": "user", "content": "No blocking gaps were detected. Expand the next loop by adding one new adversarial scenario family, one runtime trace field, and one dataset quality gate while preserving deterministic output."},
+                {"role": "user", "content": "No blocking gaps were detected. Expand the next loop by adding one new TestFlight scenario family, one runtime trace field exported by the in-app dataset package, and one dataset quality gate while preserving deterministic output."},
             ],
-            "metadata": {"category": "continuous_expansion"},
+            "metadata": {"category": "continuous_expansion", "testFlightStatus": testflight_plan.get("status")},
         })
     return prompts
 
@@ -458,16 +602,18 @@ def _priority_for_gap(gap: dict[str, Any]) -> str:
     }.get(str(gap.get("severity")), "low")
 
 
-def _gap_prompt(gap: dict[str, Any]) -> str:
+def _gap_prompt(gap: dict[str, Any], testflight_plan: dict[str, Any]) -> str:
     return (
         "Fix or expand the Lumen agent improvement loop for this gap.\n\n"
         f"Severity: {gap.get('severity')}\n"
         f"Category: {gap.get('category')}\n"
         f"Title: {gap.get('title')}\n"
         f"Recommended action: {gap.get('recommendedAction')}\n\n"
+        "TestFlight phase:\n"
+        f"{json.dumps(testflight_plan, ensure_ascii=False, indent=2, sort_keys=True)}\n\n"
         "Evidence JSON:\n"
         f"{json.dumps(gap.get('evidence'), ensure_ascii=False, indent=2, sort_keys=True)}\n\n"
-        "Required outcome: modify the crawler, in-app audit, runtime trace schema, dataset compiler, tests, or workflow scripts so the next loop iteration has stronger coverage or removes the drift."
+        "Required outcome: modify the crawler, in-app Agent Grounding audit, runtime trace schema, dataset compiler, TestFlight runbook, tests, or workflow scripts so the next TestFlight loop iteration has stronger live-runtime coverage or removes the drift."
     )
 
 
@@ -507,8 +653,14 @@ def _write_markdown_report(path: Path, state: dict[str, Any], gaps: list[dict[st
         f"- Dataset records: `{state['dataset']['recordCount']}`",
         f"- Runtime audit reports: `{state['runtime']['reportCount']}`",
         f"- Runtime failures: `{state['runtime']['failureCount']}`",
+        f"- TestFlight status: `{state['testFlight']['status']}`",
+        f"- TestFlight scenarios: `{state['testFlight']['scenarioCount']}`",
         f"- Gaps: `{len(gaps)}`",
         f"- Next action prompts: `{len(prompts)}`",
+        "",
+        "## TestFlight handoff",
+        "",
+        "Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the in-app dataset package JSON, then rerun this command with `--runtime-audit <exported-json>`.",
         "",
         "## Top gaps",
         "",
@@ -522,5 +674,53 @@ def _write_markdown_report(path: Path, state: dict[str, Any], gaps: list[dict[st
             "",
         ])
     if not gaps:
-        lines.append("No blocking gaps detected. The next loop should expand coverage.")
+        lines.append("No blocking gaps detected. The next loop should expand TestFlight runtime coverage.")
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _write_testflight_runbook(path: Path, state: dict[str, Any], scenarios: list[dict[str, Any]]) -> None:
+    lines = [
+        "# TestFlight In-App Runtime Runbook",
+        "",
+        "This is the live-runtime phase of the Lumen improvement loop. Do not replace this with mocked unit tests. The point is to run the current app build through TestFlight, then export what the shipped app observed.",
+        "",
+        "## Build identity",
+        "",
+        f"- Manifest fingerprint: `{state['manifest']['fingerprint']}`",
+        f"- Manifest commit: `{state['manifest']['commit']}`",
+        f"- Build label: `{state['testFlight'].get('buildLabel')}`",
+        f"- Expected export: `{state['testFlight']['expectedExport']}`",
+        "",
+        "## Required app flow",
+        "",
+        "1. Compile/archive the app and distribute it through TestFlight.",
+        "2. Install or update that TestFlight build on the device.",
+        "3. Use the normal app surface for scenario prompts. Do not use a mocked harness for this pass.",
+        "4. Open the in-app Agent Grounding screen.",
+        "5. Tap `Run Agent Grounding Audit`.",
+        "6. Tap `Export In-App Dataset Package`.",
+        "7. Share/save the produced `lumen-in-app-dataset-*.json` file.",
+        "8. Feed it into the next loop:",
+        "",
+        "```bash",
+        state["testFlight"]["nextIngestCommand"],
+        "```",
+        "",
+        "## Scenario queue",
+        "",
+        f"Full machine-readable queue: `{state['testFlight']['scenarioQueuePath']}`",
+        "",
+    ]
+    for index, scenario in enumerate(scenarios[:30], start=1):
+        prompt = str(scenario.get("prompt") or "").replace("\n", " ").strip()
+        lines.extend([
+            f"### {index}. {scenario.get('taskType')}",
+            "",
+            f"- Agent: `{scenario.get('agent')}`",
+            f"- Source: `{scenario.get('sourceFamily')}`",
+            f"- Prompt: {prompt}",
+            "",
+        ])
+    if len(scenarios) > 30:
+        lines.append(f"Additional scenarios omitted from this Markdown view: `{len(scenarios) - 30}`. Use `testflight_scenarios.jsonl` for the full queue.")
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")

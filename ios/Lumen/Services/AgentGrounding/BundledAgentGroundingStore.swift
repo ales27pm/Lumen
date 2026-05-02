@@ -6,9 +6,6 @@ public struct BundledFleetSystemPrompt: Codable, Hashable, Sendable {
     public let systemPrompt: String?
     public let system_prompt: String?
 
-    public var resolvedSystemPrompt: String {
-        system_prompt ?? systemPrompt ?? ""
-    }
 }
 
 public enum BundledAgentGroundingStoreError: LocalizedError, Sendable {
@@ -55,7 +52,7 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
         }
     }
 
-    public nonisolated func loadManifest() throws -> AgentBehaviorManifest {
+    public func loadManifest() throws -> AgentBehaviorManifest {
         let url = try fileURL("AgentGrounding/agent_manifest/AgentBehaviorManifest", extension: "json")
         let data = try Data(contentsOf: url)
         return try JSONDecoder().decode(AgentBehaviorManifest.self, from: data)
@@ -69,10 +66,15 @@ public final class BundledAgentGroundingStore: @unchecked Sendable {
 
     public nonisolated func systemPrompt(for slotID: String) throws -> String {
         let prompts = try loadFleetSystemPrompts()
-        guard let prompt = prompts[slotID], !prompt.resolvedSystemPrompt.isEmpty else {
+        guard let prompt = prompts[slotID] else {
             throw BundledAgentGroundingStoreError.missingPrompt(slotID: slotID)
         }
-        return prompt.resolvedSystemPrompt
+        let resolved = (prompt.system_prompt ?? prompt.systemPrompt ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !resolved.isEmpty else {
+            throw BundledAgentGroundingStoreError.missingPrompt(slotID: slotID)
+        }
+        return resolved
     }
 
     public nonisolated func loadManifestMarkdown() throws -> String {

@@ -4,7 +4,7 @@ nonisolated enum AgentGroundingPromptComposer {
     static func composeSystemPrompt(for slot: LumenModelSlot, fallbackSystemPrompt: String) -> String {
         let fallback = fallbackSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let bundledPrompt = try? BundledAgentGroundingStore.shared.systemPrompt(for: slot.rawValue)
+        guard let bundledPrompt = try? BundledAgentGroundingStore(bundle: .main).systemPrompt(for: slot.rawValue)
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !bundledPrompt.isEmpty else {
             return fallbackSystemPrompt

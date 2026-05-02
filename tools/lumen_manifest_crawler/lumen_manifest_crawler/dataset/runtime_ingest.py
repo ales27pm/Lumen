@@ -4,18 +4,49 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lumen_manifest_crawler.dataset.e2e_report_normalizer import flatten_e2e_json_report
+from lumen_manifest_crawler.dataset.e2e_text_parser import parse_e2e_text_report
+
+SUPPORTED_TEXT_REPORT_SUFFIXES = {".txt", ".md", ".markdown", ".log"}
+SUPPORTED_RUNTIME_AUDIT_SUFFIXES = {".json", *SUPPORTED_TEXT_REPORT_SUFFIXES}
+
 
 def load_runtime_audit_reports(paths: list[Path] | None) -> list[dict[str, Any]]:
     reports: list[dict[str, Any]] = []
     for path in paths or []:
-        candidates = sorted(path.rglob("*.json")) if path.is_dir() else [path]
+        candidates = _candidate_report_files(path)
         for candidate in candidates:
             try:
-                value = json.loads(candidate.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+                text = candidate.read_text(encoding="utf-8")
+            except OSError:
                 continue
-            reports.extend(_normalize_payload(value, source=str(candidate)))
+            reports.extend(_load_report_text(text, source=str(candidate)))
     return reports
+
+
+def _candidate_report_files(path: Path) -> list[Path]:
+    if path.is_dir():
+        return sorted(
+            candidate
+            for candidate in path.rglob("*")
+            if _is_supported_report_file(candidate)
+        )
+    return [path] if _is_supported_report_file(path) else []
+
+
+def _is_supported_report_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.casefold() in SUPPORTED_RUNTIME_AUDIT_SUFFIXES
+
+
+def _load_report_text(text: str, *, source: str) -> list[dict[str, Any]]:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = parse_e2e_text_report(text, source=source)
+        if parsed is None:
+            return []
+        return [flatten_e2e_json_report(parsed, source=source, source_format="lumen_e2e_text_report", source_layer="e2eTextReport")]
+    return _normalize_payload(value, source=source)
 
 
 def _normalize_payload(value: Any, *, source: str) -> list[dict[str, Any]]:
@@ -28,6 +59,8 @@ def _normalize_payload(value: Any, *, source: str) -> list[dict[str, Any]]:
         return []
     if _is_in_app_package(value):
         return [_flatten_in_app_package(value, source=source)]
+    if _is_e2e_json_report(value):
+        return [flatten_e2e_json_report(value, source=source)]
     if isinstance(value.get("failures"), list):
         return [{**value, "_source": source, "_sourceFormat": "runtime_manifest_audit"}]
     if isinstance(value.get("violations"), list) or isinstance(value.get("repairSamples"), list):
@@ -40,6 +73,14 @@ def _is_in_app_package(value: dict[str, Any]) -> bool:
         value.get("schemaVersion") == "1.0.0"
         and "exportPolicy" in value
         and any(key in value for key in ("runtimeManifestAudit", "behaviorAudit", "scenarioResults", "recentTraces"))
+    )
+
+
+def _is_e2e_json_report(value: dict[str, Any]) -> bool:
+    return (
+        value.get("kind") in {"lumen_e2e_test_report", "e2e_test_report"}
+        or isinstance(value.get("trainingSignals"), list)
+        or isinstance(value.get("scenarios"), list) and {"passed", "failed"}.intersection(value.keys())
     )
 
 

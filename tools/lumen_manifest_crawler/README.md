@@ -23,10 +23,11 @@ It extracts the real source-of-truth from the Lumen / monGARS codebase and write
 
 LLM agents drift when they are trained on stale examples, invented tool names, outdated memory scopes, or synthetic schemas that no longer match the app. This crawler prevents that by deriving the training source from Swift files that actually define the runtime.
 
-The pipeline combines two truth sources:
+The pipeline combines three truth sources:
 
 1. **Static Swift source analysis** from the repository.
 2. **In-app runtime audit JSON** exported from the Lumen app, when provided.
+3. **E2E evaluation reports** from TestFlight/runtime evals, when provided as JSON, `.txt`, `.md`, or `.log` files.
 
 It now also emits fleet self-knowledge artifacts so every model slot can learn:
 
@@ -62,7 +63,7 @@ The raw role datasets are preserved, then compiled into higher-grade training ar
 - `dpo_preference_pairs.jsonl` — chosen/rejected preference pairs built from negative tool-call samples.
 - `tool_schema_cards.jsonl` — exact immutable tool-schema grounding cards.
 - `manifest_grounding_cards.jsonl` — fleet, memory, protocol, and sentinel policy cards.
-- `runtime_audit_repairs.jsonl` — REM-style repair samples produced from in-app audit failures.
+- `runtime_audit_repairs.jsonl` — REM-style repair samples produced from in-app audit failures and E2E evaluation reports.
 - `dataset_manifest.json` — dataset lineage, counts, hashes, source policy, split policy, and privacy policy.
 - `dataset_index.csv` — compact overview of every emitted dataset family.
 
@@ -114,9 +115,10 @@ The `improve-loop` command performs one auditable cycle of the static/TestFlight
 1. optionally run a local validation command;
 2. scan Swift source and regenerate the manifest;
 3. ingest one or more in-app dataset package JSON files from a previous TestFlight run;
-4. compile base datasets, fleet artifacts, and per-agent fine-tuning datasets;
-5. optionally run build/archive/training commands;
-6. write a loop state file, gap report, Markdown report, TestFlight runbook, TestFlight scenario queue, and next-action prompts for the next pass.
+4. ingest one or more E2E evaluation reports from a previous runtime eval;
+5. compile base datasets, fleet artifacts, and per-agent fine-tuning datasets;
+6. optionally run build/archive/training commands;
+7. write a loop state file, gap report, Markdown report, TestFlight runbook, TestFlight scenario queue, and next-action prompts for the next pass.
 
 ```bash
 python -m lumen_manifest_crawler improve-loop \
@@ -124,6 +126,7 @@ python -m lumen_manifest_crawler improve-loop \
   --output generated/agent_manifest \
   --loop-output generated/agent_improvement_loop \
   --runtime-audit runtime-audits/latest-testflight-export.json \
+  --runtime-audit runtime-audits/latest-e2e-report.txt \
   --generate-system-prompts \
   --generate-agent-fine-tuning \
   --testflight-build-label "1.0.0-build-42"
@@ -164,6 +167,40 @@ python -m lumen_manifest_crawler improve-loop \
 ```
 
 Run the command repeatedly from CI, a local shell loop, or a Codex pass. Each iteration should either ingest a fresh TestFlight export, remove a gap, or expand runtime coverage with a new TestFlight scenario family, trace field, adversarial dataset family, or quality gate.
+
+## Ingest E2E reports into the next fine-tuning cycle
+
+`--runtime-audit` now accepts structured runtime JSON and text-based E2E reports with suffixes `.txt`, `.md`, `.markdown`, or `.log`.
+
+Example text report shape:
+
+```text
+E2E Test Report
+Passed: 5
+Failed: 2
+
+Training signals for next run:
+• response-quality: 2 issues
+• Capture failed prompts + final outputs into next fine-tuning dataset.
+
+❌ Training eval: memory save/recall
+Prompt: Remember that I prefer concise bullet points, then tell me what you remembered.
+Intent: memory / expected memory
+Failures: Required final hint missing: remember
+Final: Saved: I prefer concise bullet points.
+```
+
+The ingest layer converts failed E2E scenarios into `runtime_audit_repairs` records with:
+
+- original prompt
+- intended/expected intent
+- bad final output
+- missing required hint
+- corrected output
+- lesson
+- curriculum label
+
+This lets failed runtime evals become direct supervised repair samples for the next fine-tuning dataset instead of being manually appended to generated JSONL.
 
 ## Generate fleet self-knowledge artifacts
 
@@ -207,14 +244,15 @@ python -m lumen_manifest_crawler generate \
 
 ## Include in-app runtime audit data
 
-Export one or more in-app dataset package JSON files from the iPhone app, then pass each file or a directory containing JSON reports:
+Export one or more in-app dataset package JSON files from the iPhone app, then pass each file or a directory containing JSON/text reports:
 
 ```bash
 python -m lumen_manifest_crawler generate \
   --root . \
   --output generated/agent_manifest \
   --pretty \
-  --runtime-audit ./runtime-audits/latest-audit.json
+  --runtime-audit ./runtime-audits/latest-audit.json \
+  --runtime-audit ./runtime-audits/latest-e2e-report.txt
 ```
 
 Multiple inputs are allowed:
@@ -228,7 +266,7 @@ python -m lumen_manifest_crawler generate \
   --runtime-audit ./runtime-audits/archive/
 ```
 
-The compiler only ingests explicit audit/package JSON files. It does not scrape free-form user logs, full conversations, private text, photos, contacts, calendar bodies, files, or unrestricted tool payloads.
+The compiler only ingests explicit audit/package/report files. It does not scrape free-form user logs, full conversations, private text, photos, contacts, calendar bodies, files, or unrestricted tool payloads.
 
 ## Determinism
 
@@ -324,6 +362,7 @@ Use:
 - `eval_scenarios.jsonl` sentinel cases
 - `manifest_grounding_cards.jsonl`
 - `cross_model_training.jsonl` records with `fleet_whole_system_identity`, `fleet_peer_knowledge`, and `fleet_private_state_boundary`
+- `runtime_audit_repairs.jsonl` records from failed E2E response-quality reports
 - its `fleet_system_prompts.json` entry
 
 Mouth should produce only user-facing text and must never expose private reasoning, raw tool JSON, forbidden sentinels, fabricated source knowledge, or peer-private runtime state.
@@ -350,7 +389,7 @@ Use:
 - `cross_model_training.jsonl` records with `source_code_self_knowledge`, `source_routing_knowledge`, `fleet_private_state_boundary`, and `fleet_whole_system_identity`
 - its `fleet_system_prompts.json` entry
 
-REM should diagnose drift, produce repair samples, classify memory/freshness decisions, and keep the fleet aligned with the manifest and TestFlight runtime exports.
+REM should diagnose drift, produce repair samples, classify memory/freshness decisions, and keep the fleet aligned with the manifest, TestFlight runtime exports, and E2E reports.
 
 ## Adding a new tool safely
 
@@ -388,7 +427,7 @@ The Python crawler runs on the build/dev machine and reads Swift source.
 
 The iPhone app does not crawl raw Swift source. It loads the bundled manifest and compares it against the live runtime tool registry and deterministic scenarios. This verifies the shipped app still matches the training truth.
 
-When an audit fails, its JSON report can be fed back into the dataset compiler. The compiler converts failures into REM repair records so the model learns how to diagnose drift and request the correct manifest/schema regeneration path.
+When an audit or E2E report fails, its JSON/text report can be fed back into the dataset compiler. The compiler converts failures into REM/Mouth repair records so the model learns how to diagnose drift and produce corrected final responses in the next fine-tuning cycle.
 
 ## Validation behaviour
 

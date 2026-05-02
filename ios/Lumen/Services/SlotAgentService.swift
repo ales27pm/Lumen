@@ -95,13 +95,6 @@ final class SlotAgentService {
                         continuation.yield(.step(thoughtStep))
                     }
 
-                    if structuredMode == .actionOnly, let final = parsed.final, !final.isEmpty {
-                        recordTrace(slot: slot, stage: "structured-turn-action-only", stepIndex: stepIndex, error: "unexpected_final_in_action_turn", raw: turnOutput, prompt: executionPrompt)
-                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: nil)
-                        yieldFinal(finalText, steps: steps, continuation: continuation)
-                        return
-                    }
-
                     if let final = parsed.final, !final.isEmpty {
                         if observations.isEmpty,
                            let fallbackTool = requiredFallbackTool,

@@ -1847,7 +1847,9 @@ final class AgentService {
             prompt += "\n[\(i + 1)] \(obs.tool):\n\(obs.result)\n"
         }
         prompt += "\n\(reason.hint)\n"
-        prompt += "Write ONE short, direct, helpful answer in plain language based only on these observations. Include a section header exactly named \"Key modules\" when the request is about local files, architecture, or project internals. Cite specific retrieved snippets/sources from observations instead of generic advice. No preamble, no JSON, no prefixes, no apology. If observations conflict, prefer the most recent."
+        prompt += "Write the final answer in plain text with exactly these sections: Summary, Key modules.\n"
+        prompt += "In Key modules, name concrete modules/components/services/packages from the observations when available; if none are explicit, say that clearly.\n"
+        prompt += "Ground every claim in the listed observations and avoid generic advice. No preamble, no JSON, no prefixes, no apology. If observations conflict, prefer the most recent."
 
         let genReq = GenerateRequest(
             systemPrompt: "You summarize tool results into a concise user-facing answer. Output plain text only. When summarizing local knowledge/tool retrieval results, include a section named Key modules and ground claims in the provided snippets/sources.",

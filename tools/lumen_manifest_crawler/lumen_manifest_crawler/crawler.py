@@ -32,6 +32,12 @@ IGNORED_DIRS = {
     "generated",
 }
 IGNORED_PLIST_DIRS = IGNORED_DIRS | {"Tests", "UITests", "UnitTests", "Fixtures", "fixtures"}
+FRESHNESS_DEFAULTS = {
+    "volatile": {"ttlSeconds": 300, "durable": False},
+    "shortLived": {"ttlSeconds": 3600, "durable": False},
+    "short_lived": {"ttlSeconds": 3600, "durable": False},
+    "timeless": {"ttlSeconds": None, "durable": True},
+}
 
 
 def generate_manifest(root: Path) -> AgentBehaviorManifest:
@@ -174,6 +180,8 @@ def _finalize_defaults(manifest: AgentBehaviorManifest) -> None:
     if not manifest.agentProtocols.executorOutput.get("supportedJSONTypes"):
         manifest.agentProtocols.executorOutput["supportedJSONTypes"] = ["string", "double", "int", "bool", "array", "object", "null"]
 
+    _apply_freshness_defaults(manifest)
+
     known_tools = sorted({tool.id for tool in manifest.tools})
     if manifest.intents and not manifest.routingMatrix:
         manifest.routingMatrix = [
@@ -185,6 +193,17 @@ def _finalize_defaults(manifest: AgentBehaviorManifest) -> None:
             for intent in manifest.intents
         ]
     manifest.fleetTopology = _build_fleet_topology(manifest)
+
+
+def _apply_freshness_defaults(manifest: AgentBehaviorManifest) -> None:
+    for freshness in manifest.memory.freshnessClasses:
+        defaults = FRESHNESS_DEFAULTS.get(freshness.id)
+        if not defaults:
+            continue
+        if freshness.ttlSeconds is None and defaults["ttlSeconds"] is not None:
+            freshness.ttlSeconds = int(defaults["ttlSeconds"])
+        if not freshness.durable:
+            freshness.durable = bool(defaults["durable"])
 
 
 def _build_fleet_topology(manifest: AgentBehaviorManifest) -> FleetTopologyManifest:

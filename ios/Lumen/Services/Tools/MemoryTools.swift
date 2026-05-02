@@ -27,7 +27,14 @@ enum MemoryTools {
         guard let container = SharedContainer.shared else { return "RAG store unavailable." }
         let ctx = ModelContext(container)
         let results = await RAGStore.search(query: trimmed, context: ctx, limit: limit)
-        if results.isEmpty { return "No matches. Try reindexing files or photos first." }
+        if results.isEmpty {
+            let counts = RAGStore.counts(context: ctx)
+            let indexedTotal = counts.values.reduce(0, +)
+            if indexedTotal == 0 {
+                return "No matching files found for \"\(trimmed)\". I also couldn't find any indexed local documents yet. Next step: import files or notes, then run reindex if needed."
+            }
+            return "No matching files found for \"\(trimmed)\". Next step: try a more specific query (for example a file name, module, or component) and I can search again."
+        }
         return results.enumerated().map { idx, r in
             let src = "\(r.chunk.kind.label) · \(r.chunk.sourceName)"
             let snippet = r.chunk.content.prefix(300)

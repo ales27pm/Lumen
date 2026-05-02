@@ -300,8 +300,21 @@ enum E2ETestRunner {
         for hint in scenario.forbiddenTextHints where lowerFinal.contains(hint.lowercased()) {
             failures.append("Forbidden final hint present: \(hint)")
         }
+        if scenario.id == "training-rag-grounding" {
+            if !(lowerFinal.contains("module") || lowerFinal.contains("modules")) {
+                failures.append("RAG grounding assertion failed: final text must mention module/modules")
+            }
+            if !referencesRetrievedSnippet(lowerFinal) {
+                failures.append("RAG grounding assertion failed: summary must reference retrieved docs/snippets")
+            }
+        }
 
         return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, events: events, startedAt: started, finishedAt: Date())
+    }
+
+    private static func referencesRetrievedSnippet(_ lowerFinal: String) -> Bool {
+        let signals = ["[1]", "[2]", "snippet", "source", "file", "pdf", "note", "photos", "retrieved"]
+        return signals.contains { lowerFinal.contains($0) }
     }
 }
 

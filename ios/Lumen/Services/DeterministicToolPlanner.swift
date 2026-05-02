@@ -86,7 +86,10 @@ nonisolated enum DeterministicToolPlanner {
         case .rag:
             if containsAny(text, ["reindex", "index files"]) { return action("rag.index_files") }
             if containsAny(text, ["index photos", "reindex photos"]) { return action("rag.index_photos") }
-            if containsAny(text, ["search"]) { return action("rag.search", ["query": .string(extractWebQuery(from: prompt))]) }
+            if containsAny(text, ["search"]) {
+                let query = expandRAGQueryIfNeeded(originalPrompt: prompt)
+                return action("rag.search", ["query": .string(query)])
+            }
             return nil
         case .alarm:
             if containsAny(text, ["list", "status"]) { return action("alarm.list") ?? action("alarm.authorization_status") }
@@ -158,6 +161,21 @@ nonisolated enum DeterministicToolPlanner {
 
     private static func normalized(_ text: String) -> String { text.lowercased().replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) }
     private static func containsAny(_ value: String, _ needles: [String]) -> Bool { needles.contains { value.contains($0) } }
+    private static func expandRAGQueryIfNeeded(originalPrompt: String) -> String {
+        let base = extractWebQuery(from: originalPrompt)
+        let normalizedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = normalizedBase.isEmpty ? originalPrompt : normalizedBase
+        let lower = normalized(fallback)
+        let architectureTerms = ["architecture", "module", "service", "component", "package"]
+        guard containsAny(lower, ["architecture", "module", "service", "component", "package", "design", "system"]) else {
+            return fallback
+        }
+        var query = fallback
+        for term in architectureTerms where !lower.contains(term) {
+            query += " " + term
+        }
+        return query
+    }
     static func extractWebQuery(from text: String) -> String { SlotAgentService.shared_extractWebQuery(text) }
     static func extractOutlookSearchQuery(from text: String) -> String { SlotAgentService.shared_extractOutlookSearchQuery(text) }
     static func extractOutlookMessageReference(from text: String) -> String? { SlotAgentService.shared_extractOutlookMessageReference(text) }

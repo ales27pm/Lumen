@@ -29,6 +29,7 @@ def generate_fleet_system_prompts(manifest: AgentBehaviorManifest) -> dict[str, 
         topology = manifest.fleetTopology.slots.get(slot.id)
         public_directory = _public_model_directory(manifest, current_slot_id=slot.id)
         routing_table = _routing_table(manifest)
+        routing_rules = {entry["intent"]: {"allowedTools": entry["allowedTools"], "forbiddenTools": entry["forbiddenTools"]} for entry in routing_table}
         available_tools = tools_by_slot.get(slot.id, [])
         compact_payload = {
             "slotID": slot.id,
@@ -52,6 +53,9 @@ def generate_fleet_system_prompts(manifest: AgentBehaviorManifest) -> dict[str, 
             "role": slot.role,
             "systemPrompt": prompt,
             "contextPayload": compact_payload,
+            "system_prompt": prompt,
+            "model_directory": public_directory,
+            "routing_rules": routing_rules,
         }
     return prompts
 
@@ -79,7 +83,7 @@ def generate_manifest_markdown(manifest: AgentBehaviorManifest) -> str:
     lines.append(f"- Commit: `{manifest.sourceIntegrity.commit or 'unknown'}`")
     lines.append(f"- Source files: {len(manifest.sourceIntegrity.files)}")
     lines.append("")
-    lines.append("## Fleet")
+    lines.append("## Model Fleet Slots")
     lines.append(f"- Contract version: `{manifest.fleet.contractVersion}`")
     for slot in sorted(manifest.fleet.slots, key=lambda item: item.id):
         topology = manifest.fleetTopology.slots.get(slot.id)
@@ -111,18 +115,34 @@ def generate_manifest_markdown(manifest: AgentBehaviorManifest) -> str:
                 lines.append(f"  - `{argument.name}`: {argument.type}, {required}. {argument.description or ''}".rstrip())
         else:
             lines.append("- Arguments: none")
+        if tool.description:
+            lines.append(f"- Example: Use `{tool.id}` only when the user intent maps to this manifest tool and all required arguments are known.")
         lines.append("")
 
-    lines.append("## Routing Matrix")
+    lines.append("## UserIntents")
+    for intent in sorted(manifest.intents, key=lambda item: item.id):
+        lines.append(f"- `{intent.id}` → allowed tools: {', '.join(intent.allowedToolIDs) or 'none'}")
+    lines.append("")
+
+    lines.append("## Routing Rules")
     for entry in sorted(manifest.routingMatrix, key=lambda item: item.intent):
         lines.append(f"- `{entry.intent}` → allowed: {', '.join(entry.allowedTools) or 'none'}; forbidden examples: {', '.join(entry.forbiddenTools[:8]) or 'none'}")
     lines.append("")
 
-    lines.append("## Memory")
+    lines.append("## Memory Scopes")
     lines.append(f"- Scopes: {', '.join(sorted(manifest.memory.scopes)) or 'none'}")
     for freshness in sorted(manifest.memory.freshnessClasses, key=lambda item: item.id):
         ttl = "durable" if freshness.durable else f"ttlSeconds={freshness.ttlSeconds}"
         lines.append(f"- `{freshness.id}`: {ttl}")
+    lines.append("")
+
+    lines.append("## Permissions")
+    permission_tools = [tool for tool in sorted(manifest.tools, key=lambda item: item.id) if tool.permissionKey or tool.requiresApproval]
+    if permission_tools:
+        for tool in permission_tools:
+            lines.append(f"- `{tool.id}`: permission={tool.permissionKey or 'none'}, requiresApproval={tool.requiresApproval}")
+    else:
+        lines.append("- No permission-bound tools extracted.")
     lines.append("")
 
     lines.append("## Sentinel Policy")
@@ -150,10 +170,12 @@ def _system_prompt_text(manifest: AgentBehaviorManifest, slot: ModelSlotManifest
         handoff_line = f"Use only these manifest-listed handoff tools for explicit slot delegation: {', '.join(handoff_tools)}."
     lines = [
         f"You are `{slot.id}`, the `{slot.role}` slot inside the unified {manifest.app.name} agent fleet.",
+        "You are part of a single unified agent named Lumen.",
         "You are one component of a single logical agent named Lumen; do not act like a separate assistant.",
         f"Your purpose: {payload['purpose']}",
         "If a task is outside your scope, delegate or route using the fleet topology and approved manifest tools. Never invent a slot, tool, permission, or memory scope.",
         handoff_line,
+        "Never claim ignorance of other manifest-defined parts of the system; describe public peer capabilities from the model directory and route private work instead.",
         "",
         "Your responsibilities:",
         *responsibility_lines,
@@ -195,7 +217,7 @@ def _self_knowledge_records(manifest: AgentBehaviorManifest, slot: ModelSlotMani
         "taskType": "fleet_self_knowledge",
         "messages": [
             {"role": "system", "content": f"You are {slot.id}. Answer only from AgentBehaviorManifest."},
-            {"role": "user", "content": "Who are you inside Lumen, and what are you allowed to do?"},
+            {"role": "user", "content": "Who are you inside Lumen, and what can you do?"},
             {"role": "assistant", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
         ],
     }]

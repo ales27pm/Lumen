@@ -20,6 +20,7 @@ def write_outputs(
     fleet_artifacts: FleetArtifacts | None = None,
     manifest_markdown: str | None = None,
     cross_model_train_dir: Path | None = None,
+    incremental_fingerprint: str | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     canonical_path = output_dir / "AgentBehaviorManifest.json"
@@ -27,6 +28,8 @@ def write_outputs(
     if pretty:
         manifest.write_json(output_dir / "AgentBehaviorManifest.pretty.json", pretty=True)
     (output_dir / "AgentBehaviorManifest.sha256").write_text(sha256_file(canonical_path) + "\n", encoding="utf-8")
+    if incremental_fingerprint is not None:
+        (output_dir / "AgentBehaviorManifest.incremental.sha256").write_text(incremental_fingerprint + "\n", encoding="utf-8")
     (output_dir / "manifest_validation_report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
     _write_tool_registry_csv(output_dir / "tool_registry.csv", manifest)
     _write_routing_matrix_csv(output_dir / "routing_matrix.csv", manifest)
@@ -70,10 +73,50 @@ def _write_fleet_artifacts(output_dir: Path, artifacts: FleetArtifacts, cross_mo
     (output_dir / "AgentBehaviorManifest.md").write_text(artifacts.markdown, encoding="utf-8")
     target_dir = cross_model_train_dir or (output_dir / "cross_model_training")
     target_dir.mkdir(parents=True, exist_ok=True)
-    with (target_dir / "cross_model_training.jsonl").open("w", encoding="utf-8") as handle:
-        for record in artifacts.cross_model_training:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    _write_jsonl(target_dir / "cross_model_training.jsonl", artifacts.cross_model_training)
+    split_records = _split_cross_model_records(artifacts.cross_model_training)
+    for filename, records in split_records.items():
+        _write_jsonl(target_dir / filename, records)
     _write_cross_model_index(target_dir / "cross_model_training_index.csv", artifacts.cross_model_training)
+
+
+def _split_cross_model_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    sft = [record for record in records if record.get("recordType") == "sft"]
+    dpo = [record for record in records if record.get("recordType") == "dpo"]
+    sft_train, sft_val = _stable_split_records(sft)
+    dpo_train, dpo_val = _stable_split_records(dpo)
+    return {
+        "train_sft_cross.jsonl": sft_train,
+        "val_sft_cross.jsonl": sft_val,
+        "dpo_train_cross.jsonl": dpo_train,
+        "dpo_val_cross.jsonl": dpo_val,
+    }
+
+
+def _stable_split_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not records:
+        return [], []
+    ranked = sorted(records, key=lambda record: str(record.get("id") or ""))
+    val_count = 1 if len(ranked) > 1 else 0
+    if len(ranked) >= 10:
+        val_count = max(1, round(len(ranked) * 0.15))
+    val_ids = {str(record.get("id") or "") for record in ranked[:val_count]}
+    train: list[dict[str, Any]] = []
+    val: list[dict[str, Any]] = []
+    for record in records:
+        cloned = {**record}
+        cloned["split"] = "validation" if str(record.get("id") or "") in val_ids else "train"
+        if cloned["split"] == "validation":
+            val.append(cloned)
+        else:
+            train.append(cloned)
+    return train, val
+
+
+def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _write_cross_model_index(path: Path, records: list[dict[str, Any]]) -> None:

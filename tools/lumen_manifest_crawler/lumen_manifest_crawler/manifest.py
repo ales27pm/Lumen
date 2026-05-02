@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -48,10 +49,28 @@ class FleetTopologySlotManifest(BaseModel):
     memoryScopes: list[str] = Field(default_factory=list)
     responsibilities: list[str] = Field(default_factory=list)
 
+    def snake_dump(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "purpose": self.purpose,
+            "input_signature": self.inputSignature,
+            "output_signature": self.outputSignature,
+            "calls": self.calls,
+            "called_by": self.calledBy,
+            "memory_scopes": self.memoryScopes,
+            "responsibilities": self.responsibilities,
+        }
+
 
 class FleetTopologyManifest(BaseModel):
     slots: dict[str, FleetTopologySlotManifest] = Field(default_factory=dict)
     externalHandoffTools: list[str] = Field(default_factory=list)
+
+    def snake_dump(self) -> dict[str, Any]:
+        return {
+            "slots": {slot_id: slot.snake_dump() for slot_id, slot in sorted(self.slots.items())},
+            "external_handoff_tools": self.externalHandoffTools,
+        }
 
 
 class ToolArgumentManifest(BaseModel):
@@ -146,7 +165,12 @@ class AgentBehaviorManifest(BaseModel):
     sentinels: SentinelManifest = Field(default_factory=SentinelManifest)
     agentProtocols: AgentProtocolManifest = Field(default_factory=AgentProtocolManifest)
 
+    def output_dict(self) -> dict[str, Any]:
+        payload = self.model_dump()
+        payload["fleet_topology"] = self.fleetTopology.snake_dump()
+        return payload
+
     def write_json(self, path: Path, *, pretty: bool = False) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         indent = 2 if pretty else None
-        path.write_text(self.model_dump_json(indent=indent), encoding="utf-8")
+        path.write_text(json.dumps(self.output_dict(), ensure_ascii=False, indent=indent, sort_keys=False) + "\n", encoding="utf-8")

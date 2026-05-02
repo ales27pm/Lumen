@@ -158,7 +158,6 @@ final class ToolExecutor {
 nonisolated enum ToolRouteGuard {
     static func canonicalToolID(_ raw: String) -> String {
         let id = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            .replacingOccurrences(of: "_", with: ".")
             .replacingOccurrences(of: "-", with: ".")
             .replacingOccurrences(of: " ", with: ".")
         switch id {

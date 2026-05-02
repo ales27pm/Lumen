@@ -71,14 +71,16 @@ def _extract_field(body: str, field: str) -> str:
 
 
 def _extract_multiline_field(body: str, field: str) -> str:
-    match = re.search(rf"(?ms)^{re.escape(field)}:\s*(.*)$", body)
+    match = re.search(rf"(?m)^{re.escape(field)}:\s*", body)
     if not match:
         return ""
-    value = match.group(1).strip()
+
     heading_labels = sorted(REPORT_FIELD_HEADERS - {field})
-    heading_pattern = rf"(?m)^({'|'.join(map(re.escape, heading_labels))}):\s*" if heading_labels else ""
-    stop = re.search(heading_pattern, value) if heading_pattern else None
-    return value[: stop.start()].strip() if stop else value
+    heading_pattern = rf"^({'|'.join(map(re.escape, heading_labels))}):\s*" if heading_labels else ""
+    stop = re.search(heading_pattern, body[match.end():], flags=re.MULTILINE) if heading_pattern else None
+    stop_index = match.end() + stop.start() if stop else len(body)
+    value = body[match.end():stop_index]
+    return value.strip()
 
 
 def _parse_intent_line(value: str) -> tuple[str, str | None]:

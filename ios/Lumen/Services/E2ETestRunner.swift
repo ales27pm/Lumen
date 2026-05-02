@@ -6,6 +6,7 @@ nonisolated enum E2ETestKind: String, Codable, Sendable, CaseIterable {
     case toolGuard
     case chat
     case regression
+    case training
 }
 
 nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
@@ -45,6 +46,16 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
     }
 
     static let standard: [E2ETestScenario] = regression + allToolCoverage + chatCoverage
+
+    static let trainingValidation: [E2ETestScenario] = [
+        E2ETestScenario(id: "training-weather-grounded", title: "Training eval: weather stays grounded", kind: .training, prompt: "What is the weather here and should I carry an umbrella?", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "mail.draft"], requiredTextHints: ["weather"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-web-research", title: "Training eval: web research synthesis", kind: .training, prompt: "Search the web for two recent Swift concurrency best practices and summarize them.", expectedIntent: .webSearch, requiredAllowedToolIDs: ["web.search", "web.fetch"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["swift"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-memory-loop", title: "Training eval: memory save/recall", kind: .training, prompt: "Remember that I prefer concise bullet points, then tell me what you remembered.", expectedIntent: .memory, requiredAllowedToolIDs: ["memory.save", "memory.recall"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["remember"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-rag-grounding", title: "Training eval: local knowledge grounding", kind: .training, prompt: "Search my files for architecture notes and summarize key modules.", expectedIntent: .rag, requiredAllowedToolIDs: ["rag.search", "files.read"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["module"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-scheduler-agent", title: "Training eval: trigger scheduling quality", kind: .training, prompt: "Schedule a trigger to summarize reminders tonight and confirm what will run.", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.create", "trigger.list"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["trigger"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-communication-draft", title: "Training eval: communication drafting", kind: .training, prompt: "Draft an email to Alex with a professional update and ask one clarifying question.", expectedIntent: .emailDraft, requiredAllowedToolIDs: ["mail.draft", "contacts.search"], forbiddenToolIDs: ["calendar.create", "weather"], requiredTextHints: ["question"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true),
+        E2ETestScenario(id: "training-general-chat", title: "Training eval: pure chat quality", kind: .training, prompt: "Explain tradeoffs between precision and recall in retrieval systems in plain English.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "mail.draft"], requiredTextHints: ["precision", "recall"], forbiddenTextHints: ["created a new event"], requiresAgentRun: true)
+    ]
 
     static let regression: [E2ETestScenario] = [
         E2ETestScenario(id: "weather-here-no-calendar", title: "Weather here must not create events", kind: .regression, prompt: "What is the weather here?", expectedIntent: .weather, requiredAllowedToolIDs: ["weather", "location.current"], forbiddenToolIDs: ["calendar.create", "calendar.list", "reminders.create", "web.search"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "calendar event", "will start in", "search web for diy underground shelter"], requiresAgentRun: true),
@@ -153,6 +164,24 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
         lines.append("Passed: \(passed)")
         lines.append("Failed: \(failed)")
         lines.append("")
+
+        let failureBuckets = Dictionary(grouping: results.flatMap(\.failures)) { failure in
+            if failure.contains("Intent mismatch") { return "intent" }
+            if failure.contains("Forbidden tool") || failure.contains("Required tool not allowed") || failure.contains("Forbidden tool selected by agent") { return "tool-boundary" }
+            if failure.contains("Required final hint") || failure.contains("Forbidden final hint") { return "response-quality" }
+            if failure.contains("Agent error") { return "runtime" }
+            return "other"
+        }
+        if !failureBuckets.isEmpty {
+            lines.append("Training signals for next run:")
+            for key in ["intent", "tool-boundary", "response-quality", "runtime", "other"] where failureBuckets[key] != nil {
+                lines.append("• \(key): \(failureBuckets[key]?.count ?? 0) issues")
+            }
+            lines.append("• Capture failed prompts + final outputs into next fine-tuning dataset.")
+            lines.append("• Prioritize scenarios with repeated tool-boundary violations.")
+            lines.append("")
+        }
+
         for result in results {
             lines.append("\(result.passed ? "✅" : "❌") \(result.title)")
             lines.append("Prompt: \(result.prompt)")
@@ -173,6 +202,10 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
 enum E2ETestRunner {
     static func runStandard(appState: AppState, context: ModelContext) async -> E2ETestReport {
         await run(scenarios: E2ETestScenario.standard, appState: appState, context: context)
+    }
+
+    static func runTrainingValidation(appState: AppState, context: ModelContext) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context)
     }
 
     static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext) async -> E2ETestReport {

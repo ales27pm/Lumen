@@ -315,16 +315,23 @@ private struct E2ETestRunnerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @State private var isRunning = false
+    @State private var runMode: RunMode = .standard
     @State private var reportText = E2ETestLogStore.latestText()
 
     var body: some View {
         List {
             Section {
+                Picker("Mode", selection: $runMode) {
+                    ForEach(RunMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+
                 Button {
                     run()
                 } label: {
                     HStack {
-                        Label(isRunning ? "Running…" : "Run full E2E suite", systemImage: "play.circle")
+                        Label(isRunning ? "Running…" : runMode.buttonTitle, systemImage: "play.circle")
                         Spacer()
                         if isRunning { ProgressView() }
                     }
@@ -337,11 +344,11 @@ private struct E2ETestRunnerView: View {
                     Label("Reload latest report", systemImage: "arrow.clockwise")
                 }
             } footer: {
-                Text("Runs deterministic routing checks plus live agent scenarios for tool boundaries, chat quality, stale-context regressions, and final-answer validation.")
+                Text(runMode.footerText)
             }
 
             Section("Scenarios") {
-                ForEach(E2ETestScenario.standard) { scenario in
+                ForEach(runMode.scenarios) { scenario in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(scenario.title)
                             .font(.subheadline.weight(.medium))
@@ -363,17 +370,71 @@ private struct E2ETestRunnerView: View {
             }
         }
         .navigationTitle("E2E Tests")
+        .onChange(of: runMode) { _, _ in
+            reportText = E2ETestLogStore.latestText()
+        }
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func run() {
         guard !isRunning else { return }
         isRunning = true
-        reportText = "Running E2E suite…"
+        reportText = runMode.runningLabel
         Task { @MainActor in
-            let report = await E2ETestRunner.runStandard(appState: appState, context: modelContext)
+            let report: E2ETestReport
+            switch runMode {
+            case .standard:
+                report = await E2ETestRunner.runStandard(appState: appState, context: modelContext)
+            case .trainingValidation:
+                report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext)
+            }
             reportText = report.summaryText
             isRunning = false
+        }
+    }
+}
+
+
+private extension E2ETestRunnerView {
+    enum RunMode: CaseIterable {
+        case standard
+        case trainingValidation
+
+        var title: String {
+            switch self {
+            case .standard: return "Standard"
+            case .trainingValidation: return "Training validation"
+            }
+        }
+
+        var buttonTitle: String {
+            switch self {
+            case .standard: return "Run full E2E suite"
+            case .trainingValidation: return "Run training validation"
+            }
+        }
+
+        var runningLabel: String {
+            switch self {
+            case .standard: return "Running E2E suite…"
+            case .trainingValidation: return "Running training validation…"
+            }
+        }
+
+        var scenarios: [E2ETestScenario] {
+            switch self {
+            case .standard: return E2ETestScenario.standard
+            case .trainingValidation: return E2ETestScenario.trainingValidation
+            }
+        }
+
+        var footerText: String {
+            switch self {
+            case .standard:
+                return "Runs deterministic routing checks plus live agent scenarios for tool boundaries, chat quality, stale-context regressions, and final-answer validation."
+            case .trainingValidation:
+                return "Runs multi-scenario in-app validation using trained models in real agent flows, then summarizes failures as training signals for the next fine-tuning cycle."
+            }
         }
     }
 }

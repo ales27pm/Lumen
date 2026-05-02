@@ -432,7 +432,8 @@ final actor AppLlamaService {
     }
 
     func stream(_ req: GenerateRequest, slot: LumenModelSlot) -> AsyncStream<GenerationToken> {
-        let messages = buildMessages(req: req, contextSize: chatRuntimes[slot]?.contextSize ?? 2048)
+        let groundedRequest = req.groundingSystemPrompt(for: slot)
+        let messages = buildMessages(req: groundedRequest, contextSize: chatRuntimes[slot]?.contextSize ?? 2048)
 
         return AsyncStream { continuation in
             let generationTask = Task { [weak self] in
@@ -443,7 +444,7 @@ final actor AppLlamaService {
                 }
 
                 do {
-                    guard req.maxTokens > 0 else {
+                    guard groundedRequest.maxTokens > 0 else {
                         continuation.yield(.done)
                         continuation.finish()
                         return
@@ -452,11 +453,11 @@ final actor AppLlamaService {
                     let stream = try await self.streamResponse(
                         slot: slot,
                         messages: messages,
-                        temperature: Float(req.temperature),
-                        topP: Float(req.topP),
-                        repetitionPenalty: Float(req.repetitionPenalty),
-                        maxTokens: req.maxTokens,
-                        seed: req.seed
+                        temperature: Float(groundedRequest.temperature),
+                        topP: Float(groundedRequest.topP),
+                        repetitionPenalty: Float(groundedRequest.repetitionPenalty),
+                        maxTokens: groundedRequest.maxTokens,
+                        seed: groundedRequest.seed
                     )
                     for try await chunk in stream {
                         continuation.yield(.text(chunk))

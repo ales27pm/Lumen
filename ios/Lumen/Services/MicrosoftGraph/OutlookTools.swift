@@ -207,19 +207,15 @@ enum OutlookTools {
     private static let recentMessageTTL: TimeInterval = 30 * 60
 
     static func status() async -> String {
-        do {
-            let auth = MicrosoftGraphAuthManager()
-            await auth.bootstrap()
-            guard auth.isSignedIn else {
-                return "Outlook is not signed in. Open Outlook in Lumen and sign in first."
-            }
-            let username = auth.account?.username ?? auth.account?.name ?? "Microsoft account"
-            let cached = loadRecentReferences()
-            let contextLine = cached.isEmpty ? "No cached message context." : "Cached message context: \(cached.count) recent message(s)."
-            return "Outlook signed in as \(username). Auth provider: \(auth.authProviderDescription). \(contextLine)"
-        } catch {
-            return "Outlook status failed: \(error.localizedDescription)"
+        let auth = MicrosoftGraphAuthManager()
+        await auth.bootstrap()
+        guard auth.isSignedIn else {
+            return "Outlook is not signed in. Open Outlook in Lumen and sign in first."
         }
+        let username = auth.account?.username ?? auth.account?.name ?? "Microsoft account"
+        let cached = loadRecentReferences()
+        let contextLine = cached.isEmpty ? "No cached message context." : "Cached message context: \(cached.count) recent message(s)."
+        return "Outlook signed in as \(username). Auth provider: \(auth.authProviderDescription). \(contextLine)"
     }
 
     static func listFolders(args: [String: String]) async -> String {

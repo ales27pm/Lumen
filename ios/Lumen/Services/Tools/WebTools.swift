@@ -35,7 +35,7 @@ nonisolated enum WebTools {
 
         let direct = await executeTextRequest(endpoint: "web.fetch.urlsession", request: req, timeout: 14, retryPolicy: fetchPolicy, context: "Web page fetch")
         switch direct {
-        case .success(let html, _):
+        case .success(let (html, _)):
             if let output = pageOutput(htmlOrText: html, url: u) { return output }
         case .failure:
             break
@@ -44,7 +44,7 @@ nonisolated enum WebTools {
         let result = await executeWebRequest(endpoint: "web.fetch.webview", request: req, timeout: 15, retryPolicy: fetchPolicy, context: "Web page fetch")
         switch result {
         case .failure(let error): return error.localizedDescription
-        case .success(let html, _):
+        case .success(let (html, _)):
             return pageOutput(htmlOrText: html, url: u) ?? "Page was empty or unreadable."
         }
     }
@@ -94,7 +94,7 @@ nonisolated enum WebTools {
         switch result {
         case .failure:
             return nil
-        case .success(let data, _):
+        case .success(let (data, _)):
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
@@ -147,7 +147,7 @@ nonisolated enum WebTools {
         switch result {
         case .failure:
             return nil
-        case .success(let html, _):
+        case .success(let (html, _)):
             let results = parseDuckDuckGoHTMLResults(html).prefix(8).map { result in
                 WebSearchResultPayload(
                     title: result.title,
@@ -287,7 +287,7 @@ nonisolated enum WebTools {
         let dataResult = await executeAPIRequest(endpoint: endpoint, request: request, timeout: timeout, retryPolicy: retryPolicy, context: context)
         switch dataResult {
         case .failure(let error): return .failure(error)
-        case .success(let data, let response):
+        case .success(let (data, response)):
             if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? String(data: data, encoding: .ascii) {
                 return .success((text, response))
             }

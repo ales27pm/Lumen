@@ -271,7 +271,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PROJECT_DIR}/Lumen/Scripts/copy_agent_grounding_resources.sh\"\n";
+			shellScript = "/bin/sh \"${PROJECT_DIR}/Lumen/Scripts/copy_agent_grounding_resources.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

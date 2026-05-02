@@ -4,7 +4,6 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
@@ -15,6 +14,275 @@ DATASET_SCHEMA_VERSION = "2.0.0"
 TRAIN_SPLIT = "train"
 VALIDATION_SPLIT = "validation"
 EVAL_SPLIT = "eval"
+MIN_EVAL_SCENARIOS_PER_TOOL = 5
+
+TOOL_SCENARIO_PROMPTS: dict[str, list[str]] = {
+    "alarm.authorization_status": [
+        "Can Lumen use alarms on this phone?",
+        "Check whether alarm permission is enabled.",
+        "Tell me the current alarm authorization status.",
+    ],
+    "alarm.request_authorization": [
+        "Ask me for permission to use alarms.",
+        "Request alarm authorization before scheduling anything.",
+        "Enable alarm access for Lumen.",
+    ],
+    "alarm.schedule": [
+        "Set an alarm for 7 tomorrow morning.",
+        "Schedule a wake-up alarm at 6:30 AM.",
+        "Create an alarm called work shift for tomorrow morning.",
+    ],
+    "alarm.countdown": [
+        "Start a 10 minute countdown alarm.",
+        "Set a timer-style alarm for 45 minutes.",
+        "Count down 5 minutes and alert me.",
+    ],
+    "alarm.list": [
+        "Show my alarms.",
+        "List all active alarms.",
+        "Which alarms are currently scheduled?",
+    ],
+    "alarm.pause": [
+        "Pause this alarm.",
+        "Temporarily pause the selected alarm.",
+        "Stop this alarm for now without deleting it.",
+    ],
+    "alarm.resume": [
+        "Resume the paused alarm.",
+        "Turn that paused alarm back on.",
+        "Continue the alarm I paused earlier.",
+    ],
+    "alarm.stop": [
+        "Stop the ringing alarm.",
+        "Turn off the current alarm.",
+        "Silence this alarm now.",
+    ],
+    "alarm.snooze": [
+        "Snooze this alarm.",
+        "Give me a few more minutes on this alarm.",
+        "Snooze the current alarm for later.",
+    ],
+    "alarm.cancel": [
+        "Cancel my 7 AM alarm.",
+        "Delete the alarm named work shift.",
+        "Remove this scheduled alarm.",
+    ],
+    "calendar.create": [
+        "Create a calendar event for a meeting in 10 minutes.",
+        "Add a dentist appointment tomorrow at 2 PM.",
+        "Schedule a job-site visit next Friday morning.",
+    ],
+    "calendar.list": [
+        "What is on my calendar today?",
+        "List my next events.",
+        "Show tomorrow's calendar schedule.",
+    ],
+    "camera.capture": [
+        "Open camera and take a picture.",
+        "Take a photo now.",
+        "Capture an image with the camera.",
+    ],
+    "contacts.search": [
+        "Find Antoine in my contacts.",
+        "Search contacts for Marc.",
+        "Look up the phone number for Dalia.",
+    ],
+    "files.read": [
+        "Read the imported project notes file.",
+        "Open the document I imported.",
+        "Summarize the local file named build-plan.",
+    ],
+    "health.summary": [
+        "Show my health summary.",
+        "How much activity did I log today?",
+        "Summarize my recent health data.",
+    ],
+    "location.current": [
+        "Where are we?",
+        "Where am I right now?",
+        "Get my current location.",
+    ],
+    "mail.draft": [
+        "Draft an email to Antoine about the show.",
+        "Write an email draft for the supplier.",
+        "Prepare a mail draft with this update.",
+    ],
+    "maps.directions": [
+        "Give me directions to the nearest hardware store.",
+        "Navigate to the airport.",
+        "Find a route to Trois-Rivières.",
+    ],
+    "maps.search": [
+        "Show me on map.",
+        "Find a hardware store nearby.",
+        "Search maps for coffee near me.",
+    ],
+    "memory.recall": [
+        "What do you remember about my Lumen project?",
+        "Recall what I said about the app architecture.",
+        "Find my saved memory about model loading.",
+    ],
+    "memory.save": [
+        "Remember that I prefer direct technical answers.",
+        "Save this as a project note.",
+        "Store this preference in memory.",
+    ],
+    "messages.draft": [
+        "Draft a message to Sylvie.",
+        "Write a text message saying I will be late.",
+        "Prepare an SMS to my son.",
+    ],
+    "motion.activity": [
+        "What activity am I doing right now?",
+        "Check if I am walking or driving.",
+        "Detect my current motion activity.",
+    ],
+    "phone.call": [
+        "Call Antoine.",
+        "Dial this phone number.",
+        "Start a phone call to my contact.",
+    ],
+    "photos.search": [
+        "Find photos of my cabin plan.",
+        "Search my photos from last week.",
+        "Show pictures of the job site.",
+    ],
+    "rag.index_files": [
+        "Index my imported files for search.",
+        "Add my documents to RAG.",
+        "Process local files into the retrieval index.",
+    ],
+    "rag.index_photos": [
+        "Index recent photos for visual recall.",
+        "Add my photos to the RAG index.",
+        "Process the last six months of photos for retrieval.",
+    ],
+    "rag.search": [
+        "Search my knowledge base for build notes.",
+        "Find relevant RAG chunks about Core ML.",
+        "Look through indexed files for model loading.",
+    ],
+    "reminders.create": [
+        "Remind me to charge the scooter battery.",
+        "Create a reminder to call the supplier.",
+        "Add a reminder for tomorrow morning.",
+    ],
+    "reminders.list": [
+        "Show my reminders.",
+        "List reminders due today.",
+        "What reminders do I have open?",
+    ],
+    "trigger.create": [
+        "Create an automation to check this every morning.",
+        "Set up a trigger for this task.",
+        "Run this workflow whenever the condition is met.",
+    ],
+    "trigger.list": [
+        "List my active triggers.",
+        "Show all automations.",
+        "What scheduled triggers exist?",
+    ],
+    "trigger.cancel": [
+        "Cancel that trigger.",
+        "Disable the morning automation.",
+        "Remove this scheduled workflow.",
+    ],
+    "weather": [
+        "What is the weather here?",
+        "Check the weather in Montreal.",
+        "Will it rain today?",
+    ],
+    "web.fetch": [
+        "Open and read this URL.",
+        "Fetch the webpage content.",
+        "Read the documentation page at this link.",
+    ],
+    "web.search": [
+        "Search the web for Core ML conversion tips.",
+        "Look up current Swift concurrency warnings.",
+        "Find recent documentation about Xcode build phases.",
+    ],
+    "outlook.status": [
+        "Am I signed in to Outlook?",
+        "Check Microsoft Graph connection status.",
+        "Verify whether Outlook access is configured.",
+    ],
+    "outlook.folders.list": [
+        "List my Outlook mail folders.",
+        "Show the folders in my mailbox.",
+        "Which Outlook folders are available?",
+    ],
+    "outlook.messages.list": [
+        "Read new emails.",
+        "Read my unread emails.",
+        "Check my outlook email.",
+    ],
+    "outlook.messages.search": [
+        "Search Outlook for emails from Antoine.",
+        "Find emails about the invoice.",
+        "Search my mailbox for Core ML.",
+    ],
+    "outlook.message.read": [
+        "Read the latest email.",
+        "Open this Outlook message.",
+        "Show the full email body for this message.",
+    ],
+    "outlook.attachments.list": [
+        "List attachments on this email.",
+        "Show files attached to the selected message.",
+        "Does this Outlook message have attachments?",
+    ],
+    "outlook.draft.create": [
+        "Draft an Outlook email to Antoine.",
+        "Create a mail draft but do not send it.",
+        "Prepare an email reply as a draft.",
+    ],
+    "outlook.mail.send": [
+        "Send this Outlook email to Antoine.",
+        "Email the supplier with this update.",
+        "Send a Microsoft Graph mail message.",
+    ],
+    "outlook.message.mark_read": [
+        "Mark this email as read.",
+        "Set the selected Outlook message to read.",
+        "Mark the current message read.",
+    ],
+    "outlook.message.mark_unread": [
+        "Mark this email as unread.",
+        "Set the selected Outlook message to unread.",
+        "Keep this Outlook message unread.",
+    ],
+    "outlook.message.move": [
+        "Move this email to the project folder.",
+        "Move the selected Outlook message.",
+        "File this email in another folder.",
+    ],
+    "outlook.message.archive": [
+        "Archive this email.",
+        "Move the selected Outlook message to archive.",
+        "Archive the current message.",
+    ],
+    "outlook.message.delete": [
+        "Delete this email.",
+        "Move the selected Outlook message to trash.",
+        "Remove this Outlook message.",
+    ],
+    "outlook.message.reply": [
+        "Reply to this email.",
+        "Send a reply to the selected Outlook message.",
+        "Answer this message with a short note.",
+    ],
+    "outlook.message.reply_all": [
+        "Reply all to this email.",
+        "Send this response to everyone on the thread.",
+        "Reply to all recipients on the selected Outlook message.",
+    ],
+    "outlook.message.forward": [
+        "Forward this email to Antoine.",
+        "Send the selected Outlook message to someone else.",
+        "Forward this message with a note.",
+    ],
+}
 
 
 @dataclass(frozen=True)
@@ -329,6 +597,33 @@ def _build_eval_records(manifest: AgentBehaviorManifest, config: DatasetCompiler
             },
             config=config,
         ))
+        for index, scenario in enumerate(_tool_eval_scenarios(tool), start=1):
+            prompt = scenario["prompt"]
+            scenario_kind = scenario["scenarioKind"]
+            evals.append(_eval_record(
+                name=f"tool-scenario-{tool.id}-{index}",
+                task="tool_runtime_scenario_selection",
+                prompt=prompt,
+                expected={
+                    "tool": tool.id,
+                    "selectedToolID": tool.id,
+                    "requiredArguments": [arg.name for arg in tool.arguments if arg.required],
+                    "requiresApproval": tool.requiresApproval,
+                    "permissionKey": tool.permissionKey,
+                    "mustPersistActionStep": True,
+                    "mustUseManifestToolIDsOnly": True,
+                    "scenarioKind": scenario_kind,
+                },
+                config=config,
+                metadata={
+                    "scenarioKind": scenario_kind,
+                    "toolIDVisibleInPrompt": scenario.get("toolIDVisibleInPrompt", tool.id in prompt),
+                    "coverageFamily": _coverage_family(tool.id),
+                    "argumentCoverage": scenario.get("argumentCoverage", []),
+                    "approvalCoverage": scenario.get("approvalCoverage", False),
+                    "permissionCoverage": scenario.get("permissionCoverage", False),
+                },
+            ))
 
     if sentinel_list:
         evals.append(_eval_record(
@@ -349,7 +644,89 @@ def _build_eval_records(manifest: AgentBehaviorManifest, config: DatasetCompiler
     return evals
 
 
-def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig) -> dict[str, Any]:
+def _coverage_family(tool_id: str) -> str:
+    return tool_id.split(".", 1)[0]
+
+
+def _tool_words(tool: Any) -> list[str]:
+    tokens: list[str] = []
+    for value in [getattr(tool, "displayName", ""), getattr(tool, "description", ""), str(getattr(tool, "id", ""))]:
+        text = str(value).replace("_", " ").replace(".", " ").lower()
+        tokens.extend(token for token in text.split() if token.isalpha() and len(token) > 2)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        if token not in seen:
+            seen.add(token)
+            deduped.append(token)
+    return deduped
+
+
+def _humanize_tool_phrase(tool: Any) -> str:
+    display = str(getattr(tool, "displayName", "")).strip()
+    if display:
+        return display.lower()
+    description = str(getattr(tool, "description", "")).strip()
+    if description:
+        return description.lower().rstrip(".")
+    words = _tool_words(tool)[:4]
+    return " ".join(words) if words else "this app action"
+
+
+def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
+    required_args = [arg.name for arg in getattr(tool, "arguments", []) if getattr(arg, "required", False)]
+    optional_args = [arg.name for arg in getattr(tool, "arguments", []) if not getattr(arg, "required", False)]
+    phrase = _humanize_tool_phrase(tool)
+    curated = TOOL_SCENARIO_PROMPTS.get(tool.id, [])
+
+    scenarios: list[dict[str, Any]] = [
+        {"prompt": f"Generate a manifest-valid action step for `{tool.id}`.", "scenarioKind": "explicit_tool_schema", "toolIDVisibleInPrompt": True, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False},
+    ]
+    for prompt in curated[:2]:
+        scenarios.append({"prompt": prompt, "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    if required_args:
+        arg_text = ", ".join(required_args)
+        scenarios.append({"prompt": f"Use {phrase} with these details: {arg_text} = sample value.", "scenarioKind": "argument_completion", "toolIDVisibleInPrompt": False, "argumentCoverage": required_args, "approvalCoverage": False, "permissionCoverage": False})
+    else:
+        arg_hint = optional_args[:2]
+        detail = f" and include {', '.join(arg_hint)}" if arg_hint else ""
+        scenarios.append({"prompt": f"Help me with {phrase}{detail}.", "scenarioKind": "argument_completion", "toolIDVisibleInPrompt": False, "argumentCoverage": arg_hint, "approvalCoverage": False, "permissionCoverage": False})
+
+    if getattr(tool, "requiresApproval", False):
+        scenarios.append({"prompt": f"Prepare to {phrase}, but ask for my approval before executing.", "scenarioKind": "approval_boundary", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": True, "permissionCoverage": False})
+    if getattr(tool, "permissionKey", None):
+        scenarios.append({"prompt": f"Before {phrase}, confirm required permissions or sign-in access.", "scenarioKind": "permission_boundary", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": True})
+
+    fallback_natural = [
+        f"Please help me {phrase}.",
+        f"I need assistance with {phrase} right now.",
+        f"Can you handle this app action: {phrase}?",
+    ]
+    for prompt in curated[2:] + fallback_natural:
+        scenarios.append({"prompt": prompt, "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for scenario in scenarios:
+        prompt = " ".join(str(scenario["prompt"]).split())
+        if not prompt or prompt.lower() in seen:
+            continue
+        seen.add(prompt.lower())
+        clean = {**scenario, "prompt": prompt}
+        if clean["scenarioKind"] != "explicit_tool_schema":
+            clean["toolIDVisibleInPrompt"] = False
+            if tool.id in prompt:
+                continue
+        deduped.append(clean)
+
+    while len(deduped) < MIN_EVAL_SCENARIOS_PER_TOOL:
+        deduped.append({"prompt": f"Help me with {phrase} in a safe and manifest-compliant way.", "scenarioKind": "natural_intent", "toolIDVisibleInPrompt": False, "argumentCoverage": [], "approvalCoverage": False, "permissionCoverage": False})
+
+    return deduped
+
+
+def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], config: DatasetCompilerConfig, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     record_id = _stable_id({"name": name, "task": task, "expected": expected})
     return {
         "id": f"eval-{record_id[:16]}",
@@ -361,7 +738,7 @@ def _eval_record(name: str, task: str, prompt: str, expected: dict[str, Any], co
             {"role": "user", "content": prompt},
         ],
         "expected": expected,
-        "metadata": {"generatedAt": config.generated_at, "name": name},
+        "metadata": {"generatedAt": config.generated_at, "name": name, **(metadata or {})},
     }
 
 

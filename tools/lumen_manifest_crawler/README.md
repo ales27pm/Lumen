@@ -15,6 +15,8 @@ It extracts the real source-of-truth from the Lumen / monGARS codebase and write
 - runtime audit repair records
 - fleet system prompts
 - cross-model self/peer/delegation training
+- source-code self-awareness records
+- unified fleet identity records
 - a compact Markdown manifest for RAG or prompt injection
 
 ## Why this exists
@@ -28,18 +30,20 @@ The pipeline combines two truth sources:
 
 It now also emits fleet self-knowledge artifacts so every model slot can learn:
 
-1. **Who am I?** Role, responsibilities, tools, memory scopes, output contract.
-2. **Who are the others?** Public peer slot directory, purpose, input/output signatures.
-3. **How do we act as one?** Routing rules, topology, delegation boundaries, shared memory policy.
+1. **Who am I?** Role, responsibilities, tools, memory scopes, output contract, and source origin.
+2. **Who are the others?** Public peer slot directory, source origin, purpose, input/output signatures, and private-state boundaries.
+3. **How do we act as one?** Routing rules, topology, delegation boundaries, shared memory policy, and unified Lumen identity.
+4. **What code map defines us?** Manifest-derived source files, hashes, extracted domains, tool origins, slot origins, and routing origins.
 
 ## What it extracts
 
 - model fleet slots and role contracts
 - fleet topology and peer call graph
-- tool IDs and argument schemas
+- source-code map with hashed source-of-truth files
+- tool IDs, argument schemas, and source origins
 - approval requirements
 - permission keys
-- `UserIntent` cases
+- `UserIntent` cases and source origins
 - intent-to-tool routing
 - supported JSON value types
 - memory scopes
@@ -68,8 +72,20 @@ When enabled, the crawler also writes:
 
 - `fleet_system_prompts.json` — one deterministic prompt and compact context payload per model slot.
 - `AgentBehaviorManifest.md` — compact LLM-readable Markdown manifest for RAG or prompt injection.
-- `cross_model_training/cross_model_training.jsonl` — SFT and DPO records for self-knowledge, peer-knowledge, delegation, and private-state boundaries.
+- `cross_model_training/cross_model_training.jsonl` — SFT and DPO records for self-knowledge, peer-knowledge, delegation, source-code awareness, and private-state boundaries.
 - `cross_model_training/cross_model_training_index.csv` — compact count summary by record type, role, and task.
+
+The fleet artifacts now include these source-aware task families:
+
+- `fleet_whole_system_identity` — teaches every slot that Lumen is one logical agent composed of specialized slots.
+- `fleet_self_knowledge` — teaches each slot its own role, source, responsibilities, memory scope, and boundary.
+- `fleet_peer_knowledge` — teaches each slot the public role and contract of every other slot.
+- `fleet_peer_source_knowledge` — teaches each slot where peer roles come from and how to coordinate without crossing private-state boundaries.
+- `source_code_self_knowledge` — teaches the manifest-derived source map, hashed source files, and code-awareness limits.
+- `source_tool_registry_knowledge` — teaches every valid tool, argument schema, permission boundary, approval boundary, and source origin.
+- `source_routing_knowledge` — teaches intent routing, allowed tools, forbidden tools, and source-derived routing constraints.
+- `fleet_delegation` / `fleet_delegation_preference` — teaches manifest-compliant routing and rejects invented peer/tool calls.
+- `fleet_private_state_boundary` — teaches that peer-private caches, hidden reasoning, and runtime internals cannot be exposed or fabricated.
 
 These artifacts are derived from the same manifest and are intended to make the fleet behave like one coherent Lumen agent instead of isolated models.
 
@@ -282,7 +298,7 @@ Use:
 - `routing_matrix.csv`
 - `eval_scenarios.jsonl`
 - `fleet_system_prompts.json` entry for the Cortex/router slot
-- `cross_model_training.jsonl` records with `taskType=fleet_delegation` and `fleet_peer_knowledge`
+- `cross_model_training.jsonl` records with `taskType=fleet_delegation`, `fleet_peer_knowledge`, `source_routing_knowledge`, and `fleet_whole_system_identity`
 
 Cortex should classify intent, select only allowed manifest tools or slots, and delegate out-of-scope work rather than improvising.
 
@@ -295,6 +311,7 @@ Use:
 - `tool_schema_cards.jsonl`
 - `negative_samples.jsonl`
 - `dpo_preference_pairs.jsonl`
+- `cross_model_training.jsonl` records with `source_tool_registry_knowledge`, `source_code_self_knowledge`, and private-state boundary tasks
 - its `fleet_system_prompts.json` entry
 
 Tool Executor should emit exact manifest-valid tool JSON, respect required arguments, and stop at approval/permission boundaries.
@@ -306,9 +323,10 @@ Use:
 - `mouth_responses.jsonl`
 - `eval_scenarios.jsonl` sentinel cases
 - `manifest_grounding_cards.jsonl`
+- `cross_model_training.jsonl` records with `fleet_whole_system_identity`, `fleet_peer_knowledge`, and `fleet_private_state_boundary`
 - its `fleet_system_prompts.json` entry
 
-Mouth should produce only user-facing text and must never expose private reasoning, raw tool JSON, or forbidden sentinels.
+Mouth should produce only user-facing text and must never expose private reasoning, raw tool JSON, forbidden sentinels, fabricated source knowledge, or peer-private runtime state.
 
 ### Mimicry
 
@@ -316,9 +334,10 @@ Use:
 
 - `mimicry_style.jsonl`
 - `train_sft.jsonl` records with `agentRole=mimicry`
+- `cross_model_training.jsonl` records with `fleet_self_knowledge`, `fleet_peer_source_knowledge`, and `source_code_self_knowledge`
 - its `fleet_system_prompts.json` entry
 
-Mimicry should adapt style, language, and formatting without changing facts, tool IDs, safety boundaries, or approval requirements.
+Mimicry should adapt style, language, and formatting without changing facts, tool IDs, source-code boundaries, safety boundaries, or approval requirements.
 
 ### REM
 
@@ -328,9 +347,10 @@ Use:
 - `runtime_audit_repairs.jsonl`
 - `manifest_grounding_cards.jsonl`
 - `dataset_manifest.json`
+- `cross_model_training.jsonl` records with `source_code_self_knowledge`, `source_routing_knowledge`, `fleet_private_state_boundary`, and `fleet_whole_system_identity`
 - its `fleet_system_prompts.json` entry
 
-REM should diagnose drift, produce repair samples, classify memory/freshness decisions, and keep the fleet aligned with the manifest.
+REM should diagnose drift, produce repair samples, classify memory/freshness decisions, and keep the fleet aligned with the manifest and TestFlight runtime exports.
 
 ## Adding a new tool safely
 

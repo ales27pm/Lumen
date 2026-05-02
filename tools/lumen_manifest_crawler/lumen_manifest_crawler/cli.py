@@ -15,9 +15,10 @@ from lumen_manifest_crawler.crawler import generate_manifest
 from lumen_manifest_crawler.dataset import generate_all_datasets
 from lumen_manifest_crawler.dataset.fine_tuning import compile_agent_fine_tuning_datasets
 from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
-from lumen_manifest_crawler.validators import validate_manifest, validate_agent_fine_tuning_datasets
 from lumen_manifest_crawler.fleet_artifacts import generate_fleet_artifacts, generate_manifest_markdown
+from lumen_manifest_crawler.improvement_loop import AgentImprovementLoopConfig, run_agent_improvement_loop
 from lumen_manifest_crawler.output.writer import write_outputs
+from lumen_manifest_crawler.validators import validate_agent_fine_tuning_datasets, validate_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ app = typer.Typer(no_args_is_help=True)
 generate_app = typer.Typer(help="Generate AgentBehaviorManifest.json and grounded datasets.", invoke_without_command=True)
 app.add_typer(generate_app, name="generate")
 console = Console()
+
+
+def _split_command(value: str | None) -> tuple[str, ...]:
+    if not value or not value.strip():
+        return ()
+    return tuple(part for part in value.strip().split(" ") if part)
 
 
 @generate_app.callback()
@@ -60,6 +67,7 @@ def generate(
         console.print(f"[green]Incremental generation skipped; manifest fingerprint unchanged for {output}[/green]")
         return
 
+    runtime_audit_reports = load_runtime_audit_reports(runtime_audit)
     datasets = generate_all_datasets(manifest, runtime_audit_paths=runtime_audit, deterministic=deterministic)
     report = validate_manifest(manifest, datasets, strict=strict)
     should_generate_full_fleet_artifacts = generate_system_prompts or cross_model_train_dir is not None
@@ -68,11 +76,20 @@ def generate(
 
     fine_tuning_datasets = None
     if generate_agent_fine_tuning:
-        fine_tuning_datasets = compile_agent_fine_tuning_datasets(manifest, datasets, None, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+        fine_tuning_datasets = compile_agent_fine_tuning_datasets(
+            manifest,
+            datasets,
+            fleet_artifacts=fleet_artifacts,
+            runtime_audit_reports=runtime_audit_reports,
+        )
         if agent_filter:
-            allowed={a.strip() for a in agent_filter.split(",") if a.strip()}
-            fine_tuning_datasets={k:v for k,v in fine_tuning_datasets.items() if k in allowed}
-        ft_failures = validate_agent_fine_tuning_datasets(manifest, fine_tuning_datasets, runtime_audit_reports=load_runtime_audit_reports(runtime_audit))
+            allowed = {agent.strip() for agent in agent_filter.split(",") if agent.strip()}
+            fine_tuning_datasets = {key: value for key, value in fine_tuning_datasets.items() if key in allowed}
+        ft_failures = validate_agent_fine_tuning_datasets(
+            manifest,
+            fine_tuning_datasets,
+            runtime_audit_reports=runtime_audit_reports,
+        )
         for failure in ft_failures:
             report.failures.append(failure)
 
@@ -134,6 +151,54 @@ def generate(
         console.print("[red]Generated outputs differ from the git working tree, or git status could not be verified. Commit regenerated artifacts or fix the git status check.[/red]")
         raise typer.Exit(code=1)
     console.print(f"[green]Wrote manifest and dataset outputs to {output}[/green]")
+
+
+@app.command("improve-loop")
+def improve_loop(
+    root: Path = typer.Option(Path("."), "--root", help="Repository root to scan."),
+    output: Path = typer.Option(Path("generated/agent_manifest"), "--output", help="Manifest and dataset output directory."),
+    loop_output: Path = typer.Option(Path("generated/agent_improvement_loop"), "--loop-output", help="Loop state, gap report, and next-action prompt output directory."),
+    runtime_audit: Annotated[list[Path] | None, typer.Option("--runtime-audit", help="In-app dataset package JSON file or directory. Can be passed multiple times.")] = None,
+    deterministic: bool = typer.Option(True, "--deterministic/--non-deterministic", help="Use deterministic timestamps and splits."),
+    pretty: bool = typer.Option(True, "--pretty/--no-pretty", help="Write pretty manifest output."),
+    strict: bool = typer.Option(True, "--strict/--no-strict", help="Promote selected validation warnings to gaps."),
+    generate_system_prompts: bool = typer.Option(True, "--generate-system-prompts/--no-generate-system-prompts", help="Generate fleet prompts and cross-model artifacts."),
+    generate_agent_fine_tuning: bool = typer.Option(True, "--generate-agent-fine-tuning/--no-generate-agent-fine-tuning", help="Generate per-agent fine-tuning datasets."),
+    fine_tuning_output: Path | None = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
+    cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross-model training artifacts."),
+    build_command: str | None = typer.Option(None, "--build-command", help="Optional build command to run after generation. Space-separated."),
+    test_command: str | None = typer.Option(None, "--test-command", help="Optional test command to run before generation. Space-separated."),
+    train_command: str | None = typer.Option(None, "--train-command", help="Optional training command to run after generation. Space-separated."),
+    dry_run_commands: bool = typer.Option(False, "--dry-run-commands", help="Record build/test/train commands without executing them."),
+    fail_on_validation: bool = typer.Option(False, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero if the loop finds critical/error gaps."),
+) -> None:
+    """Run one closed improvement-loop cycle and emit machine-readable next actions."""
+    result = run_agent_improvement_loop(
+        AgentImprovementLoopConfig(
+            root=root,
+            output=output,
+            loop_output=loop_output,
+            runtime_audit_paths=tuple(runtime_audit or []),
+            deterministic=deterministic,
+            pretty=pretty,
+            strict=strict,
+            generate_system_prompts=generate_system_prompts,
+            generate_agent_fine_tuning=generate_agent_fine_tuning,
+            fine_tuning_output=fine_tuning_output,
+            cross_model_train_dir=cross_model_train_dir,
+            build_command=_split_command(build_command),
+            test_command=_split_command(test_command),
+            train_command=_split_command(train_command),
+            fail_on_validation=fail_on_validation,
+            dry_run_commands=dry_run_commands,
+        )
+    )
+    console.print(f"[bold]Loop passed:[/bold] {result.passed}")
+    console.print(f"[bold]Gaps:[/bold] {len(result.gaps)}")
+    console.print(f"[bold]Next-action prompts:[/bold] {len(result.next_prompts)}")
+    console.print(f"[green]Wrote loop outputs to {loop_output.resolve()}[/green]")
+    if fail_on_validation and not result.passed:
+        raise typer.Exit(code=1)
 
 
 def _manifest_fingerprint(manifest: Any) -> str:

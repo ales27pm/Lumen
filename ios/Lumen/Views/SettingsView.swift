@@ -348,7 +348,7 @@ private struct E2ETestRunnerView: View {
             }
 
             Section("Scenarios") {
-                ForEach(E2ETestScenario.standard) { scenario in
+                ForEach(runMode.scenarios) { scenario in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(scenario.title)
                             .font(.subheadline.weight(.medium))
@@ -418,6 +418,13 @@ private extension E2ETestRunnerView {
             switch self {
             case .standard: return "Running E2E suite…"
             case .trainingValidation: return "Running training validation…"
+            }
+        }
+
+        var scenarios: [E2ETestScenario] {
+            switch self {
+            case .standard: return E2ETestScenario.standard
+            case .trainingValidation: return E2ETestScenario.trainingValidation
             }
         }
 

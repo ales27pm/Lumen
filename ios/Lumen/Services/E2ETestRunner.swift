@@ -167,7 +167,7 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
 
         let failureBuckets = Dictionary(grouping: results.flatMap(\.failures)) { failure in
             if failure.contains("Intent mismatch") { return "intent" }
-            if failure.contains("Forbidden tool") { return "tool-boundary" }
+            if failure.contains("Forbidden tool") || failure.contains("Required tool not allowed") || failure.contains("Forbidden tool selected by agent") { return "tool-boundary" }
             if failure.contains("Required final hint") || failure.contains("Forbidden final hint") { return "response-quality" }
             if failure.contains("Agent error") { return "runtime" }
             return "other"

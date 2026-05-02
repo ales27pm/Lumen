@@ -27,6 +27,9 @@ final class SlotAgentService {
 
                 if routing.requiresClarification {
                     let clarification = routing.clarificationPrompt ?? "Could you clarify what you want me to do?"
+                    let clarificationStep = AgentStep(kind: .reflection, content: clarification, toolID: nil, toolArgs: nil)
+                    steps.append(clarificationStep)
+                    continuation.yield(.step(clarificationStep))
                     yieldFinal(clarification, steps: steps, continuation: continuation)
                     return
                 }

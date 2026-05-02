@@ -194,6 +194,7 @@ def improve_loop(
             build_command=_split_command(build_command),
             test_command=_split_command(test_command),
             train_command=_split_command(train_command),
+            fail_on_validation=False,
             dry_run_commands=dry_run_commands,
             app_run_mode=app_run_mode,
             testflight_build_label=testflight_build_label,

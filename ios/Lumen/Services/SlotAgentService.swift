@@ -64,7 +64,7 @@ final class SlotAgentService {
                 )
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
-                    let structuredMode = structuredModeForTurn(requiresTool: requiresTool)
+                    let structuredMode: StructuredTurnMode = .actionOnly
                     let slot: LumenModelSlot = .cortex
                     let turnPrompt = makeStructuredTurnPrompt(
                         req: req,
@@ -80,7 +80,7 @@ final class SlotAgentService {
                         userMessage: turnPrompt,
                         temperature: observations.isEmpty ? 0.0 : min(req.temperature, 0.35),
                         topP: observations.isEmpty ? 0.05 : min(req.topP, 0.8),
-                        maxTokens: min(req.maxTokens, structuredMode == .actionOnly ? 180 : 260),
+                        maxTokens: min(req.maxTokens, 180),
                         modelName: "cortex-orchestrator-json"
                     )
 
@@ -133,7 +133,7 @@ final class SlotAgentService {
                             }
                         }
                         if observations.isEmpty {
-                            let clarification = "Before I finalize, I need one clarification to avoid assumptions. Could you share the missing detail (target scope, timeframe, or source preference)?"
+                            let clarification = clarificationPromptForMissingContext(routing: routing, resolution: resolution)
                             let clarificationStep = AgentStep(kind: .reflection, content: clarification, toolID: nil, toolArgs: nil)
                             steps.append(clarificationStep)
                             continuation.yield(.step(clarificationStep))
@@ -550,28 +550,21 @@ final class SlotAgentService {
             - For "read latest email", use outlook.message.read with {"message":"latest"}.
             - If the tool needs the user's current place, use location="current location".
             """
-        case .directFinal:
-            return """
-            You are Lumen v1 direct answer step \(stepIndex + 1). Return exactly one JSON object and no markdown.
-
-            Recent safe conversation context:
-            \(contextBlock)
-
-            Original user request:
-            \(resolution.originalPrompt)
-
-            Rewritten execution request (source of truth):
-            \(resolution.rewrittenPrompt)
-
-            Required output schema:
-            {"thought":"short answer note","final":"answer shown to the user"}
-
-            Hard rules:
-            - Output a final object only.
-            - Do not output action, tool, args, markdown, code fences, or explanations outside JSON.
-            - Do not invent tool results.
-            """
         }
+    }
+
+    private func clarificationPromptForMissingContext(routing: IntentRoutingDecision, resolution: ReferenceResolution) -> String {
+        let intentHint: String
+        switch routing.intent {
+        case .weather: intentHint = "location and timeframe"
+        case .webSearch, .rag, .files: intentHint = "topic scope and preferred sources"
+        case .maps: intentHint = "destination and travel context"
+        case .phoneCall, .messageDraft, .emailDraft, .outlook: intentHint = "recipient and the intended action"
+        case .calendar, .reminder, .trigger, .alarm: intentHint = "time and completion criteria"
+        case .memory, .note: intentHint = "which memory or note context to use"
+        default: intentHint = "the key missing detail needed to proceed"
+        }
+        return "I want to avoid assumptions before finalizing. Could you clarify \(intentHint) for: \"\(resolution.rewrittenPrompt)\"?"
     }
 
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
@@ -622,11 +615,6 @@ final class SlotAgentService {
 
     private enum StructuredTurnMode: String {
         case actionOnly
-        case directFinal
-    }
-
-    private func structuredModeForTurn(requiresTool: Bool) -> StructuredTurnMode {
-        return requiresTool ? .actionOnly : .directFinal
     }
 
     private func boundedMaxSteps(for routing: IntentRoutingDecision, requested: Int) -> Int {

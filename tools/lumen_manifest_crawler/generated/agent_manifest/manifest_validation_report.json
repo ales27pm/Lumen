@@ -1,5 +1,56 @@
 {
-  "passed": true,
-  "failures": [],
+  "passed": false,
+  "failures": [
+    {
+      "code": "tool_id_leak_in_natural_eval",
+      "message": "Tool weather leaked in natural intent prompt",
+      "path": "dataset.eval_scenarios.weather"
+    },
+    {
+      "code": "tool_id_leak_in_natural_eval",
+      "message": "Tool weather leaked in natural intent prompt",
+      "path": "dataset.eval_scenarios.weather"
+    },
+    {
+      "code": "tool_id_leak_in_natural_eval",
+      "message": "Tool weather leaked in natural intent prompt",
+      "path": "dataset.eval_scenarios.weather"
+    },
+    {
+      "code": "missing_permission_eval_coverage",
+      "message": "Tool weather requires permission coverage in eval scenarios",
+      "path": "dataset.eval_scenarios.weather"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage mouth",
+      "path": "fine_tuning.fleet"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage rem",
+      "path": "fine_tuning.fleet"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage mimicry",
+      "path": "fine_tuning.fleet"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage embedding",
+      "path": "fine_tuning.fleet"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage executor",
+      "path": "fine_tuning.fleet"
+    },
+    {
+      "code": "fleet_slot_coverage_missing",
+      "message": "fleet missing slot coverage cortex",
+      "path": "fine_tuning.fleet"
+    }
+  ],
   "warnings": []
 }

@@ -7,6 +7,7 @@ from typing import Any
 
 from lumen_manifest_crawler.fleet_artifacts import FleetArtifacts
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationReport
+from lumen_manifest_crawler.dataset.fine_tuning import AgentFineTuningDataset
 from lumen_manifest_crawler.output.hashing import sha256_file
 
 
@@ -21,6 +22,8 @@ def write_outputs(
     manifest_markdown: str | None = None,
     cross_model_train_dir: Path | None = None,
     incremental_fingerprint: str | None = None,
+    fine_tuning_datasets: dict[str, AgentFineTuningDataset] | None = None,
+    fine_tuning_output_dir: Path | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     canonical_path = output_dir / "AgentBehaviorManifest.json"
@@ -63,6 +66,9 @@ def write_outputs(
         with (dataset_dir / f"{name}.jsonl").open("w", encoding="utf-8") as handle:
             for record in records:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+    if fine_tuning_datasets is not None:
+        _write_fine_tuning_outputs(fine_tuning_output_dir or (output_dir / "fine_tuning"), fine_tuning_datasets)
 
 
 def _write_fleet_artifacts(output_dir: Path, artifacts: FleetArtifacts, cross_model_train_dir: Path | None) -> None:
@@ -162,3 +168,17 @@ def _write_routing_matrix_csv(path: Path, manifest: AgentBehaviorManifest) -> No
         writer.writerow(["intent", "allowedTools", "forbiddenTools"])
         for entry in manifest.routingMatrix:
             writer.writerow([entry.intent, ";".join(entry.allowedTools), ";".join(entry.forbiddenTools)])
+
+
+def _write_fine_tuning_outputs(root: Path, datasets: dict[str, AgentFineTuningDataset]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for agent, dataset in sorted(datasets.items()):
+        d = root / agent
+        d.mkdir(parents=True, exist_ok=True)
+        _write_jsonl(d / "train_sft.jsonl", dataset.train_sft)
+        _write_jsonl(d / "val_sft.jsonl", dataset.val_sft)
+        _write_jsonl(d / "train_dpo.jsonl", dataset.train_dpo)
+        _write_jsonl(d / "val_dpo.jsonl", dataset.val_dpo)
+        _write_jsonl(d / "eval.jsonl", dataset.eval)
+        (d / "dataset_card.json").write_text(json.dumps(dataset.dataset_card, ensure_ascii=False, indent=2, sort_keys=True)+"\n", encoding="utf-8")
+        (d / "unsloth_config.json").write_text(json.dumps(dataset.unsloth_config, ensure_ascii=False, indent=2, sort_keys=True)+"\n", encoding="utf-8")

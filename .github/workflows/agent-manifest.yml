@@ -32,6 +32,18 @@ jobs:
         env:
           PYTHONPATH: tools/lumen_manifest_crawler
 
+      - name: Run improvement-loop dry pass
+        run: |
+          python -m lumen_manifest_crawler improve-loop \
+            --root . \
+            --output generated/agent_manifest \
+            --loop-output generated/agent_improvement_loop \
+            --dry-run-commands \
+            --test-command "python -m pytest tools/lumen_manifest_crawler/tests" \
+            --no-fail-on-validation
+        env:
+          PYTHONPATH: tools/lumen_manifest_crawler
+
       - name: Check generated artifacts are committed
         run: |
           git diff --exit-code generated/agent_manifest
@@ -48,3 +60,10 @@ jobs:
         with:
           name: agent-manifest
           path: generated/agent_manifest
+
+      - name: Upload improvement-loop report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-improvement-loop
+          path: generated/agent_improvement_loop

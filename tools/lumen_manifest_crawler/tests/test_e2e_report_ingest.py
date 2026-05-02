@@ -67,6 +67,22 @@ Question: should I send this today?
 """
 
 
+FINAL_WITH_GENERIC_CAPITALIZED_LINES_REPORT = """E2E Test Report
+Passed: 0
+Failed: 1
+
+❌ Training eval: communication drafting
+Prompt: Draft an email to Alex with a professional update and ask one clarifying question.
+Intent: emailDraft / expected emailDraft
+Failures: Required final hint missing: question
+Final: Subject: Project update
+
+Note: this line is part of the email body.
+Summary: progress is moving forward.
+Question: should I send this today?
+"""
+
+
 def test_load_runtime_audit_reports_ingests_text_e2e_report(tmp_path: Path):
     report_path = tmp_path / "e2e-report.txt"
     report_path.write_text(E2E_REPORT, encoding="utf-8")
@@ -135,5 +151,19 @@ def test_final_multiline_field_preserves_email_subject_body_headers(tmp_path: Pa
 
     assert "Subject: Project update" in actual
     assert "Hi Alex," in actual
+    assert "Question: should I send this today?" in actual
+    assert failure["repairSample"]["badOutput"] == actual
+
+
+def test_final_multiline_field_preserves_generic_capitalized_body_lines(tmp_path: Path):
+    report_path = tmp_path / "email-final-generic-headers.log"
+    report_path.write_text(FINAL_WITH_GENERIC_CAPITALIZED_LINES_REPORT, encoding="utf-8")
+
+    failure = load_runtime_audit_reports([report_path])[0]["failures"][0]
+    actual = failure["actual"]
+
+    assert "Subject: Project update" in actual
+    assert "Note: this line is part of the email body." in actual
+    assert "Summary: progress is moving forward." in actual
     assert "Question: should I send this today?" in actual
     assert failure["repairSample"]["badOutput"] == actual

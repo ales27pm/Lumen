@@ -67,7 +67,7 @@ def write_outputs(
             for record in records:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
-    if fine_tuning_datasets:
+    if fine_tuning_datasets is not None:
         _write_fine_tuning_outputs(fine_tuning_output_dir or (output_dir / "fine_tuning"), fine_tuning_datasets)
 
 

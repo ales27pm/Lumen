@@ -42,9 +42,18 @@ def compile_agent_fine_tuning_datasets(manifest: AgentBehaviorManifest, compiled
     config = config or FineTuningDatasetConfig()
     out = {}
     known_tools = {t.id for t in manifest.tools}
+    base_sft_records = compiled_records.get("train_sft", []) + compiled_records.get("validation_sft", [])
+    fleet_sft_records = compiled_records.get("manifest_grounding_cards", []) + compiled_records.get("fleet_system_prompts", [])
+    executor_sft_records = compiled_records.get("executor_tool_calls", []) + compiled_records.get("tool_schema_cards", []) + compiled_records.get("approval_boundary_samples", [])
+
     for agent in AGENTS:
         sft = []
-        for rec in compiled_records.get("train_sft", []) + compiled_records.get("validation_sft", []):
+        candidate_records = list(base_sft_records)
+        if agent == "fleet":
+            candidate_records += fleet_sft_records
+        if agent == "executor":
+            candidate_records += executor_sft_records
+        for rec in candidate_records:
             role = ((rec.get("metadata") or {}).get("agent") or rec.get("agentRole") or "").replace("tool_executor","executor")
             fam = rec.get("sourceFamily")
             if role == agent or (agent=="fleet" and fam in {"manifest_grounding_cards","fleet_system_prompts"}) or (agent=="executor" and fam in {"executor_tool_calls","tool_schema_cards","approval_boundary_samples"}):

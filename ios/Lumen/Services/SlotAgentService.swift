@@ -64,7 +64,7 @@ final class SlotAgentService {
                 )
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 for stepIndex in 0..<maxSteps {
-                    let structuredMode: StructuredTurnMode = .actionOnly
+                    let structuredMode: StructuredTurnMode = observations.isEmpty ? .actionOnly : .actionOrFinal
                     let slot: LumenModelSlot = .cortex
                     let turnPrompt = makeStructuredTurnPrompt(
                         req: req,
@@ -80,7 +80,7 @@ final class SlotAgentService {
                         userMessage: turnPrompt,
                         temperature: observations.isEmpty ? 0.0 : min(req.temperature, 0.35),
                         topP: observations.isEmpty ? 0.05 : min(req.topP, 0.8),
-                        maxTokens: min(req.maxTokens, 180),
+                        maxTokens: min(req.maxTokens, structuredMode == .actionOnly ? 180 : 260),
                         modelName: "cortex-orchestrator-json"
                     )
 
@@ -521,6 +521,40 @@ final class SlotAgentService {
             Available tools:
             \(tools)
 
+            Required output schema:
+            {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
+
+            Hard rules:
+            - You are the planner/orchestrator for this request.
+            - Output an action object only.
+            - Use exactly one tool from Available tools.
+            - Use recent context only to resolve words like he, she, her, him, it, that, them, previous, last.
+            - Never reuse previous tool observations as current results.
+            - Never call the same tool with the same arguments twice.
+            - For phone calls to a person by name or pronoun, use contacts.search first unless a phone number is already explicit.
+            - For Outlook/Hotmail inbox checks, prefer outlook.messages.list with unreadOnly=true when user asks unread.
+            - For "read latest email", use outlook.message.read with {"message":"latest"}.
+            - If the tool needs the user's current place, use location="current location".
+            """
+        case .actionOrFinal:
+            return """
+            You are Lumen Cortex orchestrator step \(stepIndex + 1). Return exactly one JSON object and no markdown.
+
+            Recent safe conversation context for pronoun/reference resolution only:
+            \(contextBlock)
+
+            Original user request:
+            \(resolution.originalPrompt)
+
+            Rewritten execution request (source of truth):
+            \(resolution.rewrittenPrompt)
+
+            Previous observations for this current request only:
+            \(observationBlock)
+
+            Available tools:
+            \(tools)
+
             Required output schema (choose one):
             {"thought":"short routing note","action":{"tool":"tool.id","args":{"key":"value"}}}
             {"thought":"short completion note","final":"handoff draft for Mouth"}
@@ -608,6 +642,7 @@ final class SlotAgentService {
 
     private enum StructuredTurnMode: String {
         case actionOnly
+        case actionOrFinal
     }
 
     private func boundedMaxSteps(for routing: IntentRoutingDecision, requested: Int) -> Int {

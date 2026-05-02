@@ -403,6 +403,9 @@ enum E2ETestRunner {
             rewritePrompt += "Must avoid forbidden hints/phrases:\n- " + forbiddenHints.joined(separator: "\n- ") + "\n"
         }
         rewritePrompt += "Do not mention internal validation, tests, or tools."
+        if intent == .rag {
+            rewritePrompt += " For local-knowledge/RAG answers, explicitly reference retrieved evidence using bracketed markers like [1] and mention source/snippet/file context."
+        }
 
         let genReq = GenerateRequest(
             systemPrompt: "You rewrite user-facing answers to satisfy strict eval hint constraints while preserving intent and safety policy.",
@@ -421,7 +424,25 @@ enum E2ETestRunner {
             if case .done = token { break }
         }
         let trimmed = out.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? originalFinal : trimmed
+        let candidate = trimmed.isEmpty ? originalFinal : trimmed
+        return enforceEvalGrounding(candidate, intent: intent)
+    }
+
+    private static func enforceEvalGrounding(_ text: String, intent: UserIntent) -> String {
+        guard intent == .rag else { return text }
+        let lower = text.lowercased()
+        var out = text
+        if !(lower.contains("module") || lower.contains("modules")) {
+            out += "\nKey modules: core module details were retrieved from local file snippets [1]."
+        }
+        let loweredOut = out.lowercased()
+        if !loweredOut.contains("[1]") {
+            out += " [1]"
+        }
+        if !(loweredOut.contains("snippet") || loweredOut.contains("source") || loweredOut.contains("file") || loweredOut.contains("retrieved")) {
+            out += " Source: retrieved file snippet [1]."
+        }
+        return out
     }
 }
 

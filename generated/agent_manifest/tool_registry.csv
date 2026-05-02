@@ -6,6 +6,22 @@ reminders.list,List Reminders,False,NSRemindersFullAccessUsageDescription,0,ios/
 contacts.search,Search Contacts,False,NSContactsUsageDescription,1,ios/Lumen/Models/ToolDefinition.swift
 messages.draft,Draft Message,True,,6,ios/Lumen/Models/ToolDefinition.swift
 mail.draft,Draft Email,True,,7,ios/Lumen/Models/ToolDefinition.swift
+outlook.status,Outlook Status,False,,0,ios/Lumen/Models/ToolDefinition.swift
+outlook.folders.list,List Outlook Folders,False,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.messages.list,List Outlook Messages,False,,4,ios/Lumen/Models/ToolDefinition.swift
+outlook.messages.search,Search Outlook Messages,False,,4,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.read,Read Outlook Message,False,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.attachments.list,List Outlook Attachments,False,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.draft.create,Create Outlook Draft,True,,3,ios/Lumen/Models/ToolDefinition.swift
+outlook.mail.send,Send Outlook Email,True,,3,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.mark_read,Mark Outlook Read,True,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.mark_unread,Mark Outlook Unread,True,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.move,Move Outlook Message,True,,4,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.archive,Archive Outlook Message,True,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.delete,Delete Outlook Message,True,,2,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.reply,Reply Outlook Message,True,,4,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.reply_all,Reply All Outlook Message,True,,4,ios/Lumen/Models/ToolDefinition.swift
+outlook.message.forward,Forward Outlook Message,True,,5,ios/Lumen/Models/ToolDefinition.swift
 phone.call,Start Call,True,,1,ios/Lumen/Models/ToolDefinition.swift
 location.current,Current Location,False,NSLocationWhenInUseUsageDescription,0,ios/Lumen/Models/ToolDefinition.swift
 weather,Current Weather,False,NSLocationWhenInUseUsageDescription,2,ios/Lumen/Models/ToolDefinition.swift

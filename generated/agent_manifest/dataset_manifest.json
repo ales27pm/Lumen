@@ -1,0 +1,58 @@
+{
+  "counts": {
+    "approval_boundary_samples": 115,
+    "cortex_routing": 69,
+    "dpo_preference_pairs": 53,
+    "eval_scenarios": 77,
+    "executor_tool_calls": 53,
+    "manifest_grounding_cards": 4,
+    "mimicry_style": 3,
+    "mouth_responses": 53,
+    "negative_samples": 53,
+    "rem_reflection": 5,
+    "runtime_audit_repairs": 0,
+    "tool_schema_cards": 53,
+    "train_sft": 298,
+    "validation_sft": 53
+  },
+  "deterministic": true,
+  "generatedAt": "1970-01-01T00:00:00+00:00",
+  "hashes": {
+    "dpo_preference_pairs": "fe30237492e17dfdeb3679726e4d4c887a156338004e7be17602d6f32163e191",
+    "eval_scenarios": "41984f1a2ee373774a789ecaf7cefc01577765e7db25c53e3c1e0e4a0d490263",
+    "manifest_grounding_cards": "0c1964064e27af4457611297c2f0d52c8730ce0019c30c640e6574db86d1ba1c",
+    "runtime_audit_repairs": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tool_schema_cards": "9f8d3486e7a84c91e36fc5ca0f74aae4cb1f49e5279d9753e7b19749941bba8a",
+    "train_sft": "68e19b19a62a9d2adf9151397468a9eaf11675413792993ac9a5627756156ea0",
+    "validation_sft": "ea913d48d5f1880b73f8c528d3165f6681a8dc47508368a54c383f3e3e76128b"
+  },
+  "manifest": {
+    "commit": "51b4f67fe27ed71ce89acf1a0265c9c79c49b4a5",
+    "intentCount": 22,
+    "modelSlotCount": 6,
+    "schemaVersion": "1.0.0",
+    "toolCount": 53
+  },
+  "schemaVersion": "2.0.0",
+  "sources": {
+    "rawDatasetFamilies": [
+      "approval_boundary_samples",
+      "cortex_routing",
+      "executor_tool_calls",
+      "mimicry_style",
+      "mouth_responses",
+      "negative_samples",
+      "rem_reflection"
+    ],
+    "runtimeAuditFormats": [],
+    "runtimeAuditReports": 0,
+    "staticSwiftSourceFiles": 13
+  },
+  "trainingPolicy": {
+    "format": "chat_messages_jsonl",
+    "privateDataPolicy": "static Swift source manifest, role datasets, explicit runtime audit JSON, explicit in-app dataset packages, behavior repair samples, deterministic scenario results, and bounded diagnostic trace prefixes only; no unrestricted logs, full conversations, contacts, calendar bodies, files, photos, or tool payload bodies are ingested",
+    "sentinelLeakPolicy": "fail validation on model-visible leaks",
+    "splitStrategy": "stable_hash_by_record_id",
+    "validationRatio": 0.15
+  }
+}

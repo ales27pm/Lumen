@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "0f95df0fc542005f2acb76c5c82948864da6746c",
+    "commit": "51b4f67fe27ed71ce89acf1a0265c9c79c49b4a5",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -23,7 +23,7 @@
       },
       {
         "path": "ios/Lumen/Models/ToolDefinition.swift",
-        "sha256": "c15f939bc70d9a402d7112ee6903f42ff0291e0f5c704b1fefde7f29230d6841"
+        "sha256": "c897dc048ebeec2a536f1c5dbe633728ed267e9ea5dbb0cec71eb7fe6956146e"
       },
       {
         "path": "ios/Lumen/Models/Trigger.swift",
@@ -35,7 +35,7 @@
       },
       {
         "path": "ios/Lumen/Services/IntentRouter.swift",
-        "sha256": "003aef73a9cbeb209ec513423ca3ceb7820f38aff4da7ca90dcfdba6b5d04ce3"
+        "sha256": "e34fa68f03ae39d170975697611415bd74718958dbe9bb72275c5f49c2923ab2"
       },
       {
         "path": "ios/Lumen/Services/MemoryStore.swift",
@@ -131,6 +131,201 @@
         "source": "ios/Lumen/Services/ModelFleet.swift"
       }
     ]
+  },
+  "fleetTopology": {
+    "slots": {
+      "cortex": {
+        "role": "orchestrator",
+        "purpose": "intent routing",
+        "inputSignature": "User request plus manifest routing matrix, available tools, memory context, and prior agent state.",
+        "outputSignature": "Intent classification, selectedToolID or target slot, approval requirement, and concise routing summary.",
+        "calls": [
+          "embedding",
+          "executor",
+          "mimicry",
+          "mouth",
+          "rem"
+        ],
+        "calledBy": [
+          "rem"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "intent routing",
+          "model coordination",
+          "task planning",
+          "tool selection"
+        ]
+      },
+      "embedding": {
+        "role": "embedding",
+        "purpose": "Perform the embedding role defined by the Lumen model fleet contract.",
+        "inputSignature": "Role-specific input defined by the fleet contract and AgentBehaviorManifest.",
+        "outputSignature": "Role-specific output defined by the fleet contract and AgentBehaviorManifest.",
+        "calls": [],
+        "calledBy": [
+          "cortex"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": []
+      },
+      "executor": {
+        "role": "tool_executor",
+        "purpose": "strict JSON generation",
+        "inputSignature": "Approved Cortex plan, exact tool ID, argument candidates, permission state, and approval state.",
+        "outputSignature": "Strict JSON tool call, clarification request, approval request, or structured tool result.",
+        "calls": [
+          "mouth",
+          "rem"
+        ],
+        "calledBy": [
+          "cortex",
+          "rem"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "approval boundary enforcement",
+          "strict JSON generation",
+          "tool argument validation"
+        ]
+      },
+      "mimicry": {
+        "role": "tone_adapter",
+        "purpose": "tone detection",
+        "inputSignature": "Draft response, user style hints, locale, tone preferences, and safety constraints.",
+        "outputSignature": "Style-adjusted user-facing text or style profile that preserves facts and safety boundaries.",
+        "calls": [
+          "mouth"
+        ],
+        "calledBy": [
+          "cortex"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "response rewriting",
+          "style adaptation",
+          "tone detection"
+        ]
+      },
+      "mouth": {
+        "role": "user_response",
+        "purpose": "final user-facing response",
+        "inputSignature": "Tool result, user-visible state, style profile, and safety/sentinel constraints.",
+        "outputSignature": "Final user-facing text with no private reasoning, raw tool JSON, or forbidden sentinels.",
+        "calls": [],
+        "calledBy": [
+          "cortex",
+          "executor",
+          "mimicry"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "clarification",
+          "final user-facing response",
+          "spoken output"
+        ]
+      },
+      "rem": {
+        "role": "idle_reflection",
+        "purpose": "memory pruning",
+        "inputSignature": "Audit failure, conversation summary, memory candidates, freshness policy, and manifest context.",
+        "outputSignature": "Repair sample, memory decision, freshness classification, or runtime drift recommendation.",
+        "calls": [
+          "cortex",
+          "executor"
+        ],
+        "calledBy": [
+          "cortex",
+          "executor"
+        ],
+        "memoryScopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "dataset generation",
+          "failure analysis",
+          "manifest audit",
+          "memory pruning"
+        ]
+      }
+    },
+    "externalHandoffTools": []
   },
   "tools": [
     {
@@ -276,7 +471,7 @@
     {
       "id": "mail.draft",
       "displayName": "Draft Email",
-      "description": "Compose an email draft. Args: to or recipient or email, subject, body or message or text.",
+      "description": "Compose an email draft using the system mail composer. Args: to or recipient or email, subject, body or message or text.",
       "requiresApproval": true,
       "permissionKey": null,
       "arguments": [
@@ -327,6 +522,512 @@
           "type": "string",
           "required": true,
           "description": "Inferred from ToolDefinition description Args contract: to or recipient or email, subject, body or message or text",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.status",
+      "displayName": "Outlook Status",
+      "description": "Check whether the Microsoft Graph Outlook account is signed in. Args: none.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.folders.list",
+      "displayName": "List Outlook Folders",
+      "description": "List Outlook/Hotmail mail folders with unread and total counts. Args: optional includeHidden true/false.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "includeHidden",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional includeHidden true/false",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "false",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional includeHidden true/false",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.messages.list",
+      "displayName": "List Outlook Messages",
+      "description": "List recent Outlook messages. Args: optional folder or folderId, limit, unreadOnly.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "folder",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional folder or folderId, limit, unreadOnly",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "folderId",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional folder or folderId, limit, unreadOnly",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional folder or folderId, limit, unreadOnly",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "unreadOnly",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: optional folder or folderId, limit, unreadOnly",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.messages.search",
+      "displayName": "Search Outlook Messages",
+      "description": "Search Outlook mail with Microsoft Graph. Args: query, optional folder/folderId, limit.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional folder/folderId, limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "folder",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional folder/folderId, limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "folderId",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional folder/folderId, limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: query, optional folder/folderId, limit",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.read",
+      "displayName": "Read Outlook Message",
+      "description": "Read one Outlook message body by id. Args: messageId or id.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.attachments.list",
+      "displayName": "List Outlook Attachments",
+      "description": "List attachment metadata for one Outlook message. Args: messageId or id.",
+      "requiresApproval": false,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.draft.create",
+      "displayName": "Create Outlook Draft",
+      "description": "Create a saved Outlook draft through Microsoft Graph. Args: to, subject, body.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.mail.send",
+      "displayName": "Send Outlook Email",
+      "description": "Send an Outlook email through Microsoft Graph. Args: to, subject, body. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: to, subject, body",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.mark_read",
+      "displayName": "Mark Outlook Read",
+      "description": "Mark an Outlook message as read. Args: messageId or id. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.mark_unread",
+      "displayName": "Mark Outlook Unread",
+      "description": "Mark an Outlook message as unread. Args: messageId or id. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.move",
+      "displayName": "Move Outlook Message",
+      "description": "Move an Outlook message to a folder. Args: messageId or id, destination or destinationId. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, destination or destinationId",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, destination or destinationId",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, destination or destinationId",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "destinationId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, destination or destinationId",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.archive",
+      "displayName": "Archive Outlook Message",
+      "description": "Move an Outlook message to Archive. Args: messageId or id. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.delete",
+      "displayName": "Delete Outlook Message",
+      "description": "Delete an Outlook message. Args: messageId or id. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.reply",
+      "displayName": "Reply Outlook Message",
+      "description": "Reply to an Outlook message. Args: messageId or id, body/comment. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.reply_all",
+      "displayName": "Reply All Outlook Message",
+      "description": "Reply-all to an Outlook message. Args: messageId or id, body/comment. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        }
+      ],
+      "source": "ios/Lumen/Models/ToolDefinition.swift",
+      "inferred": false,
+      "inferredSource": null
+    },
+    {
+      "id": "outlook.message.forward",
+      "displayName": "Forward Outlook Message",
+      "description": "Forward an Outlook message. Args: messageId or id, to, optional body/comment. Requires explicit approval.",
+      "requiresApproval": true,
+      "permissionKey": null,
+      "arguments": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, to, optional body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, to, optional body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, to, optional body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, to, optional body/comment",
+          "source": "ios/Lumen/Models/ToolDefinition.swift"
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "required": false,
+          "description": "Inferred from ToolDefinition description Args contract: messageId or id, to, optional body/comment",
           "source": "ios/Lumen/Models/ToolDefinition.swift"
         }
       ],
@@ -1045,6 +1746,28 @@
       "source": "ios/Lumen/Services/IntentRouter.swift"
     },
     {
+      "id": "outlook",
+      "allowedToolIDs": [
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list",
+        "outlook.mail.send",
+        "outlook.message.archive",
+        "outlook.message.delete",
+        "outlook.message.forward",
+        "outlook.message.mark_read",
+        "outlook.message.mark_unread",
+        "outlook.message.move",
+        "outlook.message.read",
+        "outlook.message.reply",
+        "outlook.message.reply_all",
+        "outlook.messages.list",
+        "outlook.messages.search",
+        "outlook.status"
+      ],
+      "source": "ios/Lumen/Services/IntentRouter.swift"
+    },
+    {
       "id": "phoneCall",
       "allowedToolIDs": [],
       "source": "ios/Lumen/Services/IntentRouter.swift"
@@ -1134,17 +1857,17 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search",
-        "rag.index_files",
-        "rag.index_photos",
-        "rag.search",
-        "reminders.create",
-        "reminders.list",
-        "trigger.cancel",
-        "trigger.create",
-        "trigger.list",
-        "weather"
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list",
+        "outlook.mail.send",
+        "outlook.message.archive",
+        "outlook.message.delete",
+        "outlook.message.forward",
+        "outlook.message.mark_read",
+        "outlook.message.mark_unread",
+        "outlook.message.move",
+        "outlook.message.read"
       ]
     },
     {
@@ -1176,9 +1899,9 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search",
-        "rag.index_files"
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list"
       ]
     },
     {
@@ -1210,8 +1933,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1242,7 +1965,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1273,7 +1996,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1304,7 +2027,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1340,8 +2063,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "reminders.create"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1373,8 +2096,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1406,10 +2129,10 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search",
-        "rag.index_files",
-        "rag.index_photos"
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list",
+        "outlook.mail.send"
       ]
     },
     {
@@ -1441,9 +2164,9 @@
         "maps.search",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search",
-        "rag.index_files"
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list"
       ]
     },
     {
@@ -1474,7 +2197,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1506,13 +2229,61 @@
         "memory.recall",
         "memory.save",
         "messages.draft",
-        "phone.call",
-        "photos.search"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
       "intent": "note",
       "allowedTools": [],
+      "forbiddenTools": [
+        "alarm.authorization_status",
+        "alarm.cancel",
+        "alarm.countdown",
+        "alarm.list",
+        "alarm.pause",
+        "alarm.request_authorization",
+        "alarm.resume",
+        "alarm.schedule",
+        "alarm.snooze",
+        "alarm.stop",
+        "calendar.create",
+        "calendar.list",
+        "camera.capture",
+        "contacts.search",
+        "files.read",
+        "health.summary",
+        "location.current",
+        "mail.draft",
+        "maps.directions",
+        "maps.search",
+        "memory.recall",
+        "memory.save",
+        "messages.draft",
+        "motion.activity",
+        "outlook.attachments.list"
+      ]
+    },
+    {
+      "intent": "outlook",
+      "allowedTools": [
+        "outlook.attachments.list",
+        "outlook.draft.create",
+        "outlook.folders.list",
+        "outlook.mail.send",
+        "outlook.message.archive",
+        "outlook.message.delete",
+        "outlook.message.forward",
+        "outlook.message.mark_read",
+        "outlook.message.mark_unread",
+        "outlook.message.move",
+        "outlook.message.read",
+        "outlook.message.reply",
+        "outlook.message.reply_all",
+        "outlook.messages.list",
+        "outlook.messages.search",
+        "outlook.status"
+      ],
       "forbiddenTools": [
         "alarm.authorization_status",
         "alarm.cancel",
@@ -1569,7 +2340,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1605,8 +2376,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "reminders.create"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1642,8 +2413,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "reminders.create"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1674,7 +2445,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1709,7 +2480,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1740,7 +2511,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     },
     {
@@ -1773,8 +2544,8 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call",
-        "photos.search"
+        "outlook.attachments.list",
+        "outlook.draft.create"
       ]
     },
     {
@@ -1805,7 +2576,7 @@
         "memory.save",
         "messages.draft",
         "motion.activity",
-        "phone.call"
+        "outlook.attachments.list"
       ]
     }
   ],
@@ -1826,14 +2597,8 @@
     ],
     "freshnessClasses": [
       {
-        "id": "timeless",
-        "ttlSeconds": null,
-        "durable": false,
-        "source": "ios/Lumen/Models/MemoryItem.swift"
-      },
-      {
         "id": "shortLived",
-        "ttlSeconds": null,
+        "ttlSeconds": 3600,
         "durable": false,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       },
@@ -1845,8 +2610,14 @@
       },
       {
         "id": "volatile",
-        "ttlSeconds": null,
+        "ttlSeconds": 300,
         "durable": false,
+        "source": "ios/Lumen/Models/MemoryItem.swift"
+      },
+      {
+        "id": "timeless",
+        "ttlSeconds": null,
+        "durable": true,
         "source": "ios/Lumen/Models/MemoryItem.swift"
       }
     ]
@@ -1898,5 +2669,200 @@
       ],
       "jsonTypeSource": "ios/Lumen/Models/AgentJSONValue.swift"
     }
+  },
+  "fleet_topology": {
+    "slots": {
+      "cortex": {
+        "role": "orchestrator",
+        "purpose": "intent routing",
+        "input_signature": "User request plus manifest routing matrix, available tools, memory context, and prior agent state.",
+        "output_signature": "Intent classification, selectedToolID or target slot, approval requirement, and concise routing summary.",
+        "calls": [
+          "embedding",
+          "executor",
+          "mimicry",
+          "mouth",
+          "rem"
+        ],
+        "called_by": [
+          "rem"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "intent routing",
+          "model coordination",
+          "task planning",
+          "tool selection"
+        ]
+      },
+      "embedding": {
+        "role": "embedding",
+        "purpose": "Perform the embedding role defined by the Lumen model fleet contract.",
+        "input_signature": "Role-specific input defined by the fleet contract and AgentBehaviorManifest.",
+        "output_signature": "Role-specific output defined by the fleet contract and AgentBehaviorManifest.",
+        "calls": [],
+        "called_by": [
+          "cortex"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": []
+      },
+      "executor": {
+        "role": "tool_executor",
+        "purpose": "strict JSON generation",
+        "input_signature": "Approved Cortex plan, exact tool ID, argument candidates, permission state, and approval state.",
+        "output_signature": "Strict JSON tool call, clarification request, approval request, or structured tool result.",
+        "calls": [
+          "mouth",
+          "rem"
+        ],
+        "called_by": [
+          "cortex",
+          "rem"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "approval boundary enforcement",
+          "strict JSON generation",
+          "tool argument validation"
+        ]
+      },
+      "mimicry": {
+        "role": "tone_adapter",
+        "purpose": "tone detection",
+        "input_signature": "Draft response, user style hints, locale, tone preferences, and safety constraints.",
+        "output_signature": "Style-adjusted user-facing text or style profile that preserves facts and safety boundaries.",
+        "calls": [
+          "mouth"
+        ],
+        "called_by": [
+          "cortex"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "response rewriting",
+          "style adaptation",
+          "tone detection"
+        ]
+      },
+      "mouth": {
+        "role": "user_response",
+        "purpose": "final user-facing response",
+        "input_signature": "Tool result, user-visible state, style profile, and safety/sentinel constraints.",
+        "output_signature": "Final user-facing text with no private reasoning, raw tool JSON, or forbidden sentinels.",
+        "calls": [],
+        "called_by": [
+          "cortex",
+          "executor",
+          "mimicry"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "clarification",
+          "final user-facing response",
+          "spoken output"
+        ]
+      },
+      "rem": {
+        "role": "idle_reflection",
+        "purpose": "memory pruning",
+        "input_signature": "Audit failure, conversation summary, memory candidates, freshness policy, and manifest context.",
+        "output_signature": "Repair sample, memory decision, freshness classification, or runtime drift recommendation.",
+        "calls": [
+          "cortex",
+          "executor"
+        ],
+        "called_by": [
+          "cortex",
+          "executor"
+        ],
+        "memory_scopes": [
+          "backgroundOnly",
+          "conversation",
+          "currentTurn",
+          "person",
+          "preferenceOnly",
+          "project",
+          "referenceOnly",
+          "remCondensed",
+          "sourceOfTruth",
+          "task",
+          "toolObservation",
+          "userPreference"
+        ],
+        "responsibilities": [
+          "dataset generation",
+          "failure analysis",
+          "manifest audit",
+          "memory pruning"
+        ]
+      }
+    },
+    "external_handoff_tools": []
   }
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,7 +32,7 @@ console = Console()
 def _split_command(value: str | None) -> tuple[str, ...]:
     if not value or not value.strip():
         return ()
-    return tuple(part for part in value.strip().split(" ") if part)
+    return tuple(shlex.split(value))
 
 
 @generate_app.callback()
@@ -193,7 +194,6 @@ def improve_loop(
             build_command=_split_command(build_command),
             test_command=_split_command(test_command),
             train_command=_split_command(train_command),
-            fail_on_validation=fail_on_validation,
             dry_run_commands=dry_run_commands,
             app_run_mode=app_run_mode,
             testflight_build_label=testflight_build_label,

@@ -1,19 +1,19 @@
 {
   "agent": "executor",
-  "availableSFTRecords": 528,
+  "availableSFTRecords": 547,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "92151fb7ef4fd24d7e5d6356ec260caf9fb3e933",
+  "manifestCommit": "9a46e31e6ace373cb79bf85b021f665a6560fc6f",
   "recordCounts": {
     "eval": 111,
     "train_dpo": 11,
-    "train_sft": 445,
+    "train_sft": 457,
     "val_dpo": 2,
-    "val_sft": 79
+    "val_sft": 81
   },
   "sourceFamilies": [
     "approval_boundary_samples",
@@ -37,12 +37,17 @@
     "fleet_delegation",
     "fleet_delegation_preference",
     "fleet_peer_knowledge",
+    "fleet_peer_source_knowledge",
     "fleet_private_state_boundary",
     "fleet_self_knowledge",
+    "fleet_whole_system_identity",
     "manifest_grounding_cards",
     "negative_samples",
     "permission_unavailable",
     "role_directory",
+    "source_code_self_knowledge",
+    "source_routing_knowledge",
+    "source_tool_registry_knowledge",
     "tool_call_generation",
     "tool_id_repair",
     "tool_schema_cards"

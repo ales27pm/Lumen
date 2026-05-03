@@ -469,6 +469,18 @@ def shorten(value: str, max_len: int = 120) -> str:
     return value if len(value) <= max_len else value[: max_len - 1] + "…"
 
 
+def normalize_html_attribute_quotes(markup: str) -> str:
+    """Normalize single-quoted tag attributes to double quotes for HTMLHint."""
+    tag_pattern = re.compile(r"<[^>]+>")
+    attr_pattern = re.compile(r"([A-Za-z_:][\w:.-]*)='([^']*)'")
+
+    def _normalize_tag(tag_match: re.Match[str]) -> str:
+        tag = tag_match.group(0)
+        return attr_pattern.sub(r'\1="\2"', tag)
+
+    return tag_pattern.sub(_normalize_tag, markup)
+
+
 def svg_bar_chart(data: dict[str, Any], title: str) -> str:
     numeric: dict[str, float] = {}
     for key, value in data.items():
@@ -493,7 +505,12 @@ def svg_bar_chart(data: dict[str, Any], title: str) -> str:
         rows.append(f"<rect x='{left}' y='{y}' width='{bar}' height='18' rx='9' fill='#101827'/>")
         rows.append(f"<rect x='{left}' y='{y}' width='{w}' height='18' rx='9' fill='#73a7ff'/>")
         rows.append(f"<text x='{left + bar + 12}' y='{y + 15}' fill='#e8eefc' font-size='12'>{escape(int(value) if value.is_integer() else round(value, 2))}</text>")
-    return f"<svg viewBox='0 0 {width} {height}' width='100%' xmlns='http://www.w3.org/2000/svg'><text x='12' y='23' fill='#e8eefc' font-size='16' font-weight='700'>{escape(title)}</text>{''.join(rows)}</svg>"
+    svg = (
+        f"<svg viewBox='0 0 {width} {height}' width='100%' "
+        f"xmlns='http://www.w3.org/2000/svg'><text x='12' y='23' fill='#e8eefc' "
+        f"font-size='16' font-weight='700'>{escape(title)}</text>{''.join(rows)}</svg>"
+    )
+    return normalize_html_attribute_quotes(svg)
 
 
 def pipeline_svg(steps: list[StepResult], artifacts: LoopArtifacts) -> str:
@@ -508,7 +525,16 @@ def pipeline_svg(steps: list[StepResult], artifacts: LoopArtifacts) -> str:
         rows.append(f"<rect x='32' y='{y}' width='1056' height='56' rx='15' fill='#111722' stroke='{colour}' stroke-width='2'/>")
         rows.append(f"<text x='55' y='{y + 24}' fill='#e8eefc' font-size='16' font-weight='700'>{idx + 1}. {escape(step.name)}</text>")
         rows.append(f"<text x='55' y='{y + 44}' fill='#8ea0bd' font-size='12'>{escape(step.status)} · {step.duration_seconds:.1f}s · {escape(shorten(shlex.join(step.command), 100) if step.command else 'internal')}</text>")
-    return f"<svg viewBox='0 0 {width} {height}' width='100%' xmlns='http://www.w3.org/2000/svg'><rect width='100%' height='100%' rx='20' fill='#090b10'/><text x='32' y='34' fill='#e8eefc' font-size='24' font-weight='800'>Improve-loop pipeline</text><text x='32' y='53' fill='#8ea0bd' font-size='13'>hard gaps: {hard} · total gaps: {len(artifacts.gaps)} · scenarios: {len(artifacts.testflight_scenarios)}</text>{''.join(rows)}</svg>"
+    svg = (
+        f"<svg viewBox='0 0 {width} {height}' width='100%' "
+        f"xmlns='http://www.w3.org/2000/svg'><rect width='100%' height='100%' "
+        f"rx='20' fill='#090b10'/><text x='32' y='34' fill='#e8eefc' font-size='24' "
+        f"font-weight='800'>Improve-loop pipeline</text><text x='32' y='53' "
+        f"fill='#8ea0bd' font-size='13'>hard gaps: {hard} · total gaps: "
+        f"{len(artifacts.gaps)} · scenarios: {len(artifacts.testflight_scenarios)}"
+        f"</text>{''.join(rows)}</svg>"
+    )
+    return normalize_html_attribute_quotes(svg)
 
 
 def build_summary(root: Path, output: Path, loop_output: Path, fine_tuning_output: Path, args: argparse.Namespace, started_at: str, ended_at: str, steps: list[StepResult], artifacts: LoopArtifacts) -> dict[str, Any]:
@@ -582,7 +608,7 @@ def build_html(summary: dict[str, Any], steps: list[StepResult], artifacts: Loop
         for prompt in artifacts.next_prompts[:120]
     ) or "<tr><td colspan='3'>No next prompts.</td></tr>"
     tails = "".join(f"<details><summary>{escape(step.name)} · {escape(step.status)}</summary><pre>{escape(step.stdout_tail or step.stderr_tail)}</pre></details>" for step in steps if step.stdout_tail or step.stderr_tail)
-    return f"""<!doctype html>
+    html_doc = f"""<!doctype html>
 <html lang='en'>
 <head>
 <meta charset='utf-8'>
@@ -623,6 +649,7 @@ pre {{ white-space:pre-wrap; max-height:24rem; overflow:auto; background:#070b12
 </body>
 </html>
 """
+    return normalize_html_attribute_quotes(html_doc)
 
 
 def write_visual_outputs(

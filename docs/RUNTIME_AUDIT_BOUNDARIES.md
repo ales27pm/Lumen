@@ -1,6 +1,21 @@
 # Runtime Audit and E2E Boundaries
 
-This document prevents the improve-loop from mixing three different evidence layers.
+This document prevents the improve-loop from mixing different evidence layers.
+
+## Export buttons by layer
+
+The developer UI now exposes exports for every layer, while keeping ownership explicit.
+
+| UI | Button | File prefix | `sourceLayer` | Owns live E2E scenarios |
+|---|---|---|---|---|
+| Agent Grounding | Export Runtime Audit Package | `lumen-agent-grounding-audit-*` | `agentGroundingRuntimeAudit` | `false` |
+| Agent Grounding | Export Runtime Registry Audit | `lumen-runtime-registry-audit-*` | `runtimeManifestAudit` | `false` |
+| Agent Grounding | Export Model Behaviour Audit | `lumen-model-behaviour-audit-*` | `agentModelBehaviorAuditor` | `false` |
+| Agent Grounding | Export Static Scenario Checks | `lumen-static-scenario-checks-*` | `runtimeScenarioRunner.staticChecks` | `false` |
+| Agent Grounding | Export Recent Runtime Traces | `lumen-agent-runtime-traces-*` | `agentBehaviorTraceRecorder` | `false` |
+| End-to-end tests | Export Live E2E Report JSON | `lumen-live-e2e-report-*` | `e2eTestReport` | `true` |
+
+Only the E2E export should be treated as the live model scenario result layer. The other exports are diagnostics, grounding evidence, static checks, or trace evidence.
 
 ## 1. Agent Grounding runtime audit
 
@@ -40,7 +55,7 @@ Agent Grounding is allowed to export:
 
 Agent Grounding must not be treated as the owner of live E2E scenario results.
 
-Static manifest scenario checks may be displayed in the UI, but they are omitted from the dataset export by default. If included explicitly, they must remain marked as deterministic static checks and not as proof of model execution.
+Static manifest scenario checks may be displayed in the UI, but they are omitted from the combined runtime audit package by default. They also have a dedicated per-layer export for diagnostics.
 
 ## 2. E2E live model execution
 
@@ -61,6 +76,19 @@ No model loaded; routing-only checks completed.
 
 then the improve-loop ingester treats that scenario as invalid E2E evidence and converts it into a repair/gap signal.
 
+Use the `Export Live E2E Report JSON` button after running the E2E screen. That export uses:
+
+```json
+{
+  "exportPolicy": {
+    "format": "live-e2e-test-report-json",
+    "sourceLayer": "e2eTestReport",
+    "ownsLiveE2EScenarios": true,
+    "includesDeterministicStaticScenarios": false
+  }
+}
+```
+
 ## 3. Deterministic static scenario checks
 
 Owned by:
@@ -74,7 +102,36 @@ ios/Lumen/Services/AgentGrounding/RuntimeScenarioRunner.swift
 - expected tool exists in the bundled manifest;
 - generated prompts do not contain forbidden sentinels.
 
-These checks are useful for UI diagnostics and manifest sanity, but they must not be mixed into E2E training records as live model failures.
+These checks are useful for UI diagnostics and manifest sanity, but they must not be mixed into E2E training records as live model failures. The per-layer export is ingested as non-live evidence with `ignoredScenarioResultCount`.
+
+## 4. Per-layer evidence envelope
+
+Owned by:
+
+```text
+ios/Lumen/Services/Diagnostics/EvidenceLayerExporter.swift
+```
+
+All individual layer exports share this envelope:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "...",
+  "app": {},
+  "exportPolicy": {
+    "format": "...",
+    "sourceLayer": "...",
+    "ownsLiveE2EScenarios": false,
+    "includesDeterministicStaticScenarios": false,
+    "privacy": "...",
+    "notes": []
+  },
+  "payload": {}
+}
+```
+
+The `exportPolicy` is the contract. The ingester routes the payload according to `sourceLayer` and `ownsLiveE2EScenarios`, not by filename alone.
 
 ## Python ingestion rules
 
@@ -93,6 +150,10 @@ Rules:
 4. E2E-owned scenario results may be ingested only when the package explicitly says `ownsLiveE2EScenarios=true`.
 5. E2E reports that claim success while saying `No model loaded` or `routing-only checks completed` are forced into the failure path.
 6. Empty Agent Grounding trace exports emit `agent_grounding_no_recent_model_traces` so the loop cannot silently accept a package that did not capture live model/tool traces.
+7. Per-layer evidence envelopes are routed by `exportPolicy.sourceLayer`.
+8. `e2eTestReport` envelopes are normalized into the same repair/failure path as other E2E reports.
+9. `runtimeScenarioRunner.staticChecks` envelopes are non-live and ignored as E2E evidence.
+10. Empty `agentBehaviorTraceRecorder` envelopes emit `agent_grounding_no_recent_model_traces`.
 
 ## Required next hardening
 

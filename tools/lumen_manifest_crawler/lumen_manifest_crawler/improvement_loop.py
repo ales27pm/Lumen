@@ -27,6 +27,7 @@ LOOP_SCHEMA_VERSION = "1.1.0"
 DEFAULT_LOOP_DIR = Path("generated/agent_improvement_loop")
 TESTFLIGHT_SCENARIOS_FILE = "testflight_scenarios.jsonl"
 TESTFLIGHT_RUNBOOK_FILE = "TESTFLIGHT_RUNBOOK.md"
+EXPORT_DATASET_INSTRUCTION = "Export the in-app dataset package JSON from Agent Grounding."
 
 
 @dataclass(frozen=True)
@@ -411,7 +412,7 @@ def _build_trace_export_scenarios(manifest: Any) -> list[dict[str, Any]]:
             },
             "testFlightInstructions": [
                 "Run the prompt in the real TestFlight app.",
-                "After the batch, open Agent Grounding and export the in-app dataset package JSON.",
+                f"After the batch, {EXPORT_DATASET_INSTRUCTION}",
                 "Verify the export includes `traceSelectedToolAllowedCount` and that recent traces keep allowedToolIDs for tool-selection turns.",
             ],
         })
@@ -430,7 +431,7 @@ def _build_trace_export_scenarios(manifest: Any) -> list[dict[str, Any]]:
         },
         "testFlightInstructions": [
             "Run the prompt in the real TestFlight app without developer harnesses.",
-            "Export the in-app dataset package JSON from Agent Grounding.",
+            EXPORT_DATASET_INSTRUCTION,
             "Verify the export includes `traceSelectedToolAllowedCount` and at least one trace for this interaction.",
         ],
     })
@@ -452,7 +453,7 @@ def _build_trace_integrity_scenarios() -> list[dict[str, Any]]:
             },
             "testFlightInstructions": [
                 "Run the prompt in the real TestFlight app.",
-                "Export the in-app dataset package JSON from Agent Grounding.",
+                EXPORT_DATASET_INSTRUCTION,
                 "Verify `traceParseErrorCount` exists and inspect whether parse errors are regressing.",
             ],
         },
@@ -468,7 +469,7 @@ def _build_trace_integrity_scenarios() -> list[dict[str, Any]]:
             },
             "testFlightInstructions": [
                 "Run mixed prompts through the normal app UI.",
-                "Export the in-app dataset package JSON from Agent Grounding.",
+                EXPORT_DATASET_INSTRUCTION,
                 "Confirm both trace metrics are present for loop ingestion.",
             ],
         },
@@ -496,7 +497,7 @@ def _scenario_from_eval_record(record: dict[str, Any], *, source_family: str) ->
             "Install or update the current TestFlight build.",
             "Run this prompt through the real app UI and current bundled model/runtime.",
             "Do not use mocked developer harnesses for this pass.",
-            "After the batch, open Agent Grounding and export the in-app dataset package JSON.",
+            f"After the batch, {EXPORT_DATASET_INSTRUCTION}",
             "Feed the exported JSON into the next loop with --runtime-audit.",
         ],
     }

@@ -1,8 +1,10 @@
+"""Runtime audit ingestion helpers for JSON and text E2E reports."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from lumen_manifest_crawler.dataset.e2e_report_normalizer import flatten_e2e_json_report
 from lumen_manifest_crawler.dataset.e2e_text_parser import parse_e2e_text_report
@@ -12,6 +14,7 @@ SUPPORTED_RUNTIME_AUDIT_SUFFIXES = {".json", *SUPPORTED_TEXT_REPORT_SUFFIXES}
 
 
 def load_runtime_audit_reports(paths: list[Path] | None) -> list[dict[str, Any]]:
+    """Load runtime audit records from JSON and supported plain-text report files."""
     reports: list[dict[str, Any]] = []
     for path in paths or []:
         candidates = _candidate_report_files(path)
@@ -45,7 +48,14 @@ def _load_report_text(text: str, *, source: str) -> list[dict[str, Any]]:
         parsed = parse_e2e_text_report(text, source=source)
         if parsed is None:
             return []
-        return [flatten_e2e_json_report(parsed, source=source, source_format="lumen_e2e_text_report", source_layer="e2eTextReport")]
+        return [
+            flatten_e2e_json_report(
+                parsed,
+                source=source,
+                source_format="lumen_e2e_text_report",
+                source_layer="e2eTextReport",
+            )
+        ]
     return _normalize_payload(value, source=source)
 
 
@@ -72,7 +82,15 @@ def _is_in_app_package(value: dict[str, Any]) -> bool:
     return (
         value.get("schemaVersion") == "1.0.0"
         and "exportPolicy" in value
-        and any(key in value for key in ("runtimeManifestAudit", "behaviorAudit", "scenarioResults", "recentTraces"))
+        and any(
+            key in value
+            for key in (
+                "runtimeManifestAudit",
+                "behaviorAudit",
+                "scenarioResults",
+                "recentTraces",
+            )
+        )
     )
 
 
@@ -80,71 +98,122 @@ def _is_e2e_json_report(value: dict[str, Any]) -> bool:
     return (
         value.get("kind") in {"lumen_e2e_test_report", "e2e_test_report"}
         or isinstance(value.get("trainingSignals"), list)
-        or isinstance(value.get("scenarios"), list) and {"passed", "failed"}.intersection(value.keys())
+        or (
+            isinstance(value.get("scenarios"), list)
+            and {"passed", "failed"}.intersection(value.keys())
+        )
     )
+
+
+def _iter_dicts(items: Iterable[Any]) -> Iterable[dict[str, Any]]:
+    for item in items:
+        if isinstance(item, dict):
+            yield item
+
+
+def _layered_failures(
+    failures: Iterable[Any], *, source_layer: str
+) -> list[dict[str, Any]]:
+    return [{**failure, "sourceLayer": source_layer} for failure in _iter_dicts(failures)]
+
+
+def _trace_parse_error_failure(
+    trace: dict[str, Any], parse_error: Any
+) -> dict[str, Any]:
+    return {
+        "type": "trace_parse_error",
+        "agent": trace.get("slot") or trace.get("stage") or "unknown",
+        "expected": ["strict manifest-valid structured output"],
+        "actual": str(parse_error),
+        "scenario": trace.get("promptPrefix"),
+        "problem": "A recorded in-app model trace contained a parse error.",
+        "sourceLayer": "agentBehaviorTraceRecorder",
+    }
+
+
+def _trace_tool_failure(
+    trace: dict[str, Any], selected_tool_id: str, allowed_tool_ids: list[str]
+) -> dict[str, Any] | None:
+    if not allowed_tool_ids:
+        return {
+            "type": "trace_tool_without_allowed_set",
+            "agent": trace.get("slot") or "cortex",
+            "expected": ["non-empty allowedToolIDs for tool-selection traces"],
+            "actual": selected_tool_id,
+            "scenario": trace.get("promptPrefix"),
+            "problem": (
+                "A recorded in-app trace selected a tool while the trace carried "
+                "no allowed tool set for validation."
+            ),
+            "sourceLayer": "agentBehaviorTraceRecorder",
+        }
+    if selected_tool_id not in allowed_tool_ids:
+        return {
+            "type": "trace_tool_outside_allowed_set",
+            "agent": trace.get("slot") or "cortex",
+            "expected": allowed_tool_ids,
+            "actual": selected_tool_id,
+            "scenario": trace.get("promptPrefix"),
+            "problem": (
+                "A recorded in-app trace selected a tool outside its allowed tool set."
+            ),
+            "sourceLayer": "agentBehaviorTraceRecorder",
+        }
+    return None
+
+
+def _collect_trace_failures(
+    traces: Iterable[Any],
+) -> tuple[list[dict[str, Any]], int, int]:
+    failures: list[dict[str, Any]] = []
+    selected_tool_allowed_count = 0
+    parse_error_count = 0
+    for trace in _iter_dicts(traces):
+        parse_error = trace.get("parseError")
+        selected_tool_id = trace.get("selectedToolID")
+        allowed_tool_ids = trace.get("allowedToolIDs")
+        allowed_tool_ids = allowed_tool_ids if isinstance(allowed_tool_ids, list) else []
+
+        if parse_error:
+            parse_error_count += 1
+            failures.append(_trace_parse_error_failure(trace, parse_error))
+        if not selected_tool_id:
+            continue
+        if selected_tool_id in allowed_tool_ids:
+            selected_tool_allowed_count += 1
+        tool_failure = _trace_tool_failure(trace, str(selected_tool_id), allowed_tool_ids)
+        if tool_failure is not None:
+            failures.append(tool_failure)
+    return failures, selected_tool_allowed_count, parse_error_count
 
 
 def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str, Any]:
     failures: list[dict[str, Any]] = []
-    trace_selected_tool_allowed_count = 0
-    trace_parse_error_count = 0
+
     runtime_audit = package.get("runtimeManifestAudit")
     if isinstance(runtime_audit, dict):
-        for failure in runtime_audit.get("failures", []) or []:
-            if isinstance(failure, dict):
-                failures.append({**failure, "sourceLayer": "runtimeManifestAudit"})
+        failures.extend(
+            _layered_failures(
+                runtime_audit.get("failures", []) or [],
+                source_layer="runtimeManifestAudit",
+            )
+        )
 
     behavior_audit = package.get("behaviorAudit")
     if isinstance(behavior_audit, dict):
         failures.extend(_behavior_failures(behavior_audit))
 
-    for scenario_result in package.get("scenarioResults", []) or []:
-        if not isinstance(scenario_result, dict):
-            continue
-        for failure in scenario_result.get("failures", []) or []:
-            if isinstance(failure, dict):
-                failures.append({**failure, "sourceLayer": "runtimeScenarioRunner"})
-
-    for trace in package.get("recentTraces", []) or []:
-        if not isinstance(trace, dict):
-            continue
-        parse_error = trace.get("parseError")
-        selected_tool_id = trace.get("selectedToolID")
-        allowed_tool_ids = trace.get("allowedToolIDs") if isinstance(trace.get("allowedToolIDs"), list) else []
-        if parse_error:
-            trace_parse_error_count += 1
-        if selected_tool_id and selected_tool_id in allowed_tool_ids:
-            trace_selected_tool_allowed_count += 1
-        if parse_error:
-            failures.append({
-                "type": "trace_parse_error",
-                "agent": trace.get("slot") or trace.get("stage") or "unknown",
-                "expected": ["strict manifest-valid structured output"],
-                "actual": str(parse_error),
-                "scenario": trace.get("promptPrefix"),
-                "problem": "A recorded in-app model trace contained a parse error.",
-                "sourceLayer": "agentBehaviorTraceRecorder",
-            })
-        if selected_tool_id and not allowed_tool_ids:
-            failures.append({
-                "type": "trace_tool_without_allowed_set",
-                "agent": trace.get("slot") or "cortex",
-                "expected": ["non-empty allowedToolIDs for tool-selection traces"],
-                "actual": selected_tool_id,
-                "scenario": trace.get("promptPrefix"),
-                "problem": "A recorded in-app trace selected a tool while the trace carried no allowed tool set for validation.",
-                "sourceLayer": "agentBehaviorTraceRecorder",
-            })
-        elif selected_tool_id and selected_tool_id not in allowed_tool_ids:
-            failures.append({
-                "type": "trace_tool_outside_allowed_set",
-                "agent": trace.get("slot") or "cortex",
-                "expected": allowed_tool_ids,
-                "actual": selected_tool_id,
-                "scenario": trace.get("promptPrefix"),
-                "problem": "A recorded in-app trace selected a tool outside its allowed tool set.",
-                "sourceLayer": "agentBehaviorTraceRecorder",
-            })
+    for scenario_result in _iter_dicts(package.get("scenarioResults", []) or []):
+        failures.extend(
+            _layered_failures(
+                scenario_result.get("failures", []) or [],
+                source_layer="runtimeScenarioRunner",
+            )
+        )
+    trace_failures, selected_tool_allowed_count, parse_error_count = _collect_trace_failures(
+        package.get("recentTraces", []) or []
+    )
+    failures.extend(trace_failures)
 
     return {
         "_source": source,
@@ -152,8 +221,11 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
         "generatedAt": package.get("generatedAt"),
         "manifestSource": package.get("manifestSource"),
         "usedRuntimeFallback": package.get("usedRuntimeFallback"),
-        "traceSelectedToolAllowedCount": package.get("traceSelectedToolAllowedCount", trace_selected_tool_allowed_count),
-        "traceParseErrorCount": package.get("traceParseErrorCount", trace_parse_error_count),
+        "traceSelectedToolAllowedCount": package.get(
+            "traceSelectedToolAllowedCount",
+            selected_tool_allowed_count,
+        ),
+        "traceParseErrorCount": package.get("traceParseErrorCount", parse_error_count),
         "exportPolicy": package.get("exportPolicy"),
         "failures": failures,
     }
@@ -172,31 +244,39 @@ def _behavior_failures(behavior_audit: dict[str, Any]) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     repair_samples = behavior_audit.get("repairSamples")
     if isinstance(repair_samples, list):
-        for sample in repair_samples:
-            if not isinstance(sample, dict):
-                continue
-            failures.append({
-                "type": sample.get("violationCode") or "behavior_repair_sample",
-                "agent": sample.get("agent"),
-                "expected": [str(sample.get("correctedOutput") or sample.get("expected") or "")],
-                "actual": sample.get("badOutput"),
-                "scenario": sample.get("promptPrefix"),
-                "problem": sample.get("lesson") or "In-app model behavior audit generated a repair sample.",
-                "repairSample": sample,
-                "sourceLayer": "agentModelBehaviorAuditor.repairSamples",
-            })
+        for sample in _iter_dicts(repair_samples):
+            failures.append(
+                {
+                    "type": sample.get("violationCode") or "behavior_repair_sample",
+                    "agent": sample.get("agent"),
+                    "expected": [
+                        str(sample.get("correctedOutput") or sample.get("expected") or "")
+                    ],
+                    "actual": sample.get("badOutput"),
+                    "scenario": sample.get("promptPrefix"),
+                    "problem": (
+                        sample.get("lesson")
+                        or "In-app model behavior audit generated a repair sample."
+                    ),
+                    "repairSample": sample,
+                    "sourceLayer": "agentModelBehaviorAuditor.repairSamples",
+                }
+            )
         return failures
 
-    for violation in behavior_audit.get("violations", []) or []:
-        if not isinstance(violation, dict):
-            continue
-        failures.append({
-            "type": violation.get("code") or "behavior_violation",
-            "agent": violation.get("agent"),
-            "expected": [str(violation.get("expected") or "")],
-            "actual": violation.get("actual"),
-            "scenario": violation.get("promptPrefix"),
-            "problem": violation.get("problem") or "In-app model behavior violated manifest constraints.",
-            "sourceLayer": "agentModelBehaviorAuditor.violations",
-        })
+    for violation in _iter_dicts(behavior_audit.get("violations", []) or []):
+        failures.append(
+            {
+                "type": violation.get("code") or "behavior_violation",
+                "agent": violation.get("agent"),
+                "expected": [str(violation.get("expected") or "")],
+                "actual": violation.get("actual"),
+                "scenario": violation.get("promptPrefix"),
+                "problem": (
+                    violation.get("problem")
+                    or "In-app model behavior violated manifest constraints."
+                ),
+                "sourceLayer": "agentModelBehaviorAuditor.violations",
+            }
+        )
     return failures

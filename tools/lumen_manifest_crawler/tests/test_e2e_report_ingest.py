@@ -1,3 +1,7 @@
+"""Tests for runtime audit and E2E report ingestion."""
+
+# pylint: disable=missing-function-docstring,line-too-long
+
 from pathlib import Path
 
 from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports

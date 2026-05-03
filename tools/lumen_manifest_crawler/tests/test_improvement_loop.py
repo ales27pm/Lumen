@@ -1,3 +1,7 @@
+"""Tests for the manifest improvement loop runner."""
+
+# pylint: disable=missing-function-docstring,line-too-long
+
 from pathlib import Path
 
 from lumen_manifest_crawler.improvement_loop import AgentImprovementLoopConfig, run_agent_improvement_loop

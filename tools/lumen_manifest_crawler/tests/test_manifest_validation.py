@@ -1,3 +1,7 @@
+"""Tests for manifest validation rules."""
+
+# pylint: disable=missing-function-docstring,line-too-long
+
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, IntentManifest, ToolArgumentManifest, ToolManifest
 from lumen_manifest_crawler.validators import validate_manifest
 

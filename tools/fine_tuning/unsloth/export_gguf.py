@@ -104,6 +104,10 @@ def _validate_path_tokens(*, path: str, required_token: str, markers: set[str], 
         raise ValueError(f"{label} must include one marker token in [{options}]. Got: {path}")
 
 
+def _adapter_dir(cfg: dict[str, Any]) -> Path:
+    return Path(str(cfg.get("adapter_output_dir") or cfg["output_dir"])).resolve()
+
+
 def load_config(path: Path) -> dict[str, Any]:
     cfg = json.loads(path.read_text(encoding="utf-8"))
     required = {"agent", "base_model_name", "max_seq_length", "output_dir"}
@@ -114,10 +118,10 @@ def load_config(path: Path) -> dict[str, Any]:
     if agent not in AGENTS:
         raise ValueError(f"{path} has unsupported agent '{agent}'")
     _validate_path_tokens(
-        path=str(cfg["output_dir"]),
+        path=str(_adapter_dir(cfg)),
         required_token=agent,
         markers={"lora", "adapter", "sft", "dpo", "orpo", "finetune", "finetuned"},
-        label="output_dir",
+        label="adapter_output_dir",
     )
     if cfg.get("merge_adapters_by_default") is not False:
         raise ValueError(f"{path} must set merge_adapters_by_default=false for adapter-first training")
@@ -183,7 +187,7 @@ def _release_bake_skipped_manifest(configs: list[dict[str, Any]], args: argparse
         "agents": {
             str(cfg["agent"]).strip().lower(): {
                 "agent": str(cfg["agent"]).strip().lower(),
-                "adapter_dir": str(Path(str(cfg["output_dir"])).resolve()),
+                "adapter_dir": str(_adapter_dir(cfg)),
                 "base_model_name": cfg["base_model_name"],
                 "merge_adapters_by_default": False,
                 "release_bake_enabled_by_default": False,
@@ -209,7 +213,7 @@ def export_agent_gguf(
         ) from exc
 
     agent = str(cfg["agent"]).strip().lower()
-    adapter_dir = Path(str(cfg["output_dir"])).resolve()
+    adapter_dir = _adapter_dir(cfg)
     if not adapter_dir.exists():
         raise FileNotFoundError(f"Adapter directory not found for {agent}: {adapter_dir}")
 
@@ -310,6 +314,12 @@ def existing_summary_for_agent(
     agent_output_dir = Path(
         str(cfg.get("gguf_output_dir") or (output_root / f"{agent}_release_bake_gguf"))
     ).resolve()
+    _validate_path_tokens(
+        path=str(agent_output_dir),
+        required_token=agent,
+        markers=GGUF_MARKERS,
+        label="gguf_output_dir",
+    )
     target_name = f"lumen-{agent}-release-bake-{quantization}.gguf"
     target_path = agent_output_dir / target_name
     if not target_path.exists():
@@ -318,7 +328,7 @@ def existing_summary_for_agent(
         "agent": agent,
         "mode": "optional_release_bake",
         "quantization": quantization,
-        "adapter_dir": str(Path(str(cfg["output_dir"])).resolve()),
+        "adapter_dir": str(_adapter_dir(cfg)),
         "gguf_output_dir": str(agent_output_dir),
         "gguf_file": target_name,
         "gguf_path": str(target_path),

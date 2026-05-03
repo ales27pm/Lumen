@@ -28,12 +28,12 @@ public struct AgentGroundingAuditView: View {
                 Button("Run Agent Grounding Audit") {
                     runAudit()
                 }
-                Button("Export In-App Dataset Package") {
-                    exportDatasetPackage()
+                Button("Export Runtime Audit Package") {
+                    exportRuntimeAuditPackage()
                 }
                 .disabled(report == nil && behaviorReport == nil && scenarioResults.isEmpty)
             } footer: {
-                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes a bounded JSON package for the offline dataset compiler: audit failures, behavior violations, static scenarios, and truncated diagnostic traces only.")
+                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes an Agent Grounding runtime audit package for the offline loop: audit failures, behavior violations, and bounded diagnostic traces. Static scenario checks stay visible here but are not exported as live E2E model results.")
             }
 
             if let errorMessage {
@@ -43,20 +43,28 @@ public struct AgentGroundingAuditView: View {
             }
 
             if let lastExportURL {
-                Section("Dataset Export") {
+                Section("Runtime Audit Export") {
                     LabeledContent("File", value: lastExportURL.lastPathComponent)
                         .font(.caption)
                     if let lastExportPackage {
+                        LabeledContent("Source layer", value: lastExportPackage.exportPolicy.sourceLayer)
+                        LabeledContent("Owns live E2E", value: lastExportPackage.exportPolicy.ownsLiveE2EScenarios ? "yes" : "no")
+                        LabeledContent("Static scenarios exported", value: lastExportPackage.exportPolicy.includesDeterministicStaticScenarios ? "yes" : "no")
                         LabeledContent("Traces", value: "\(lastExportPackage.recentTraces.count)")
                         LabeledContent("Allowed selections", value: "\(lastExportPackage.traceSelectedToolAllowedCount)")
                         LabeledContent("Trace parse errors", value: "\(lastExportPackage.traceParseErrorCount)")
                         LabeledContent("Runtime failures", value: "\(lastExportPackage.runtimeManifestAudit?.failures.count ?? 0)")
                         LabeledContent("Behavior violations", value: "\(lastExportPackage.behaviorAudit?.violations.count ?? 0)")
+                        if lastExportPackage.recentTraces.isEmpty {
+                            Label("No recent model/tool traces were exported. Run real model interactions before exporting or wire AgentBehaviorTraceRecorder into the live path.", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     ShareLink(item: lastExportURL) {
-                        Label("Share Dataset JSON", systemImage: "square.and.arrow.up")
+                        Label("Share Runtime Audit JSON", systemImage: "square.and.arrow.up")
                     }
-                    Text("Feed this JSON into `python -m lumen_manifest_crawler generate --runtime-audit <file>`.")
+                    Text("Feed this JSON into `python -m lumen_manifest_crawler improve-loop --runtime-audit <file>`. Live E2E scenario reports should come from End-to-end tests, not from Agent Grounding static scenario checks.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -186,6 +194,8 @@ public struct AgentGroundingAuditView: View {
                                 .foregroundStyle(result.passed ? .green : .red)
                         }
                     }
+                } footer: {
+                    Text("These are deterministic manifest sanity checks. They do not run the model and are not exported as live E2E scenario evidence by default.")
                 }
             }
         }
@@ -210,7 +220,7 @@ public struct AgentGroundingAuditView: View {
         }
     }
 
-    private func exportDatasetPackage() {
+    private func exportRuntimeAuditPackage() {
         do {
             let result = try InAppDatasetPackageExporter.writePackage(
                 manifestSource: manifestSource ?? "unknown",
@@ -224,7 +234,7 @@ public struct AgentGroundingAuditView: View {
             lastExportPackage = result.package
             errorMessage = nil
         } catch {
-            errorMessage = "Dataset export failed: \(error.localizedDescription)"
+            errorMessage = "Runtime audit export failed: \(error.localizedDescription)"
         }
     }
 

@@ -19,7 +19,14 @@ def adapter_artifact_path(agent: str) -> str:
 
 def base_model_id_from_config(config: dict[str, Any] | None) -> str:
     config = config or {}
-    for key in ("baseModelID", "base_model_id", "base_model", "model_name", "modelName"):
+    for key in (
+        "baseModelID",
+        "base_model_id",
+        "base_model",
+        "base_model_name",
+        "model_name",
+        "modelName",
+    ):
         value = config.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()

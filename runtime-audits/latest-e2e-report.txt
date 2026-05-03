@@ -1,18 +1,8 @@
 E2E Test Report
 
-Passed: 5
+Passed: 7
 
-Failed: 2
-
-
-
-Training signals for next run:
-
-• response-quality: 2 issues
-
-• Capture failed prompts + final outputs into next fine-tuning dataset.
-
-• Prioritize scenarios with repeated tool-boundary violations.
+Failed: 0
 
 
 
@@ -32,33 +22,37 @@ Prompt: Search the web for two recent Swift concurrency best practices and summa
 
 Intent: webSearch / expected webSearch
 
-Final: Sure, here are two recent Swift concurrency best practices:
+Final: Here are two recent Swift concurrency best practices:
 
 
 
-1. "Concurrency Changes & Best Practices in Swift 6.2 | Medium" - This article discusses the changes and best practices introduced in Swift 6.2.
+1. Concurrency Changes & Best Practices in Swift 6.2 | Medium
 
-2. "Mastering Swift Concurrency: Best Practices for 2025 - Howik" - This guide provides valuable insights into mastering Swift concurrency.
-
-
-
-These resources should help you understand the latest trends and effective strategies in Swift concurrency.
+https://ravi6997.medium.com/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e
 
 
 
-<lumen_web_payload>{"query":"two recent Swift concurrency best practices","kind":"searchResults","media":[{"title":"Concurrency Changes & Best Practices in Swift 6.2 | Medium","sourcePageURL":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e","kind":"page","url":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e"},{"sourcePageURL":"https:\/\/howik.com\/swift-concurrency-best-practices","kind":"page","url":"https:\/\/howik.com\/swift-concurrency-best-practices","title":"Mastering Swift Concurrency: Best Practices for 2025 - Howik"},{"sourcePageURL":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/","kind":"page","url":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/","title":"Concurrency in Swift - NamasteDev Blogs"},{"sourcePageURL":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency","kind":"page","url":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency","title":"Concurrency | Apple Developer Documentation"},{"sourcePageURL":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/","kind":"page","url":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/","title":"Concurrency - Documentation"},{"sourcePageURL":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/","kind":"page","url":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/","title":"Swift 6.2 Introduces Approachable Concurrency to Simplify ... - InfoQ"},{"url":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/","title":"Exploring concurrency changes in Swift 6.2 - Donny Wals","sourcePageURL":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/","kind":"page"},{"url":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition","title":"SwiftUI Concurrency Deep Dive: Mastering Structured Concurrency with ...","sourcePageURL":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition","kind":"page"}],"results":[{"title":"Concurrency Changes & Best Practices in Swift 6.2 | Medium","mediaKind":"page","url":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e","source":"ravi6997.medium.com"},{"title":"Mastering Swift Concurrency: Best Practices for 2025 - Howik","mediaKind":"page","url":"https:\/\/howik.com\/swift-concurrency-best-practices","source":"howik.com"},{"title":"Concurrency in Swift - NamasteDev Blogs","mediaKind":"page","url":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/","source":"namastedev.com"},{"title":"Concurrency | Apple Developer Documentation","mediaKind":"page","url":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency","source":"developer.apple.com"},{"title":"Concurrency - Documentation","mediaKind":"page","url":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/","source":"docs.swift.org"},{"title":"Swift 6.2 Introduces Approachable Concurrency to Simplify ... - InfoQ","mediaKind":"page","url":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/","source":"www.infoq.com"},{"title":"Exploring concurrency changes in Swift 6.2 - Donny Wals","mediaKind":"page","url":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/","source":"www.donnywals.com"},{"title":"SwiftUI Concurrency Deep Dive: Mastering Structured Concurrency with ...","source":"howtoinswift.tech","mediaKind":"page","url":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition"}],"generatedAt":"2026-05-02T23:48:46Z"}</lumen_web_payload>
+2. Mastering Swift Concurrency: Best Practices for 2025 - Howik
+
+https://howik.com/swift-concurrency-best-practices
 
 
 
-❌ Training eval: memory save/recall
+<lumen_web_payload>{"media":[{"sourcePageURL":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e","title":"Concurrency Changes & Best Practices in Swift 6.2 | Medium","kind":"page","url":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e"},{"sourcePageURL":"https:\/\/howik.com\/swift-concurrency-best-practices","title":"Mastering Swift Concurrency: Best Practices for 2025 - Howik","kind":"page","url":"https:\/\/howik.com\/swift-concurrency-best-practices"},{"sourcePageURL":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency","title":"Concurrency | Apple Developer Documentation","kind":"page","url":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency"},{"sourcePageURL":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/","title":"Concurrency in Swift - NamasteDev Blogs","kind":"page","url":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/"},{"sourcePageURL":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/","title":"Concurrency - Documentation","kind":"page","url":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/"},{"sourcePageURL":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/","title":"Swift 6.2 Introduces Approachable Concurrency to Simplify ... - InfoQ","kind":"page","url":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/"},{"sourcePageURL":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/","title":"Exploring concurrency changes in Swift 6.2 - Donny Wals","kind":"page","url":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/"},{"sourcePageURL":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition","title":"SwiftUI Concurrency Deep Dive: Mastering Structured Concurrency with ...","kind":"page","url":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition"}],"kind":"searchResults","generatedAt":"2026-05-03T03:54:20Z","query":"two recent Swift concurrency best practices","results":[{"source":"ravi6997.medium.com","title":"Concurrency Changes & Best Practices in Swift 6.2 | Medium","mediaKind":"page","url":"https:\/\/ravi6997.medium.com\/concurrency-changes-best-practices-in-swift-6-2-33d1561c066e"},{"source":"howik.com","title":"Mastering Swift Concurrency: Best Practices for 2025 - Howik","mediaKind":"page","url":"https:\/\/howik.com\/swift-concurrency-best-practices"},{"source":"developer.apple.com","title":"Concurrency | Apple Developer Documentation","mediaKind":"page","url":"https:\/\/developer.apple.com\/documentation\/swift\/concurrency"},{"source":"namastedev.com","title":"Concurrency in Swift - NamasteDev Blogs","mediaKind":"page","url":"https:\/\/namastedev.com\/blog\/concurrency-in-swift\/"},{"source":"docs.swift.org","title":"Concurrency - Documentation","mediaKind":"page","url":"https:\/\/docs.swift.org\/swift-book\/documentation\/the-swift-programming-language\/concurrency\/"},{"source":"www.infoq.com","title":"Swift 6.2 Introduces Approachable Concurrency to Simplify ... - InfoQ","mediaKind":"page","url":"https:\/\/www.infoq.com\/news\/2025\/08\/swift62-approachable-concurrency\/"},{"source":"www.donnywals.com","title":"Exploring concurrency changes in Swift 6.2 - Donny Wals","mediaKind":"page","url":"https:\/\/www.donnywals.com\/exploring-concurrency-changes-in-swift-6-2\/"},{"source":"howtoinswift.tech","title":"SwiftUI Concurrency Deep Dive: Mastering Structured Concurrency with ...","mediaKind":"page","url":"https:\/\/howtoinswift.tech\/blog\/2025\/SwiftUI-Concurrency-Deep-Dive-Mastering-Structured-Concurrency-with-Swift-6-2025-Edition"}]}</lumen_web_payload>
+
+
+
+✅ Training eval: memory save/recall
 
 Prompt: Remember that I prefer concise bullet points, then tell me what you remembered.
 
 Intent: memory / expected memory
 
-Failures: Required final hint missing: remember
-
 Final: Saved: I prefer concise bullet points.
+
+
+
+I remember: I prefer concise bullet points
 
 
 
@@ -68,9 +62,7 @@ Prompt: Search my files for architecture notes and summarize key modules.
 
 Intent: rag / expected rag
 
-Final: I couldn't find any files related to architecture notes. The available files are "Lumen_codebase5.txt" and "microsoft-identity-association.json".
-
-Key modules: core module details were retrieved from local file snippets [1].
+Final: I couldn't find any specific architecture notes or key modules in your files. The available files are Lumen_codebase5.txt and microsoft-identity-association.json. [1]
 
 
 
@@ -80,19 +72,21 @@ Prompt: Schedule a trigger to summarize reminders tonight and confirm what will 
 
 Intent: trigger / expected trigger
 
-Final: This tool requires explicit user approval before it can run: trigger.create.
+Final: Sure, I'll schedule a trigger to summarize reminders tonight and confirm what will run. Please approve this action before proceeding.
 
 
 
-❌ Training eval: communication drafting
+✅ Training eval: communication drafting
 
 Prompt: Draft an email to Alex with a professional update and ask one clarifying question.
 
 Intent: emailDraft / expected emailDraft
 
-Failures: Required final hint missing: question
+Final: Email drafted successfully.
 
-Final: emailDraft
+
+
+One clarifying question: what specific deadline, priority, or next step should I align this update with?
 
 
 
@@ -102,69 +96,21 @@ Prompt: Explain tradeoffs between precision and recall in retrieval systems in p
 
 Intent: chat / expected chat
 
-Final: Certainly! In the realm of retrieval systems, precision and recall are two key performance metrics that measure how well a system identifies relevant documents or items. Let's break down these concepts:
+Final: Certainly! In retrieval systems, precision and recall are two key performance metrics that trade off against each other. Precision refers to the proportion of relevant documents retrieved out of the total number of documents retrieved. A high precision means that most of the documents returned are actually relevant, but it may also mean that some irrelevant documents are included in the results.
 
 
 
-### Precision
-
-Precision measures the proportion of retrieved documents that are actually relevant to the query. It is calculated as:
-
-\[ \text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}} \]
+Recall, on the other hand, is the percentage of relevant documents that were successfully retrieved. It measures how many documents from a given set would be found if they were indeed present in the database. A high recall means that most of the relevant documents are returned, but it may also mean that some irrelevant documents are included.
 
 
 
-- **True Positives (TP)**: These are the documents that match the query and are correctly identified.
-
-- **False Positives (FP)**: These are documents that match the query but are not relevant to the user.
+In practice, these two metrics often need to be balanced carefully. For example, a system might prioritize precision over recall by only returning the top N documents or using more aggressive filtering techniques. Conversely, a system might focus on maximizing recall by including all relevant documents in the results, even if it means some irrelevant ones are also returned.
 
 
 
-A high precision means that most of the documents retrieved are actually what you're looking for. This is desirable when you want to minimize false positives, ensuring that only truly relevant results are returned.
+The optimal balance depends on the specific use case and requirements of the retrieval system. For instance, in information retrieval tasks where relevance is paramount, such as finding medical records or legal documents, high precision is crucial to ensure that only the most relevant documents are presented. In other cases, like a news aggregator, where the goal is to provide a broad range of content, higher recall might be more important.
 
 
 
-### Recall
-
-Recall measures the proportion of relevant documents that are found by the system. It is calculated as:
-
-\[ \text{Recall} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Negatives}} \]
-
-
-
-- **True Positives (TP)**: These are the documents that match the query and are correctly identified.
-
-- **False Negatives (FN)**: These are documents that do not match the query but should be included in the results.
-
-
-
-A high recall means that most of the relevant documents are found. This is useful when you want to ensure that all relevant information is accessible, even if some might be missed by chance.
-
-
-
-### Tradeoffs Between Precision and Recall
-
-In retrieval systems, there's a tradeoff between precision and recall:
-
-
-
-- **Increasing Precision**: To increase precision, you often need to reduce the number of documents retrieved. This can lead to lower recall because fewer documents are likely to match the query.
-
-  
-
-- **Increasing Recall**: To increase recall, you might include more documents in the results, which could result in a higher rate of false positives.
-
-
-
-### Practical Considerations
-
-1. **User Needs**: The user's needs will guide your decision on whether to prioritize precision or recall. If the user is looking for specific information and not just any document, they may want high precision.
-
-  
-
-2. **System Constraints**: The system's constraints such as storage capacity, computational resources, and time limits can also influence these decisions.
-
-
-
-3. **Contextual Understanding**: In some cases, a balance might be sought where documents are retrieved that cover multiple aspects of the query, thereby improving both
+In summary, while precision and recall measure different aspects of retrieval system performance, they often need to be carefully considered together in order to achieve the best possible results for a given application.
 

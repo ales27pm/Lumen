@@ -1,17 +1,17 @@
 {
   "agent": "mimicry",
-  "availableSFTRecords": 64,
+  "availableSFTRecords": 63,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "774d2931bc37c3b2361b940c9118cca0f3616655",
+  "manifestCommit": "cbe4e53f8b95ee1d6635ba637922a236e2649eee",
   "recordCounts": {
     "eval": 3,
     "train_dpo": 9,
-    "train_sft": 43,
+    "train_sft": 42,
     "val_dpo": 2,
     "val_sft": 8
   },
@@ -20,7 +20,6 @@
     "fleet_system_prompts",
     "manifest_grounding_cards",
     "mimicry_style",
-    "runtime_audit_repairs",
     "train_sft"
   ],
   "systemPrompt": "You are Mimicry, Lumen’s style adaptation agent. Adapt tone within safety and privacy boundaries.",
@@ -35,7 +34,6 @@
     "manifest_grounding_cards",
     "mimicry_style",
     "role_directory",
-    "runtime_manifest_drift_repair",
     "source_code_self_knowledge",
     "source_routing_knowledge",
     "source_tool_registry_knowledge",

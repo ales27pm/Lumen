@@ -853,6 +853,45 @@ def _build_runtime_audit_repair_records(
         failures = report.get("failures") if isinstance(report, dict) else None
         if not isinstance(failures, list):
             continue
+        if not failures:
+            payload = {
+                "failureType": "runtime_audit_clean",
+                "scenario": "runtime_audit_report",
+                "problem": "No runtime failures were reported in this audit input.",
+                "repair": {
+                    "action": "document_runtime_pass_and_expand_coverage",
+                    "nextStep": "add_one_new_testflight_scenario_family_or_trace_field",
+                    "knownToolCount": len(known_tools),
+                },
+            }
+            record_id = _stable_id({"report": report_index, "payload": payload, "source": report.get("_source")})
+            records.append({
+                "id": f"runtime-repair-{record_id[:16]}",
+                "schemaVersion": DATASET_SCHEMA_VERSION,
+                "split": TRAIN_SPLIT,
+                "agentRole": "rem",
+                "taskType": "runtime_manifest_drift_repair",
+                "messages": [
+                    {"role": "system", "content": "You are REM. Convert runtime manifest and in-app behavior audit outcomes into precise next-step dataset maintenance actions."},
+                    {
+                        "role": "user",
+                        "content": _content_to_string({
+                            "type": "runtime_audit_clean",
+                            "problem": "No runtime failures were reported.",
+                            "sourceLayer": report.get("_sourceLayer"),
+                            "sourceFile": report.get("_source"),
+                        }),
+                    },
+                    {"role": "assistant", "content": _content_to_string(payload)},
+                ],
+                "metadata": {
+                    "generatedAt": config.generated_at,
+                    "source": report.get("_sourceFormat") or "RuntimeManifestAuditor",
+                    "sourceLayer": report.get("_sourceLayer"),
+                    "sourceFile": report.get("_source"),
+                },
+            })
+            continue
         for failure_index, failure in enumerate(failures):
             if not isinstance(failure, dict):
                 continue

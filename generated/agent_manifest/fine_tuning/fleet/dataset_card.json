@@ -1,17 +1,17 @@
 {
   "agent": "fleet",
-  "availableSFTRecords": 898,
+  "availableSFTRecords": 900,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "ec51d9d16d01e3b1d9d0cf1135b5b670289fadde",
+  "manifestCommit": "b517f9172e4d48f2cec23b81f0c86fd5e8263489",
   "recordCounts": {
     "eval": 93,
     "train_dpo": 14,
-    "train_sft": 669,
+    "train_sft": 671,
     "val_dpo": 3,
     "val_sft": 118
   },
@@ -27,6 +27,7 @@
     "mouth_responses",
     "negative_samples",
     "rem_reflection",
+    "runtime_audit_repairs",
     "tool_schema_cards",
     "train_sft",
     "validation_sft"
@@ -57,6 +58,7 @@
     "reflection_and_memory_policy",
     "rem_reflection",
     "role_directory",
+    "runtime_manifest_drift_repair",
     "source_code_self_knowledge",
     "source_routing_knowledge",
     "source_tool_registry_knowledge",

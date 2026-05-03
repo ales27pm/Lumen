@@ -134,6 +134,12 @@ final class SlotAgentService {
                             return
                         }
                         finalText = FinalIntentValidator.validate(final, routing: routing, fallback: observations.last)
+                        finalText = enforceIntentSpecificFinalQuality(
+                            finalText,
+                            routing: routing,
+                            resolution: resolution,
+                            observations: observations
+                        )
                         finalText = appendRichPayloadMarkersIfNeeded(to: finalText, from: observations)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
                         return
@@ -386,7 +392,13 @@ final class SlotAgentService {
             candidate = trimmed
         }
         let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
-        return appendRichPayloadMarkersIfNeeded(to: validated, from: observations + [draft ?? ""])
+        let enforced = enforceIntentSpecificFinalQuality(
+            validated,
+            routing: routing,
+            resolution: resolution,
+            observations: observations
+        )
+        return appendRichPayloadMarkersIfNeeded(to: enforced, from: observations + [draft ?? ""])
     }
 
     private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
@@ -419,7 +431,77 @@ final class SlotAgentService {
         let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: req.maxTokens, modelName: "mouth-direct")
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate = trimmed.isEmpty ? "I’m here." : trimmed
-        return FinalIntentValidator.validate(candidate, routing: routing, fallback: nil)
+        let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: nil)
+        return enforceIntentSpecificFinalQuality(
+            validated,
+            routing: routing,
+            resolution: resolution,
+            observations: []
+        )
+    }
+
+    private func enforceIntentSpecificFinalQuality(
+        _ text: String,
+        routing: IntentRoutingDecision,
+        resolution: ReferenceResolution,
+        observations: [String]
+    ) -> String {
+        var output = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let promptLower = resolution.rewrittenPrompt.lowercased()
+
+        switch routing.intent {
+        case .emailDraft:
+            let asksForClarifyingQuestion = promptLower.contains("clarifying question")
+                || promptLower.contains("ask one question")
+                || promptLower.contains("ask a question")
+            let isIntentTokenOnly = output.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare("emailDraft") == .orderedSame
+            if isIntentTokenOnly {
+                output = "I can draft it. Who should receive the email, and what key update should I include?"
+            }
+            if asksForClarifyingQuestion && !output.lowercased().contains("question") {
+                if !output.isEmpty {
+                    output += "\n\n"
+                }
+                output += "One clarifying question: what specific deadline, priority, or next step should I align this update with?"
+            }
+        case .memory:
+            let asksForRecall = promptLower.contains("what you remembered")
+                || promptLower.contains("what do you remember")
+                || promptLower.contains("tell me what you remembered")
+            if asksForRecall && !output.lowercased().contains("remember") {
+                let remembered = rememberedPreferenceSnippet(from: observations, originalPrompt: resolution.originalPrompt)
+                if !output.isEmpty {
+                    output += "\n\n"
+                }
+                output += remembered.isEmpty ? "I remember your preference." : "I remember: \(remembered)"
+            }
+        default:
+            break
+        }
+
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rememberedPreferenceSnippet(from observations: [String], originalPrompt: String) -> String {
+        for raw in observations.reversed() {
+            let clean = WebRichContentPayload.removingMarkers(from: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            if clean.isEmpty { continue }
+            if clean.lowercased().hasPrefix("saved:") {
+                return clean.dropFirst("saved:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        let lower = originalPrompt.lowercased()
+        if let range = lower.range(of: "remember that ") {
+            let start = originalPrompt.index(range.lowerBound, offsetBy: "remember that ".count)
+            let remainder = String(originalPrompt[start...])
+            if let end = remainder.lowercased().range(of: ", then")?.lowerBound {
+                return String(remainder[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return ""
     }
 
     private func appendRichPayloadMarkersIfNeeded(to text: String, from sources: [String]) -> String {

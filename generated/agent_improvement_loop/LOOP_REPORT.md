@@ -1,13 +1,13 @@
 # Lumen Agent Improvement Loop Report
 
-- Passed: `True`
+- Passed: `False`
 - Tools: `53`
 - Intents: `22`
 - Model slots: `6`
-- Dataset records: `1362`
-- Runtime audit reports: `0`
-- Runtime failures: `0`
-- TestFlight status: `awaiting-testflight-runtime-audit`
+- Dataset records: `1364`
+- Runtime audit reports: `1`
+- Runtime failures: `2`
+- TestFlight status: `runtime-audit-ingested`
 - TestFlight scenarios: `120`
 - Gaps: `2`
 - Next action prompts: `2`
@@ -18,12 +18,12 @@ Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the in-app datase
 
 ## Top gaps
 
-### WARNING — Empty dataset family: runtime_audit_repairs
+### ERROR — e2e_missing_required_final_hint_question
 
-- Category: `dataset_coverage`
-- Recommendation: Add generators or runtime inputs that produce runtime_audit_repairs records.
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
 
-### WARNING — TestFlight in-app audit export has not been ingested yet
+### ERROR — e2e_missing_required_final_hint_remember
 
-- Category: `testflight_runtime_pending`
-- Recommendation: Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit <json>.
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.

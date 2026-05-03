@@ -487,7 +487,7 @@ final class SlotAgentService {
             let clean = WebRichContentPayload.removingMarkers(from: raw).trimmingCharacters(in: .whitespacesAndNewlines)
             if clean.isEmpty { continue }
             if clean.lowercased().hasPrefix("saved:") {
-                return clean.dropFirst("saved:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+                return String(clean.dropFirst("saved:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
 

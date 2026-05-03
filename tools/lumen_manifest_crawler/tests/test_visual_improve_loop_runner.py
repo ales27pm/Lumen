@@ -11,8 +11,8 @@ def _repo_root() -> Path:
 
 
 def _load_runner() -> ModuleType:
-    module_path = _repo_root() / "tools" / "run_visual_improve_loop.py"
-    spec = importlib.util.spec_from_file_location("lumen_visual_improve_loop", module_path)
+    module_path = _repo_root() / "tools" / "run_visual_improve_loop_v2.py"
+    spec = importlib.util.spec_from_file_location("lumen_visual_improve_loop_v2", module_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -41,8 +41,6 @@ def test_relative_outputs_are_resolved_against_invocation_root(tmp_path: Path) -
         "--skip-tests",
     ])
 
-    # This is the contract the runner must satisfy: every default relative output
-    # path belongs inside --root, even when the shell cwd is elsewhere.
     assert runner.rooted_path(root, args.output) == root / "generated" / "agent_manifest"
     assert runner.rooted_path(root, args.loop_output) == root / "generated" / "agent_improvement_loop"
     assert runner.rooted_path(root, args.fine_tuning_output) == root / "generated" / "fine_tuning"

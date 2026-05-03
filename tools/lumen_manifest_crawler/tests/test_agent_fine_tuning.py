@@ -12,9 +12,13 @@ from lumen_manifest_crawler.output.writer import write_outputs
 from lumen_manifest_crawler.validators import validate_agent_fine_tuning_datasets, validate_manifest
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
 @pytest.fixture(scope="module")
 def compiled_fine_tuning() -> tuple:
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = _repo_root()
     manifest = generate_manifest(repo_root)
     datasets = generate_all_datasets(manifest)
     fine_tuning = compile_agent_fine_tuning_datasets(manifest, datasets)
@@ -164,7 +168,7 @@ def test_unsloth_configs_include_required_keys(compiled_fine_tuning: tuple) -> N
         config = fine_tuning[agent].unsloth_config
         assert required.issubset(config.keys()), f"{agent} missing keys"
 
-    config_dir = Path("tools/fine_tuning/unsloth/configs")
+    config_dir = _repo_root() / "tools" / "fine_tuning" / "unsloth" / "configs"
     for path in config_dir.glob("*.json"):
         cfg = json.loads(path.read_text(encoding="utf-8"))
         assert required.issubset(cfg.keys()), f"{path} missing required keys"
@@ -180,7 +184,7 @@ def test_unsloth_output_dirs_include_agent_and_finetune_marker(compiled_fine_tun
         assert agent in tokens, f"{agent} output_dir missing slot token: {output_dir}"
         assert markers.intersection(tokens), f"{agent} output_dir missing finetune marker: {output_dir}"
 
-    config_dir = Path("tools/fine_tuning/unsloth/configs")
+    config_dir = _repo_root() / "tools" / "fine_tuning" / "unsloth" / "configs"
     for path in config_dir.glob("*.json"):
         cfg = json.loads(path.read_text(encoding="utf-8"))
         agent = str(cfg["agent"]).lower()
@@ -191,7 +195,7 @@ def test_unsloth_output_dirs_include_agent_and_finetune_marker(compiled_fine_tun
 
 
 def test_static_unsloth_configs_are_adapter_first_with_optional_release_bake() -> None:
-    config_dir = Path("tools/fine_tuning/unsloth/configs")
+    config_dir = _repo_root() / "tools" / "fine_tuning" / "unsloth" / "configs"
     for path in config_dir.glob("*.json"):
         cfg = json.loads(path.read_text(encoding="utf-8"))
         assert cfg.get("artifact_mode") == "adapter_first", f"{path} must default to adapter-first artifacts"

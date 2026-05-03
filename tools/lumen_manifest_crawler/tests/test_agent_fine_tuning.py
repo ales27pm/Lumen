@@ -72,22 +72,33 @@ def test_written_fine_tuning_outputs_are_adapter_first(tmp_path: Path, compiled_
     assert runtime_manifest["runtimeStrategy"]["mergedExportPhase"] == "optional_release_bake"
     assert runtime_manifest["releaseBakePolicy"]["enabledByDefault"] is False
 
+    adapters_by_agent = {entry["agent"]: entry for entry in runtime_manifest["adapters"]}
     for agent in AGENTS:
+        expected_adapter_dir = f"models/lora/{agent}"
         agent_dir = fine_tuning_output / agent
         config = json.loads((agent_dir / "unsloth_config.json").read_text(encoding="utf-8"))
         plan = json.loads((agent_dir / "adapter_export_plan.json").read_text(encoding="utf-8"))
 
         assert config["artifactMode"] == "adapter_first"
         assert config["defaultExportArtifact"] == "lora_adapter"
+        assert config["adapter_output_dir"] == expected_adapter_dir
+        assert config["output_dir"] == expected_adapter_dir
         assert config["adapterExport"]["agent"] == agent
+        assert config["adapterExport"]["adapterArtifact"] == expected_adapter_dir
+        assert config["adapterExport"]["adapterDirectory"] == expected_adapter_dir
         assert config["adapterExport"]["trainBaseModelWeights"] is False
         assert config["adapterExport"]["saveAdapterByDefault"] is True
         assert config["adapterExport"]["mergeAdaptersByDefault"] is False
         assert config["mergeExport"]["enabledByDefault"] is False
         assert config["mergeExport"]["phase"] == "optional_release_bake"
 
+        assert adapters_by_agent[agent]["adapterArtifact"] == expected_adapter_dir
+        assert adapters_by_agent[agent]["adapterDirectory"] == expected_adapter_dir
         assert plan["mode"] == "adapter_first"
         assert plan["agent"] == agent
+        assert plan["adapterArtifact"] == expected_adapter_dir
+        assert plan["adapterDirectory"] == expected_adapter_dir
+        assert plan["expectedArtifacts"]["adapterDirectory"] == expected_adapter_dir
         assert plan["runtimeBinding"]["loadBaseModelOnce"] is True
         assert plan["runtimeBinding"]["selectAdapterByAgentSlot"] is True
         assert plan["exportPolicy"]["defaultArtifact"] == "adapter"
@@ -208,4 +219,5 @@ def test_static_unsloth_configs_are_adapter_first_with_optional_release_bake() -
         assert gguf_output_dir, f"{path} missing optional gguf_output_dir"
         tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in gguf_output_dir).split())
         assert agent in tokens, f"{path} optional gguf_output_dir missing slot token: {gguf_output_dir}"
-        assert {"gguf", "merged", "release", "bake"}.intersection(tokens), f"{path} optional gguf_output_dir missing release-bake marker: {gguf_output_dir}"
+        assert "gguf" in tokens, f"{path} optional gguf_output_dir missing gguf marker: {gguf_output_dir}"
+        assert {"release", "bake"}.issubset(tokens), f"{path} optional gguf_output_dir missing release-bake marker: {gguf_output_dir}"

@@ -67,6 +67,8 @@ def _normalize_payload(value: Any, *, source: str) -> list[dict[str, Any]]:
         return out
     if not isinstance(value, dict):
         return []
+    if _is_evidence_layer_envelope(value):
+        return _flatten_evidence_layer_envelope(value, source=source)
     if _is_in_app_package(value):
         return [_flatten_in_app_package(value, source=source)]
     if _is_e2e_json_report(value):
@@ -78,9 +80,132 @@ def _normalize_payload(value: Any, *, source: str) -> list[dict[str, Any]]:
     return []
 
 
+def _is_evidence_layer_envelope(value: dict[str, Any]) -> bool:
+    return isinstance(value.get("exportPolicy"), dict) and "payload" in value
+
+
+def _flatten_evidence_layer_envelope(envelope: dict[str, Any], *, source: str) -> list[dict[str, Any]]:
+    export_policy = envelope.get("exportPolicy")
+    export_policy = export_policy if isinstance(export_policy, dict) else {}
+    payload = envelope.get("payload")
+    source_layer = str(export_policy.get("sourceLayer") or "unknown")
+    source_format = str(export_policy.get("format") or "evidence-layer-json")
+    owns_live_e2e = export_policy.get("ownsLiveE2EScenarios") is True
+
+    if source_layer == "e2eTestReport" or owns_live_e2e:
+        if isinstance(payload, dict):
+            report = _swift_e2e_payload_to_normalized_report(payload)
+            return [
+                flatten_e2e_json_report(
+                    report,
+                    source=source,
+                    source_format=source_format,
+                    source_layer="e2eTestReport.evidenceLayer",
+                )
+            ]
+        return []
+
+    if source_layer == "runtimeManifestAudit" and isinstance(payload, dict):
+        return [{
+            **payload,
+            "_source": source,
+            "_sourceFormat": source_format,
+            "_sourceLayer": "runtimeManifestAudit",
+            "exportPolicy": export_policy,
+        }]
+
+    if source_layer == "agentModelBehaviorAuditor" and isinstance(payload, dict):
+        flattened = _flatten_behavior_audit(payload, source=source)
+        flattened["_sourceFormat"] = source_format
+        flattened["_sourceLayer"] = "agentModelBehaviorAuditor"
+        flattened["exportPolicy"] = export_policy
+        return [flattened]
+
+    if source_layer == "agentBehaviorTraceRecorder" and isinstance(payload, list):
+        trace_failures, selected_tool_allowed_count, parse_error_count = _collect_trace_failures(payload)
+        if not payload:
+            trace_failures.append({
+                "type": "agent_grounding_no_recent_model_traces",
+                "agent": "runtime",
+                "expected": ["Recent runtime trace layer should include at least one trace after exercising the app."],
+                "actual": "payload is empty",
+                "scenario": "Agent Grounding > Export Recent Runtime Traces",
+                "problem": "The runtime trace layer export is empty. Run real model/tool interactions or wire AgentBehaviorTraceRecorder.record into the live path.",
+                "sourceLayer": "agentBehaviorTraceRecorder.exportQuality",
+            })
+        return [{
+            "_source": source,
+            "_sourceFormat": source_format,
+            "_sourceLayer": "agentBehaviorTraceRecorder",
+            "generatedAt": envelope.get("generatedAt"),
+            "traceSelectedToolAllowedCount": selected_tool_allowed_count,
+            "traceParseErrorCount": parse_error_count,
+            "traceCount": len(payload),
+            "exportPolicy": export_policy,
+            "failures": trace_failures,
+        }]
+
+    if source_layer == "runtimeScenarioRunner.staticChecks" and isinstance(payload, list):
+        return [{
+            "_source": source,
+            "_sourceFormat": source_format,
+            "_sourceLayer": "runtimeScenarioRunner.staticChecks",
+            "generatedAt": envelope.get("generatedAt"),
+            "ownsLiveE2EScenarios": False,
+            "ignoredScenarioResultCount": len(payload),
+            "exportPolicy": export_policy,
+            "failures": [],
+        }]
+
+    return [{
+        "_source": source,
+        "_sourceFormat": source_format,
+        "_sourceLayer": source_layer,
+        "generatedAt": envelope.get("generatedAt"),
+        "exportPolicy": export_policy,
+        "failures": [],
+    }]
+
+
+def _swift_e2e_payload_to_normalized_report(payload: dict[str, Any]) -> dict[str, Any]:
+    results = payload.get("results") if isinstance(payload.get("results"), list) else []
+    scenarios: list[dict[str, Any]] = []
+    for result in _iter_dicts(results):
+        scenarios.append({
+            "name": result.get("title"),
+            "passed": result.get("passed") is True,
+            "prompt": result.get("prompt"),
+            "intent": result.get("actualIntent") or result.get("expectedIntent"),
+            "expectedIntent": result.get("expectedIntent"),
+            "failures": "; ".join(str(item) for item in result.get("failures", []) if item) if isinstance(result.get("failures"), list) else result.get("failures"),
+            "final": result.get("finalText"),
+            "events": result.get("events") or [],
+        })
+    return {
+        "kind": "lumen_e2e_test_report",
+        "passed": payload.get("passed"),
+        "failed": payload.get("failed"),
+        "scenarioCount": len(scenarios),
+        "scenarios": scenarios,
+        "trainingSignals": _derive_e2e_training_signals(scenarios),
+    }
+
+
+def _derive_e2e_training_signals(scenarios: list[dict[str, Any]]) -> list[str]:
+    failed = [scenario for scenario in scenarios if scenario.get("passed") is not True]
+    if not failed:
+        return []
+    return [
+        f"failed-scenarios: {len(failed)}",
+        "Capture failed prompts + final outputs into next fine-tuning dataset.",
+        "Prioritize repeated tool-boundary, response-quality, and no-model execution failures.",
+    ]
+
+
 def _is_in_app_package(value: dict[str, Any]) -> bool:
+    schema_version = str(value.get("schemaVersion") or "")
     return (
-        value.get("schemaVersion") == "1.0.0"
+        schema_version in {"1.0.0", "1.1.0"}
         and "exportPolicy" in value
         and any(
             key in value
@@ -162,6 +287,29 @@ def _trace_tool_failure(
     return None
 
 
+def _empty_agent_grounding_trace_failure(package: dict[str, Any], export_policy: dict[str, Any]) -> dict[str, Any] | None:
+    source_layer = str(export_policy.get("sourceLayer") or "")
+    package_format = str(export_policy.get("format") or "")
+    if source_layer != "agentGroundingRuntimeAudit" and package_format != "agent-grounding-runtime-json-package":
+        return None
+    recent_traces = package.get("recentTraces")
+    if isinstance(recent_traces, list) and recent_traces:
+        return None
+    return {
+        "type": "agent_grounding_no_recent_model_traces",
+        "agent": "runtime",
+        "expected": ["Agent Grounding export should include recent model/tool traces captured from real in-app execution."],
+        "actual": "recentTraces is empty",
+        "scenario": "Agent Grounding > Run Agent Grounding Audit > Export In-App Dataset Package",
+        "problem": (
+            "The Agent Grounding package exported no recent traces. This usually means "
+            "AgentBehaviorTraceRecorder.record is not wired into the live model path, "
+            "or the app audit was exported before exercising real model interactions."
+        ),
+        "sourceLayer": "agentGroundingRuntimeAudit.exportQuality",
+    }
+
+
 def _collect_trace_failures(
     traces: Iterable[Any],
 ) -> tuple[list[dict[str, Any]], int, int]:
@@ -203,21 +351,31 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
     if isinstance(behavior_audit, dict):
         failures.extend(_behavior_failures(behavior_audit))
 
-    for scenario_result in _iter_dicts(package.get("scenarioResults", []) or []):
-        failures.extend(
-            _layered_failures(
-                scenario_result.get("failures", []) or [],
-                source_layer="runtimeScenarioRunner",
+    export_policy = package.get("exportPolicy")
+    export_policy = export_policy if isinstance(export_policy, dict) else {}
+    owns_live_e2e = export_policy.get("ownsLiveE2EScenarios") is True
+    scenario_results = list(_iter_dicts(package.get("scenarioResults", []) or []))
+    if owns_live_e2e:
+        for scenario_result in scenario_results:
+            failures.extend(
+                _layered_failures(
+                    scenario_result.get("failures", []) or [],
+                    source_layer="e2eTestReport.scenarioResults",
+                )
             )
-        )
+
     trace_failures, selected_tool_allowed_count, parse_error_count = _collect_trace_failures(
         package.get("recentTraces", []) or []
     )
     failures.extend(trace_failures)
+    empty_trace_failure = _empty_agent_grounding_trace_failure(package, export_policy)
+    if empty_trace_failure is not None:
+        failures.append(empty_trace_failure)
 
     return {
         "_source": source,
         "_sourceFormat": "lumen_in_app_dataset_package",
+        "_sourceLayer": export_policy.get("sourceLayer") or "agentGroundingRuntimeAudit",
         "generatedAt": package.get("generatedAt"),
         "manifestSource": package.get("manifestSource"),
         "usedRuntimeFallback": package.get("usedRuntimeFallback"),
@@ -226,7 +384,9 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
             selected_tool_allowed_count,
         ),
         "traceParseErrorCount": package.get("traceParseErrorCount", parse_error_count),
-        "exportPolicy": package.get("exportPolicy"),
+        "ignoredScenarioResultCount": 0 if owns_live_e2e else len(scenario_results),
+        "ownsLiveE2EScenarios": owns_live_e2e,
+        "exportPolicy": export_policy,
         "failures": failures,
     }
 

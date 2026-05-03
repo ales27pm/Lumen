@@ -17,6 +17,8 @@ public struct AgentGroundingAuditView: View {
     @State private var usedRuntimeFallback = false
     @State private var lastExportURL: URL?
     @State private var lastExportPackage: LumenInAppDatasetPackage?
+    @State private var lastLayerExportURL: URL?
+    @State private var lastLayerExportLabel: String?
 
     public init(registryProvider: RuntimeToolRegistryProviding) {
         self.auditor = RuntimeManifestAuditor(registryProvider: registryProvider)
@@ -28,12 +30,43 @@ public struct AgentGroundingAuditView: View {
                 Button("Run Agent Grounding Audit") {
                     runAudit()
                 }
-                Button("Export In-App Dataset Package") {
-                    exportDatasetPackage()
+                Button("Export Runtime Audit Package") {
+                    exportRuntimeAuditPackage()
                 }
                 .disabled(report == nil && behaviorReport == nil && scenarioResults.isEmpty)
             } footer: {
-                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes a bounded JSON package for the offline dataset compiler: audit failures, behavior violations, static scenarios, and truncated diagnostic traces only.")
+                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes an Agent Grounding runtime audit package for the offline loop: audit failures, behavior violations, and bounded diagnostic traces. Static scenario checks stay visible here but are not exported as live E2E model results.")
+            }
+
+            Section("Export Individual Evidence Layers") {
+                Button("Export Runtime Registry Audit") {
+                    exportRuntimeRegistryAuditLayer()
+                }
+                .disabled(report == nil)
+
+                Button("Export Model Behaviour Audit") {
+                    exportBehaviorAuditLayer()
+                }
+                .disabled(behaviorReport == nil)
+
+                Button("Export Static Scenario Checks") {
+                    exportStaticScenarioLayer()
+                }
+                .disabled(scenarioResults.isEmpty)
+
+                Button("Export Recent Runtime Traces") {
+                    exportRecentTraceLayer()
+                }
+
+                if let lastLayerExportURL {
+                    LabeledContent(lastLayerExportLabel ?? "Last layer export", value: lastLayerExportURL.lastPathComponent)
+                        .font(.caption)
+                    ShareLink(item: lastLayerExportURL) {
+                        Label("Share Layer JSON", systemImage: "square.and.arrow.up")
+                    }
+                }
+            } footer: {
+                Text("Each export is a separate JSON envelope with an explicit sourceLayer and ownership policy. Use these for debugging one layer without polluting the live E2E dataset path.")
             }
 
             if let errorMessage {
@@ -43,20 +76,28 @@ public struct AgentGroundingAuditView: View {
             }
 
             if let lastExportURL {
-                Section("Dataset Export") {
+                Section("Runtime Audit Export") {
                     LabeledContent("File", value: lastExportURL.lastPathComponent)
                         .font(.caption)
                     if let lastExportPackage {
+                        LabeledContent("Source layer", value: lastExportPackage.exportPolicy.sourceLayer)
+                        LabeledContent("Owns live E2E", value: lastExportPackage.exportPolicy.ownsLiveE2EScenarios ? "yes" : "no")
+                        LabeledContent("Static scenarios exported", value: lastExportPackage.exportPolicy.includesDeterministicStaticScenarios ? "yes" : "no")
                         LabeledContent("Traces", value: "\(lastExportPackage.recentTraces.count)")
                         LabeledContent("Allowed selections", value: "\(lastExportPackage.traceSelectedToolAllowedCount)")
                         LabeledContent("Trace parse errors", value: "\(lastExportPackage.traceParseErrorCount)")
                         LabeledContent("Runtime failures", value: "\(lastExportPackage.runtimeManifestAudit?.failures.count ?? 0)")
                         LabeledContent("Behavior violations", value: "\(lastExportPackage.behaviorAudit?.violations.count ?? 0)")
+                        if lastExportPackage.recentTraces.isEmpty {
+                            Label("No recent model/tool traces were exported. Run real model interactions before exporting or wire AgentBehaviorTraceRecorder into the live path.", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     ShareLink(item: lastExportURL) {
-                        Label("Share Dataset JSON", systemImage: "square.and.arrow.up")
+                        Label("Share Runtime Audit JSON", systemImage: "square.and.arrow.up")
                     }
-                    Text("Feed this JSON into `python -m lumen_manifest_crawler generate --runtime-audit <file>`.")
+                    Text("Feed this JSON into `python -m lumen_manifest_crawler improve-loop --runtime-audit <file>`. Live E2E scenario reports should come from End-to-end tests, not from Agent Grounding static scenario checks.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -186,6 +227,8 @@ public struct AgentGroundingAuditView: View {
                                 .foregroundStyle(result.passed ? .green : .red)
                         }
                     }
+                } footer: {
+                    Text("These are deterministic manifest sanity checks. They do not run the model and are not exported as live E2E scenario evidence by default.")
                 }
             }
         }
@@ -210,7 +253,7 @@ public struct AgentGroundingAuditView: View {
         }
     }
 
-    private func exportDatasetPackage() {
+    private func exportRuntimeAuditPackage() {
         do {
             let result = try InAppDatasetPackageExporter.writePackage(
                 manifestSource: manifestSource ?? "unknown",
@@ -224,7 +267,103 @@ public struct AgentGroundingAuditView: View {
             lastExportPackage = result.package
             errorMessage = nil
         } catch {
-            errorMessage = "Dataset export failed: \(error.localizedDescription)"
+            errorMessage = "Runtime audit export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func exportRuntimeRegistryAuditLayer() {
+        guard let report else { return }
+        exportLayer(
+            payload: report,
+            label: "Runtime registry audit",
+            filePrefix: "lumen-runtime-registry-audit",
+            format: "runtime-registry-audit-json",
+            sourceLayer: "runtimeManifestAudit",
+            ownsLiveE2EScenarios: false,
+            includesDeterministicStaticScenarios: false,
+            notes: [
+                "Compares AgentBehaviorManifest.json against the live runtime tool registry.",
+                "Does not run model scenarios."
+            ]
+        )
+    }
+
+    private func exportBehaviorAuditLayer() {
+        guard let behaviorReport else { return }
+        exportLayer(
+            payload: behaviorReport,
+            label: "Model behaviour audit",
+            filePrefix: "lumen-model-behaviour-audit",
+            format: "agent-model-behaviour-audit-json",
+            sourceLayer: "agentModelBehaviorAuditor",
+            ownsLiveE2EScenarios: false,
+            includesDeterministicStaticScenarios: false,
+            notes: [
+                "Audits recent persisted app messages and model behaviour violations.",
+                "Use this for drift and repair samples, not as an E2E scenario result."
+            ]
+        )
+    }
+
+    private func exportStaticScenarioLayer() {
+        exportLayer(
+            payload: scenarioResults,
+            label: "Static scenario checks",
+            filePrefix: "lumen-static-scenario-checks",
+            format: "deterministic-static-scenario-checks-json",
+            sourceLayer: "runtimeScenarioRunner.staticChecks",
+            ownsLiveE2EScenarios: false,
+            includesDeterministicStaticScenarios: true,
+            notes: [
+                "Deterministic manifest sanity checks only.",
+                "Does not run the model and must not be treated as live E2E evidence."
+            ]
+        )
+    }
+
+    private func exportRecentTraceLayer() {
+        let traces = AgentBehaviorTraceRecorder.recent(limit: 500)
+        exportLayer(
+            payload: traces,
+            label: "Recent runtime traces",
+            filePrefix: "lumen-agent-runtime-traces",
+            format: "agent-runtime-traces-json",
+            sourceLayer: "agentBehaviorTraceRecorder",
+            ownsLiveE2EScenarios: false,
+            includesDeterministicStaticScenarios: false,
+            notes: [
+                "Bounded recent traces captured by AgentBehaviorTraceRecorder.",
+                "Empty exports indicate the recorder is not wired or no real model interactions were exercised."
+            ]
+        )
+    }
+
+    private func exportLayer<Payload: Encodable>(
+        payload: Payload,
+        label: String,
+        filePrefix: String,
+        format: String,
+        sourceLayer: String,
+        ownsLiveE2EScenarios: Bool,
+        includesDeterministicStaticScenarios: Bool,
+        notes: [String]
+    ) {
+        do {
+            let result = try EvidenceLayerExporter.writeLayer(
+                payload: payload,
+                filePrefix: filePrefix,
+                format: format,
+                sourceLayer: sourceLayer,
+                ownsLiveE2EScenarios: ownsLiveE2EScenarios,
+                includesDeterministicStaticScenarios: includesDeterministicStaticScenarios,
+                privacy: "Bounded diagnostic export generated from the local device. Review before sharing outside the improve-loop.",
+                notes: notes
+            )
+            lastLayerExportURL = result.url
+            lastLayerExportLabel = label
+            errorMessage = nil
+        } catch {
+            errorMessage = "\(label) export failed: \(error.localizedDescription)"
         }
     }
 

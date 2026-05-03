@@ -11,7 +11,7 @@ def flatten_e2e_json_report(value: dict[str, Any], *, source: str, source_format
     failures = [
         e2e_failure_from_scenario(scenario, source_layer=source_layer)
         for scenario in scenarios
-        if isinstance(scenario, dict) and scenario.get("passed") is not True
+        if isinstance(scenario, dict) and (scenario.get("passed") is not True or _scenario_skipped_live_model_run(scenario))
     ]
     return {
         "_source": source,
@@ -27,6 +27,8 @@ def flatten_e2e_json_report(value: dict[str, Any], *, source: str, source_format
 
 def e2e_failure_from_scenario(scenario: dict[str, Any], *, source_layer: str) -> dict[str, Any]:
     failure_text = str(scenario.get("failures") or "E2E scenario failed.").strip()
+    if _scenario_skipped_live_model_run(scenario) and failure_text == "E2E scenario failed.":
+        failure_text = "Agent model did not execute: scenario fell back to routing-only checks because no chat model was loaded."
     prompt = str(scenario.get("prompt") or "").strip()
     final = str(scenario.get("final") or "").strip()
     intent = _scenario_intent(scenario)
@@ -49,6 +51,7 @@ def e2e_failure_from_scenario(scenario: dict[str, Any], *, source_layer: str) ->
             "prompt": prompt,
             "final": final,
             "requiredHint": required_hint,
+            "skippedLiveModelRun": _scenario_skipped_live_model_run(scenario),
         },
         "repairSample": {
             "agent": policy.agent,
@@ -72,6 +75,8 @@ def _scenario_intent(scenario: dict[str, Any]) -> str:
 
 
 def _expected_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
+    if _scenario_skipped_live_model_run(scenario):
+        return "E2E scenarios that require an agent run must execute an actual loaded chat model; routing-only fallback is not valid E2E evidence."
     if required_hint:
         return f"Final answer must include the required hint `{required_hint}` while preserving the requested intent and user-visible usefulness."
     expected_intent = scenario.get("expectedIntent") or scenario.get("intent") or "expected intent"
@@ -83,6 +88,8 @@ def _corrected_output_for_e2e_failure(scenario: dict[str, Any], required_hint: s
     final = str(scenario.get("final") or "").strip()
     intent = _scenario_intent(scenario)
     normalized_intent = intent.casefold()
+    if _scenario_skipped_live_model_run(scenario):
+        return "Load the configured chat model/fleet and rerun this scenario through SlotAgentService; do not emit routing-only fallback as a passing E2E result."
     if required_hint and normalized_intent == "memory":
         remembered = _derive_memory_content_from_prompt(prompt)
         base = final if _is_useful_final(final, intent=intent) else f"Remembered: {remembered}."
@@ -208,6 +215,15 @@ def _is_useful_final(final: str, *, intent: str) -> bool:
     return len(stripped.split()) >= 3
 
 
+def _scenario_skipped_live_model_run(scenario: dict[str, Any]) -> bool:
+    final = str(scenario.get("final") or scenario.get("finalText") or "").casefold()
+    failures = str(scenario.get("failures") or "").casefold()
+    events = scenario.get("events") if isinstance(scenario.get("events"), list) else []
+    event_text = " ".join(str(event) for event in events).casefold()
+    haystack = "\n".join([final, failures, event_text])
+    return "no model loaded" in haystack or "routing-only checks completed" in haystack
+
+
 def _clean_prompt(prompt: str) -> str:
     return " ".join(str(prompt or "").strip().split())
 
@@ -220,6 +236,8 @@ def _clean_derived_fragment(value: str) -> str:
 
 def _lesson_for_e2e_failure(scenario: dict[str, Any], required_hint: str | None) -> str:
     intent = _scenario_intent(scenario)
+    if _scenario_skipped_live_model_run(scenario):
+        return f"For `{intent}` E2E evals, a scenario marked as requiring an agent/model run must fail closed if no model is loaded."
     if required_hint:
         return f"For `{intent}` E2E evals, the final answer must include required hint `{required_hint}` while remaining natural and useful."
     return f"Use failed `{intent}` E2E prompts and final outputs as next-cycle fine-tuning repair examples."

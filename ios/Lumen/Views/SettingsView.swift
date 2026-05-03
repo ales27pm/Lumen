@@ -317,6 +317,9 @@ private struct E2ETestRunnerView: View {
     @State private var isRunning = false
     @State private var runMode: RunMode = .standard
     @State private var reportText = E2ETestLogStore.latestText()
+    @State private var latestReport: E2ETestReport?
+    @State private var lastExportURL: URL?
+    @State private var exportError: String?
 
     var body: some View {
         List {
@@ -343,8 +346,29 @@ private struct E2ETestRunnerView: View {
                 } label: {
                     Label("Reload latest report", systemImage: "arrow.clockwise")
                 }
+
+                Button {
+                    exportLatestReport()
+                } label: {
+                    Label("Export Live E2E Report JSON", systemImage: "square.and.arrow.up")
+                }
+                .disabled(latestReport == nil)
+
+                if let lastExportURL {
+                    LabeledContent("Last E2E export", value: lastExportURL.lastPathComponent)
+                        .font(.caption)
+                    ShareLink(item: lastExportURL) {
+                        Label("Share Live E2E JSON", systemImage: "square.and.arrow.up")
+                    }
+                }
             } footer: {
                 Text(runMode.footerText)
+            }
+
+            if let exportError {
+                Section("Export Error") {
+                    Text(exportError).foregroundStyle(.red)
+                }
             }
 
             Section("Scenarios") {
@@ -355,7 +379,7 @@ private struct E2ETestRunnerView: View {
                         Text(scenario.prompt)
                             .font(.caption)
                             .foregroundStyle(Theme.textSecondary)
-                        Text("Intent: \(scenario.expectedIntent.rawValue) · \(scenario.kind.rawValue)")
+                        Text("Intent: \(scenario.expectedIntent.rawValue) · \(scenario.kind.rawValue) · agent run: \(scenario.requiresAgentRun ? "yes" : "no")")
                             .font(.caption2.monospaced())
                             .foregroundStyle(Theme.textTertiary)
                     }
@@ -372,6 +396,9 @@ private struct E2ETestRunnerView: View {
         .navigationTitle("E2E Tests")
         .onChange(of: runMode) { _, _ in
             reportText = E2ETestLogStore.latestText()
+            latestReport = nil
+            lastExportURL = nil
+            exportError = nil
         }
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -379,6 +406,7 @@ private struct E2ETestRunnerView: View {
     private func run() {
         guard !isRunning else { return }
         isRunning = true
+        exportError = nil
         reportText = runMode.runningLabel
         Task { @MainActor in
             let report: E2ETestReport
@@ -388,8 +416,33 @@ private struct E2ETestRunnerView: View {
             case .trainingValidation:
                 report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext)
             }
+            latestReport = report
             reportText = report.summaryText
             isRunning = false
+        }
+    }
+
+    private func exportLatestReport() {
+        guard let latestReport else { return }
+        do {
+            let result = try EvidenceLayerExporter.writeLayer(
+                payload: latestReport,
+                filePrefix: "lumen-live-e2e-report",
+                format: "live-e2e-test-report-json",
+                sourceLayer: "e2eTestReport",
+                ownsLiveE2EScenarios: true,
+                includesDeterministicStaticScenarios: false,
+                privacy: "Contains prompts, final outputs, failures, and event logs from the current local E2E run. Review before sharing outside the improve-loop.",
+                notes: [
+                    "This is the live E2E model/test layer export.",
+                    "Scenarios with requiresAgentRun=true are intended to exercise the loaded SlotAgentService path.",
+                    "If a scenario says no model loaded or routing-only checks completed, the offline ingester treats it as invalid E2E evidence."
+                ]
+            )
+            lastExportURL = result.url
+            exportError = nil
+        } catch {
+            exportError = "Live E2E report export failed: \(error.localizedDescription)"
         }
     }
 }
@@ -431,9 +484,9 @@ private extension E2ETestRunnerView {
         var footerText: String {
             switch self {
             case .standard:
-                return "Runs deterministic routing checks plus live agent scenarios for tool boundaries, chat quality, stale-context regressions, and final-answer validation."
+                return "Runs deterministic routing checks plus live agent scenarios for tool boundaries, chat quality, stale-context regressions, and final-answer validation. Export creates a live E2E JSON layer with ownsLiveE2EScenarios=true."
             case .trainingValidation:
-                return "Runs multi-scenario in-app validation using trained models in real agent flows, then summarizes failures as training signals for the next fine-tuning cycle."
+                return "Runs multi-scenario in-app validation using trained models in real agent flows, then summarizes failures as training signals for the next fine-tuning cycle. Export creates a live E2E JSON layer with ownsLiveE2EScenarios=true."
             }
         }
     }

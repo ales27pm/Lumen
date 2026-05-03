@@ -1,68 +1,99 @@
 import Foundation
 
 nonisolated enum LumenModelFleetCatalog {
-    static let v1FineTunedMerged: [CatalogModel] = [
+    static let v1AdapterFirstBase: [CatalogModel] = [
         CatalogModel(
-            id: "fleet-v1-ft-cortex-qwen1.5b-q4",
-            name: "Fleet v1 FT Cortex — Qwen 1.5B",
-            repoId: "ales27pm/lumen-fleet-gguf",
-            fileName: "lumen-cortex-merged-q4_k_m.gguf",
+            id: "fleet-v1-adapter-base-qwen2.5-1.5b-q4",
+            name: "Fleet v1 Adapter Base — Qwen 2.5 1.5B",
+            repoId: "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            fileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
             parameters: "1.5B",
             quantization: "Q4_K_M",
-            sizeBytes: 1_150_000_000,
+            sizeBytes: 1_117_000_000,
             role: .chat,
-            description: "Merged fine-tuned Cortex slot model for routing and planning.",
-            tags: ["fleet-v1", "finetuned", "merged-gguf", "cortex"]
+            description: "Default shared chat base for the adapter-first fleet. Role adapters stay separate unless an explicit release bake is produced.",
+            tags: ["fleet-v1", "adapter-first", "shared-base", "qwen", "baseline"]
         ),
         CatalogModel(
-            id: "fleet-v1-ft-executor-qwen1.5b-q4",
-            name: "Fleet v1 FT Executor — Qwen 1.5B",
+            id: "fleet-v1-qwen3-embedding-0.6b",
+            name: "Fleet v1 Memory — Qwen3 Embedding 0.6B",
+            repoId: "Qwen/Qwen3-Embedding-0.6B-GGUF",
+            fileName: "qwen3-embedding-0.6b-q4_k_m.gguf",
+            parameters: "0.6B",
+            quantization: "Q4_K_M",
+            sizeBytes: 450_000_000,
+            role: .embedding,
+            description: "Qwen3 embedding candidate for source-map, memory, RAG, runtime repair, and tool-schema retrieval. Keep fallback enabled until eval gates pass.",
+            tags: ["fleet-v1", "adapter-first", "embedding", "qwen3", "candidate"]
+        )
+    ]
+
+    static let v1ReleaseBaked: [CatalogModel] = [
+        CatalogModel(
+            id: "fleet-v1-release-bake-cortex-qwen1.5b-q4",
+            name: "Fleet v1 Release Bake Cortex — Qwen 1.5B",
             repoId: "ales27pm/lumen-fleet-gguf",
-            fileName: "lumen-executor-merged-q4_k_m.gguf",
+            fileName: "lumen-cortex-release-bake-q4_k_m.gguf",
             parameters: "1.5B",
             quantization: "Q4_K_M",
             sizeBytes: 1_150_000_000,
             role: .chat,
-            description: "Merged fine-tuned Executor slot model for strict tool JSON.",
-            tags: ["fleet-v1", "finetuned", "merged-gguf", "executor", "structured"]
+            description: "Optional release-baked Cortex artifact for runtimes that cannot load adapters dynamically. Not the default training artifact.",
+            tags: ["fleet-v1", "release-bake", "optional", "gguf", "cortex"]
         ),
         CatalogModel(
-            id: "fleet-v1-ft-mouth-qwen1.5b-q4",
-            name: "Fleet v1 FT Mouth — Qwen 1.5B",
+            id: "fleet-v1-release-bake-executor-qwen1.5b-q4",
+            name: "Fleet v1 Release Bake Executor — Qwen 1.5B",
             repoId: "ales27pm/lumen-fleet-gguf",
-            fileName: "lumen-mouth-merged-q4_k_m.gguf",
+            fileName: "lumen-executor-release-bake-q4_k_m.gguf",
             parameters: "1.5B",
             quantization: "Q4_K_M",
             sizeBytes: 1_150_000_000,
             role: .chat,
-            description: "Merged fine-tuned Mouth slot model for user-facing responses.",
-            tags: ["fleet-v1", "finetuned", "merged-gguf", "mouth"]
+            description: "Optional release-baked Executor artifact for strict tool JSON when adapter loading is unavailable.",
+            tags: ["fleet-v1", "release-bake", "optional", "gguf", "executor", "structured"]
         ),
         CatalogModel(
-            id: "fleet-v1-ft-mimicry-qwen1.5b-q4",
-            name: "Fleet v1 FT Mimicry — Qwen 1.5B",
+            id: "fleet-v1-release-bake-mouth-qwen1.5b-q4",
+            name: "Fleet v1 Release Bake Mouth — Qwen 1.5B",
             repoId: "ales27pm/lumen-fleet-gguf",
-            fileName: "lumen-mimicry-merged-q4_k_m.gguf",
+            fileName: "lumen-mouth-release-bake-q4_k_m.gguf",
             parameters: "1.5B",
             quantization: "Q4_K_M",
             sizeBytes: 1_150_000_000,
             role: .chat,
-            description: "Merged fine-tuned Mimicry slot model for safe style adaptation.",
-            tags: ["fleet-v1", "finetuned", "merged-gguf", "mimicry"]
+            description: "Optional release-baked Mouth artifact for user-facing responses when adapter loading is unavailable.",
+            tags: ["fleet-v1", "release-bake", "optional", "gguf", "mouth"]
         ),
         CatalogModel(
-            id: "fleet-v1-ft-rem-qwen1.5b-q4",
-            name: "Fleet v1 FT REM — Qwen 1.5B",
+            id: "fleet-v1-release-bake-mimicry-qwen1.5b-q4",
+            name: "Fleet v1 Release Bake Mimicry — Qwen 1.5B",
             repoId: "ales27pm/lumen-fleet-gguf",
-            fileName: "lumen-rem-merged-q4_k_m.gguf",
+            fileName: "lumen-mimicry-release-bake-q4_k_m.gguf",
             parameters: "1.5B",
             quantization: "Q4_K_M",
             sizeBytes: 1_150_000_000,
             role: .chat,
-            description: "Merged fine-tuned REM slot model for reflection and repair.",
-            tags: ["fleet-v1", "finetuned", "merged-gguf", "rem", "idle"]
+            description: "Optional release-baked Mimicry artifact for style adaptation when adapter loading is unavailable.",
+            tags: ["fleet-v1", "release-bake", "optional", "gguf", "mimicry"]
+        ),
+        CatalogModel(
+            id: "fleet-v1-release-bake-rem-qwen1.5b-q4",
+            name: "Fleet v1 Release Bake REM — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-rem-release-bake-q4_k_m.gguf",
+            parameters: "1.5B",
+            quantization: "Q4_K_M",
+            sizeBytes: 1_150_000_000,
+            role: .chat,
+            description: "Optional release-baked REM artifact for reflection and repair when adapter loading is unavailable.",
+            tags: ["fleet-v1", "release-bake", "optional", "gguf", "rem", "idle"]
         ),
     ]
+
+    // Backward-compatible alias. These are optional release-baked full-model artifacts,
+    // not the default output of the improvement loop.
+    static var v1FineTunedMerged: [CatalogModel] { v1ReleaseBaked }
 
     static let v1Recommended: [CatalogModel] = [
         CatalogModel(
@@ -110,8 +141,8 @@ nonisolated enum LumenModelFleetCatalog {
             quantization: "Q4_K_M",
             sizeBytes: 85_000_000,
             role: .embedding,
-            description: "Semantic memory model for recall and codebase knowledge chunks.",
-            tags: ["fleet-v1", "memory", "embedding", "tiny"]
+            description: "Semantic memory fallback model for recall and codebase knowledge chunks.",
+            tags: ["fleet-v1", "memory", "embedding", "fallback", "tiny"]
         )
     ]
 
@@ -125,8 +156,8 @@ nonisolated enum LumenModelFleetCatalog {
             quantization: "Q4_K_M",
             sizeBytes: 1_117_000_000,
             role: .chat,
-            description: "Recommended dedicated v1 orchestrator.",
-            tags: ["fleet-v1", "cortex", "coder"]
+            description: "Recommended dedicated v1 orchestrator fallback while adapter-first role artifacts are evaluated.",
+            tags: ["fleet-v1", "cortex", "coder", "fallback"]
         ),
         CatalogModel(
             id: "fleet-v1-phi3.5-mini-q4",
@@ -138,9 +169,15 @@ nonisolated enum LumenModelFleetCatalog {
             sizeBytes: 2_390_000_000,
             role: .chat,
             description: "Heavier idle-only reasoning model for advanced self-improvement cycles.",
-            tags: ["fleet-v1", "rem", "idle-only"]
+            tags: ["fleet-v1", "rem", "idle-only", "fallback"]
         )
     ]
 
-    static var allFleetModels: [CatalogModel] { v1FineTunedMerged + v1Recommended + v1Candidates }
+    static var defaultFleetModels: [CatalogModel] {
+        v1AdapterFirstBase + v1Recommended + v1Candidates
+    }
+
+    static var allFleetModels: [CatalogModel] {
+        defaultFleetModels + v1ReleaseBaked
+    }
 }

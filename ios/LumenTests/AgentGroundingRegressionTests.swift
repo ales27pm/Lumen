@@ -57,6 +57,78 @@ struct AgentGroundingRegressionTests {
         #expect(SlotAgentService.resolveRequiredToolFallback(intent: .outlook, prompt: "Check my outlook email", allowedToolIDs: Self.outlookTools) == "outlook.messages.list")
     }
 
+    @Test func agentGroundingPackageDoesNotExportStaticScenarioResultsByDefault() throws {
+        AgentBehaviorTraceRecorder.clear()
+        let scenario = RuntimeScenario(
+            id: "calendar::calendar.create",
+            intent: "calendar",
+            expectedToolID: "calendar.create",
+            requiresApproval: false,
+            prompt: "Create a calendar event."
+        )
+        let failure = RuntimeManifestFailure(
+            type: "scenario_unknown_tool",
+            agent: "cortex",
+            expected: ["calendar.create"],
+            actual: "calendar.create",
+            scenario: scenario.prompt,
+            problem: "Static manifest scenario failure, not model execution."
+        )
+        let package = InAppDatasetPackageExporter.makePackage(
+            manifestSource: "test-manifest",
+            usedRuntimeFallback: false,
+            runtimeManifestAudit: nil,
+            behaviorAudit: nil,
+            scenarioResults: [
+                RuntimeScenarioResult(
+                    id: scenario.id,
+                    scenario: scenario,
+                    passed: false,
+                    failures: [failure]
+                )
+            ],
+            traceLimit: 0
+        )
+
+        #expect(package.schemaVersion == "1.1.0")
+        #expect(package.exportPolicy.sourceLayer == "agentGroundingRuntimeAudit")
+        #expect(package.exportPolicy.ownsLiveE2EScenarios == false)
+        #expect(package.exportPolicy.includesDeterministicStaticScenarios == false)
+        #expect(package.scenarioResults.isEmpty)
+    }
+
+    @Test func agentGroundingPackageCanExplicitlyIncludeStaticScenarioResultsButMarksThemNonE2E() throws {
+        AgentBehaviorTraceRecorder.clear()
+        let scenario = RuntimeScenario(
+            id: "calendar::calendar.create",
+            intent: "calendar",
+            expectedToolID: "calendar.create",
+            requiresApproval: false,
+            prompt: "Create a calendar event."
+        )
+        let package = InAppDatasetPackageExporter.makePackage(
+            manifestSource: "test-manifest",
+            usedRuntimeFallback: false,
+            runtimeManifestAudit: nil,
+            behaviorAudit: nil,
+            scenarioResults: [
+                RuntimeScenarioResult(
+                    id: scenario.id,
+                    scenario: scenario,
+                    passed: true,
+                    failures: []
+                )
+            ],
+            traceLimit: 0,
+            includeScenarioResults: true
+        )
+
+        #expect(package.exportPolicy.ownsLiveE2EScenarios == false)
+        #expect(package.exportPolicy.includesDeterministicStaticScenarios == true)
+        #expect(package.exportPolicy.deterministicScenarioPolicy.contains("not proof of live model execution"))
+        #expect(package.scenarioResults.count == 1)
+    }
+
     private func makeManifest(tools: [RuntimeToolDefinition], intent: String, allowed: [String], extraIntents: [ManifestRoutingEntry] = []) -> AgentBehaviorManifest {
         AgentBehaviorManifest(
             schemaVersion: "1",

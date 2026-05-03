@@ -86,7 +86,7 @@ enum ModelLaunchBootstrap {
     }
 
     private static func fleetModelsForInstall() -> [CatalogModel] {
-        uniqueByArtifact(LumenModelFleetCatalog.allFleetModels)
+        uniqueByArtifact(LumenModelFleetCatalog.defaultFleetModels)
     }
 
     private static func ensureModelPresent(

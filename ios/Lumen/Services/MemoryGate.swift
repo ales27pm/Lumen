@@ -1,6 +1,9 @@
 import Foundation
+import OSLog
 
 nonisolated enum MemoryGate {
+    private nonisolated static let logger = Logger(subsystem: "ai.lumen.app", category: "memory-gate")
+
     static func filter(intent: UserIntent, items: [MemoryContextItem], userMessage: String, now: Date = Date()) -> [MemoryContextItem] {
         let normalized = normalize(userMessage)
         return items.compactMap { item in
@@ -84,7 +87,7 @@ nonisolated enum MemoryGate {
 
     private static func logReject(_ item: MemoryContextItem, reason: String) {
         #if DEBUG
-        print("[MemoryGate] reject reason=\(reason) scope=\(item.scope.rawValue) authority=\(item.authority.rawValue) topic=\(item.topic ?? "-") source=\(item.source ?? "-")")
+        logger.debug("memory_gate_reject reason=\(reason, privacy: .public) scope=\(item.scope.rawValue, privacy: .public) authority=\(item.authority.rawValue, privacy: .public) topic=\(item.topic ?? "-", privacy: .public) source=\(item.source ?? "-", privacy: .public)")
         #endif
     }
 }

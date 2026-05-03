@@ -37,13 +37,13 @@ nonisolated enum LumenFleetRuntimeMode: String, Codable, Sendable {
 
     var displayName: String {
         switch self {
-        case .v1MultiResident: return "v1 multi-resident"
+        case .v1MultiResident: return "v1 adapter-first compatible"
         }
     }
 }
 
 nonisolated struct LumenModelSlotContract: Sendable, Hashable {
-    nonisolated static let fleetContractVersion = "2026.04.29"
+    nonisolated static let fleetContractVersion = "2026.05.03-adapter-first"
     private nonisolated static let logger = Logger(subsystem: "ai.lumen.app", category: "model-fleet")
 
     nonisolated enum ContractError: LocalizedError, Equatable {
@@ -250,7 +250,7 @@ enum LumenModelFleetResolver {
 
     static func resolveV1(activeChatModelID: String?, activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> LumenModelFleetSnapshot {
         var assignments: [LumenModelSlot: LumenModelAssignment] = [:]
-        let textModels = storedModels.filter { $0.modelRole == .chat }
+        let textModels = storedModels.filter { $0.modelRole == .chat && isStandaloneLoadableChatArtifact($0) }
         let activeText = activeChatModelID.flatMap { id in textModels.first { $0.id.uuidString == id } }
         let fallbackText = activeText ?? preferredTextModel(from: textModels)
 
@@ -354,7 +354,7 @@ enum LumenModelFleetResolver {
         case .rem:
             return ["phi": 60, "3.5": 35, "smollm": 35, "rem": 30, "idle": 15, "1.7b": 10]
         case .embedding:
-            return ["nomic": 50, "embed": 40, "embedding": 30, "memory": 15]
+            return ["qwen3": 70, "embed": 50, "embedding": 40, "nomic": 30, "memory": 15]
         }
     }
 
@@ -385,25 +385,48 @@ enum LumenModelFleetResolver {
         let primaryTokens = tokenSet(primary)
         let secondaryTokens = tokenSet(secondary)
 
-        let tunedMarkers = ["finetune", "finetuned", "sft", "dpo", "orpo", "lora", "adapter", "merged", "agent"]
-        let tunedPhrases = ["fine-tune", "fine_tune", "fine tuned"]
+        let standaloneTunedMarkers = ["release", "bake", "merged", "gguf", "finetune", "finetuned", "sft", "dpo", "orpo", "agent"]
+        let tunedPhrases = ["release-bake", "release_bake", "release baked", "fine-tune", "fine_tune", "fine tuned"]
 
         let slotMatchPrimary = slotTokens.contains { primaryTokens.contains($0) }
         let slotMatchSecondary = slotTokens.contains { secondaryTokens.contains($0) }
         guard slotMatchPrimary || slotMatchSecondary else { return 0 }
+        guard isStandaloneLoadableChatArtifact(model) else { return 0 }
 
-        let tunedPrimary = tunedMarkers.contains { primaryTokens.contains($0) }
+        let tunedPrimary = standaloneTunedMarkers.contains { primaryTokens.contains($0) }
             || tunedPhrases.contains { primary.contains($0) }
-        let tunedSecondary = tunedMarkers.contains { secondaryTokens.contains($0) }
+        let tunedSecondary = standaloneTunedMarkers.contains { secondaryTokens.contains($0) }
             || tunedPhrases.contains { secondary.contains($0) }
+        let releaseBake = primary.contains("release-bake")
+            || primary.contains("release_bake")
+            || primaryTokens.contains("release") && primaryTokens.contains("bake")
 
         var score = 0
         score += slotMatchPrimary ? 120 : 70
-        score += tunedPrimary ? 100 : 0
-        score += tunedSecondary ? 40 : 0
-        score += (tunedPrimary || tunedSecondary) ? 40 : 0
+        score += releaseBake ? 160 : 0
+        score += tunedPrimary ? 80 : 0
+        score += tunedSecondary ? 30 : 0
+        score += (tunedPrimary || tunedSecondary) ? 30 : 0
 
         return score
+    }
+
+    private static func isStandaloneLoadableChatArtifact(_ model: StoredModel) -> Bool {
+        let artifactText = [model.repoId, model.fileName, model.localPath, model.parameters, model.quantization, model.role]
+            .joined(separator: " ")
+            .lowercased()
+        let fileName = model.fileName.lowercased()
+        let artifactTokens = tokenSet(artifactText)
+
+        let hasAdapterMarker = fileName.hasSuffix(".lora")
+            || fileName.hasSuffix(".adapter")
+            || artifactTokens.contains("adapter")
+            || artifactTokens.contains("lora")
+        if hasAdapterMarker { return false }
+
+        if fileName.hasSuffix(".gguf") { return true }
+        if fileName.hasSuffix(".bin") || fileName.hasSuffix(".safetensors") || fileName.hasSuffix(".mlmodelc") { return true }
+        return false
     }
 
     private static func tokenSet(_ value: String) -> Set<String> {

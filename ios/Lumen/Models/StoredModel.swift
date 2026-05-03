@@ -139,21 +139,20 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum ModelCatalog {
-    static let defaultOnboardingModelID = "fleet-v1-ft-cortex-qwen1.5b-q4"
-    static let featured: [CatalogModel] = uniqueByArtifact(
-        LumenModelFleetCatalog.v1FineTunedMerged
-        + LumenModelFleetCatalog.v1Recommended
-        + LumenModelFleetCatalog.v1Candidates
-    )
+    static let defaultOnboardingModelID = "fleet-v1-adapter-base-qwen2.5-1.5b-q4"
+    static let featured: [CatalogModel] = uniqueByArtifact(LumenModelFleetCatalog.defaultFleetModels)
 
-    // Keeps compatibility if a build expects the previous default identifier.
-    static let legacyDefaultOnboardingModelID = "qwen2.5-1.5b-q4"
+    // Keeps compatibility if a build expects the previous default identifiers.
+    static let legacyDefaultOnboardingModelID = "fleet-v1-ft-cortex-qwen1.5b-q4"
+    static let legacyGeneralDefaultOnboardingModelID = "qwen2.5-1.5b-q4"
 
     static var defaultOnboardingModel: CatalogModel {
         featured.first { $0.id == defaultOnboardingModelID }
         ?? featured.first { $0.id == legacyDefaultOnboardingModelID }
+        ?? featured.first { $0.id == legacyGeneralDefaultOnboardingModelID }
         ?? legacyFeatured.first { $0.id == defaultOnboardingModelID }
         ?? legacyFeatured.first { $0.id == legacyDefaultOnboardingModelID }
+        ?? legacyFeatured.first { $0.id == legacyGeneralDefaultOnboardingModelID }
         ?? legacyFeatured.first
         ?? featured[0]
     }

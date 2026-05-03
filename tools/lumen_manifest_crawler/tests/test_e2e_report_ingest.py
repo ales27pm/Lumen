@@ -231,6 +231,38 @@ def test_expected_intent_is_used_when_intent_is_missing(tmp_path: Path):
     assert "unknown" not in missing_intent["type"]
 
 
+def test_ingestion_flags_e2e_no_model_fallback_as_invalid_evidence(tmp_path: Path):
+    report_path = tmp_path / "e2e-no-model-report.json"
+    import json
+
+    report = {
+        "kind": "lumen_e2e_test_report",
+        "passed": 1,
+        "failed": 0,
+        "scenarios": [
+            {
+                "name": "chat should run model",
+                "passed": True,
+                "prompt": "Explain actor isolation in Swift.",
+                "intent": "chat",
+                "expectedIntent": "chat",
+                "failures": [],
+                "final": "No model loaded; routing-only checks completed.",
+                "events": [{"phase": "models", "message": "no chat model loaded"}],
+            }
+        ],
+    }
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    normalized = load_runtime_audit_reports([report_path])[0]
+
+    assert len(normalized["failures"]) == 1
+    failure = normalized["failures"][0]
+    assert failure["e2eScenario"]["skippedLiveModelRun"] is True
+    assert "routing-only fallback is not valid E2E evidence" in failure["expected"][0]
+    assert "Load the configured chat model" in failure["repairSample"]["correctedOutput"]
+
+
 def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Path):
     report_path = tmp_path / "lumen-agent-grounding-audit.json"
     import json

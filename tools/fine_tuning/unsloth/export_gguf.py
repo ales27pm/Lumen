@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,10 @@ from typing import Any
 AGENTS = ("cortex", "executor", "mouth", "mimicry", "rem", "fleet")
 GGUF_MARKERS = {"gguf", "merged", "release", "bake", "finetune", "finetuned"}
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+
+
+def _emit(message: str) -> None:
+    sys.stdout.write(message.rstrip() + "\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -347,8 +352,8 @@ def main() -> None:
 
     if not args.release_bake:
         manifest_path = _write_manifest(args.manifest_output, _release_bake_skipped_manifest(configs, args))
-        print(f"Skipped GGUF release bake by default. Wrote adapter-first manifest: {manifest_path}")
-        print("Pass --release-bake to explicitly merge adapters into GGUF artifacts.")
+        _emit(f"Skipped GGUF release bake by default. Wrote adapter-first manifest: {manifest_path}")
+        _emit("Pass --release-bake to explicitly merge adapters into GGUF artifacts.")
         return
 
     if args.hf_repo_id and not args.skip_upload:
@@ -389,7 +394,7 @@ def main() -> None:
         manifest["agents"][agent] = summary
 
     manifest_path = _write_manifest(args.manifest_output, manifest)
-    print(f"Wrote GGUF release-bake manifest: {manifest_path}")
+    _emit(f"Wrote GGUF release-bake manifest: {manifest_path}")
 
 
 if __name__ == "__main__":

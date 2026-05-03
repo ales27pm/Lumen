@@ -21,7 +21,7 @@ def compiled_fine_tuning() -> tuple:
     return manifest, datasets, fine_tuning
 
 
-def test_per_agent_directories_are_produced(tmp_path: Path, compiled_fine_tuning: tuple) -> None:
+def _write_fine_tuning_fixture(tmp_path: Path, compiled_fine_tuning: tuple) -> Path:
     manifest, datasets, fine_tuning = compiled_fine_tuning
     report = validate_manifest(manifest, datasets)
     output = tmp_path / "agent_manifest"
@@ -36,7 +36,13 @@ def test_per_agent_directories_are_produced(tmp_path: Path, compiled_fine_tuning
         fine_tuning_datasets=fine_tuning,
         fine_tuning_output_dir=fine_tuning_output,
     )
+    return fine_tuning_output
 
+
+def test_per_agent_directories_are_produced(tmp_path: Path, compiled_fine_tuning: tuple) -> None:
+    fine_tuning_output = _write_fine_tuning_fixture(tmp_path, compiled_fine_tuning)
+
+    assert (fine_tuning_output / "adapter_runtime_manifest.json").exists()
     for agent in AGENTS:
         agent_dir = fine_tuning_output / agent
         assert agent_dir.exists()
@@ -46,8 +52,43 @@ def test_per_agent_directories_are_produced(tmp_path: Path, compiled_fine_tuning
             "eval.jsonl",
             "dataset_card.json",
             "unsloth_config.json",
+            "adapter_export_plan.json",
         ):
             assert (agent_dir / filename).exists(), f"missing {agent}/{filename}"
+
+
+def test_written_fine_tuning_outputs_are_adapter_first(tmp_path: Path, compiled_fine_tuning: tuple) -> None:
+    fine_tuning_output = _write_fine_tuning_fixture(tmp_path, compiled_fine_tuning)
+    runtime_manifest = json.loads((fine_tuning_output / "adapter_runtime_manifest.json").read_text(encoding="utf-8"))
+
+    assert runtime_manifest["mode"] == "adapter_first"
+    assert runtime_manifest["runtimeStrategy"]["loadBaseModelOnce"] is True
+    assert runtime_manifest["runtimeStrategy"]["selectAdapterByAgentSlot"] is True
+    assert runtime_manifest["runtimeStrategy"]["mergeAdaptersByDefault"] is False
+    assert runtime_manifest["runtimeStrategy"]["mergedExportPhase"] == "optional_release_bake"
+    assert runtime_manifest["releaseBakePolicy"]["enabledByDefault"] is False
+
+    for agent in AGENTS:
+        agent_dir = fine_tuning_output / agent
+        config = json.loads((agent_dir / "unsloth_config.json").read_text(encoding="utf-8"))
+        plan = json.loads((agent_dir / "adapter_export_plan.json").read_text(encoding="utf-8"))
+
+        assert config["artifactMode"] == "adapter_first"
+        assert config["defaultExportArtifact"] == "lora_adapter"
+        assert config["adapterExport"]["agent"] == agent
+        assert config["adapterExport"]["trainBaseModelWeights"] is False
+        assert config["adapterExport"]["saveAdapterByDefault"] is True
+        assert config["adapterExport"]["mergeAdaptersByDefault"] is False
+        assert config["mergeExport"]["enabledByDefault"] is False
+        assert config["mergeExport"]["phase"] == "optional_release_bake"
+
+        assert plan["mode"] == "adapter_first"
+        assert plan["agent"] == agent
+        assert plan["runtimeBinding"]["loadBaseModelOnce"] is True
+        assert plan["runtimeBinding"]["selectAdapterByAgentSlot"] is True
+        assert plan["exportPolicy"]["defaultArtifact"] == "adapter"
+        assert plan["exportPolicy"]["mergeAdaptersByDefault"] is False
+        assert plan["exportPolicy"]["mergedExportPhase"] == "optional_release_bake"
 
 
 def test_sft_records_use_chat_format(compiled_fine_tuning: tuple) -> None:
@@ -149,14 +190,18 @@ def test_unsloth_output_dirs_include_agent_and_finetune_marker(compiled_fine_tun
         assert markers.intersection(tokens), f"{path} output_dir missing finetune marker: {output_dir}"
 
 
-def test_unsloth_gguf_output_dirs_include_agent_and_merged_marker() -> None:
-    markers = {"gguf", "merged", "finetune", "finetuned"}
+def test_static_unsloth_configs_are_adapter_first_with_optional_release_bake() -> None:
     config_dir = Path("tools/fine_tuning/unsloth/configs")
     for path in config_dir.glob("*.json"):
         cfg = json.loads(path.read_text(encoding="utf-8"))
+        assert cfg.get("artifact_mode") == "adapter_first", f"{path} must default to adapter-first artifacts"
+        assert cfg.get("default_export_artifact") == "lora_adapter", f"{path} must save LoRA adapter by default"
+        assert cfg.get("merge_adapters_by_default") is False, f"{path} must not merge adapters by default"
+        assert cfg.get("release_bake_enabled_by_default") is False, f"{path} release bake must be opt-in"
+
         agent = str(cfg["agent"]).lower()
         gguf_output_dir = str(cfg.get("gguf_output_dir", ""))
-        assert gguf_output_dir, f"{path} missing gguf_output_dir"
+        assert gguf_output_dir, f"{path} missing optional gguf_output_dir"
         tokens = set("".join(ch.lower() if ch.isalnum() else " " for ch in gguf_output_dir).split())
-        assert agent in tokens, f"{path} gguf_output_dir missing slot token: {gguf_output_dir}"
-        assert markers.intersection(tokens), f"{path} gguf_output_dir missing merged/gguf marker: {gguf_output_dir}"
+        assert agent in tokens, f"{path} optional gguf_output_dir missing slot token: {gguf_output_dir}"
+        assert {"gguf", "merged", "release", "bake"}.intersection(tokens), f"{path} optional gguf_output_dir missing release-bake marker: {gguf_output_dir}"

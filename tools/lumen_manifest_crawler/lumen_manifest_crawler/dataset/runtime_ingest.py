@@ -79,8 +79,9 @@ def _normalize_payload(value: Any, *, source: str) -> list[dict[str, Any]]:
 
 
 def _is_in_app_package(value: dict[str, Any]) -> bool:
+    schema_version = str(value.get("schemaVersion") or "")
     return (
-        value.get("schemaVersion") == "1.0.0"
+        schema_version in {"1.0.0", "1.1.0"}
         and "exportPolicy" in value
         and any(
             key in value
@@ -203,13 +204,19 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
     if isinstance(behavior_audit, dict):
         failures.extend(_behavior_failures(behavior_audit))
 
-    for scenario_result in _iter_dicts(package.get("scenarioResults", []) or []):
-        failures.extend(
-            _layered_failures(
-                scenario_result.get("failures", []) or [],
-                source_layer="runtimeScenarioRunner",
+    export_policy = package.get("exportPolicy")
+    export_policy = export_policy if isinstance(export_policy, dict) else {}
+    owns_live_e2e = export_policy.get("ownsLiveE2EScenarios") is True
+    scenario_results = list(_iter_dicts(package.get("scenarioResults", []) or []))
+    if owns_live_e2e:
+        for scenario_result in scenario_results:
+            failures.extend(
+                _layered_failures(
+                    scenario_result.get("failures", []) or [],
+                    source_layer="e2eTestReport.scenarioResults",
+                )
             )
-        )
+
     trace_failures, selected_tool_allowed_count, parse_error_count = _collect_trace_failures(
         package.get("recentTraces", []) or []
     )
@@ -218,6 +225,7 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
     return {
         "_source": source,
         "_sourceFormat": "lumen_in_app_dataset_package",
+        "_sourceLayer": export_policy.get("sourceLayer") or "agentGroundingRuntimeAudit",
         "generatedAt": package.get("generatedAt"),
         "manifestSource": package.get("manifestSource"),
         "usedRuntimeFallback": package.get("usedRuntimeFallback"),
@@ -226,7 +234,9 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
             selected_tool_allowed_count,
         ),
         "traceParseErrorCount": package.get("traceParseErrorCount", parse_error_count),
-        "exportPolicy": package.get("exportPolicy"),
+        "ignoredScenarioResultCount": 0 if owns_live_e2e else len(scenario_results),
+        "ownsLiveE2EScenarios": owns_live_e2e,
+        "exportPolicy": export_policy,
         "failures": failures,
     }
 

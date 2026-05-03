@@ -412,21 +412,21 @@ enum LumenModelFleetResolver {
     }
 
     private static func isStandaloneLoadableChatArtifact(_ model: StoredModel) -> Bool {
-        let haystack = [model.name, model.repoId, model.fileName, model.localPath, model.parameters, model.quantization, model.role]
+        let artifactText = [model.repoId, model.fileName, model.localPath, model.parameters, model.quantization, model.role]
             .joined(separator: " ")
             .lowercased()
         let fileName = model.fileName.lowercased()
-        let tokens = tokenSet(haystack)
+        let artifactTokens = tokenSet(artifactText)
 
         let hasAdapterMarker = fileName.hasSuffix(".lora")
             || fileName.hasSuffix(".adapter")
-            || tokens.contains("adapter")
-            || tokens.contains("lora")
+            || artifactTokens.contains("adapter")
+            || artifactTokens.contains("lora")
         if hasAdapterMarker { return false }
 
         if fileName.hasSuffix(".gguf") { return true }
         if fileName.hasSuffix(".bin") || fileName.hasSuffix(".safetensors") || fileName.hasSuffix(".mlmodelc") { return true }
-        return true
+        return false
     }
 
     private static func tokenSet(_ value: String) -> Set<String> {

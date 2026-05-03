@@ -62,6 +62,44 @@ private final class DelegateHolder {
     var delegate: AnyObject?
 }
 
+private enum LocationAuthorizationAction {
+    case requestLocation
+    case requestWhenInUseAuthorization
+    case deniedOrRestricted
+    case waitForChoice
+    case unknown
+}
+
+private func locationAuthorizationAction(for status: CLAuthorizationStatus) -> LocationAuthorizationAction {
+    switch status {
+    case .authorizedAlways, .authorizedWhenInUse:
+        return .requestLocation
+    case .notDetermined:
+        return .requestWhenInUseAuthorization
+    case .denied, .restricted:
+        return .deniedOrRestricted
+    @unknown default:
+        return .unknown
+    }
+}
+
+private func locationAuthorizationUpdateAction(for status: CLAuthorizationStatus) -> LocationAuthorizationAction {
+    switch status {
+    case .authorizedAlways, .authorizedWhenInUse:
+        return .requestLocation
+    case .notDetermined:
+        return .waitForChoice
+    case .denied, .restricted:
+        return .deniedOrRestricted
+    @unknown default:
+        return .unknown
+    }
+}
+
+private func logUnknownAuthorizationStatus(_ status: CLAuthorizationStatus, source: String) {
+    NSLog("[LocationProbe] Unknown authorization status at %@: rawValue=%d", source, status.rawValue)
+}
+
 @MainActor
 final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
     /// Concurrency contract: callbacks are normalized onto MainActor before reading or mutating state.
@@ -76,14 +114,17 @@ final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
 
     func begin() {
         MainActor.preconditionIsolated()
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
+        switch locationAuthorizationAction(for: manager.authorizationStatus) {
+        case .requestLocation:
             manager.requestLocation()
-        case .notDetermined:
+        case .requestWhenInUseAuthorization:
             manager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
+        case .deniedOrRestricted:
             finish(with: nil)
-        @unknown default:
+        case .waitForChoice:
+            break
+        case .unknown:
+            logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotLocationDelegate.begin")
             finish(with: nil)
         }
     }
@@ -111,14 +152,15 @@ final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             guard !self.done else { return }
-            switch manager.authorizationStatus {
-            case .authorizedAlways, .authorizedWhenInUse:
+            switch locationAuthorizationUpdateAction(for: manager.authorizationStatus) {
+            case .requestLocation:
                 manager.requestLocation()
-            case .denied, .restricted:
+            case .deniedOrRestricted:
                 self.finish(with: nil)
-            case .notDetermined:
+            case .waitForChoice, .requestWhenInUseAuthorization:
                 break
-            @unknown default:
+            case .unknown:
+                logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotLocationDelegate.locationManagerDidChangeAuthorization")
                 self.finish(with: nil)
             }
         }
@@ -139,14 +181,17 @@ final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate {
 
     func begin() {
         MainActor.preconditionIsolated()
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
+        switch locationAuthorizationAction(for: manager.authorizationStatus) {
+        case .requestLocation:
             manager.requestLocation()
-        case .notDetermined:
+        case .requestWhenInUseAuthorization:
             manager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
+        case .deniedOrRestricted:
             finish(with: "Location access was denied.")
-        @unknown default:
+        case .waitForChoice:
+            break
+        case .unknown:
+            logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotDescriptionDelegate.begin")
             finish(with: "Couldn't determine location authorization state.")
         }
     }
@@ -181,14 +226,15 @@ final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             guard !self.done else { return }
-            switch manager.authorizationStatus {
-            case .authorizedAlways, .authorizedWhenInUse:
+            switch locationAuthorizationUpdateAction(for: manager.authorizationStatus) {
+            case .requestLocation:
                 manager.requestLocation()
-            case .denied, .restricted:
+            case .deniedOrRestricted:
                 self.finish(with: "Location access was denied.")
-            case .notDetermined:
+            case .waitForChoice, .requestWhenInUseAuthorization:
                 break
-            @unknown default:
+            case .unknown:
+                logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotDescriptionDelegate.locationManagerDidChangeAuthorization")
                 self.finish(with: "Couldn't determine location authorization state.")
             }
         }

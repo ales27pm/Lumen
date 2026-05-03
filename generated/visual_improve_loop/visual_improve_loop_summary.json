@@ -1,0 +1,158 @@
+{
+  "adapterRuntimeManifest": {
+    "adapterCount": 0,
+    "mode": null,
+    "releaseBakePolicy": {}
+  },
+  "dataset": {
+    "agentFineTuning": {
+      "cortex": {
+        "eval": 555,
+        "trainDPO": 8,
+        "trainSFT": 192,
+        "valDPO": 1,
+        "valSFT": 34
+      },
+      "executor": {
+        "eval": 111,
+        "trainDPO": 11,
+        "trainSFT": 457,
+        "valDPO": 2,
+        "valSFT": 81
+      },
+      "fleet": {
+        "eval": 93,
+        "trainDPO": 14,
+        "trainSFT": 670,
+        "valDPO": 3,
+        "valSFT": 118
+      },
+      "mimicry": {
+        "eval": 3,
+        "trainDPO": 9,
+        "trainSFT": 42,
+        "valDPO": 2,
+        "valSFT": 8
+      },
+      "mouth": {
+        "eval": 5,
+        "trainDPO": 10,
+        "trainSFT": 127,
+        "valDPO": 2,
+        "valSFT": 22
+      },
+      "rem": {
+        "eval": 4,
+        "trainDPO": 7,
+        "trainSFT": 63,
+        "valDPO": 1,
+        "valSFT": 11
+      }
+    },
+    "families": {
+      "approval_boundary_samples": 115,
+      "cortex_routing": 69,
+      "dpo_preference_pairs": 53,
+      "eval_scenarios": 550,
+      "executor_tool_calls": 53,
+      "manifest_grounding_cards": 4,
+      "mimicry_style": 3,
+      "mouth_responses": 53,
+      "negative_samples": 53,
+      "rem_reflection": 5,
+      "runtime_audit_repairs": 1,
+      "tool_schema_cards": 53,
+      "train_sft": 298,
+      "validation_sft": 53
+    },
+    "familyCount": 14,
+    "recordCount": 1363
+  },
+  "endedAt": "2026-05-03T23:13:37+00:00",
+  "fineTuningOutput": "/home/ales27pm/Lumen/generated/fine_tuning",
+  "gaps": {
+    "bySeverity": {},
+    "hard": 0,
+    "total": 0
+  },
+  "loopOutput": "/home/ales27pm/Lumen/generated/agent_improvement_loop",
+  "manifest": {
+    "commit": "3aa4534f69a0e7ce52af077c993e0b1ec29b1e83",
+    "fingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "intentCount": 22,
+    "modelSlotCount": 6,
+    "routingEntryCount": 22,
+    "toolCount": 53
+  },
+  "nextPrompts": 1,
+  "output": "/home/ales27pm/Lumen/generated/agent_manifest",
+  "passed": false,
+  "releaseBakeManifest": {
+    "agentCount": 0,
+    "mode": null,
+    "releaseBakeRequested": null,
+    "skipped": null
+  },
+  "releaseBakeRequested": false,
+  "root": "/home/ales27pm/Lumen",
+  "runtime": {
+    "failureCount": 0,
+    "failureTypes": {},
+    "reportCount": 1,
+    "sourceLayers": {}
+  },
+  "schemaVersion": "2.0.0",
+  "startedAt": "2026-05-03T23:13:37+00:00",
+  "steps": [
+    {
+      "command": [],
+      "cwd": "/home/ales27pm/Lumen",
+      "durationSeconds": 0.0,
+      "endedAt": "2026-05-03T23:13:37+00:00",
+      "name": "preflight",
+      "notes": [],
+      "passed": true,
+      "returncode": 0,
+      "skipped": false,
+      "startedAt": "2026-05-03T23:13:37+00:00",
+      "status": "passed",
+      "stderrTail": "",
+      "stdoutTail": "/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/cli.py\n/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs\n/home/ales27pm/Lumen/ios/Lumen"
+    },
+    {
+      "command": [
+        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "-m",
+        "pytest",
+        "tools/lumen_manifest_crawler/tests"
+      ],
+      "cwd": "/home/ales27pm/Lumen",
+      "durationSeconds": 0.016,
+      "endedAt": "2026-05-03T23:13:37+00:00",
+      "name": "test manifest crawler",
+      "notes": [],
+      "passed": false,
+      "returncode": 1,
+      "skipped": false,
+      "startedAt": "2026-05-03T23:13:37+00:00",
+      "status": "failed",
+      "stderrTail": "",
+      "stdoutTail": "/home/ales27pm/Lumen/.venv-unsloth/bin/python: No module named pytest\n"
+    }
+  ],
+  "testFlight": {
+    "buildLabel": null,
+    "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
+    "manifestFingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "mode": "testflight",
+    "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
+    "requireRuntimeAuditForPass": false,
+    "requiresTestFlightAppRun": true,
+    "runbookPath": "TESTFLIGHT_RUNBOOK.md",
+    "runtimeAuditProvided": true,
+    "scenarioCount": 120,
+    "scenarioQueuePath": "testflight_scenarios.jsonl",
+    "status": "runtime-audit-ingested"
+  },
+  "testFlightScenarios": 120
+}

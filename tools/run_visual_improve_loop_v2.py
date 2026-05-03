@@ -192,25 +192,33 @@ def build_env(root: Path) -> dict[str, str]:
     return env
 
 
-def build_command_queue(
+def _append_optional_improve_flags(
+    improve: list[str], args: argparse.Namespace, runtime_audits: list[Path]
+) -> None:
+    if args.dry_run_commands:
+        improve.append("--dry-run-commands")
+    if args.require_testflight_runtime_audit:
+        improve.append("--require-testflight-runtime-audit")
+    if args.testflight_build_label:
+        improve.extend(["--testflight-build-label", args.testflight_build_label])
+    if args.build_command:
+        improve.extend(["--build-command", args.build_command])
+    if args.train_command:
+        improve.extend(["--train-command", args.train_command])
+    for audit in runtime_audits:
+        improve.extend(["--runtime-audit", str(audit)])
+
+
+def _build_improve_command(
     args: argparse.Namespace,
     root: Path,
     output: Path,
     loop_output: Path,
     fine_tuning_output: Path,
     runtime_audits: list[Path],
-) -> list[dict[str, Any]]:
-    commands: list[dict[str, Any]] = []
-    python = sys.executable
-
-    if not args.skip_tests:
-        commands.append({
-            "name": "test manifest crawler",
-            "command": split_shell(args.test_command) if args.test_command else [python, "-m", "pytest", "tools/lumen_manifest_crawler/tests"],
-        })
-
+) -> list[str]:
     improve = [
-        python,
+        sys.executable,
         "-m",
         "lumen_manifest_crawler",
         "improve-loop",
@@ -229,24 +237,24 @@ def build_command_queue(
         "--strict" if args.strict else "--no-strict",
         "--deterministic" if args.deterministic else "--non-deterministic",
         "--pretty" if args.pretty else "--no-pretty",
-        "--generate-system-prompts" if args.generate_system_prompts else "--no-generate-system-prompts",
-        "--generate-agent-fine-tuning" if args.generate_agent_fine_tuning else "--no-generate-agent-fine-tuning",
+        (
+            "--generate-system-prompts"
+            if args.generate_system_prompts
+            else "--no-generate-system-prompts"
+        ),
+        (
+            "--generate-agent-fine-tuning"
+            if args.generate_agent_fine_tuning
+            else "--no-generate-agent-fine-tuning"
+        ),
     ]
-    if args.dry_run_commands:
-        improve.append("--dry-run-commands")
-    if args.require_testflight_runtime_audit:
-        improve.append("--require-testflight-runtime-audit")
-    if args.testflight_build_label:
-        improve.extend(["--testflight-build-label", args.testflight_build_label])
-    if args.build_command:
-        improve.extend(["--build-command", args.build_command])
-    if args.train_command:
-        improve.extend(["--train-command", args.train_command])
-    for audit in runtime_audits:
-        improve.extend(["--runtime-audit", str(audit)])
-    commands.append({"name": "improve-loop generation", "command": improve})
+    _append_optional_improve_flags(improve, args, runtime_audits)
+    return improve
 
-    release_manifest = rooted_path(root, args.release_bake_manifest_output)
+
+def _build_release_export_command(
+    args: argparse.Namespace, root: Path, release_manifest: Path
+) -> tuple[str, list[str]]:
     export = [
         args.release_bake_python,
         str(root / "tools" / "fine_tuning" / "unsloth" / "export_gguf.py"),
@@ -261,19 +269,47 @@ def build_command_queue(
         "--manifest-output",
         str(release_manifest),
     ]
-    if args.release_bake:
-        export.append("--release-bake")
-        if args.skip_release_bake_existing:
-            export.append("--skip-existing")
-        if args.hf_repo_id:
-            export.extend(["--hf-repo-id", args.hf_repo_id])
-        if args.hf_private:
-            export.append("--hf-private")
-        if args.skip_upload:
-            export.append("--skip-upload")
-        name = "optional GGUF release bake"
-    else:
-        name = "adapter-first release-bake manifest"
+    if not args.release_bake:
+        return "adapter-first release-bake manifest", export
+
+    export.append("--release-bake")
+    if args.skip_release_bake_existing:
+        export.append("--skip-existing")
+    if args.hf_repo_id:
+        export.extend(["--hf-repo-id", args.hf_repo_id])
+    if args.hf_private:
+        export.append("--hf-private")
+    if args.skip_upload:
+        export.append("--skip-upload")
+    return "optional GGUF release bake", export
+
+
+def build_command_queue(
+    args: argparse.Namespace,
+    root: Path,
+    output: Path,
+    loop_output: Path,
+    fine_tuning_output: Path,
+    runtime_audits: list[Path],
+) -> list[dict[str, Any]]:
+    commands: list[dict[str, Any]] = []
+
+    if not args.skip_tests:
+        default_test = [sys.executable, "-m", "pytest", "tools/lumen_manifest_crawler/tests"]
+        commands.append(
+            {
+                "name": "test manifest crawler",
+                "command": split_shell(args.test_command) or default_test,
+            }
+        )
+
+    improve = _build_improve_command(
+        args, root, output, loop_output, fine_tuning_output, runtime_audits
+    )
+    commands.append({"name": "improve-loop generation", "command": improve})
+
+    release_manifest = rooted_path(root, args.release_bake_manifest_output)
+    name, export = _build_release_export_command(args, root, release_manifest)
     commands.append({"name": name, "command": export})
     return commands
 
@@ -286,7 +322,7 @@ def is_runtime_audit_candidate(path: Path) -> bool:
         return False
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return False
     if not isinstance(payload, dict):
         return False
@@ -336,7 +372,7 @@ def collect_runtime_audits(args: argparse.Namespace, root: Path, console: Consol
     return deduped
 
 
-def run_preflight(root: Path, args: argparse.Namespace) -> StepResult:
+def run_preflight(root: Path) -> StepResult:
     start = time.perf_counter()
     started_at = now_iso()
     required = [
@@ -393,7 +429,7 @@ def read_json(path: Path) -> Any:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         return {"_readError": str(exc), "_path": str(path)}
 
 
@@ -406,7 +442,7 @@ def read_jsonl(path: Path) -> list[Any]:
             continue
         try:
             out.append(json.loads(line))
-        except Exception as exc:
+        except json.JSONDecodeError as exc:
             out.append({"_readError": str(exc), "_line": line_number, "_path": str(path)})
     return out
 
@@ -636,7 +672,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     console.info(f"dashboard output: {dashboard_output}")
 
     steps: list[StepResult] = []
-    preflight = run_preflight(root, args)
+    preflight = run_preflight(root)
     steps.append(preflight)
     if not preflight.passed and not args.keep_going:
         artifacts = read_artifacts(loop_output, fine_tuning_output, release_manifest)

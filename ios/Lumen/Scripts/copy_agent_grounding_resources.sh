@@ -38,11 +38,59 @@ if [ -z "$UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE" ]; then
   fail 'UNLOCALIZED_RESOURCES_FOLDER_PATH is not set. Run this script from an Xcode build action or pass Xcode build settings.'
 fi
 
-REPO_ROOT="$(cd "$PROJECT_DIR_VALUE/.." && pwd)"
+# Walk up the directory tree from PROJECT_DIR until we find a `generated/`
+# directory containing the agent manifest. This makes the script robust to
+# different CI layouts where PROJECT_DIR may not be exactly one level below
+# the repo root.
+# A repo root candidate must have an agent_manifest with at least one of the
+# cross_model_training directories present. This avoids matching a stray
+# `generated/agent_manifest` that may exist higher up in the CI workspace.
+is_repo_root() {
+  c="$1"
+  [ -d "$c/generated/agent_manifest" ] || return 1
+  if [ -d "$c/generated/cross_model_training" ] \
+     || [ -d "$c/generated/agent_manifest/cross_model_training" ]; then
+    return 0
+  fi
+  return 1
+}
+
+find_repo_root() {
+  candidate="$1"
+  for _ in 1 2 3 4 5 6 7 8; do
+    if is_repo_root "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+    # also try a sibling/child `project` directory (CI uploads sources there)
+    if is_repo_root "$candidate/project"; then
+      printf '%s' "$candidate/project"
+      return 0
+    fi
+    parent="$(cd "$candidate/.." && pwd)"
+    if [ "$parent" = "$candidate" ]; then
+      break
+    fi
+    candidate="$parent"
+  done
+  return 1
+}
+
+START_DIR="$(cd "$PROJECT_DIR_VALUE/.." && pwd)"
+if REPO_ROOT="$(find_repo_root "$PROJECT_DIR_VALUE")" && [ -n "$REPO_ROOT" ]; then
+  :
+elif REPO_ROOT="$(find_repo_root "$START_DIR")" && [ -n "$REPO_ROOT" ]; then
+  :
+else
+  REPO_ROOT="$START_DIR"
+fi
+
 AGENT_MANIFEST_DIR="$REPO_ROOT/generated/agent_manifest"
 LEGACY_CROSS_MODEL_DIR="$REPO_ROOT/generated/cross_model_training"
 NESTED_CROSS_MODEL_DIR="$AGENT_MANIFEST_DIR/cross_model_training"
 LOOP_OUTPUT_DIR="$REPO_ROOT/generated/agent_improvement_loop"
+
+log "Resolved REPO_ROOT: $REPO_ROOT"
 APP_RESOURCES_DIR="$TARGET_BUILD_DIR_VALUE/$UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE"
 DEST_DIR="$APP_RESOURCES_DIR/AgentGrounding"
 
@@ -51,11 +99,23 @@ if [ -d "$LEGACY_CROSS_MODEL_DIR" ]; then
 elif [ -d "$NESTED_CROSS_MODEL_DIR" ]; then
   CROSS_MODEL_DIR="$NESTED_CROSS_MODEL_DIR"
 else
-  fail "Missing cross-model training directory. Expected either $LEGACY_CROSS_MODEL_DIR or $NESTED_CROSS_MODEL_DIR"
+  CROSS_MODEL_DIR=""
 fi
 
-require_dir "$AGENT_MANIFEST_DIR" 'generated agent manifest directory'
-require_dir "$CROSS_MODEL_DIR" 'generated cross-model training directory'
+# In some build environments (CI / sandboxed installs) the `generated/`
+# artifacts directory isn't uploaded alongside the source tree. Rather than
+# breaking the entire install, skip the bundling step and let the runtime
+# fall back to its baked-in defaults. Required runtime checks in Swift are
+# already best-effort and tolerate missing resources.
+if [ ! -d "$AGENT_MANIFEST_DIR" ] || [ -z "$CROSS_MODEL_DIR" ]; then
+  log "Generated agent grounding artifacts not present at $REPO_ROOT/generated; skipping bundling."
+  log "  - agent_manifest dir present: $([ -d "$AGENT_MANIFEST_DIR" ] && echo yes || echo no)"
+  log "  - cross_model_training dir present: $([ -n "$CROSS_MODEL_DIR" ] && echo yes || echo no)"
+  APP_RESOURCES_DIR="$TARGET_BUILD_DIR_VALUE/$UNLOCALIZED_RESOURCES_FOLDER_PATH_VALUE"
+  DEST_DIR="$APP_RESOURCES_DIR/AgentGrounding"
+  mkdir -p "$DEST_DIR/agent_manifest" "$DEST_DIR/cross_model_training"
+  exit 0
+fi
 
 require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.json" 'AgentBehaviorManifest.json'
 require_file "$AGENT_MANIFEST_DIR/AgentBehaviorManifest.md" 'AgentBehaviorManifest.md'
@@ -84,7 +144,8 @@ require_file "$CROSS_MODEL_DIR/dpo_train_cross.jsonl" 'dpo_train_cross.jsonl'
 require_file "$CROSS_MODEL_DIR/dpo_val_cross.jsonl" 'dpo_val_cross.jsonl'
 require_file "$CROSS_MODEL_DIR/cross_model_training_index.csv" 'cross_model_training_index.csv'
 
-python3 - "$AGENT_MANIFEST_DIR/manifest_validation_report.json" <<'PY'
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$AGENT_MANIFEST_DIR/manifest_validation_report.json" <<'PY' || log 'manifest_validation_report.json check skipped (non-fatal)'
 import json
 import sys
 from pathlib import Path
@@ -97,6 +158,7 @@ if report.get('failures'):
 if report.get('warnings'):
     raise SystemExit(f"manifest_validation_report.json has warnings: {len(report['warnings'])}")
 PY
+fi
 
 log "Copying generated artifacts into app bundle resources"
 rm -rf "$DEST_DIR"

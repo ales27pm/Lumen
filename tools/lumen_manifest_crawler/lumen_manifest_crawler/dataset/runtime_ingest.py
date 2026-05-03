@@ -163,6 +163,29 @@ def _trace_tool_failure(
     return None
 
 
+def _empty_agent_grounding_trace_failure(package: dict[str, Any], export_policy: dict[str, Any]) -> dict[str, Any] | None:
+    source_layer = str(export_policy.get("sourceLayer") or "")
+    package_format = str(export_policy.get("format") or "")
+    if source_layer != "agentGroundingRuntimeAudit" and package_format != "agent-grounding-runtime-json-package":
+        return None
+    recent_traces = package.get("recentTraces")
+    if isinstance(recent_traces, list) and recent_traces:
+        return None
+    return {
+        "type": "agent_grounding_no_recent_model_traces",
+        "agent": "runtime",
+        "expected": ["Agent Grounding export should include recent model/tool traces captured from real in-app execution."],
+        "actual": "recentTraces is empty",
+        "scenario": "Agent Grounding > Run Agent Grounding Audit > Export In-App Dataset Package",
+        "problem": (
+            "The Agent Grounding package exported no recent traces. This usually means "
+            "AgentBehaviorTraceRecorder.record is not wired into the live model path, "
+            "or the app audit was exported before exercising real model interactions."
+        ),
+        "sourceLayer": "agentGroundingRuntimeAudit.exportQuality",
+    }
+
+
 def _collect_trace_failures(
     traces: Iterable[Any],
 ) -> tuple[list[dict[str, Any]], int, int]:
@@ -221,6 +244,9 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
         package.get("recentTraces", []) or []
     )
     failures.extend(trace_failures)
+    empty_trace_failure = _empty_agent_grounding_trace_failure(package, export_policy)
+    if empty_trace_failure is not None:
+        failures.append(empty_trace_failure)
 
     return {
         "_source": source,

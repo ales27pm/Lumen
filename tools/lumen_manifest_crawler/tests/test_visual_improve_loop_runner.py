@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -12,10 +13,12 @@ def _repo_root() -> Path:
 
 def _load_runner() -> ModuleType:
     module_path = _repo_root() / "tools" / "run_visual_improve_loop_v2.py"
-    spec = importlib.util.spec_from_file_location("lumen_visual_improve_loop_v2", module_path)
+    module_name = "lumen_visual_improve_loop_v2"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 

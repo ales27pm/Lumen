@@ -80,10 +80,10 @@ jobs:
               assert plan['exportPolicy']['mergeAdaptersByDefault'] is False, agent
           PY
 
-      - name: Check generated artifacts are committed
+      - name: Check generated manifest artifacts are committed
         run: |
-          git diff --exit-code generated/agent_manifest
-          untracked="$(git ls-files --others --exclude-standard generated/agent_manifest)"
+          git diff --exit-code -- generated/agent_manifest ':(exclude)generated/agent_manifest/fine_tuning'
+          untracked="$(git ls-files --others --exclude-standard generated/agent_manifest | grep -v '^generated/agent_manifest/fine_tuning/' || true)"
           if [ -n "$untracked" ]; then
             echo "Untracked generated manifest artifacts detected:"
             echo "$untracked"

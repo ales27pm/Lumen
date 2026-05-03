@@ -1,4 +1,5 @@
-"""Closed-loop runner for manifest generation, runtime audit ingestion, and TestFlight handoff artifacts."""
+# pylint: disable=line-too-long
+"""Closed-loop runner for manifest generation and runtime-audit/TestFlight handoff."""
 
 from __future__ import annotations
 

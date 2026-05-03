@@ -7,6 +7,11 @@ from typing import Any
 
 from lumen_manifest_crawler.fleet_artifacts import FleetArtifacts
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest, ValidationReport
+from lumen_manifest_crawler.dataset.adapter_export import (
+    adapter_runtime_manifest,
+    agent_adapter_export_plan,
+    augment_unsloth_config_for_adapter_export,
+)
 from lumen_manifest_crawler.dataset.fine_tuning import AgentFineTuningDataset
 from lumen_manifest_crawler.output.hashing import sha256_file
 
@@ -172,6 +177,10 @@ def _write_routing_matrix_csv(path: Path, manifest: AgentBehaviorManifest) -> No
 
 def _write_fine_tuning_outputs(root: Path, datasets: dict[str, AgentFineTuningDataset]) -> None:
     root.mkdir(parents=True, exist_ok=True)
+    (root / "adapter_runtime_manifest.json").write_text(
+        json.dumps(adapter_runtime_manifest(datasets), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     for agent, dataset in sorted(datasets.items()):
         d = root / agent
         d.mkdir(parents=True, exist_ok=True)
@@ -180,5 +189,22 @@ def _write_fine_tuning_outputs(root: Path, datasets: dict[str, AgentFineTuningDa
         _write_jsonl(d / "train_dpo.jsonl", dataset.train_dpo)
         _write_jsonl(d / "val_dpo.jsonl", dataset.val_dpo)
         _write_jsonl(d / "eval.jsonl", dataset.eval)
-        (d / "dataset_card.json").write_text(json.dumps(dataset.dataset_card, ensure_ascii=False, indent=2, sort_keys=True)+"\n", encoding="utf-8")
-        (d / "unsloth_config.json").write_text(json.dumps(dataset.unsloth_config, ensure_ascii=False, indent=2, sort_keys=True)+"\n", encoding="utf-8")
+        (d / "dataset_card.json").write_text(
+            json.dumps(dataset.dataset_card, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        adapter_first_config = augment_unsloth_config_for_adapter_export(agent, dataset.unsloth_config)
+        (d / "unsloth_config.json").write_text(
+            json.dumps(adapter_first_config, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (d / "adapter_export_plan.json").write_text(
+            json.dumps(
+                agent_adapter_export_plan(agent, dataset.dataset_card, adapter_first_config),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )

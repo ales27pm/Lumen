@@ -9,7 +9,7 @@ nonisolated struct EvidenceLayerExportPolicy: Codable, Sendable, Hashable {
     let notes: [String]
 }
 
-nonisolated struct EvidenceLayerEnvelope<Payload: Encodable>: Encodable, Sendable {
+nonisolated struct EvidenceLayerEnvelope<Payload: Encodable>: Encodable {
     let schemaVersion: String
     let generatedAt: Date
     let app: InAppDatasetAppInfo
@@ -17,7 +17,7 @@ nonisolated struct EvidenceLayerEnvelope<Payload: Encodable>: Encodable, Sendabl
     let payload: Payload
 }
 
-nonisolated struct EvidenceLayerExportResult<Payload: Encodable>: Sendable {
+nonisolated struct EvidenceLayerExportResult<Payload: Encodable> {
     let url: URL
     let envelope: EvidenceLayerEnvelope<Payload>
 }

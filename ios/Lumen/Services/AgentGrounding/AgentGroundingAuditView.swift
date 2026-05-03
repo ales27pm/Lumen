@@ -38,7 +38,7 @@ public struct AgentGroundingAuditView: View {
                 Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes an Agent Grounding runtime audit package for the offline loop: audit failures, behavior violations, and bounded diagnostic traces. Static scenario checks stay visible here but are not exported as live E2E model results.")
             }
 
-            Section("Export Individual Evidence Layers") {
+            Section {
                 Button("Export Runtime Registry Audit") {
                     exportRuntimeRegistryAuditLayer()
                 }
@@ -65,6 +65,8 @@ public struct AgentGroundingAuditView: View {
                         Label("Share Layer JSON", systemImage: "square.and.arrow.up")
                     }
                 }
+            } header: {
+                Text("Export Individual Evidence Layers")
             } footer: {
                 Text("Each export is a separate JSON envelope with an explicit sourceLayer and ownership policy. Use these for debugging one layer without polluting the live E2E dataset path.")
             }
@@ -213,7 +215,7 @@ public struct AgentGroundingAuditView: View {
             }
 
             if !scenarioResults.isEmpty {
-                Section("Static Scenario Checks") {
+                Section {
                     ForEach(scenarioResults) { result in
                         HStack {
                             VStack(alignment: .leading) {
@@ -227,6 +229,8 @@ public struct AgentGroundingAuditView: View {
                                 .foregroundStyle(result.passed ? .green : .red)
                         }
                     }
+                } header: {
+                    Text("Static Scenario Checks")
                 } footer: {
                     Text("These are deterministic manifest sanity checks. They do not run the model and are not exported as live E2E scenario evidence by default.")
                 }

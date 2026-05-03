@@ -225,3 +225,48 @@ def test_expected_intent_is_used_when_intent_is_missing(tmp_path: Path):
     assert missing_intent["agent"] == "mouth"
     assert missing_intent["repairSample"]["curriculum"] == "tool_boundary_response_quality"
     assert "unknown" not in missing_intent["type"]
+
+
+def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Path):
+    report_path = tmp_path / "in-app-package.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.0.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {"format": "single-json-package"},
+        "traceSelectedToolAllowedCount": 7,
+        "recentTraces": [
+            {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]},
+            {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"]},
+        ],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+    assert report["_sourceFormat"] == "lumen_in_app_dataset_package"
+    assert report["traceSelectedToolAllowedCount"] == 7
+
+
+def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing(tmp_path: Path):
+    report_path = tmp_path / "in-app-package-backfill.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.0.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {"format": "single-json-package"},
+        "recentTraces": [
+            {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]},
+            {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"]},
+            {"slot": "cortex", "promptPrefix": "final", "selectedToolID": None, "allowedToolIDs": []},
+        ],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+    assert report["traceSelectedToolAllowedCount"] == 1

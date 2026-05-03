@@ -329,6 +329,8 @@ def _build_testflight_scenario_queue(
     limit: int,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
+    candidates.extend(_build_trace_export_scenarios(manifest))
+
     for record in datasets.get("eval_scenarios", []):
         candidates.append(_scenario_from_eval_record(record, source_family="eval_scenarios"))
 
@@ -370,6 +372,55 @@ def _build_testflight_scenario_queue(
         candidate["id"] = key
         deduped.append(candidate)
     return deduped[: max(0, limit)]
+
+
+def _build_trace_export_scenarios(manifest: Any) -> list[dict[str, Any]]:
+    scenarios: list[dict[str, Any]] = []
+    routing_entries = sorted(
+        (entry for entry in manifest.routingMatrix if getattr(entry, "allowedTools", None)),
+        key=lambda entry: str(entry.intent),
+    )
+    for entry in routing_entries[:3]:
+        allowed = [str(tool_id) for tool_id in list(entry.allowedTools)[:5]]
+        tool_hint = ", ".join(allowed) if allowed else "manifest-allowed tool IDs"
+        scenarios.append({
+            "id": _stable_id("trace_export_coverage", entry.intent, allowed),
+            "sourceFamily": "trace_export_coverage",
+            "agent": "runtime",
+            "taskType": "runtime_trace_export_coverage",
+            "prompt": f"Trigger intent `{entry.intent}` with a realistic request that should select one of: {tool_hint}.",
+            "expected": {
+                "intent": entry.intent,
+                "traceField": "traceSelectedToolAllowedCount",
+                "requiresRecentTrace": True,
+                "allowedToolIDs": allowed,
+            },
+            "testFlightInstructions": [
+                "Run the prompt in the real TestFlight app.",
+                "After the batch, open Agent Grounding and export the in-app dataset package JSON.",
+                "Verify the export includes `traceSelectedToolAllowedCount` and that recent traces keep allowedToolIDs for tool-selection turns.",
+            ],
+        })
+
+    scenarios.append({
+        "id": _stable_id("trace_export_coverage", "chat_intent_no_tool"),
+        "sourceFamily": "trace_export_coverage",
+        "agent": "runtime",
+        "taskType": "runtime_trace_export_coverage",
+        "prompt": "Ask a normal chat-only question that should not call tools, then verify the exported runtime traces still include prompt prefixes and parse diagnostics.",
+        "expected": {
+            "intent": "chat",
+            "traceField": "traceSelectedToolAllowedCount",
+            "requiresRecentTrace": True,
+            "selectedToolExpected": False,
+        },
+        "testFlightInstructions": [
+            "Run the prompt in the real TestFlight app without developer harnesses.",
+            "Export the in-app dataset package JSON from Agent Grounding.",
+            "Verify the export includes `traceSelectedToolAllowedCount` and at least one trace for this interaction.",
+        ],
+    })
+    return scenarios
 
 
 def _scenario_from_eval_record(record: dict[str, Any], *, source_family: str) -> dict[str, Any]:

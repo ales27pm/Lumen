@@ -10,6 +10,7 @@ nonisolated struct LumenInAppDatasetPackage: Codable, Sendable, Hashable {
     let behaviorAudit: AgentBehaviorAuditReport?
     let scenarioResults: [RuntimeScenarioResult]
     let recentTraces: [AgentBehaviorTrace]
+    let traceSelectedToolAllowedCount: Int
     let exportPolicy: InAppDatasetExportPolicy
 }
 
@@ -45,6 +46,7 @@ nonisolated enum InAppDatasetPackageExporter {
         scenarioResults: [RuntimeScenarioResult],
         traceLimit: Int = 200
     ) -> LumenInAppDatasetPackage {
+        let traces = AgentBehaviorTraceRecorder.recent(limit: traceLimit)
         LumenInAppDatasetPackage(
             schemaVersion: schemaVersion,
             generatedAt: Date(),
@@ -59,7 +61,13 @@ nonisolated enum InAppDatasetPackageExporter {
             runtimeManifestAudit: runtimeManifestAudit,
             behaviorAudit: behaviorAudit,
             scenarioResults: scenarioResults,
-            recentTraces: AgentBehaviorTraceRecorder.recent(limit: traceLimit),
+            recentTraces: traces,
+            traceSelectedToolAllowedCount: traces.reduce(into: 0) { count, trace in
+                guard let selectedToolID = trace.selectedToolID else { return }
+                if trace.allowedToolIDs.contains(selectedToolID) {
+                    count += 1
+                }
+            },
             exportPolicy: InAppDatasetExportPolicy(
                 format: "single-json-package",
                 privacy: "contains only manifest audit failures, behavior violations, deterministic scenarios, and truncated trace prefixes; no full conversations, contacts, calendar bodies, files, photos, or tool payload bodies are exported",

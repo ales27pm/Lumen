@@ -214,6 +214,14 @@ def _validate_compiled_record_shape(name: str, index: int, record: dict, failure
             for message_index, message in enumerate(messages):
                 if not isinstance(message, dict) or message.get("role") not in {"system", "user", "assistant", "tool"} or not isinstance(message.get("content"), str):
                     failures.append(ValidationFailure(code="invalid_chat_message", message=f"{name}[{index}].messages[{message_index}] is not canonical chat format", path=f"dataset.{name}.{index}.messages.{message_index}"))
+    if name == "runtime_audit_repairs":
+        if record.get("sourceFamily") != "runtime_audit_repairs":
+            failures.append(ValidationFailure(code="runtime_repair_missing_source_family", message="runtime_audit_repairs record missing sourceFamily marker", path=f"dataset.{name}.{index}.sourceFamily"))
+        metadata = record.get("metadata")
+        if not isinstance(metadata, dict) or not str(metadata.get("source") or "").strip() or not str(metadata.get("sourceFile") or "").strip():
+            failures.append(ValidationFailure(code="runtime_repair_missing_provenance", message="runtime_audit_repairs record missing metadata.source or metadata.sourceFile", path=f"dataset.{name}.{index}.metadata"))
+        if not _runtime_repair_has_action(record):
+            failures.append(ValidationFailure(code="runtime_repair_missing_action", message="runtime_audit_repairs assistant payload must contain repair.action", path=f"dataset.{name}.{index}.messages"))
     if name == "dpo_preference_pairs":
         if not isinstance(record.get("prompt"), list) or not isinstance(record.get("chosen"), dict) or not isinstance(record.get("rejected"), dict):
             failures.append(ValidationFailure(code="invalid_dpo_pair", message=f"{name}[{index}] is missing prompt/chosen/rejected", path=f"dataset.{name}.{index}"))
@@ -261,6 +269,26 @@ def _string_values(value: Any) -> Iterable[str]:
     elif isinstance(value, list):
         for child in value:
             yield from _string_values(child)
+
+
+def _runtime_repair_has_action(record: dict[str, Any]) -> bool:
+    messages = record.get("messages")
+    if not isinstance(messages, list):
+        return False
+    assistant_messages = [message for message in messages if isinstance(message, dict) and message.get("role") == "assistant"]
+    if not assistant_messages:
+        return False
+    content = assistant_messages[-1].get("content")
+    if not isinstance(content, str) or not content.strip():
+        return False
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    repair = payload.get("repair")
+    return isinstance(repair, dict) and isinstance(repair.get("action"), str) and bool(repair.get("action").strip())
 
 
 def _find_tool_id(record: dict) -> str | None:

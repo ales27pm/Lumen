@@ -869,6 +869,7 @@ def _build_runtime_audit_repair_records(
                 "id": f"runtime-repair-{record_id[:16]}",
                 "schemaVersion": DATASET_SCHEMA_VERSION,
                 "split": TRAIN_SPLIT,
+                "sourceFamily": "runtime_audit_repairs",
                 "agentRole": "rem",
                 "taskType": "runtime_manifest_drift_repair",
                 "messages": [
@@ -907,6 +908,7 @@ def _build_runtime_audit_repair_records(
                 "id": f"runtime-repair-{record_id[:16]}",
                 "schemaVersion": DATASET_SCHEMA_VERSION,
                 "split": TRAIN_SPLIT,
+                "sourceFamily": "runtime_audit_repairs",
                 "agentRole": str(failure.get("agent") or "rem"),
                 "taskType": "runtime_manifest_drift_repair",
                 "messages": [

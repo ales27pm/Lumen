@@ -23,3 +23,54 @@ def test_unsupported_argument_type_failure():
     report = validate_manifest(manifest)
     assert not report.passed
     assert any(f.code == "unsupported_argument_type" for f in report.failures)
+
+
+def test_runtime_repair_record_requires_provenance_and_repair_action():
+    manifest = AgentBehaviorManifest(tools=[ToolManifest(id="web.search")])
+    dataset = {
+        "runtime_audit_repairs": [
+            {
+                "id": "runtime-repair-1",
+                "schemaVersion": "2.0.0",
+                "split": "train",
+                "sourceFamily": "runtime_audit_repairs",
+                "agentRole": "rem",
+                "taskType": "runtime_manifest_drift_repair",
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "{}"},
+                    {"role": "assistant", "content": "{\"repair\":{\"action\":\"document_runtime_pass_and_expand_coverage\"}}"},
+                ],
+                "metadata": {"source": "lumen_in_app_dataset_package", "sourceFile": "runtime-audits/latest-testflight-export.json"},
+            }
+        ]
+    }
+    report = validate_manifest(manifest, dataset)
+    assert not any(
+        f.code in {"runtime_repair_missing_source_family", "runtime_repair_missing_provenance", "runtime_repair_missing_action"}
+        for f in report.failures
+    )
+
+
+def test_runtime_repair_record_fails_without_repair_action():
+    manifest = AgentBehaviorManifest(tools=[ToolManifest(id="web.search")])
+    dataset = {
+        "runtime_audit_repairs": [
+            {
+                "id": "runtime-repair-2",
+                "schemaVersion": "2.0.0",
+                "split": "train",
+                "agentRole": "rem",
+                "taskType": "runtime_manifest_drift_repair",
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "{}"},
+                    {"role": "assistant", "content": "{\"repair\":{}}"},
+                ],
+                "metadata": {"source": "lumen_in_app_dataset_package", "sourceFile": "runtime-audits/latest-testflight-export.json"},
+            }
+        ]
+    }
+    report = validate_manifest(manifest, dataset)
+    assert any(f.code == "runtime_repair_missing_source_family" for f in report.failures)
+    assert any(f.code == "runtime_repair_missing_action" for f in report.failures)

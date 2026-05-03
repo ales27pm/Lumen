@@ -38,6 +38,7 @@ def test_improvement_loop_writes_state_gaps_prompts_and_testflight_artifacts(tmp
     assert result.state["testFlight"]["status"] == "awaiting-testflight-runtime-audit"
     assert result.state["testFlight"]["buildLabel"] == "1.0.0-build-99"
     assert len(result.testflight_scenarios) <= 12
+    assert any(scenario.get("sourceFamily") == "trace_export_coverage" for scenario in result.testflight_scenarios)
     assert result.next_prompts
 
 

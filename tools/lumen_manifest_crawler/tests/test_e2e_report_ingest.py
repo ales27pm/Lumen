@@ -287,6 +287,7 @@ def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Pa
     assert report["ownsLiveE2EScenarios"] is False
     assert report["traceSelectedToolAllowedCount"] == 7
     assert report["traceParseErrorCount"] == 3
+    assert "agent_grounding_no_recent_model_traces" not in {failure["type"] for failure in report["failures"]}
 
 
 def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing(tmp_path: Path):
@@ -343,7 +344,9 @@ def test_agent_grounding_package_ignores_static_scenario_results_by_default(tmp_
                 ],
             }
         ],
-        "recentTraces": [],
+        "recentTraces": [
+            {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]}
+        ],
     }
     report_path.write_text(json.dumps(package), encoding="utf-8")
 
@@ -352,7 +355,34 @@ def test_agent_grounding_package_ignores_static_scenario_results_by_default(tmp_
     assert report["_sourceLayer"] == "agentGroundingRuntimeAudit"
     assert report["ownsLiveE2EScenarios"] is False
     assert report["ignoredScenarioResultCount"] == 1
-    assert report["failures"] == []
+    assert all(failure["type"] != "scenario_unknown_tool" for failure in report["failures"])
+
+
+def test_agent_grounding_package_without_recent_traces_generates_export_quality_failure(tmp_path: Path):
+    report_path = tmp_path / "lumen-agent-grounding-audit-empty-traces.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "agent-grounding-runtime-json-package",
+            "sourceLayer": "agentGroundingRuntimeAudit",
+            "ownsLiveE2EScenarios": False,
+        },
+        "recentTraces": [],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    failures = report["failures"]
+    assert len(failures) == 1
+    assert failures[0]["type"] == "agent_grounding_no_recent_model_traces"
+    assert failures[0]["sourceLayer"] == "agentGroundingRuntimeAudit.exportQuality"
+    assert "AgentBehaviorTraceRecorder.record is not wired" in failures[0]["problem"]
 
 
 def test_e2e_owned_package_can_ingest_live_scenario_results(tmp_path: Path):

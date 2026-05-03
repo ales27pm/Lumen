@@ -6,6 +6,8 @@ from typing import Any
 ADAPTER_EXPORT_SCHEMA_VERSION = "1.0.0"
 DEFAULT_AGENT_BASE_MODEL_ID = "Qwen/Qwen3-1.7B"
 DEFAULT_ADAPTER_DIR = "adapters"
+DEFAULT_LORA_OUTPUT_ROOT = "models/lora"
+DEFAULT_RELEASE_BAKE_OUTPUT_ROOT = "models/gguf_release_bake"
 
 
 def adapter_artifact_name(agent: str) -> str:
@@ -15,6 +17,14 @@ def adapter_artifact_name(agent: str) -> str:
 
 def adapter_artifact_path(agent: str) -> str:
     return f"{DEFAULT_ADAPTER_DIR}/{adapter_artifact_name(agent)}"
+
+
+def adapter_output_dir(agent: str) -> str:
+    return f"{DEFAULT_LORA_OUTPUT_ROOT}/{agent}"
+
+
+def release_bake_output_dir(agent: str) -> str:
+    return f"{DEFAULT_RELEASE_BAKE_OUTPUT_ROOT}/{agent}_merged_gguf"
 
 
 def base_model_id_from_config(config: dict[str, Any] | None) -> str:
@@ -45,6 +55,13 @@ def augment_unsloth_config_for_adapter_export(agent: str, config: dict[str, Any]
     out.setdefault("baseModelID", base_model_id)
     out["artifactMode"] = "adapter_first"
     out["defaultExportArtifact"] = "lora_adapter"
+    out["artifact_mode"] = "adapter_first"
+    out["default_export_artifact"] = "lora_adapter"
+    out["merge_adapters_by_default"] = False
+    out["release_bake_enabled_by_default"] = False
+    out["adapter_output_dir"] = adapter_output_dir(agent)
+    out["output_dir"] = adapter_output_dir(agent)
+    out["gguf_output_dir"] = release_bake_output_dir(agent)
     out["adapterExport"] = {
         "enabled": True,
         "agent": agent,

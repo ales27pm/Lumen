@@ -44,6 +44,69 @@ Use it for:
 
 Reasoning: Qwen3-Embedding-0.6B is official, embedding-native, Qwen-family, sentence-transformers compatible, and much more appropriate than low-adoption Qwen2.5 community embedding conversions for Lumen's core retrieval layer.
 
+### Embedding model configuration and override policy
+
+The embedding model must be configurable and reversible. Do not hard-code the Qwen3 embedding model as an irreversible runtime dependency.
+
+Planned configuration keys:
+
+```json
+{
+  "embedding": {
+    "defaultModelID": "Qwen/Qwen3-Embedding-0.6B",
+    "fallbackModelID": "current-baseline-embedding-model",
+    "teacherModelID": "Qwen/Qwen3-Embedding-4B",
+    "provider": "local",
+    "quantization": "runtime-selected",
+    "enableQwen3EmbeddingCandidate": true,
+    "allowRuntimeFallback": true
+  }
+}
+```
+
+Required override layers, from highest to lowest priority:
+
+1. explicit developer/test override in the app settings or debug configuration;
+2. environment/build flag used by CI/TestFlight experiments;
+3. persisted app configuration bundled with the model manifest;
+4. generated dataset/model card default;
+5. compiled fallback default.
+
+Suggested environment or build flags:
+
+```text
+LUMEN_EMBEDDING_MODEL_ID=Qwen/Qwen3-Embedding-0.6B
+LUMEN_EMBEDDING_FALLBACK_MODEL_ID=<current-baseline-embedding-model>
+LUMEN_ENABLE_QWEN3_EMBEDDING=1
+LUMEN_FORCE_BASELINE_EMBEDDING=0
+```
+
+Rollback behaviour:
+
+- if Qwen3 embedding evals regress below the migration gates, set `LUMEN_FORCE_BASELINE_EMBEDDING=1` for the next build/run;
+- if the Qwen3 model fails to load, produces invalid vector dimensions, or fails health checks, automatically fall back to `fallbackModelID` when `allowRuntimeFallback=true`;
+- if fallback happens, the in-app dataset export must include `embeddingModelID`, `embeddingFallbackModelID`, `usedEmbeddingFallback`, and the health-check failure reason;
+- the next improvement-loop cycle must ingest that fallback signal and add a gap if Qwen3 fallback occurred in TestFlight.
+
+Required runtime export fields:
+
+```json
+{
+  "embeddingModelID": "Qwen/Qwen3-Embedding-0.6B",
+  "embeddingFallbackModelID": "current-baseline-embedding-model",
+  "usedEmbeddingFallback": false,
+  "embeddingVectorDimension": 0,
+  "embeddingHealthCheckPassed": true,
+  "embeddingEvalSummary": {
+    "recallAt1": 0.0,
+    "recallAt5": 0.0,
+    "mrr": 0.0,
+    "ndcgAt5": 0.0,
+    "hardNegativeAccuracy": 0.0
+  }
+}
+```
+
 ### Optional benchmark model
 
 Track this as a heavier local/server benchmark, not the default mobile/runtime embedding model:
@@ -137,6 +200,47 @@ The loop should emit retrieval evals and track:
 - source-map retrieval accuracy;
 - runtime-repair retrieval accuracy.
 
+Initial numeric targets for the first Qwen3 embedding promotion gate:
+
+| Metric | Minimum target | Preferred target | Notes |
+|---|---:|---:|---|
+| Recall@1 | >= 0.72 | >= 0.80 | Measured over `eval_retrieval.jsonl`; strict top hit. |
+| Recall@5 | >= 0.90 | >= 0.95 | Required for RAG usability. |
+| MRR | >= 0.78 | >= 0.85 | Penalizes correct hits buried too low. |
+| nDCG@5 | >= 0.82 | >= 0.90 | Use graded relevance when multiple positives exist. |
+| hard-negative accuracy | >= 0.85 | >= 0.92 | Must distinguish similar tools/intents. |
+| tool-retrieval accuracy | >= 0.90 | >= 0.95 | Tool queries must retrieve the correct tool schema. |
+| source-map retrieval accuracy | >= 0.80 | >= 0.88 | Code/source awareness retrieval. |
+| runtime-repair retrieval accuracy | >= 0.78 | >= 0.86 | Failed runtime traces should retrieve the right repair family. |
+| embedding health-check pass rate | 100% | 100% | Vector dimension, non-empty embeddings, no NaN/Inf. |
+
+Promotion rule: Qwen3-Embedding-0.6B may become the default only if it meets every minimum target and is not worse than the baseline by more than 2 percentage points on any required metric. If it beats the baseline by at least 3 percentage points on Recall@5 or hard-negative accuracy without latency regression, promote it for the next TestFlight cycle.
+
+Rollback rule: roll back to the configured fallback embedding model if any required metric drops below minimum, if hard-negative accuracy regresses by more than 5 percentage points, or if TestFlight runtime fallback occurs more than once in a release candidate cycle.
+
+### Required behaviour eval metrics
+
+Agent model migration must also use numeric gates. Initial targets:
+
+| Metric | Minimum target | Preferred target | Applies to |
+|---|---:|---:|---|
+| manifest-only tool use | >= 0.98 | 1.00 | Cortex, Executor |
+| hallucinated-tool rejection | >= 0.98 | 1.00 | Cortex, Executor |
+| required-argument handling | >= 0.92 | >= 0.97 | Cortex, Executor |
+| strict JSON validity | >= 0.98 | 1.00 | Executor |
+| approval/permission boundary accuracy | >= 0.95 | >= 0.99 | Cortex, Executor, Mouth |
+| sentinel suppression | 1.00 | 1.00 | Mouth, all user-facing paths |
+| runtime repair usefulness | >= 0.85 | >= 0.92 | REM |
+| fleet peer-boundary accuracy | >= 0.95 | >= 0.99 | Fleet/self-awareness records |
+| TestFlight/E2E pass rate | >= 0.90 | >= 0.95 | Full app loop |
+| crash-free TestFlight scenario run | 100% | 100% | Full app loop |
+| P95 local response latency regression | <= +10% | <= +5% | Compared with current baseline |
+| peak memory regression | <= +10% | <= +5% | Compared with current baseline |
+
+Promotion rule: a Qwen3 candidate may replace a role only if it meets every minimum target, has zero sentinel leaks, has zero crash regressions in the TestFlight scenario batch, and is no worse than the baseline by more than 2 percentage points on any role-critical metric.
+
+Rollback rule: immediately revert the role to the baseline model if TestFlight/E2E pass rate drops below 0.90, if any sentinel leak appears, if manifest-only tool use drops below 0.98, or if latency/memory regressions exceed the allowed thresholds.
+
 ### Improvement-loop integration
 
 Add the embedding generator to:
@@ -154,11 +258,23 @@ The loop summary should include:
 {
   "embedding": {
     "model": "Qwen/Qwen3-Embedding-0.6B",
+    "fallbackModel": "current-baseline-embedding-model",
+    "usedFallback": false,
     "corpusCount": 0,
     "pairCount": 0,
     "tripletCount": 0,
     "hardNegativeCount": 0,
-    "evalCount": 0
+    "evalCount": 0,
+    "metrics": {
+      "recallAt1": 0.0,
+      "recallAt5": 0.0,
+      "mrr": 0.0,
+      "ndcgAt5": 0.0,
+      "hardNegativeAccuracy": 0.0,
+      "toolRetrievalAccuracy": 0.0,
+      "sourceMapRetrievalAccuracy": 0.0,
+      "runtimeRepairRetrievalAccuracy": 0.0
+    }
   }
 }
 ```
@@ -179,12 +295,15 @@ A Qwen3 candidate may replace an existing model role only if it beats or matches
 - latency/memory budget;
 - deterministic dataset validation.
 
+Use the numeric targets in the retrieval and behaviour metrics sections as the initial objective gates. Revise targets upward after the first stable baseline is measured.
+
 ### Non-goals
 
 - Do not switch every agent model to Qwen3 without an A/B run.
 - Do not use a normal chat model as an embedding model unless it is adapted and evaluated as an embedding model.
 - Do not train the embedding model on conversational SFT records as if it were a chat agent.
 - Do not expose raw private runtime state or hidden reasoning in embedding corpus records.
+- Do not remove the baseline/fallback model until Qwen3 passes two consecutive TestFlight improvement-loop cycles.
 
 ### Decision
 
@@ -192,6 +311,7 @@ Adopt a Qwen3-first strategy, starting with:
 
 ```text
 Embedding default: Qwen/Qwen3-Embedding-0.6B
+Embedding fallback: current baseline embedding model until Qwen3 passes promotion gates
 Agent baseline: current Qwen2.5 1.5B-style models
 Agent migration: staged Qwen3 candidates, promoted only by Lumen-specific evals
 ```

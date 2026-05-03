@@ -124,7 +124,7 @@ Use this as the initial model bill of materials. The app should keep model IDs c
 | Lumen role | Default/candidate model | Fallback | Teacher/benchmark | Notes |
 |---|---|---|---|---|
 | Embedding / RAG / memory retrieval | `Qwen/Qwen3-Embedding-0.6B` | current baseline embedding model | `Qwen/Qwen3-Embedding-4B` | First Qwen3 model to add. Use for source map, tool schema, memory/RAG, runtime repair, and E2E failure retrieval. |
-| Reranker | `Qwen/Qwen3-Reranker-0.6B` | embedding-only retrieval | `Qwen/Qwen3-Reranker-4B` | Rerank top-k retrieval results only. Do not run for every low-risk query if latency is tight. |
+| Reranker | `Qwen/Qwen3-Reranker-0.6B` *(candidate; disabled by default)* | embedding-only retrieval | `Qwen/Qwen3-Reranker-4B` | Rerank top-k retrieval results only. Do not run for every low-risk query if latency is tight. Enable only after reranker promotion gates pass; until then use embedding-only retrieval by default. |
 | Cortex / router | `Qwen/Qwen3-1.7B` | current Qwen2.5 1.5B-style Cortex baseline | `Qwen/Qwen3-Coder-30B-A3B-Instruct` for offline dataset generation | Best first chat/agent migration because routing accuracy is measurable. |
 | Executor / tool JSON | `Qwen/Qwen3-1.7B` fine-tuned for strict JSON | current Executor baseline | `Qwen/Qwen3-Coder-30B-A3B-Instruct` | Promote only after strict JSON validity and manifest-only tool gates pass. |
 | REM / repair agent | `Qwen/Qwen3-1.7B` | current REM baseline | `Qwen/Qwen3-Coder-30B-A3B-Instruct` | Good early migration candidate because runtime repair quality is structured and measurable. |
@@ -148,6 +148,7 @@ Recommended app/runtime stack:
   "embeddingDefault": "Qwen/Qwen3-Embedding-0.6B",
   "embeddingTeacher": "Qwen/Qwen3-Embedding-4B",
   "rerankerDefault": "Qwen/Qwen3-Reranker-0.6B",
+  "rerankerEnabledByDefault": false,
   "rerankerTeacher": "Qwen/Qwen3-Reranker-4B",
   "visionCandidate": "Qwen/Qwen3-VL-2B-Instruct",
   "visionEmbeddingCandidate": "Qwen/Qwen3-VL-Embedding-2B",
@@ -188,6 +189,8 @@ The offline teacher should generate or review:
 - strict JSON examples for Executor;
 - fleet/self-awareness records;
 - dataset quality reports.
+
+Before any teacher-generated or teacher-reviewed record becomes training or eval data, the loop must apply the same sanitization boundary as the Non-goals section: automated PII/redaction filters, deterministic removal of hidden/internal reasoning traces, and stripping or redaction of raw log lines, trace identifiers, device identifiers, account identifiers, private file-system paths, and transient runtime state. Residual metadata is allowed only when it is needed for analysis and must be explicit, minimal, non-secret, and documented in the dataset card.
 
 ### Candidate migration order
 
@@ -411,7 +414,8 @@ The loop summary should include:
       "rerankedRecallAt1": 0.0,
       "rerankedNdcgAt5": 0.0,
       "hardNegativePairAccuracy": 0.0,
-      "top5ReorderWinRate": 0.0
+      "top5ReorderWinRate": 0.0,
+      "p95RerankLatencyRegression": 0.0
     }
   }
 }

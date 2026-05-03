@@ -232,15 +232,15 @@ def test_expected_intent_is_used_when_intent_is_missing(tmp_path: Path):
 
 
 def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Path):
-    report_path = tmp_path / "in-app-package.json"
+    report_path = tmp_path / "lumen-agent-grounding-audit.json"
     import json
 
     package = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "generatedAt": "2026-05-03T00:00:00Z",
         "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
         "usedRuntimeFallback": False,
-        "exportPolicy": {"format": "single-json-package"},
+        "exportPolicy": {"format": "agent-grounding-runtime-json-package", "ownsLiveE2EScenarios": False},
         "traceSelectedToolAllowedCount": 7,
         "traceParseErrorCount": 3,
         "recentTraces": [
@@ -252,20 +252,21 @@ def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Pa
 
     report = load_runtime_audit_reports([report_path])[0]
     assert report["_sourceFormat"] == "lumen_in_app_dataset_package"
+    assert report["ownsLiveE2EScenarios"] is False
     assert report["traceSelectedToolAllowedCount"] == 7
     assert report["traceParseErrorCount"] == 3
 
 
 def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing(tmp_path: Path):
-    report_path = tmp_path / "in-app-package-backfill.json"
+    report_path = tmp_path / "lumen-agent-grounding-audit-backfill.json"
     import json
 
     package = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "generatedAt": "2026-05-03T00:00:00Z",
         "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
         "usedRuntimeFallback": False,
-        "exportPolicy": {"format": "single-json-package"},
+        "exportPolicy": {"format": "agent-grounding-runtime-json-package", "ownsLiveE2EScenarios": False},
         "recentTraces": [
             {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]},
             {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"], "parseError": "bad-json"},
@@ -277,3 +278,88 @@ def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing
     report = load_runtime_audit_reports([report_path])[0]
     assert report["traceSelectedToolAllowedCount"] == 1
     assert report["traceParseErrorCount"] == 1
+
+
+def test_agent_grounding_package_ignores_static_scenario_results_by_default(tmp_path: Path):
+    report_path = tmp_path / "lumen-agent-grounding-audit-with-static-scenarios.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "agent-grounding-runtime-json-package",
+            "sourceLayer": "agentGroundingRuntimeAudit",
+            "ownsLiveE2EScenarios": False,
+            "includesDeterministicStaticScenarios": True,
+        },
+        "scenarioResults": [
+            {
+                "id": "calendar::calendar.create",
+                "passed": False,
+                "failures": [
+                    {
+                        "type": "scenario_unknown_tool",
+                        "agent": "cortex",
+                        "expected": ["calendar.create"],
+                        "actual": "calendar.create",
+                        "scenario": "Create a calendar event.",
+                        "problem": "Static scenario failure, not model execution.",
+                    }
+                ],
+            }
+        ],
+        "recentTraces": [],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    assert report["_sourceLayer"] == "agentGroundingRuntimeAudit"
+    assert report["ownsLiveE2EScenarios"] is False
+    assert report["ignoredScenarioResultCount"] == 1
+    assert report["failures"] == []
+
+
+def test_e2e_owned_package_can_ingest_live_scenario_results(tmp_path: Path):
+    report_path = tmp_path / "lumen-e2e-owned-package.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "E2ETestRunner",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "e2e-runtime-json-package",
+            "sourceLayer": "e2eTestReport",
+            "ownsLiveE2EScenarios": True,
+        },
+        "scenarioResults": [
+            {
+                "id": "training-memory-loop",
+                "passed": False,
+                "failures": [
+                    {
+                        "type": "missing_required_hint",
+                        "agent": "mouth",
+                        "expected": ["remember"],
+                        "actual": "Saved.",
+                        "scenario": "Remember this detail.",
+                        "problem": "Required final hint missing: remember",
+                    }
+                ],
+            }
+        ],
+        "recentTraces": [],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    assert report["ownsLiveE2EScenarios"] is True
+    assert report["ignoredScenarioResultCount"] == 0
+    assert len(report["failures"]) == 1
+    assert report["failures"][0]["sourceLayer"] == "e2eTestReport.scenarioResults"

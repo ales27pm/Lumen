@@ -1,4 +1,8 @@
+"""Dataset compiler for SFT, eval, schema, and runtime-repair records."""
+
 from __future__ import annotations
+
+# pylint: disable=line-too-long,too-many-lines,too-many-branches,too-many-statements,too-many-locals,too-many-arguments,too-many-nested-blocks,missing-function-docstring,missing-class-docstring
 
 import hashlib
 import json
@@ -7,7 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
 from lumen_manifest_crawler.manifest import AgentBehaviorManifest
 
 DETERMINISTIC_DATASET_GENERATED_AT = "1970-01-01T00:00:00+00:00"
@@ -456,7 +459,7 @@ def _has_assistant_target(messages: list[dict[str, str]]) -> bool:
     return any(message.get("role") == "assistant" and message.get("content") for message in messages)
 
 
-def _infer_role(family: str, record: dict[str, Any], messages: list[dict[str, str]]) -> str:
+def _infer_role(family: str, record: dict[str, Any], messages: list[dict[str, str]]) -> str:  # NOSONAR
     explicit = record.get("agent") or record.get("role")
     if isinstance(explicit, str) and explicit:
         return explicit
@@ -676,7 +679,7 @@ def _humanize_tool_phrase(tool: Any) -> str:
     return " ".join(words) if words else "this app action"
 
 
-def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:
+def _tool_eval_scenarios(tool: Any) -> list[dict[str, Any]]:  # NOSONAR
     required_args = [arg.name for arg in getattr(tool, "arguments", []) if getattr(arg, "required", False)]
     optional_args = [arg.name for arg in getattr(tool, "arguments", []) if not getattr(arg, "required", False)]
     phrase = _humanize_tool_phrase(tool)
@@ -840,7 +843,7 @@ def _build_manifest_grounding_cards(manifest: AgentBehaviorManifest, config: Dat
     return records
 
 
-def _build_runtime_audit_repair_records(
+def _build_runtime_audit_repair_records(  # NOSONAR
     manifest: AgentBehaviorManifest,
     runtime_audit_reports: list[dict[str, Any]],
     config: DatasetCompilerConfig,

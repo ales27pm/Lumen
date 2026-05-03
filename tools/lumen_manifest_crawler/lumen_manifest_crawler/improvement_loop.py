@@ -1,4 +1,8 @@
+"""Closed-loop runner for manifest generation, runtime audit ingestion, and TestFlight handoff artifacts."""
+
 from __future__ import annotations
+
+# pylint: disable=line-too-long,too-many-lines,too-many-branches,too-many-statements,too-many-locals,too-many-arguments,too-many-nested-blocks,missing-function-docstring,missing-class-docstring
 
 import hashlib
 import json
@@ -20,6 +24,8 @@ from lumen_manifest_crawler.validators import validate_agent_fine_tuning_dataset
 DETERMINISTIC_LOOP_TIMESTAMP = "1970-01-01T00:00:00+00:00"
 LOOP_SCHEMA_VERSION = "1.1.0"
 DEFAULT_LOOP_DIR = Path("generated/agent_improvement_loop")
+TESTFLIGHT_SCENARIOS_FILE = "testflight_scenarios.jsonl"
+TESTFLIGHT_RUNBOOK_FILE = "TESTFLIGHT_RUNBOOK.md"
 
 
 @dataclass(frozen=True)
@@ -133,8 +139,11 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
             fine_tuning_datasets,
             runtime_audit_reports=runtime_reports,
         )
-        for failure in ft_failures:
-            validation_report.failures.append(failure)
+        existing_failures = list(getattr(validation_report, "failures", []))
+        existing_failures.extend(ft_failures)
+        validation_report = validation_report.model_copy(
+            update={"failures": existing_failures, "passed": not existing_failures}
+        )
 
     write_outputs(
         output,
@@ -174,6 +183,8 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
     )
     next_prompts = _build_next_action_prompts(gaps, runtime_reports, command_results, testflight_plan)
 
+    source_integrity = getattr(manifest, "sourceIntegrity", None)
+    fleet_manifest = getattr(manifest, "fleet", None)
     state = {
         "schemaVersion": LOOP_SCHEMA_VERSION,
         "startedAt": started_at,
@@ -182,11 +193,11 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
         "output": str(output),
         "runtimeAuditInputs": [str(path) for path in config.runtime_audit_paths],
         "manifest": {
-            "commit": manifest.sourceIntegrity.commit,
+            "commit": getattr(source_integrity, "commit", None),
             "fingerprint": _manifest_fingerprint(manifest),
             "toolCount": len(manifest.tools),
             "intentCount": len(manifest.intents),
-            "modelSlotCount": len(manifest.fleet.slots),
+            "modelSlotCount": len(getattr(fleet_manifest, "slots", [])),
             "routingEntryCount": len(manifest.routingMatrix),
         },
         "dataset": dataset_summary,
@@ -209,9 +220,9 @@ def run_agent_improvement_loop(config: AgentImprovementLoopConfig) -> AgentImpro
     _write_json(loop_output / "loop_state.json", state)
     _write_json(loop_output / "loop_gaps.json", {"gaps": gaps})
     _write_jsonl(loop_output / "next_action_prompts.jsonl", next_prompts)
-    _write_jsonl(loop_output / "testflight_scenarios.jsonl", testflight_scenarios)
+    _write_jsonl(loop_output / TESTFLIGHT_SCENARIOS_FILE, testflight_scenarios)
     _write_markdown_report(loop_output / "LOOP_REPORT.md", state, gaps, next_prompts)
-    _write_testflight_runbook(loop_output / "TESTFLIGHT_RUNBOOK.md", state, testflight_scenarios)
+    _write_testflight_runbook(loop_output / TESTFLIGHT_RUNBOOK_FILE, state, testflight_scenarios)
 
     result = AgentImprovementLoopResult(
         state=state,
@@ -241,6 +252,7 @@ def _run_optional_command(name: str, command: tuple[str, ...], cwd: Path, config
             cwd=cwd,
             text=True,
             capture_output=True,
+            check=False,
             timeout=None,
         )
     except OSError as exc:
@@ -464,8 +476,8 @@ def _build_testflight_plan(
         "requiresTestFlightAppRun": config.app_run_mode.casefold() == "testflight",
         "requireRuntimeAuditForPass": config.require_testflight_runtime_audit,
         "runtimeAuditProvided": has_runtime,
-        "scenarioQueuePath": "testflight_scenarios.jsonl",
-        "runbookPath": "TESTFLIGHT_RUNBOOK.md",
+        "scenarioQueuePath": TESTFLIGHT_SCENARIOS_FILE,
+        "runbookPath": TESTFLIGHT_RUNBOOK_FILE,
         "scenarioCount": len(scenarios),
         "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
         "nextIngestCommand": shlex.join([
@@ -486,7 +498,7 @@ def _build_testflight_plan(
     }
 
 
-def _build_gap_report(
+def _build_gap_report(  # NOSONAR
     *,
     manifest: Any,
     validation_report: Any,

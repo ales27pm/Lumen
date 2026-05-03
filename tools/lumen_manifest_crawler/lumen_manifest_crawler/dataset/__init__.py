@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lumen_manifest_crawler.dataset.compiler import DatasetCompilerConfig, compile_state_of_art_datasets, load_runtime_audit_reports
+from lumen_manifest_crawler.dataset.compiler import DatasetCompilerConfig, compile_state_of_art_datasets
+from lumen_manifest_crawler.dataset.runtime_ingest import load_runtime_audit_reports
 from lumen_manifest_crawler.dataset.cortex import generate_cortex_records
 from lumen_manifest_crawler.dataset.executor import generate_approval_boundary_records, generate_executor_records, generate_negative_samples
 from lumen_manifest_crawler.dataset.mimicry import generate_mimicry_records

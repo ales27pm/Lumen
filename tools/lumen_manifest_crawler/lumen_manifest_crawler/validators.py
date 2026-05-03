@@ -1,4 +1,8 @@
+"""Validation rules for manifest extraction and compiled training/eval datasets."""
+
 from __future__ import annotations
+
+# pylint: disable=line-too-long,too-many-lines,too-many-branches,too-many-statements,too-many-locals,too-many-arguments,too-many-nested-blocks,missing-function-docstring
 
 import json
 import re
@@ -27,7 +31,7 @@ FANOUT_INTENTS = {
 }
 
 
-def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str, list[dict]] | None = None, *, strict: bool = False) -> ValidationReport:
+def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str, list[dict]] | None = None, *, strict: bool = False) -> ValidationReport:  # NOSONAR
     failures: list[ValidationFailure] = []
     warnings: list[ValidationWarning] = []
 
@@ -77,7 +81,7 @@ def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str
             warnings.append(ValidationWarning(code="freshness_missing_ttl", message=f"Freshness class {freshness.id} has no TTL or durable marker", path=f"memory.freshnessClasses.{freshness.id}"))
 
     if dataset_records:
-        _validate_dataset_records(manifest, dataset_records, failures, warnings)
+        _validate_dataset_records(manifest, dataset_records, failures)
 
     if strict:
         strict_failures = [
@@ -90,7 +94,7 @@ def validate_manifest(manifest: AgentBehaviorManifest, dataset_records: dict[str
     return ValidationReport(passed=not failures, failures=failures, warnings=warnings)
 
 
-def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str, list[dict]], failures: list[ValidationFailure], warnings: list[ValidationWarning]) -> None:
+def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str, list[dict]], failures: list[ValidationFailure]) -> None:  # NOSONAR
     forbidden = set(manifest.sentinels.forbiddenInUserOutput)
     known_tools = {tool.id for tool in manifest.tools}
     approval_tools = {tool.id for tool in manifest.tools if tool.requiresApproval}
@@ -103,7 +107,7 @@ def _validate_dataset_records(manifest: AgentBehaviorManifest, records: dict[str
 
     for name, dataset in records.items():
         for index, record in enumerate(dataset):
-            _validate_compiled_record_shape(name, index, record, failures, warnings, compiled_ids)
+            _validate_compiled_record_shape(name, index, record, failures, compiled_ids)
             if name in {"mouth_responses", "mimicry_style", "train_sft", "validation_sft", "tool_schema_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
                 for sentinel in forbidden:
                     if sentinel and _record_model_visible_text_contains(record, sentinel):
@@ -195,7 +199,7 @@ def _has_explicit_tool_id_reference(prompt_text: str, tool_id: str) -> bool:
     lowered = prompt_text.lower()
     return any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in explicit_patterns)
 
-def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], warnings: list[ValidationWarning], seen_ids: set[str]) -> None:
+def _validate_compiled_record_shape(name: str, index: int, record: dict, failures: list[ValidationFailure], seen_ids: set[str]) -> None:  # NOSONAR
     if name == "dataset_manifest":
         return
     if name in {"train_sft", "validation_sft", "eval_scenarios", "tool_schema_cards", "manifest_grounding_cards", "runtime_audit_repairs", "dpo_preference_pairs"}:
@@ -340,7 +344,7 @@ def _looks_like_intentionally_invalid_tool(tool_id: str) -> bool:
     return "invalid" in tokens
 
 
-def validate_agent_fine_tuning_datasets(
+def validate_agent_fine_tuning_datasets(  # NOSONAR
     manifest: AgentBehaviorManifest,
     datasets: dict[str, Any],
     runtime_audit_reports: list[dict[str, Any]] | None = None,
@@ -420,7 +424,7 @@ def _dataset_card_int(card: dict[str, Any], key: str) -> int:
     return value if isinstance(value, int) else 0
 
 
-def _validate_agent_sft_records(
+def _validate_agent_sft_records(  # NOSONAR
     *,
     agent: str,
     records: list[dict[str, Any]],
@@ -565,7 +569,7 @@ def _validate_executor_tool_coverage(ds: Any, known_tools: set[str], failures: l
         failures.append(ValidationFailure(code="executor_tool_coverage_missing", message=f"Executor missing tool coverage for: {', '.join(missing[:10])}", path="fine_tuning.executor"))
 
 
-def _validate_executor_required_args(ds: Any, tool_arg_map: dict[str, set[str]], failures: list[ValidationFailure]) -> None:
+def _validate_executor_required_args(ds: Any, tool_arg_map: dict[str, set[str]], failures: list[ValidationFailure]) -> None:  # NOSONAR
     for record in ds.train_sft + ds.val_sft:
         metadata = record.get("metadata")
         if not isinstance(metadata, dict):
@@ -603,7 +607,7 @@ def _validate_fleet_slot_coverage(ds: Any, slot_ids: set[str], failures: list[Va
             failures.append(ValidationFailure(code="fleet_slot_coverage_missing", message=f"fleet missing role-card coverage for slot {slot_id}", path="fine_tuning.fleet"))
 
 
-def _validate_natural_intent_tool_leaks(*, agent: str, ds: Any, failures: list[ValidationFailure], known_tools: set[str]) -> None:
+def _validate_natural_intent_tool_leaks(*, agent: str, ds: Any, failures: list[ValidationFailure], known_tools: set[str]) -> None:  # NOSONAR
     for index, rec in enumerate(ds.eval):
         metadata = rec.get("metadata")
         if not isinstance(metadata, dict):

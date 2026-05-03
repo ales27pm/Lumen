@@ -8,13 +8,17 @@ from pathlib import Path
 from lumen_manifest_crawler.improvement_loop import AgentImprovementLoopConfig, run_agent_improvement_loop
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
 def test_improvement_loop_writes_state_gaps_prompts_and_testflight_artifacts(tmp_path: Path):
     output = tmp_path / "agent_manifest"
     loop_output = tmp_path / "loop"
 
     result = run_agent_improvement_loop(
         AgentImprovementLoopConfig(
-            root=Path(".").resolve(),
+            root=_repo_root(),
             output=output,
             loop_output=loop_output,
             deterministic=True,
@@ -74,7 +78,7 @@ def test_improvement_loop_writes_state_gaps_prompts_and_testflight_artifacts(tmp
 def test_improvement_loop_can_require_testflight_runtime_audit(tmp_path: Path):
     result = run_agent_improvement_loop(
         AgentImprovementLoopConfig(
-            root=Path(".").resolve(),
+            root=_repo_root(),
             output=tmp_path / "agent_manifest",
             loop_output=tmp_path / "loop",
             deterministic=True,
@@ -94,7 +98,7 @@ def test_improvement_loop_can_require_testflight_runtime_audit(tmp_path: Path):
 def test_improvement_loop_records_failed_command_as_critical_gap(tmp_path: Path):
     result = run_agent_improvement_loop(
         AgentImprovementLoopConfig(
-            root=Path(".").resolve(),
+            root=_repo_root(),
             output=tmp_path / "agent_manifest",
             loop_output=tmp_path / "loop",
             deterministic=True,

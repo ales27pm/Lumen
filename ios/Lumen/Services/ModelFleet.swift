@@ -416,20 +416,13 @@ enum LumenModelFleetResolver {
             .joined(separator: " ")
             .lowercased()
         let fileName = model.fileName.lowercased()
-        let path = model.localPath.lowercased()
         let tokens = tokenSet(haystack)
 
         let hasAdapterMarker = fileName.hasSuffix(".lora")
             || fileName.hasSuffix(".adapter")
             || tokens.contains("adapter")
             || tokens.contains("lora")
-        if hasAdapterMarker {
-            return tokens.contains("release")
-                || tokens.contains("bake")
-                || tokens.contains("merged")
-                || path.contains("release_bake")
-                || path.contains("release-bake")
-        }
+        if hasAdapterMarker { return false }
 
         if fileName.hasSuffix(".gguf") { return true }
         if fileName.hasSuffix(".bin") || fileName.hasSuffix(".safetensors") || fileName.hasSuffix(".mlmodelc") { return true }

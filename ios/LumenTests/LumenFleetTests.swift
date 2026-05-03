@@ -39,36 +39,36 @@ struct LumenFleetTests {
         }
     }
 
-    @Test @MainActor func v0ResolverAssignsAllTextSlotsFromSingleSmallChatModel() async throws {
+    @Test @MainActor func resolverAssignsAllTextSlotsFromSingleSharedAdapterFirstBase() async throws {
         let chat = StoredModel(
-            name: "Qwen2.5 Coder Fleet",
-            repoId: "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
-            fileName: "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-            sizeBytes: 450_000_000,
+            name: "Fleet v1 Adapter Base — Qwen 2.5 1.5B",
+            repoId: "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            fileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            sizeBytes: 1_117_000_000,
             quantization: "Q4_K_M",
-            parameters: "0.5B",
+            parameters: "1.5B",
             role: .chat,
-            localPath: "/tmp/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+            localPath: "/tmp/qwen2.5-1.5b-instruct-q4_k_m.gguf"
         )
         let embedding = StoredModel(
-            name: "Nomic Embed",
-            repoId: "nomic-ai/nomic-embed-text-v1.5-GGUF",
-            fileName: "nomic-embed-text-v1.5.Q4_K_M.gguf",
-            sizeBytes: 85_000_000,
+            name: "Qwen3 Embedding",
+            repoId: "Qwen/Qwen3-Embedding-0.6B-GGUF",
+            fileName: "qwen3-embedding-0.6b-q4_k_m.gguf",
+            sizeBytes: 450_000_000,
             quantization: "Q4_K_M",
-            parameters: "137M",
+            parameters: "0.6B",
             role: .embedding,
-            localPath: "/tmp/nomic-embed-text-v1.5.Q4_K_M.gguf"
+            localPath: "/tmp/qwen3-embedding-0.6b-q4_k_m.gguf"
         )
 
-        let snapshot = LumenModelFleetResolver.resolveV0(
+        let snapshot = LumenModelFleetResolver.resolveV1(
             activeChatModelID: chat.id.uuidString,
             activeEmbeddingModelID: embedding.id.uuidString,
             storedModels: [chat, embedding]
         )
 
-        #expect(snapshot.mode == .v0SingleRuntime)
-        #expect(snapshot.isRunnableV0)
+        #expect(snapshot.mode == .v1MultiResident)
+        #expect(snapshot.isRunnableV1)
         #expect(snapshot.missingSlots.isEmpty)
         #expect(snapshot.assignment(for: .cortex)?.modelID == chat.id)
         #expect(snapshot.assignment(for: .executor)?.modelID == chat.id)
@@ -76,8 +76,8 @@ struct LumenFleetTests {
         #expect(snapshot.assignment(for: .mimicry)?.modelID == chat.id)
         #expect(snapshot.assignment(for: .rem)?.modelID == chat.id)
         #expect(snapshot.assignment(for: .embedding)?.modelID == embedding.id)
-        #expect(snapshot.runtimeResidentSlots == Set(LumenModelSlot.allCases))
-        #expect(snapshot.targetResidentSlots == Set(LumenModelSlot.allCases))
+        #expect(snapshot.runtimeResidentSlots.contains(.cortex))
+        #expect(snapshot.runtimeResidentSlots.contains(.embedding))
     }
 
     @Test @MainActor func fleetResolverKeepsEmbeddingAssignmentWhenHintsDoNotMatch() async throws {
@@ -112,51 +112,68 @@ struct LumenFleetTests {
         #expect(!snapshot.missingSlots.contains(.embedding))
     }
 
-    @Test @MainActor func v1ResolverPrefersRoleSpecificModelWhenAvailableButMarksPendingRuntimeSeparately() async throws {
-        let general = StoredModel(
-            name: "General Mouth Model",
-            repoId: "HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
-            fileName: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
-            sizeBytes: 1,
-            quantization: "Q4_K_M",
-            parameters: "1.7B",
-            role: .chat,
-            localPath: "/tmp/smollm.gguf"
-        )
-        let coder = StoredModel(
-            name: "Qwen Coder Model",
-            repoId: "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
-            fileName: "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-            sizeBytes: 1,
-            quantization: "Q4_K_M",
-            parameters: "0.5B",
-            role: .chat,
-            localPath: "/tmp/coder.gguf"
-        )
-        let cortex = StoredModel(
-            name: "Fleet v1 Cortex — Qwen Coder 1.5B",
-            repoId: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
-            fileName: "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+    @Test @MainActor func resolverPrefersReleaseBakedSlotModelWhenAvailable() async throws {
+        let sharedBase = StoredModel(
+            name: "Fleet v1 Adapter Base — Qwen 2.5 1.5B",
+            repoId: "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            fileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
             sizeBytes: 1,
             quantization: "Q4_K_M",
             parameters: "1.5B",
             role: .chat,
-            localPath: "/tmp/cortex.gguf"
+            localPath: "/tmp/shared-base.gguf"
+        )
+        let cortexReleaseBake = StoredModel(
+            name: "Fleet v1 Release Bake Cortex — Qwen 1.5B",
+            repoId: "ales27pm/lumen-fleet-gguf",
+            fileName: "lumen-cortex-release-bake-q4_k_m.gguf",
+            sizeBytes: 1,
+            quantization: "Q4_K_M",
+            parameters: "1.5B",
+            role: .chat,
+            localPath: "/tmp/models/gguf_release_bake/cortex_merged_gguf/lumen-cortex-release-bake-q4_k_m.gguf"
         )
 
         let snapshot = LumenModelFleetResolver.resolveV1(
-            activeChatModelID: general.id.uuidString,
+            activeChatModelID: sharedBase.id.uuidString,
             activeEmbeddingModelID: nil,
-            storedModels: [general, coder, cortex]
+            storedModels: [sharedBase, cortexReleaseBake]
         )
 
-        #expect(snapshot.mode == .v1MultiResidentPlanned)
-        #expect(snapshot.assignment(for: .cortex)?.modelID == cortex.id)
-        #expect(snapshot.assignment(for: .executor)?.modelID == coder.id)
-        #expect(snapshot.assignment(for: .rem)?.modelID == general.id)
-        #expect(snapshot.targetResidentSlots.contains(.cortex))
-        #expect(snapshot.targetResidentSlots.contains(.executor))
-        #expect(snapshot.runtimeResidentSlots.contains(.cortex))
-        #expect(!snapshot.runtimeResidentSlots.contains(.executor))
+        #expect(snapshot.assignment(for: .cortex)?.modelID == cortexReleaseBake.id)
+        #expect(snapshot.assignment(for: .executor)?.modelID == sharedBase.id)
+    }
+
+    @Test @MainActor func resolverDoesNotLoadAdapterOnlyArtifactsAsStandaloneChatModels() async throws {
+        let sharedBase = StoredModel(
+            name: "Fleet v1 Adapter Base — Qwen 2.5 1.5B",
+            repoId: "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            fileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            sizeBytes: 1,
+            quantization: "Q4_K_M",
+            parameters: "1.5B",
+            role: .chat,
+            localPath: "/tmp/shared-base.gguf"
+        )
+        let cortexAdapter = StoredModel(
+            name: "Lumen Cortex LoRA Adapter",
+            repoId: "ales27pm/lumen-fleet-adapters",
+            fileName: "cortex.lora",
+            sizeBytes: 1,
+            quantization: "lora",
+            parameters: "adapter",
+            role: .chat,
+            localPath: "/tmp/models/lora/cortex/cortex.lora"
+        )
+
+        let snapshot = LumenModelFleetResolver.resolveV1(
+            activeChatModelID: sharedBase.id.uuidString,
+            activeEmbeddingModelID: nil,
+            storedModels: [sharedBase, cortexAdapter]
+        )
+
+        #expect(snapshot.assignment(for: .cortex)?.modelID == sharedBase.id)
+        #expect(snapshot.assignment(for: .executor)?.modelID == sharedBase.id)
+        #expect(snapshot.assignments.values.allSatisfy { $0.modelID != cortexAdapter.id })
     }
 }

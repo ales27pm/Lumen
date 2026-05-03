@@ -11,6 +11,7 @@ nonisolated struct LumenInAppDatasetPackage: Codable, Sendable, Hashable {
     let scenarioResults: [RuntimeScenarioResult]
     let recentTraces: [AgentBehaviorTrace]
     let traceSelectedToolAllowedCount: Int
+    let traceParseErrorCount: Int
     let exportPolicy: InAppDatasetExportPolicy
 }
 
@@ -65,6 +66,11 @@ nonisolated enum InAppDatasetPackageExporter {
             traceSelectedToolAllowedCount: traces.reduce(into: 0) { count, trace in
                 guard let selectedToolID = trace.selectedToolID else { return }
                 if trace.allowedToolIDs.contains(selectedToolID) {
+                    count += 1
+                }
+            },
+            traceParseErrorCount: traces.reduce(into: 0) { count, trace in
+                if trace.parseError != nil {
                     count += 1
                 }
             },

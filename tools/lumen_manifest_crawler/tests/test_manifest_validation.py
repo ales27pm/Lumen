@@ -39,7 +39,7 @@ def test_runtime_repair_record_requires_provenance_and_repair_action():
                 "messages": [
                     {"role": "system", "content": "sys"},
                     {"role": "user", "content": "{}"},
-                    {"role": "assistant", "content": "{\"repair\":{\"action\":\"document_runtime_pass_and_expand_coverage\"}}"},
+                    {"role": "assistant", "content": "{\"failureType\":\"runtime_audit_clean\",\"repair\":{\"action\":\"document_runtime_pass_and_expand_coverage\"}}"},
                 ],
                 "metadata": {"source": "lumen_in_app_dataset_package", "sourceFile": "runtime-audits/latest-testflight-export.json"},
             }
@@ -47,7 +47,7 @@ def test_runtime_repair_record_requires_provenance_and_repair_action():
     }
     report = validate_manifest(manifest, dataset)
     assert not any(
-        f.code in {"runtime_repair_missing_source_family", "runtime_repair_missing_provenance", "runtime_repair_missing_action"}
+        f.code in {"runtime_repair_missing_source_family", "runtime_repair_missing_provenance", "runtime_repair_missing_action", "runtime_repair_missing_failure_type"}
         for f in report.failures
     )
 
@@ -74,3 +74,4 @@ def test_runtime_repair_record_fails_without_repair_action():
     report = validate_manifest(manifest, dataset)
     assert any(f.code == "runtime_repair_missing_source_family" for f in report.failures)
     assert any(f.code == "runtime_repair_missing_action" for f in report.failures)
+    assert any(f.code == "runtime_repair_missing_failure_type" for f in report.failures)

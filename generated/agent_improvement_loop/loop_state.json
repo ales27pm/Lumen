@@ -69,8 +69,8 @@
   "errorGapCount": 0,
   "gapCount": 0,
   "manifest": {
-    "commit": "7403de0d19a321f6789effcc5b3bf23e0f7726a3",
-    "fingerprint": "057194b21c589e50339c9b1a7730c1f8155a3bf1b5fb2ce42976fdff9939044e",
+    "commit": "3aa4534f69a0e7ce52af077c993e0b1ec29b1e83",
+    "fingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
@@ -95,7 +95,7 @@
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "057194b21c589e50339c9b1a7730c1f8155a3bf1b5fb2ce42976fdff9939044e",
+    "manifestFingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,

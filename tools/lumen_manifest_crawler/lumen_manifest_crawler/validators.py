@@ -226,6 +226,8 @@ def _validate_compiled_record_shape(name: str, index: int, record: dict, failure
             failures.append(ValidationFailure(code="runtime_repair_missing_provenance", message="runtime_audit_repairs record missing metadata.source or metadata.sourceFile", path=f"dataset.{name}.{index}.metadata"))
         if not _runtime_repair_has_action(record):
             failures.append(ValidationFailure(code="runtime_repair_missing_action", message="runtime_audit_repairs assistant payload must contain repair.action", path=f"dataset.{name}.{index}.messages"))
+        if not _runtime_repair_has_failure_type(record):
+            failures.append(ValidationFailure(code="runtime_repair_missing_failure_type", message="runtime_audit_repairs assistant payload must contain failureType", path=f"dataset.{name}.{index}.messages"))
     if name == "dpo_preference_pairs":
         if not isinstance(record.get("prompt"), list) or not isinstance(record.get("chosen"), dict) or not isinstance(record.get("rejected"), dict):
             failures.append(ValidationFailure(code="invalid_dpo_pair", message=f"{name}[{index}] is missing prompt/chosen/rejected", path=f"dataset.{name}.{index}"))
@@ -293,6 +295,26 @@ def _runtime_repair_has_action(record: dict[str, Any]) -> bool:
         return False
     repair = payload.get("repair")
     return isinstance(repair, dict) and isinstance(repair.get("action"), str) and bool(repair.get("action").strip())
+
+
+def _runtime_repair_has_failure_type(record: dict[str, Any]) -> bool:
+    messages = record.get("messages")
+    if not isinstance(messages, list):
+        return False
+    assistant_messages = [message for message in messages if isinstance(message, dict) and message.get("role") == "assistant"]
+    if not assistant_messages:
+        return False
+    content = assistant_messages[-1].get("content")
+    if not isinstance(content, str) or not content.strip():
+        return False
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    value = payload.get("failureType")
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _find_tool_id(record: dict) -> str | None:

@@ -4,8 +4,8 @@ This is the live-runtime phase of the Lumen improvement loop. Do not replace thi
 
 ## Build identity
 
-- Manifest fingerprint: `057194b21c589e50339c9b1a7730c1f8155a3bf1b5fb2ce42976fdff9939044e`
-- Manifest commit: `7403de0d19a321f6789effcc5b3bf23e0f7726a3`
+- Manifest fingerprint: `d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875`
+- Manifest commit: `3aa4534f69a0e7ce52af077c993e0b1ec29b1e83`
 - Build label: `None`
 - Expected export: `lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package`
 
@@ -52,160 +52,160 @@ Full machine-readable queue: `testflight_scenarios.jsonl`
 - Source: `trace_export_coverage`
 - Prompt: Ask a normal chat-only question that should not call tools, then verify the exported runtime traces still include prompt prefixes and parse diagnostics.
 
-### 5. routing_matrix_adherence
+### 5. runtime_trace_integrity
 
 - Agent: `runtime`
-- Source: `eval_scenarios`
-- Prompt: For intent `alarm`, select only an allowed tool. Forbidden candidates: calendar.create, calendar.list, camera.capture, contacts.search, files.read.
+- Source: `trace_integrity`
+- Prompt: Run one tool-backed task and verify the exported dataset shows `traceParseErrorCount` does not increase unexpectedly.
 
-### 6. routing_matrix_adherence
+### 6. runtime_trace_integrity
 
 - Agent: `runtime`
-- Source: `eval_scenarios`
-- Prompt: For intent `calendar`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Source: `trace_integrity`
+- Prompt: Run a mixed batch of chat and tool prompts, then verify the export includes both `traceSelectedToolAllowedCount` and `traceParseErrorCount`.
 
 ### 7. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `camera`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `alarm`, select only an allowed tool. Forbidden candidates: calendar.create, calendar.list, camera.capture, contacts.search, files.read.
 
 ### 8. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `chat`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `calendar`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 9. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `contactSearch`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `camera`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 10. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `emailDraft`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `chat`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 11. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `files`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `contactSearch`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 12. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `health`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `emailDraft`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 13. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `maps`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `files`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 14. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `memory`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `health`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 15. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `messageDraft`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `maps`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 16. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `motion`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `memory`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 17. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `note`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `messageDraft`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 18. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `outlook`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `motion`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 19. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `phoneCall`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `note`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 20. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `photos`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `outlook`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 21. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `rag`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `phoneCall`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 22. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `reminder`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `photos`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 23. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `trigger`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `rag`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 24. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `unknown`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `reminder`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 25. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: For intent `weather`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+- Prompt: For intent `trigger`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
 ### 26. routing_matrix_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
+- Prompt: For intent `unknown`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+
+### 27. routing_matrix_adherence
+
+- Agent: `runtime`
+- Source: `eval_scenarios`
+- Prompt: For intent `weather`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
+
+### 28. routing_matrix_adherence
+
+- Agent: `runtime`
+- Source: `eval_scenarios`
 - Prompt: For intent `webSearch`, select only an allowed tool. Forbidden candidates: alarm.authorization_status, alarm.cancel, alarm.countdown, alarm.list, alarm.pause.
 
-### 27. tool_schema_adherence
+### 29. tool_schema_adherence
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
 - Prompt: Generate a Tool Executor JSON call for `calendar.create` using only required arguments from the manifest.
 
-### 28. tool_runtime_scenario_selection
-
-- Agent: `runtime`
-- Source: `eval_scenarios`
-- Prompt: Generate a manifest-valid action step for `calendar.create`.
-
-### 29. tool_runtime_scenario_selection
-
-- Agent: `runtime`
-- Source: `eval_scenarios`
-- Prompt: Create a calendar event for a meeting in 10 minutes.
-
 ### 30. tool_runtime_scenario_selection
 
 - Agent: `runtime`
 - Source: `eval_scenarios`
-- Prompt: Add a dentist appointment tomorrow at 2 PM.
+- Prompt: Generate a manifest-valid action step for `calendar.create`.
 
 Additional scenarios omitted from this Markdown view: `90`. Use `testflight_scenarios.jsonl` for the full queue.

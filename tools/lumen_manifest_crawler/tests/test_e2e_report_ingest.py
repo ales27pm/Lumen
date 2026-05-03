@@ -238,6 +238,7 @@ def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Pa
         "usedRuntimeFallback": False,
         "exportPolicy": {"format": "single-json-package"},
         "traceSelectedToolAllowedCount": 7,
+        "traceParseErrorCount": 3,
         "recentTraces": [
             {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]},
             {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"]},
@@ -248,6 +249,7 @@ def test_in_app_package_preserves_trace_selected_tool_allowed_count(tmp_path: Pa
     report = load_runtime_audit_reports([report_path])[0]
     assert report["_sourceFormat"] == "lumen_in_app_dataset_package"
     assert report["traceSelectedToolAllowedCount"] == 7
+    assert report["traceParseErrorCount"] == 3
 
 
 def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing(tmp_path: Path):
@@ -262,11 +264,12 @@ def test_in_app_package_backfills_trace_selected_tool_allowed_count_when_missing
         "exportPolicy": {"format": "single-json-package"},
         "recentTraces": [
             {"slot": "cortex", "promptPrefix": "route this", "selectedToolID": "calendar.create", "allowedToolIDs": ["calendar.create"]},
-            {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"]},
-            {"slot": "cortex", "promptPrefix": "final", "selectedToolID": None, "allowedToolIDs": []},
+            {"slot": "cortex", "promptPrefix": "route this too", "selectedToolID": "web.search", "allowedToolIDs": ["maps.search"], "parseError": "bad-json"},
+            {"slot": "cortex", "promptPrefix": "final", "selectedToolID": None, "allowedToolIDs": [], "parseError": None},
         ],
     }
     report_path.write_text(json.dumps(package), encoding="utf-8")
 
     report = load_runtime_audit_reports([report_path])[0]
     assert report["traceSelectedToolAllowedCount"] == 1
+    assert report["traceParseErrorCount"] == 1

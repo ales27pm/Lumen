@@ -49,6 +49,7 @@ public struct AgentGroundingAuditView: View {
                     if let lastExportPackage {
                         LabeledContent("Traces", value: "\(lastExportPackage.recentTraces.count)")
                         LabeledContent("Allowed selections", value: "\(lastExportPackage.traceSelectedToolAllowedCount)")
+                        LabeledContent("Trace parse errors", value: "\(lastExportPackage.traceParseErrorCount)")
                         LabeledContent("Runtime failures", value: "\(lastExportPackage.runtimeManifestAudit?.failures.count ?? 0)")
                         LabeledContent("Behavior violations", value: "\(lastExportPackage.behaviorAudit?.violations.count ?? 0)")
                     }

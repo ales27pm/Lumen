@@ -343,6 +343,7 @@ def _build_testflight_scenario_queue(
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     candidates.extend(_build_trace_export_scenarios(manifest))
+    candidates.extend(_build_trace_integrity_scenarios())
 
     for record in datasets.get("eval_scenarios", []):
         candidates.append(_scenario_from_eval_record(record, source_family="eval_scenarios"))
@@ -434,6 +435,44 @@ def _build_trace_export_scenarios(manifest: Any) -> list[dict[str, Any]]:
         ],
     })
     return scenarios
+
+
+def _build_trace_integrity_scenarios() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": _stable_id("trace_integrity", "parse_error_free_tool_turn"),
+            "sourceFamily": "trace_integrity",
+            "agent": "runtime",
+            "taskType": "runtime_trace_integrity",
+            "prompt": "Run one tool-backed task and verify the exported dataset shows `traceParseErrorCount` does not increase unexpectedly.",
+            "expected": {
+                "traceField": "traceParseErrorCount",
+                "requiresRecentTrace": True,
+                "expectedDirection": "non_increasing_for_stable_build",
+            },
+            "testFlightInstructions": [
+                "Run the prompt in the real TestFlight app.",
+                "Export the in-app dataset package JSON from Agent Grounding.",
+                "Verify `traceParseErrorCount` exists and inspect whether parse errors are regressing.",
+            ],
+        },
+        {
+            "id": _stable_id("trace_integrity", "mixed_prompts_trace_consistency"),
+            "sourceFamily": "trace_integrity",
+            "agent": "runtime",
+            "taskType": "runtime_trace_integrity",
+            "prompt": "Run a mixed batch of chat and tool prompts, then verify the export includes both `traceSelectedToolAllowedCount` and `traceParseErrorCount`.",
+            "expected": {
+                "traceFields": ["traceSelectedToolAllowedCount", "traceParseErrorCount"],
+                "requiresRecentTrace": True,
+            },
+            "testFlightInstructions": [
+                "Run mixed prompts through the normal app UI.",
+                "Export the in-app dataset package JSON from Agent Grounding.",
+                "Confirm both trace metrics are present for loop ingestion.",
+            ],
+        },
+    ]
 
 
 def _scenario_from_eval_record(record: dict[str, Any], *, source_family: str) -> dict[str, Any]:

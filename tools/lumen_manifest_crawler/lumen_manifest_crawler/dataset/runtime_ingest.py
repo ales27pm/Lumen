@@ -87,6 +87,7 @@ def _is_e2e_json_report(value: dict[str, Any]) -> bool:
 def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str, Any]:
     failures: list[dict[str, Any]] = []
     trace_selected_tool_allowed_count = 0
+    trace_parse_error_count = 0
     runtime_audit = package.get("runtimeManifestAudit")
     if isinstance(runtime_audit, dict):
         for failure in runtime_audit.get("failures", []) or []:
@@ -110,6 +111,8 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
         parse_error = trace.get("parseError")
         selected_tool_id = trace.get("selectedToolID")
         allowed_tool_ids = trace.get("allowedToolIDs") if isinstance(trace.get("allowedToolIDs"), list) else []
+        if parse_error:
+            trace_parse_error_count += 1
         if selected_tool_id and selected_tool_id in allowed_tool_ids:
             trace_selected_tool_allowed_count += 1
         if parse_error:
@@ -150,6 +153,7 @@ def _flatten_in_app_package(package: dict[str, Any], *, source: str) -> dict[str
         "manifestSource": package.get("manifestSource"),
         "usedRuntimeFallback": package.get("usedRuntimeFallback"),
         "traceSelectedToolAllowedCount": package.get("traceSelectedToolAllowedCount", trace_selected_tool_allowed_count),
+        "traceParseErrorCount": package.get("traceParseErrorCount", trace_parse_error_count),
         "exportPolicy": package.get("exportPolicy"),
         "failures": failures,
     }

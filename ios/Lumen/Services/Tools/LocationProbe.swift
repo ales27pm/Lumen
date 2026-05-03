@@ -8,15 +8,13 @@ enum LocationProbe {
         let manager = CLLocationManager()
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         let status = manager.authorizationStatus
-        if status == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        } else if status == .denied || status == .restricted {
+        if status == .denied || status == .restricted {
             return nil
         }
 
         let holder = DelegateHolder()
         return await withCheckedContinuation { (cont: CheckedContinuation<CLLocationCoordinate2D?, Never>) in
-            let delegate = SingleShotLocationDelegate { coord in
+            let delegate = SingleShotLocationDelegate(manager: manager) { coord in
                 cont.resume(returning: coord)
             }
             holder.delegate = delegate
@@ -27,7 +25,7 @@ enum LocationProbe {
                 delegate.finish(with: nil)
             }
 
-            manager.requestLocation()
+            delegate.begin()
             _ = holder
         }
     }
@@ -36,15 +34,13 @@ enum LocationProbe {
         let manager = CLLocationManager()
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         let status = manager.authorizationStatus
-        if status == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        } else if status == .denied || status == .restricted {
+        if status == .denied || status == .restricted {
             return "Location access was denied."
         }
 
         let holder = DelegateHolder()
         return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
-            let delegate = SingleShotDescriptionDelegate { text in
+            let delegate = SingleShotDescriptionDelegate(manager: manager) { text in
                 cont.resume(returning: text)
             }
             holder.delegate = delegate
@@ -55,7 +51,7 @@ enum LocationProbe {
                 delegate.finish(with: "Couldn't get location (timed out).")
             }
 
-            manager.requestLocation()
+            delegate.begin()
             _ = holder
         }
     }
@@ -66,13 +62,72 @@ private final class DelegateHolder {
     var delegate: AnyObject?
 }
 
+private enum LocationAuthorizationAction {
+    case requestLocation
+    case requestWhenInUseAuthorization
+    case deniedOrRestricted
+    case waitForChoice
+    case unknown
+}
+
+private func locationAuthorizationAction(for status: CLAuthorizationStatus) -> LocationAuthorizationAction {
+    switch status {
+    case .authorizedAlways, .authorizedWhenInUse:
+        return .requestLocation
+    case .notDetermined:
+        return .requestWhenInUseAuthorization
+    case .denied, .restricted:
+        return .deniedOrRestricted
+    @unknown default:
+        return .unknown
+    }
+}
+
+private func locationAuthorizationUpdateAction(for status: CLAuthorizationStatus) -> LocationAuthorizationAction {
+    switch status {
+    case .authorizedAlways, .authorizedWhenInUse:
+        return .requestLocation
+    case .notDetermined:
+        return .waitForChoice
+    case .denied, .restricted:
+        return .deniedOrRestricted
+    @unknown default:
+        return .unknown
+    }
+}
+
+private func logUnknownAuthorizationStatus(_ status: CLAuthorizationStatus, source: String) {
+    NSLog("[LocationProbe] Unknown authorization status at %@: rawValue=%d", source, status.rawValue)
+}
+
 @MainActor
 final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
     /// Concurrency contract: callbacks are normalized onto MainActor before reading or mutating state.
+    private let manager: CLLocationManager
     private let handler: (CLLocationCoordinate2D?) -> Void
     private var done = false
 
-    init(handler: @escaping (CLLocationCoordinate2D?) -> Void) { self.handler = handler }
+    init(manager: CLLocationManager, handler: @escaping (CLLocationCoordinate2D?) -> Void) {
+        self.manager = manager
+        self.handler = handler
+    }
+
+    func begin() {
+        MainActor.preconditionIsolated()
+        switch locationAuthorizationAction(for: manager.authorizationStatus) {
+        case .requestLocation:
+            manager.requestLocation()
+        case .requestWhenInUseAuthorization:
+            manager.requestWhenInUseAuthorization()
+        case .deniedOrRestricted:
+            finish(with: nil)
+        case .waitForChoice:
+            break
+        case .unknown:
+            logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotLocationDelegate.begin")
+            finish(with: nil)
+        }
+    }
 
     func finish(with coord: CLLocationCoordinate2D?) {
         MainActor.preconditionIsolated()
@@ -93,15 +148,53 @@ final class SingleShotLocationDelegate: NSObject, CLLocationManagerDelegate {
             self.finish(with: nil)
         }
     }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            guard !self.done else { return }
+            switch locationAuthorizationUpdateAction(for: manager.authorizationStatus) {
+            case .requestLocation:
+                manager.requestLocation()
+            case .deniedOrRestricted:
+                self.finish(with: nil)
+            case .waitForChoice, .requestWhenInUseAuthorization:
+                break
+            case .unknown:
+                logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotLocationDelegate.locationManagerDidChangeAuthorization")
+                self.finish(with: nil)
+            }
+        }
+    }
 }
 
 @MainActor
 final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate {
     /// Concurrency contract: callbacks are normalized onto MainActor before reading or mutating state.
+    private let manager: CLLocationManager
     private let handler: (String) -> Void
     private var done = false
 
-    init(handler: @escaping (String) -> Void) { self.handler = handler }
+    init(manager: CLLocationManager, handler: @escaping (String) -> Void) {
+        self.manager = manager
+        self.handler = handler
+    }
+
+    func begin() {
+        MainActor.preconditionIsolated()
+        switch locationAuthorizationAction(for: manager.authorizationStatus) {
+        case .requestLocation:
+            manager.requestLocation()
+        case .requestWhenInUseAuthorization:
+            manager.requestWhenInUseAuthorization()
+        case .deniedOrRestricted:
+            finish(with: "Location access was denied.")
+        case .waitForChoice:
+            break
+        case .unknown:
+            logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotDescriptionDelegate.begin")
+            finish(with: "Couldn't determine location authorization state.")
+        }
+    }
 
     func finish(with text: String) {
         MainActor.preconditionIsolated()
@@ -127,6 +220,23 @@ final class SingleShotDescriptionDelegate: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
             self.finish(with: "Couldn't get location: \(error.localizedDescription)")
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            guard !self.done else { return }
+            switch locationAuthorizationUpdateAction(for: manager.authorizationStatus) {
+            case .requestLocation:
+                manager.requestLocation()
+            case .deniedOrRestricted:
+                self.finish(with: "Location access was denied.")
+            case .waitForChoice, .requestWhenInUseAuthorization:
+                break
+            case .unknown:
+                logUnknownAuthorizationStatus(manager.authorizationStatus, source: "SingleShotDescriptionDelegate.locationManagerDidChangeAuthorization")
+                self.finish(with: "Couldn't determine location authorization state.")
+            }
         }
     }
 }

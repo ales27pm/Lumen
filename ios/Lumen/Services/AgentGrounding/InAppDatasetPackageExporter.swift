@@ -28,6 +28,10 @@ nonisolated struct InAppDatasetExportPolicy: Codable, Sendable, Hashable {
     let promptPolicy: String
     let traceLimit: Int
     let source: String
+    let sourceLayer: String
+    let ownsLiveE2EScenarios: Bool
+    let includesDeterministicStaticScenarios: Bool
+    let deterministicScenarioPolicy: String
 }
 
 nonisolated struct InAppDatasetPackageExportResult: Sendable {
@@ -36,7 +40,8 @@ nonisolated struct InAppDatasetPackageExportResult: Sendable {
 }
 
 nonisolated enum InAppDatasetPackageExporter {
-    static let schemaVersion = "1.0.0"
+    static let schemaVersion = "1.1.0"
+    static let defaultIncludesScenarioResults = false
     private static let directoryName = "LumenDatasetExports"
 
     static func makePackage(
@@ -45,7 +50,8 @@ nonisolated enum InAppDatasetPackageExporter {
         runtimeManifestAudit: RuntimeAgentManifestAuditReport?,
         behaviorAudit: AgentBehaviorAuditReport?,
         scenarioResults: [RuntimeScenarioResult],
-        traceLimit: Int = 200
+        traceLimit: Int = 200,
+        includeScenarioResults: Bool = defaultIncludesScenarioResults
     ) -> LumenInAppDatasetPackage {
         let traces = AgentBehaviorTraceRecorder.recent(limit: traceLimit)
         return LumenInAppDatasetPackage(
@@ -61,7 +67,7 @@ nonisolated enum InAppDatasetPackageExporter {
             usedRuntimeFallback: usedRuntimeFallback,
             runtimeManifestAudit: runtimeManifestAudit,
             behaviorAudit: behaviorAudit,
-            scenarioResults: scenarioResults,
+            scenarioResults: includeScenarioResults ? scenarioResults : [],
             recentTraces: traces,
             traceSelectedToolAllowedCount: traces.reduce(into: 0) { count, trace in
                 guard let selectedToolID = trace.selectedToolID else { return }
@@ -75,11 +81,17 @@ nonisolated enum InAppDatasetPackageExporter {
                 }
             },
             exportPolicy: InAppDatasetExportPolicy(
-                format: "single-json-package",
-                privacy: "contains only manifest audit failures, behavior violations, deterministic scenarios, and truncated trace prefixes; no full conversations, contacts, calendar bodies, files, photos, or tool payload bodies are exported",
+                format: "agent-grounding-runtime-json-package",
+                privacy: "contains only manifest audit failures, behavior violations, and bounded runtime trace prefixes; no full conversations, contacts, calendar bodies, files, photos, or tool payload bodies are exported",
                 promptPolicy: "promptPrefix fields are bounded and should be treated as diagnostic snippets only",
                 traceLimit: traceLimit,
-                source: "RuntimeManifestAuditor + AgentModelBehaviorAuditor + RuntimeScenarioRunner + AgentBehaviorTraceRecorder"
+                source: "RuntimeManifestAuditor + AgentModelBehaviorAuditor + AgentBehaviorTraceRecorder",
+                sourceLayer: "agentGroundingRuntimeAudit",
+                ownsLiveE2EScenarios: false,
+                includesDeterministicStaticScenarios: includeScenarioResults,
+                deterministicScenarioPolicy: includeScenarioResults
+                    ? "Static manifest scenario checks were explicitly included; they are not proof of live model execution and must not be treated as E2E model runs."
+                    : "Static manifest scenario checks are displayed in-app only and omitted from the dataset export; E2ETestRunner owns live model scenario results."
             )
         )
     }
@@ -90,7 +102,8 @@ nonisolated enum InAppDatasetPackageExporter {
         runtimeManifestAudit: RuntimeAgentManifestAuditReport?,
         behaviorAudit: AgentBehaviorAuditReport?,
         scenarioResults: [RuntimeScenarioResult],
-        traceLimit: Int = 200
+        traceLimit: Int = 200,
+        includeScenarioResults: Bool = defaultIncludesScenarioResults
     ) throws -> InAppDatasetPackageExportResult {
         let package = makePackage(
             manifestSource: manifestSource,
@@ -98,10 +111,11 @@ nonisolated enum InAppDatasetPackageExporter {
             runtimeManifestAudit: runtimeManifestAudit,
             behaviorAudit: behaviorAudit,
             scenarioResults: scenarioResults,
-            traceLimit: traceLimit
+            traceLimit: traceLimit,
+            includeScenarioResults: includeScenarioResults
         )
         let directory = try exportDirectory()
-        let fileName = "lumen-in-app-dataset-\(Self.safeTimestamp(package.generatedAt))-\(UUID().uuidString.lowercased()).json"
+        let fileName = "lumen-agent-grounding-audit-\(Self.safeTimestamp(package.generatedAt))-\(UUID().uuidString.lowercased()).json"
         let url = directory.appendingPathComponent(fileName, isDirectory: false)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

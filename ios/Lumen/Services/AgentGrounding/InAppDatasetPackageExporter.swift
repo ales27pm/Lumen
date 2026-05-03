@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LumenInAppDatasetPackage: Codable, Sendable, Hashable {
+nonisolated struct LumenInAppDatasetPackage: Codable, Sendable {
     let schemaVersion: String
     let generatedAt: Date
     let app: InAppDatasetAppInfo
@@ -30,7 +30,7 @@ nonisolated struct InAppDatasetExportPolicy: Codable, Sendable, Hashable {
     let source: String
 }
 
-nonisolated struct InAppDatasetPackageExportResult: Sendable, Hashable {
+nonisolated struct InAppDatasetPackageExportResult: Sendable {
     let url: URL
     let package: LumenInAppDatasetPackage
 }
@@ -48,7 +48,7 @@ nonisolated enum InAppDatasetPackageExporter {
         traceLimit: Int = 200
     ) -> LumenInAppDatasetPackage {
         let traces = AgentBehaviorTraceRecorder.recent(limit: traceLimit)
-        LumenInAppDatasetPackage(
+        return LumenInAppDatasetPackage(
             schemaVersion: schemaVersion,
             generatedAt: Date(),
             app: InAppDatasetAppInfo(

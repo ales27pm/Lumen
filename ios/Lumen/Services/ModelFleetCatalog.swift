@@ -173,7 +173,11 @@ nonisolated enum LumenModelFleetCatalog {
         )
     ]
 
+    static var defaultFleetModels: [CatalogModel] {
+        v1AdapterFirstBase + v1Recommended + v1Candidates
+    }
+
     static var allFleetModels: [CatalogModel] {
-        v1AdapterFirstBase + v1Recommended + v1Candidates + v1ReleaseBaked
+        defaultFleetModels + v1ReleaseBaked
     }
 }

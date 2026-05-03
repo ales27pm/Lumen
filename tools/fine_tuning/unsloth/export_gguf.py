@@ -10,13 +10,21 @@ from typing import Any
 
 
 AGENTS = ("cortex", "executor", "mouth", "mimicry", "rem", "fleet")
-GGUF_MARKERS = {"gguf", "merged", "finetune", "finetuned"}
+GGUF_MARKERS = {"gguf", "merged", "release", "bake", "finetune", "finetuned"}
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Export per-agent merged GGUF artifacts from Unsloth LoRA outputs."
+        description=(
+            "Optionally bake per-agent LoRA adapters into merged GGUF artifacts. "
+            "Adapter-first training is the default; pass --release-bake to merge/export."
+        )
+    )
+    parser.add_argument(
+        "--release-bake",
+        action="store_true",
+        help="Explicitly enable optional adapter merge/export. Without this flag, no GGUF merge is performed.",
     )
     parser.add_argument(
         "--config",
@@ -41,8 +49,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-root",
-        default="models/gguf_merged",
-        help="Root directory for merged GGUF artifacts.",
+        default="models/gguf_release_bake",
+        help="Root directory for optional release-baked merged GGUF artifacts.",
     )
     parser.add_argument(
         "--hf-repo-id",
@@ -67,8 +75,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--manifest-output",
-        default="generated/fine_tuning/merged_gguf_manifest.json",
-        help="Path to write merged GGUF artifact manifest.",
+        default="generated/fine_tuning/release_bake_gguf_manifest.json",
+        help="Path to write optional release-baked GGUF artifact manifest.",
     )
     parser.add_argument(
         "--skip-existing",
@@ -106,6 +114,10 @@ def load_config(path: Path) -> dict[str, Any]:
         markers={"lora", "adapter", "sft", "dpo", "orpo", "finetune", "finetuned"},
         label="output_dir",
     )
+    if cfg.get("merge_adapters_by_default") is not False:
+        raise ValueError(f"{path} must set merge_adapters_by_default=false for adapter-first training")
+    if cfg.get("release_bake_enabled_by_default") is not False:
+        raise ValueError(f"{path} must set release_bake_enabled_by_default=false")
     return cfg
 
 
@@ -144,7 +156,7 @@ def upload_file(repo_id: str, local_path: Path, remote_name: str) -> None:
         path_in_repo=remote_name,
         repo_id=repo_id,
         repo_type="model",
-        commit_message=f"Upload merged GGUF: {remote_name}",
+        commit_message=f"Upload release-baked GGUF: {remote_name}",
     )
 
 
@@ -154,6 +166,26 @@ def sha256sum(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _release_bake_skipped_manifest(configs: list[dict[str, Any]], args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "mode": "adapter_first",
+        "release_bake_requested": False,
+        "skipped": True,
+        "reason": "Adapter-first training keeps LoRA adapters separate by default. Pass --release-bake to explicitly merge/export GGUF artifacts.",
+        "manifest_output": args.manifest_output,
+        "agents": {
+            str(cfg["agent"]).strip().lower(): {
+                "agent": str(cfg["agent"]).strip().lower(),
+                "adapter_dir": str(Path(str(cfg["output_dir"])).resolve()),
+                "base_model_name": cfg["base_model_name"],
+                "merge_adapters_by_default": False,
+                "release_bake_enabled_by_default": False,
+            }
+            for cfg in configs
+        },
+    }
 
 
 def export_agent_gguf(
@@ -184,7 +216,7 @@ def export_agent_gguf(
     ).lower()
 
     agent_output_dir = Path(
-        str(cfg.get("gguf_output_dir") or (output_root / f"{agent}_merged_gguf"))
+        str(cfg.get("gguf_output_dir") or (output_root / f"{agent}_release_bake_gguf"))
     ).resolve()
     _validate_path_tokens(
         path=str(agent_output_dir),
@@ -208,7 +240,7 @@ def export_agent_gguf(
     if not hasattr(model, "save_pretrained_gguf"):
         model = patch_saving_functions(model)
 
-    scratch_dir = agent_output_dir / "_unsloth_export"
+    scratch_dir = agent_output_dir / "_unsloth_release_bake"
     if scratch_dir.exists():
         shutil.rmtree(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
@@ -234,12 +266,13 @@ def export_agent_gguf(
     if selected is None:
         selected = gguf_files[0]
 
-    target_name = f"lumen-{agent}-merged-{quantization}.gguf"
+    target_name = f"lumen-{agent}-release-bake-{quantization}.gguf"
     target_path = agent_output_dir / target_name
     shutil.copy2(selected, target_path)
 
     summary = {
         "agent": agent,
+        "mode": "optional_release_bake",
         "quantization": quantization,
         "adapter_dir": str(adapter_dir),
         "gguf_output_dir": str(agent_output_dir),
@@ -249,7 +282,7 @@ def export_agent_gguf(
         "sha256": sha256sum(target_path),
         "base_model_name": cfg["base_model_name"],
     }
-    (agent_output_dir / "gguf_export_report.json").write_text(
+    (agent_output_dir / "gguf_release_bake_report.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -270,14 +303,15 @@ def existing_summary_for_agent(
         or "q4_k_m"
     ).lower()
     agent_output_dir = Path(
-        str(cfg.get("gguf_output_dir") or (output_root / f"{agent}_merged_gguf"))
+        str(cfg.get("gguf_output_dir") or (output_root / f"{agent}_release_bake_gguf"))
     ).resolve()
-    target_name = f"lumen-{agent}-merged-{quantization}.gguf"
+    target_name = f"lumen-{agent}-release-bake-{quantization}.gguf"
     target_path = agent_output_dir / target_name
     if not target_path.exists():
         return None
     return {
         "agent": agent,
+        "mode": "optional_release_bake",
         "quantization": quantization,
         "adapter_dir": str(Path(str(cfg["output_dir"])).resolve()),
         "gguf_output_dir": str(agent_output_dir),
@@ -288,6 +322,16 @@ def existing_summary_for_agent(
         "base_model_name": cfg["base_model_name"],
         "reused_existing": True,
     }
+
+
+def _write_manifest(path: str, manifest: dict[str, Any]) -> Path:
+    manifest_path = Path(path).resolve()
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path
 
 
 def main() -> None:
@@ -301,10 +345,18 @@ def main() -> None:
     output_root = Path(args.output_root).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
+    if not args.release_bake:
+        manifest_path = _write_manifest(args.manifest_output, _release_bake_skipped_manifest(configs, args))
+        print(f"Skipped GGUF release bake by default. Wrote adapter-first manifest: {manifest_path}")
+        print("Pass --release-bake to explicitly merge adapters into GGUF artifacts.")
+        return
+
     if args.hf_repo_id and not args.skip_upload:
         ensure_hf_repo(args.hf_repo_id, args.hf_private)
 
     manifest: dict[str, Any] = {
+        "mode": "optional_release_bake",
+        "release_bake_requested": True,
         "repo_id": args.hf_repo_id,
         "quantization_override": args.quantization,
         "agents": {},
@@ -336,13 +388,8 @@ def main() -> None:
             summary["hf_file_name"] = summary["gguf_file"]
         manifest["agents"][agent] = summary
 
-    manifest_path = Path(args.manifest_output).resolve()
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    print(f"Wrote GGUF manifest: {manifest_path}")
+    manifest_path = _write_manifest(args.manifest_output, manifest)
+    print(f"Wrote GGUF release-bake manifest: {manifest_path}")
 
 
 if __name__ == "__main__":

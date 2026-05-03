@@ -5,8 +5,8 @@ from typing import Any
 
 ADAPTER_EXPORT_SCHEMA_VERSION = "1.0.0"
 DEFAULT_AGENT_BASE_MODEL_ID = "Qwen/Qwen3-1.7B"
-DEFAULT_ADAPTER_DIR = "adapters"
 DEFAULT_LORA_OUTPUT_ROOT = "models/lora"
+DEFAULT_ADAPTER_DIR = DEFAULT_LORA_OUTPUT_ROOT
 DEFAULT_RELEASE_BAKE_OUTPUT_ROOT = "models/gguf_release_bake"
 
 
@@ -15,12 +15,15 @@ def adapter_artifact_name(agent: str) -> str:
     return f"{slug or 'agent'}.lora"
 
 
-def adapter_artifact_path(agent: str) -> str:
-    return f"{DEFAULT_ADAPTER_DIR}/{adapter_artifact_name(agent)}"
-
-
 def adapter_output_dir(agent: str) -> str:
     return f"{DEFAULT_LORA_OUTPUT_ROOT}/{agent}"
+
+
+def adapter_artifact_path(agent: str) -> str:
+    # Unsloth/PEFT saves LoRA adapters as a directory containing adapter weights,
+    # tokenizer/config metadata, and trainer state. The runtime contract must point
+    # at that real adapter directory, not at a synthetic standalone .lora filename.
+    return adapter_output_dir(agent)
 
 
 def release_bake_output_dir(agent: str) -> str:
@@ -67,6 +70,7 @@ def augment_unsloth_config_for_adapter_export(agent: str, config: dict[str, Any]
         "agent": agent,
         "adapterID": f"lumen-{agent}-adapter",
         "adapterArtifact": adapter_artifact_path(agent),
+        "adapterDirectory": adapter_output_dir(agent),
         "baseModelID": base_model_id,
         "trainBaseModelWeights": False,
         "saveAdapterByDefault": True,
@@ -92,6 +96,7 @@ def agent_adapter_export_plan(agent: str, dataset_card: dict[str, Any], unsloth_
         "baseModelID": base_model_id,
         "adapterID": f"lumen-{agent}-adapter",
         "adapterArtifact": adapter_artifact_path(agent),
+        "adapterDirectory": adapter_output_dir(agent),
         "systemPrompt": dataset_card.get("systemPrompt"),
         "datasetCard": {
             "manifestCommit": dataset_card.get("manifestCommit"),
@@ -116,7 +121,7 @@ def agent_adapter_export_plan(agent: str, dataset_card: dict[str, Any], unsloth_
             "rollbackUnit": "adapter",
         },
         "expectedArtifacts": {
-            "adapterDirectory": f"{DEFAULT_ADAPTER_DIR}/{agent}",
+            "adapterDirectory": adapter_output_dir(agent),
             "trainSFT": "train_sft.jsonl",
             "validationSFT": "val_sft.jsonl",
             "trainDPO": "train_dpo.jsonl",
@@ -141,6 +146,7 @@ def adapter_runtime_manifest(datasets: dict[str, Any]) -> dict[str, Any]:
                 "agent": agent,
                 "adapterID": f"lumen-{agent}-adapter",
                 "adapterArtifact": adapter_artifact_path(agent),
+                "adapterDirectory": adapter_output_dir(agent),
                 "baseModelID": base_model_id,
                 "systemPrompt": dataset_card.get("systemPrompt"),
                 "recordCounts": dataset_card.get("recordCounts", {}),

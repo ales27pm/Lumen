@@ -2,6 +2,7 @@
 
 # pylint: disable=missing-function-docstring,line-too-long
 
+import json
 from pathlib import Path
 
 from lumen_manifest_crawler.improvement_loop import AgentImprovementLoopConfig, run_agent_improvement_loop
@@ -29,16 +30,39 @@ def test_improvement_loop_writes_state_gaps_prompts_and_testflight_artifacts(tmp
 
     assert (output / "AgentBehaviorManifest.json").exists()
     assert (output / "dataset" / "train_sft.jsonl").exists()
+    assert (output / "fine_tuning" / "adapter_runtime_manifest.json").exists()
     assert (output / "fine_tuning" / "cortex" / "train_sft.jsonl").exists()
+    assert (output / "fine_tuning" / "cortex" / "adapter_export_plan.json").exists()
+    assert (output / "fine_tuning" / "cortex" / "unsloth_config.json").exists()
     assert (loop_output / "loop_state.json").exists()
     assert (loop_output / "loop_gaps.json").exists()
     assert (loop_output / "next_action_prompts.jsonl").exists()
     assert (loop_output / "testflight_scenarios.jsonl").exists()
     assert (loop_output / "TESTFLIGHT_RUNBOOK.md").exists()
     assert (loop_output / "LOOP_REPORT.md").exists()
+
+    runtime_manifest = json.loads((output / "fine_tuning" / "adapter_runtime_manifest.json").read_text(encoding="utf-8"))
+    cortex_plan = json.loads((output / "fine_tuning" / "cortex" / "adapter_export_plan.json").read_text(encoding="utf-8"))
+    cortex_config = json.loads((output / "fine_tuning" / "cortex" / "unsloth_config.json").read_text(encoding="utf-8"))
+
+    assert runtime_manifest["mode"] == "adapter_first"
+    assert runtime_manifest["runtimeStrategy"]["loadBaseModelOnce"] is True
+    assert runtime_manifest["runtimeStrategy"]["selectAdapterByAgentSlot"] is True
+    assert runtime_manifest["runtimeStrategy"]["mergeAdaptersByDefault"] is False
+    assert runtime_manifest["releaseBakePolicy"]["enabledByDefault"] is False
+    assert cortex_plan["mode"] == "adapter_first"
+    assert cortex_plan["exportPolicy"]["defaultArtifact"] == "adapter"
+    assert cortex_plan["exportPolicy"]["mergeAdaptersByDefault"] is False
+    assert cortex_config["artifactMode"] == "adapter_first"
+    assert cortex_config["defaultExportArtifact"] == "lora_adapter"
+    assert cortex_config["adapterExport"]["saveAdapterByDefault"] is True
+    assert cortex_config["adapterExport"]["mergeAdaptersByDefault"] is False
+    assert cortex_config["mergeExport"]["enabledByDefault"] is False
+
     assert result.state["schemaVersion"] == "1.1.0"
     assert result.state["manifest"]["toolCount"] >= 0
     assert result.state["dataset"]["recordCount"] > 0
+    assert result.state["dataset"]["agentFineTuning"]["cortex"]["trainSFT"] > 0
     assert result.state["testFlight"]["status"] == "awaiting-testflight-runtime-audit"
     assert result.state["testFlight"]["buildLabel"] == "1.0.0-build-99"
     assert len(result.testflight_scenarios) <= 12

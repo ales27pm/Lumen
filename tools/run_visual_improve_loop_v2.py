@@ -6,6 +6,8 @@ relative path is resolved against --root, not against the shell's current workin
 directory. The runner keeps the normal loop adapter-first, writes a visual HTML
 report, emits a pipeline SVG, and makes GGUF release bake explicit.
 """
+# pylint: disable=line-too-long
+# cspell:words GGUF gguf timespec PYTHONUNBUFFERED toolcalls popleft Segoe minmax Menlo Consolas
 
 from __future__ import annotations
 
@@ -48,6 +50,8 @@ RUNTIME_AUDIT_EXCLUDE_HINTS = (
 
 @dataclass(slots=True)
 class StepResult:
+    """Execution outcome for a single pipeline step."""
+
     name: str
     command: list[str]
     cwd: str
@@ -62,15 +66,18 @@ class StepResult:
 
     @property
     def passed(self) -> bool:
+        """Return whether the step finished successfully."""
         return self.returncode == 0
 
     @property
     def status(self) -> str:
+        """Return a user-facing step status string."""
         if self.skipped:
             return "skipped"
         return "passed" if self.passed else "failed"
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize this result for summary JSON output."""
         return {
             "name": self.name,
             "command": self.command,
@@ -90,6 +97,8 @@ class StepResult:
 
 @dataclass(slots=True)
 class LoopArtifacts:
+    """Loaded improve-loop artifacts consumed by the dashboard."""
+
     state: dict[str, Any]
     gaps: list[dict[str, Any]]
     next_prompts: list[dict[str, Any]]
@@ -99,30 +108,40 @@ class LoopArtifacts:
 
 
 class Console:
+    """Minimal console printer with optional quiet mode."""
+
     def __init__(self, *, quiet: bool = False) -> None:
+        """Create a console wrapper."""
         self.quiet = quiet
 
     def line(self, message: str = "") -> None:
+        """Print a line when output is enabled."""
         if not self.quiet:
             print(message)
 
     def step(self, index: int, total: int, name: str) -> None:
+        """Print a formatted step header."""
         self.line(f"\n[{index:02d}/{total:02d}] {name}")
 
     def ok(self, message: str) -> None:
+        """Print a success message."""
         self.line(f"✓ {message}")
 
     def warn(self, message: str) -> None:
+        """Print a warning message."""
         self.line(f"⚠ {message}")
 
     def fail(self, message: str) -> None:
+        """Print an error message."""
         self.line(f"✗ {message}")
 
     def info(self, message: str) -> None:
+        """Print an informational message."""
         self.line(f"• {message}")
 
 
 def now_iso() -> str:
+    """Return the current UTC time formatted as an ISO timestamp."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
@@ -133,12 +152,14 @@ def rooted_path(root: Path, value: Path) -> Path:
 
 
 def split_shell(command: str | None) -> list[str]:
+    """Split a shell command string into argv tokens."""
     if not command or not command.strip():
         return []
     return shlex.split(command)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for the visual improve-loop runner."""
     parser = argparse.ArgumentParser(
         description="Run the Lumen improve-loop with repo-rooted paths and visual HTML/SVG output.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -184,6 +205,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def build_env(root: Path) -> dict[str, str]:
+    """Build process environment variables for child commands."""
     env = os.environ.copy()
     crawler_root = str((root / "tools" / "lumen_manifest_crawler").resolve())
     existing = env.get("PYTHONPATH")
@@ -195,6 +217,7 @@ def build_env(root: Path) -> dict[str, str]:
 def _append_optional_improve_flags(
     improve: list[str], args: argparse.Namespace, runtime_audits: list[Path]
 ) -> None:
+    """Append optional improve-loop arguments based on CLI flags."""
     if args.dry_run_commands:
         improve.append("--dry-run-commands")
     if args.require_testflight_runtime_audit:
@@ -217,6 +240,7 @@ def _build_improve_command(
     fine_tuning_output: Path,
     runtime_audits: list[Path],
 ) -> list[str]:
+    """Build the improve-loop command argv."""
     improve = [
         sys.executable,
         "-m",
@@ -255,6 +279,7 @@ def _build_improve_command(
 def _build_release_export_command(
     args: argparse.Namespace, root: Path, release_manifest: Path
 ) -> tuple[str, list[str]]:
+    """Build the release-bake/export command and step name."""
     export = [
         args.release_bake_python,
         str(root / "tools" / "fine_tuning" / "unsloth" / "export_gguf.py"),
@@ -292,6 +317,7 @@ def build_command_queue(
     fine_tuning_output: Path,
     runtime_audits: list[Path],
 ) -> list[dict[str, Any]]:
+    """Construct the ordered command queue for the run."""
     commands: list[dict[str, Any]] = []
 
     if not args.skip_tests:
@@ -315,6 +341,7 @@ def build_command_queue(
 
 
 def is_runtime_audit_candidate(path: Path) -> bool:
+    """Return whether a JSON file appears to be a runtime audit payload."""
     lowered = path.name.lower()
     if any(token in lowered for token in RUNTIME_AUDIT_EXCLUDE_HINTS):
         return False
@@ -334,6 +361,7 @@ def is_runtime_audit_candidate(path: Path) -> bool:
 
 
 def find_runtime_audit_json(path: Path) -> list[Path]:
+    """Find runtime-audit JSON files from a file or directory path."""
     if path.is_file():
         return [path] if is_runtime_audit_candidate(path) else []
     if not path.exists():
@@ -342,6 +370,7 @@ def find_runtime_audit_json(path: Path) -> list[Path]:
 
 
 def collect_runtime_audits(args: argparse.Namespace, root: Path, console: Console) -> list[Path]:
+    """Collect explicit and auto-discovered runtime-audit inputs."""
     found: list[Path] = []
     for raw in args.runtime_audit:
         path = rooted_path(root, raw)
@@ -373,6 +402,7 @@ def collect_runtime_audits(args: argparse.Namespace, root: Path, console: Consol
 
 
 def run_preflight(root: Path) -> StepResult:
+    """Check required repository files before executing commands."""
     start = time.perf_counter()
     started_at = now_iso()
     required = [
@@ -397,6 +427,7 @@ def run_preflight(root: Path) -> StepResult:
 
 
 def run_command(name: str, command: list[str], cwd: Path, env: dict[str, str], tail_chars: int, quiet: bool) -> StepResult:
+    """Run a command and capture combined output with bounded tail size."""
     start = time.perf_counter()
     started_at = now_iso()
     tail: deque[str] = deque()
@@ -425,6 +456,7 @@ def run_command(name: str, command: list[str], cwd: Path, env: dict[str, str], t
 
 
 def read_json(path: Path) -> Any:
+    """Read JSON from disk and return an error envelope on failure."""
     if not path.exists():
         return {}
     try:
@@ -434,6 +466,7 @@ def read_json(path: Path) -> Any:
 
 
 def read_jsonl(path: Path) -> list[Any]:
+    """Read a JSONL file and return parsed rows plus parse errors."""
     if not path.exists():
         return []
     out: list[Any] = []
@@ -448,6 +481,7 @@ def read_jsonl(path: Path) -> list[Any]:
 
 
 def read_artifacts(loop_output: Path, fine_tuning_output: Path, release_bake_manifest: Path) -> LoopArtifacts:
+    """Load improve-loop artifacts used by summary and dashboard rendering."""
     gaps_payload = read_json(loop_output / "loop_gaps.json")
     gaps = gaps_payload.get("gaps", []) if isinstance(gaps_payload, dict) else []
     return LoopArtifacts(
@@ -461,10 +495,12 @@ def read_artifacts(loop_output: Path, fine_tuning_output: Path, release_bake_man
 
 
 def escape(value: Any) -> str:
+    """HTML-escape any value for safe inclusion in generated markup."""
     return html.escape(str(value), quote=True)
 
 
 def shorten(value: str, max_len: int = 120) -> str:
+    """Collapse whitespace and truncate text for compact display."""
     value = re.sub(r"\s+", " ", value).strip()
     return value if len(value) <= max_len else value[: max_len - 1] + "…"
 
@@ -482,6 +518,7 @@ def normalize_html_attribute_quotes(markup: str) -> str:
 
 
 def svg_bar_chart(data: dict[str, Any], title: str) -> str:
+    """Render a compact horizontal bar chart as inline SVG."""
     numeric: dict[str, float] = {}
     for key, value in data.items():
         try:
@@ -493,18 +530,18 @@ def svg_bar_chart(data: dict[str, Any], title: str) -> str:
     items = sorted(numeric.items(), key=lambda item: item[1], reverse=True)[:24]
     width = 880
     left = 245
-    bar = 520
+    bar_width = 520
     row_h = 28
     height = 52 + row_h * len(items)
     max_v = max(value for _, value in items) or 1.0
     rows: list[str] = []
     for idx, (label, value) in enumerate(items):
         y = 38 + idx * row_h
-        w = max(2, int((value / max_v) * bar))
+        w = max(2, int((value / max_v) * bar_width))
         rows.append(f"<text x='12' y='{y + 15}' fill='#8ea0bd' font-size='12'>{escape(shorten(label, 34))}</text>")
-        rows.append(f"<rect x='{left}' y='{y}' width='{bar}' height='18' rx='9' fill='#101827'/>")
+        rows.append(f"<rect x='{left}' y='{y}' width='{bar_width}' height='18' rx='9' fill='#101827'/>")
         rows.append(f"<rect x='{left}' y='{y}' width='{w}' height='18' rx='9' fill='#73a7ff'/>")
-        rows.append(f"<text x='{left + bar + 12}' y='{y + 15}' fill='#e8eefc' font-size='12'>{escape(int(value) if value.is_integer() else round(value, 2))}</text>")
+        rows.append(f"<text x='{left + bar_width + 12}' y='{y + 15}' fill='#e8eefc' font-size='12'>{escape(int(value) if value.is_integer() else round(value, 2))}</text>")
     svg = (
         f"<svg viewBox='0 0 {width} {height}' width='100%' "
         f"xmlns='http://www.w3.org/2000/svg'><text x='12' y='23' fill='#e8eefc' "
@@ -514,6 +551,7 @@ def svg_bar_chart(data: dict[str, Any], title: str) -> str:
 
 
 def pipeline_svg(steps: list[StepResult], artifacts: LoopArtifacts) -> str:
+    """Render the command pipeline and outcomes as inline SVG."""
     row_h = 78
     width = 1120
     height = 90 + max(1, len(steps)) * row_h
@@ -538,6 +576,7 @@ def pipeline_svg(steps: list[StepResult], artifacts: LoopArtifacts) -> str:
 
 
 def build_summary(root: Path, output: Path, loop_output: Path, fine_tuning_output: Path, args: argparse.Namespace, started_at: str, ended_at: str, steps: list[StepResult], artifacts: LoopArtifacts) -> dict[str, Any]:
+    """Build the machine-readable summary payload for the run."""
     state = artifacts.state
     dataset = state.get("dataset", {}) if isinstance(state.get("dataset"), dict) else {}
     manifest = state.get("manifest", {}) if isinstance(state.get("manifest"), dict) else {}
@@ -579,6 +618,7 @@ def build_summary(root: Path, output: Path, loop_output: Path, fine_tuning_outpu
 
 
 def build_html(summary: dict[str, Any], steps: list[StepResult], artifacts: LoopArtifacts) -> str:
+    """Build the visual HTML dashboard document."""
     dataset = summary.get("dataset", {}) if isinstance(summary.get("dataset"), dict) else {}
     manifest = summary.get("manifest", {}) if isinstance(summary.get("manifest"), dict) else {}
     gaps = summary.get("gaps", {}) if isinstance(summary.get("gaps"), dict) else {}
@@ -665,6 +705,7 @@ def write_visual_outputs(
     steps: list[StepResult],
     artifacts: LoopArtifacts,
 ) -> dict[str, Path]:
+    """Write summary JSON, dashboard HTML, and pipeline SVG to disk."""
     dashboard_dir.mkdir(parents=True, exist_ok=True)
     summary = build_summary(root, output, loop_output, fine_tuning_output, args, started_at, ended_at, steps, artifacts)
     html_doc = build_html(summary, steps, artifacts)
@@ -679,6 +720,7 @@ def write_visual_outputs(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entrypoint for the visual improve-loop runner."""
     args = parse_args(argv)
     root = args.root.resolve()
     output = rooted_path(root, args.output)

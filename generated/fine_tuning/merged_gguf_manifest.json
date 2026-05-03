@@ -8,8 +8,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/cortex_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/cortex_merged_gguf/lumen-cortex-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "354fbe736f4fa6275d8d96ea50b3099e520d8b40772812d85a802b4a7806de49",
+      "sha256": "bddf5b1c37768239949e35c8949e7b64e6d93b328afed744308508f546910665",
       "size_bytes": 986048032
     },
     "executor": {
@@ -20,8 +19,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/executor_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/executor_merged_gguf/lumen-executor-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "9910d5ff8b0e3290bd73c42f81ff840d0256e09c48db7acd8b93d74d3b74f0cd",
+      "sha256": "a75b39a60331031ae43e23346654aac14b46b2021a071ff4e84685b0aebefe29",
       "size_bytes": 986048032
     },
     "fleet": {
@@ -32,8 +30,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/fleet_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/fleet_merged_gguf/lumen-fleet-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "f0df28e6a53d5db105db5c153d311b823946b876b4a3b241a2dfd2d041ff2aa1",
+      "sha256": "0883cc41c36cff4ff1592cbbf7a30f3bf4401c6354bc098cd037d0057622c89e",
       "size_bytes": 986048032
     },
     "mimicry": {
@@ -44,8 +41,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/mimicry_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/mimicry_merged_gguf/lumen-mimicry-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "97eb4c6fdcd61e7bd13ce6e606166fb52fa0e5c57d3ee0f68ffb76b2a9d41951",
+      "sha256": "2cc22bdf1992af3b306ccaeae72aeacb2835361470a320102a5f2d1ffbba59bc",
       "size_bytes": 986048032
     },
     "mouth": {
@@ -56,8 +52,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/mouth_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/mouth_merged_gguf/lumen-mouth-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "fe9788d4e6f6bc599f11406a56f73496000fe1db1b879c2afee868722b9a50f3",
+      "sha256": "b454c091e8f2d2b2791098becd3ac96d39d7063434e238f2926070b7b124a51f",
       "size_bytes": 986048032
     },
     "rem": {
@@ -68,8 +63,7 @@
       "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_merged/rem_merged_gguf",
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_merged/rem_merged_gguf/lumen-rem-merged-q4_k_m.gguf",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "e40a75599bfea0631f73c7977340a42657ac5a4894d995478d0d007a6b4bbb6f",
+      "sha256": "126664283b9121cf29e095d6f34641b4068a0a7c905156c1f94f227e49d19471",
       "size_bytes": 986048032
     }
   },

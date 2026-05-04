@@ -8,6 +8,32 @@ The v2 runner is repo-rooted: every relative output path is resolved against `--
 
 > `tools/run_visual_improve_loop.py` remains the first visual draft. Prefer `tools/run_visual_improve_loop_v2.py` for real use.
 
+## Artifact distribution policy
+
+Lumen uses a Hugging Face-first artifact workflow. The local PC runs the loop and training, but heavy runtime artifacts are published to Hugging Face and downloaded by the app.
+
+```text
+local PC improve-loop
+→ generate datasets
+→ fine-tune adapters
+→ evaluate gates
+→ upload selected base / adapter / embedding / release artifacts to Hugging Face
+→ update catalog or artifact manifest metadata
+→ app downloads artifacts from Hugging Face
+→ TestFlight/on-device runtime audit exports results
+→ next local improve-loop cycle ingests runtime exports
+```
+
+GitHub remains source-only: code, scripts, manifests, checksums, dataset cards, and metadata. Do not commit model binaries, adapters, checkpoints, or release-baked model files.
+
+See:
+
+```text
+docs/HF_ARTIFACT_WORKFLOW.md
+tools/hf_artifacts/lumen_hf_artifact_manifest.template.json
+tools/hf_artifacts/publish_hf_artifacts.py
+```
+
 ## Default adapter-first run
 
 Run from the repository root:
@@ -35,7 +61,7 @@ generated/visual_improve_loop/pipeline.svg
 generated/visual_improve_loop/visual_improve_loop_summary.json
 ```
 
-The default run is adapter-first. It does **not** merge LoRA adapters into full GGUF models. It writes a release-bake manifest that explicitly says the GGUF bake was skipped by default.
+The default run is adapter-first. It does **not** merge LoRA adapters into full GGUF models. It writes a release-bake manifest that explicitly says the GGUF bake was skipped by default. After training, publish the selected adapter artifacts to Hugging Face with the HF artifact helper instead of committing them to GitHub.
 
 ## Local web control page
 
@@ -60,8 +86,50 @@ Useful flow:
 1. click **Run visual improve-loop**;
 2. inspect the generated dashboard;
 3. click **Run fine-tuning command** when the dataset output is ready;
-4. run the app/TestFlight layer and export runtime evidence;
-5. rerun the loop with `--runtime-audit`.
+4. publish selected artifacts to Hugging Face;
+5. update catalog or artifact manifest metadata for the app;
+6. run the app/TestFlight layer and export runtime evidence;
+7. rerun the loop with `--runtime-audit`.
+
+## Publish trained artifacts to Hugging Face
+
+Prepare or edit:
+
+```text
+tools/hf_artifacts/lumen_hf_artifact_manifest.template.json
+```
+
+Validate and write a resolved manifest without uploading:
+
+```bash
+python tools/hf_artifacts/publish_hf_artifacts.py \
+  --manifest tools/hf_artifacts/lumen_hf_artifact_manifest.template.json \
+  --skip-upload
+```
+
+Dry-run the HF upload commands:
+
+```bash
+python tools/hf_artifacts/publish_hf_artifacts.py \
+  --manifest tools/hf_artifacts/lumen_hf_artifact_manifest.template.json \
+  --dry-run
+```
+
+Real upload:
+
+```bash
+export HF_TOKEN="..."
+python tools/hf_artifacts/publish_hf_artifacts.py \
+  --manifest tools/hf_artifacts/lumen_hf_artifact_manifest.template.json
+```
+
+This writes:
+
+```text
+generated/hf_artifacts/lumen_hf_artifact_manifest.resolved.json
+```
+
+The resolved manifest contains artifact sizes, SHA-256 hashes, and Hugging Face download URLs.
 
 ## Embedding dataset stage
 

@@ -9,42 +9,35 @@ final class ModelDownloader: NSObject {
 
     var progresses: [String: DownloadProgress] = [:]
 
-    @ObservationIgnored
-    private var sessions: [String: URLSessionDownloadTask] = [:]
-    @ObservationIgnored
-    private var targets: [Int: (model: CatalogModel, destination: URL, onComplete: (URL) -> Void)] = [:]
-    @ObservationIgnored
-    private var resumeData: [String: Data] = [:]
-    @ObservationIgnored
-    private var completionHandlers: [String: (URL) -> Void] = [:]
+    @ObservationIgnored private var sessions: [String: URLSessionDownloadTask] = [:]
+    @ObservationIgnored private var targets: [Int: (model: CatalogModel, destination: URL, onComplete: (URL) -> Void)] = [:]
+    @ObservationIgnored private var resumeData: [String: Data] = [:]
+    @ObservationIgnored private var completionHandlers: [String: (URL) -> Void] = [:]
+    @ObservationIgnored private var responseStatusCodes: [Int: Int] = [:]
+    @ObservationIgnored private var responseMimeTypes: [Int: String] = [:]
 
     @ObservationIgnored
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 3600
+        config.waitsForConnectivity = true
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
-    static var modelsDirectory: URL {
-        ModelStorage.modelsDirectoryURL()
-    }
+    static var modelsDirectory: URL { ModelStorage.modelsDirectoryURL() }
+    private static var resumeDirectory: URL { ModelStorage.resumeDirectoryURL() }
 
-    private static var resumeDirectory: URL {
-        ModelStorage.resumeDirectoryURL()
-    }
-
-    func localURL(for model: CatalogModel) -> URL {
-        Self.modelsDirectory.appendingPathComponent(model.fileName)
-    }
+    func localURL(for model: CatalogModel) -> URL { Self.modelsDirectory.appendingPathComponent(model.fileName) }
 
     func isDownloaded(_ model: CatalogModel) -> Bool {
-        FileManager.default.fileExists(atPath: localURL(for: model).path)
+        if case .success = ModelFileIntegrity.validateDownloadedCatalogFile(model, at: localURL(for: model)) {
+            return true
+        }
+        return false
     }
 
-    func isDownloading(_ model: CatalogModel) -> Bool {
-        sessions[model.id] != nil
-    }
+    func isDownloading(_ model: CatalogModel) -> Bool { sessions[model.id] != nil }
 
     @discardableResult
     func start(_ model: CatalogModel, onComplete: @escaping (URL) -> Void) -> Result<Void, CatalogModel.DownloadURLError> {
@@ -52,9 +45,14 @@ final class ModelDownloader: NSObject {
             NotificationCenter.default.post(name: .modelDownloaderInfo, object: nil, userInfo: ["message": "\(model.name) is already downloading."])
             return .success(())
         }
-        completionHandlers[model.id] = onComplete
 
-        // Try to resume from persisted data
+        if isDownloaded(model) {
+            onComplete(localURL(for: model))
+            progresses[model.id] = DownloadProgress(fractionCompleted: 1, bytesReceived: model.sizeBytes, totalBytes: model.sizeBytes, state: .completed)
+            return .success(())
+        }
+
+        completionHandlers[model.id] = onComplete
         let data = resumeData[model.id] ?? loadPersistedResume(for: model)
         let task: URLSessionDownloadTask
         if let data {
@@ -71,15 +69,12 @@ final class ModelDownloader: NSObject {
             }
             task = session.downloadTask(with: downloadURL)
         }
-        progresses[model.id] = DownloadProgress(
-            fractionCompleted: progresses[model.id]?.fractionCompleted ?? 0,
-            bytesReceived: progresses[model.id]?.bytesReceived ?? 0,
-            totalBytes: model.sizeBytes,
-            state: .downloading
-        )
+        progresses[model.id] = DownloadProgress(fractionCompleted: progresses[model.id]?.fractionCompleted ?? 0, bytesReceived: progresses[model.id]?.bytesReceived ?? 0, totalBytes: model.sizeBytes, state: .downloading)
         sessions[model.id] = task
         targets[task.taskIdentifier] = (model, localURL(for: model), onComplete)
         resumeData[model.id] = nil
+        responseStatusCodes[task.taskIdentifier] = nil
+        responseMimeTypes[task.taskIdentifier] = nil
         task.resume()
         return .success(())
     }
@@ -98,22 +93,14 @@ final class ModelDownloader: NSObject {
                 }
                 self.sessions[modelID] = nil
                 let existing = self.progresses[modelID]
-                self.progresses[modelID] = DownloadProgress(
-                    fractionCompleted: existing?.fractionCompleted ?? 0,
-                    bytesReceived: existing?.bytesReceived ?? 0,
-                    totalBytes: sizeBytes,
-                    state: .paused
-                )
+                self.progresses[modelID] = DownloadProgress(fractionCompleted: existing?.fractionCompleted ?? 0, bytesReceived: existing?.bytesReceived ?? 0, totalBytes: sizeBytes, state: .paused)
             }
         }
     }
 
     func resume(_ model: CatalogModel) {
         guard sessions[model.id] == nil else { return }
-        guard let handler = completionHandlers[model.id] else {
-            // No in-memory handler — caller should call start() again
-            return
-        }
+        guard let handler = completionHandlers[model.id] else { return }
         start(model, onComplete: handler)
     }
 
@@ -146,6 +133,19 @@ final class ModelDownloader: NSObject {
         let url = Self.resumeDirectory.appendingPathComponent("\(model.id).resume")
         try? FileManager.default.removeItem(at: url)
     }
+
+    private func failDownload(taskID: Int, model: CatalogModel, message: String, cleanupURLs: [URL] = []) {
+        for url in cleanupURLs { try? FileManager.default.removeItem(at: url) }
+        try? FileManager.default.removeItem(at: localURL(for: model))
+        clearPersistedResume(for: model)
+        progresses[model.id] = DownloadProgress(fractionCompleted: progresses[model.id]?.fractionCompleted ?? 0, bytesReceived: progresses[model.id]?.bytesReceived ?? 0, totalBytes: model.sizeBytes, state: .failed(message))
+        sessions[model.id] = nil
+        completionHandlers[model.id] = nil
+        targets[taskID] = nil
+        responseStatusCodes[taskID] = nil
+        responseMimeTypes[taskID] = nil
+        NotificationCenter.default.post(name: .modelDownloaderInfo, object: nil, userInfo: ["message": "Download failed for \(model.name): \(message)"])
+    }
 }
 
 extension Notification.Name {
@@ -159,18 +159,12 @@ extension ModelDownloader: URLSessionDownloadDelegate {
             guard let entry = targets[taskId] else { return }
             let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : entry.model.sizeBytes
             let fraction = total > 0 ? Double(totalBytesWritten) / Double(total) : 0
-            progresses[entry.model.id] = DownloadProgress(
-                fractionCompleted: fraction,
-                bytesReceived: totalBytesWritten,
-                totalBytes: total,
-                state: .downloading
-            )
+            progresses[entry.model.id] = DownloadProgress(fractionCompleted: fraction, bytesReceived: totalBytesWritten, totalBytes: total, state: .downloading)
         }
     }
 
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let taskId = downloadTask.taskIdentifier
-        // Must synchronously move file before this delegate returns (temp file is deleted after)
         let fm = FileManager.default
         let modelsDir = ModelStorage.modelsDirectoryURL(fileManager: fm)
         let staging = modelsDir.appendingPathComponent(".staging-\(UUID().uuidString)")
@@ -182,38 +176,71 @@ extension ModelDownloader: URLSessionDownloadDelegate {
         } catch {
             movedURL = nil
         }
+
         Task { @MainActor in
-            let fm = FileManager.default
             guard let entry = targets[taskId] else {
                 if let moved = movedURL { try? fm.removeItem(at: moved) }
                 return
             }
-            var finalDest: URL?
-            if let moved = movedURL {
+
+            guard let moved = movedURL else {
+                failDownload(taskID: taskId, model: entry.model, message: "Could not move downloaded temporary file.")
+                return
+            }
+
+            if let status = responseStatusCodes[taskId], !(200...299).contains(status) {
+                failDownload(taskID: taskId, model: entry.model, message: "HTTP status \(status)", cleanupURLs: [moved])
+                return
+            }
+
+            if let mime = responseMimeTypes[taskId]?.lowercased(), mime.contains("text/html") || mime.contains("application/json") {
+                failDownload(taskID: taskId, model: entry.model, message: "Unexpected response type \(mime)", cleanupURLs: [moved])
+                return
+            }
+
+            switch ModelFileIntegrity.validateDownloadedCatalogFile(entry.model, at: moved) {
+            case .success(let actualSize):
                 try? fm.removeItem(at: entry.destination)
                 do {
                     try fm.moveItem(at: moved, to: entry.destination)
-                    finalDest = entry.destination
                 } catch {
-                    try? fm.copyItem(at: moved, to: entry.destination)
-                    try? fm.removeItem(at: moved)
-                    finalDest = entry.destination
+                    do {
+                        try fm.copyItem(at: moved, to: entry.destination)
+                        try? fm.removeItem(at: moved)
+                    } catch {
+                        failDownload(taskID: taskId, model: entry.model, message: "Could not install downloaded file: \(error.localizedDescription)", cleanupURLs: [moved])
+                        return
+                    }
                 }
+
+                switch ModelFileIntegrity.validateDownloadedCatalogFile(entry.model, at: entry.destination) {
+                case .success:
+                    progresses[entry.model.id] = DownloadProgress(fractionCompleted: 1, bytesReceived: actualSize, totalBytes: max(actualSize, entry.model.sizeBytes), state: .completed)
+                    clearPersistedResume(for: entry.model)
+                    entry.onComplete(entry.destination)
+                    sessions[entry.model.id] = nil
+                    completionHandlers[entry.model.id] = nil
+                    targets[taskId] = nil
+                    responseStatusCodes[taskId] = nil
+                    responseMimeTypes[taskId] = nil
+                case .failure(let failure):
+                    failDownload(taskID: taskId, model: entry.model, message: failure.localizedDescription)
+                }
+            case .failure(let failure):
+                failDownload(taskID: taskId, model: entry.model, message: failure.localizedDescription, cleanupURLs: [moved])
             }
-            if let finalDest {
-                progresses[entry.model.id] = DownloadProgress(
-                    fractionCompleted: 1,
-                    bytesReceived: entry.model.sizeBytes,
-                    totalBytes: entry.model.sizeBytes,
-                    state: .completed
-                )
-                clearPersistedResume(for: entry.model)
-                entry.onComplete(finalDest)
-            }
-            sessions[entry.model.id] = nil
-            completionHandlers[entry.model.id] = nil
-            targets[taskId] = nil
         }
+    }
+
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let taskID = downloadTask.taskIdentifier
+        Task { @MainActor in
+            if let http = response as? HTTPURLResponse {
+                responseStatusCodes[taskID] = http.statusCode
+            }
+            responseMimeTypes[taskID] = response.mimeType
+        }
+        completionHandler(.allow)
     }
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -223,25 +250,18 @@ extension ModelDownloader: URLSessionDownloadDelegate {
         let resume = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
         Task { @MainActor in
             guard let entry = targets[taskId] else { return }
-            // If cancellation produced resume data, state is already set by pause()
             if let resume {
                 self.resumeData[entry.model.id] = resume
                 self.persistResume(resume, for: entry.model)
             }
             if nsError.code == NSURLErrorCancelled {
-                // Don't flip to failed on user-initiated cancel
                 sessions[entry.model.id] = nil
                 targets[taskId] = nil
+                responseStatusCodes[taskId] = nil
+                responseMimeTypes[taskId] = nil
                 return
             }
-            progresses[entry.model.id] = DownloadProgress(
-                fractionCompleted: progresses[entry.model.id]?.fractionCompleted ?? 0,
-                bytesReceived: progresses[entry.model.id]?.bytesReceived ?? 0,
-                totalBytes: entry.model.sizeBytes,
-                state: .failed(error.localizedDescription)
-            )
-            sessions[entry.model.id] = nil
-            targets[taskId] = nil
+            failDownload(taskID: taskId, model: entry.model, message: error.localizedDescription)
         }
     }
 }

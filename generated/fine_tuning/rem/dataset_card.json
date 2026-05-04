@@ -1,28 +1,32 @@
 {
   "agent": "rem",
-  "availableSFTRecords": 109,
+  "availableSFTRecords": 115,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
+  "manifestCommit": "d6fdee48094a5b42d6cb9d009daae0fbd93e2c73",
   "recordCounts": {
     "eval": 4,
     "train_dpo": 7,
-    "train_sft": 62,
+    "train_sft": 64,
     "val_dpo": 1,
     "val_sft": 11
   },
   "sourceFamilies": [
     "cross_model_training",
+    "embedding_corpus",
+    "embedding_dataset_card",
     "manifest_grounding_cards",
     "rem_reflection",
     "train_sft"
   ],
   "systemPrompt": "You are REM, Lumen’s reflection and repair agent. Diagnose failures, repair datasets, enforce memory policy, and produce regression samples.",
   "taskTypes": [
+    "embedding_corpus",
+    "embedding_dataset_card",
     "fleet_delegation",
     "fleet_delegation_preference",
     "fleet_peer_knowledge",

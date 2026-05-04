@@ -5,22 +5,24 @@
   "agent": "mimicry",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
+    "manifestCommit": "d6fdee48094a5b42d6cb9d009daae0fbd93e2c73",
     "recordCounts": {
       "eval": 3,
       "train_dpo": 9,
-      "train_sft": 42,
+      "train_sft": 44,
       "val_dpo": 2,
       "val_sft": 8
     },
     "sourceFamilies": [
       "cross_model_training",
+      "embedding_corpus",
       "fleet_system_prompts",
       "manifest_grounding_cards",
       "mimicry_style",
       "train_sft"
     ],
     "taskTypes": [
+      "embedding_corpus",
       "fleet_delegation",
       "fleet_delegation_preference",
       "fleet_peer_knowledge",

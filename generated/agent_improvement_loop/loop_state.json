@@ -7,42 +7,42 @@
       "cortex": {
         "eval": 555,
         "trainDPO": 8,
-        "trainSFT": 192,
+        "trainSFT": 206,
         "valDPO": 1,
-        "valSFT": 34
+        "valSFT": 36
       },
       "executor": {
         "eval": 111,
         "trainDPO": 11,
-        "trainSFT": 457,
+        "trainSFT": 645,
         "valDPO": 2,
-        "valSFT": 81
+        "valSFT": 114
       },
       "fleet": {
         "eval": 93,
         "trainDPO": 14,
-        "trainSFT": 669,
+        "trainSFT": 697,
         "valDPO": 3,
-        "valSFT": 118
+        "valSFT": 123
       },
       "mimicry": {
         "eval": 3,
         "trainDPO": 9,
-        "trainSFT": 42,
+        "trainSFT": 44,
         "valDPO": 2,
         "valSFT": 8
       },
       "mouth": {
         "eval": 5,
         "trainDPO": 10,
-        "trainSFT": 127,
+        "trainSFT": 128,
         "valDPO": 2,
-        "valSFT": 22
+        "valSFT": 23
       },
       "rem": {
         "eval": 4,
         "trainDPO": 7,
-        "trainSFT": 62,
+        "trainSFT": 64,
         "valDPO": 1,
         "valSFT": 11
       }
@@ -51,6 +51,14 @@
       "approval_boundary_samples": 115,
       "cortex_routing": 69,
       "dpo_preference_pairs": 53,
+      "embedding_corpus": 489,
+      "embedding_dataset_card": 1,
+      "embedding_eval_retrieval": 658,
+      "embedding_hard_negatives": 658,
+      "embedding_train_pairs": 588,
+      "embedding_train_triplets": 586,
+      "embedding_val_pairs": 70,
+      "embedding_val_triplets": 72,
       "eval_scenarios": 550,
       "executor_tool_calls": 53,
       "manifest_grounding_cards": 4,
@@ -63,14 +71,14 @@
       "train_sft": 298,
       "validation_sft": 53
     },
-    "familyCount": 14,
-    "recordCount": 1362
+    "familyCount": 22,
+    "recordCount": 4484
   },
   "errorGapCount": 0,
   "gapCount": 2,
   "manifest": {
-    "commit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
-    "fingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
+    "commit": "d6fdee48094a5b42d6cb9d009daae0fbd93e2c73",
+    "fingerprint": "59f70dbb9e4e324dd4e6bf01ee88225275fa091dedb9ae0d3fafa3123f896f70",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
@@ -92,7 +100,7 @@
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
+    "manifestFingerprint": "59f70dbb9e4e324dd4e6bf01ee88225275fa091dedb9ae0d3fafa3123f896f70",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,

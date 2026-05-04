@@ -4,7 +4,7 @@
 - Tools: `53`
 - Intents: `22`
 - Model slots: `6`
-- Dataset records: `1362`
+- Dataset records: `4484`
 - Runtime audit reports: `0`
 - Runtime failures: `0`
 - TestFlight status: `awaiting-testflight-runtime-audit`

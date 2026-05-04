@@ -1,22 +1,23 @@
 {
   "agent": "mouth",
-  "availableSFTRecords": 158,
+  "availableSFTRecords": 160,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
+  "manifestCommit": "d6fdee48094a5b42d6cb9d009daae0fbd93e2c73",
   "recordCounts": {
     "eval": 5,
     "train_dpo": 10,
-    "train_sft": 127,
+    "train_sft": 128,
     "val_dpo": 2,
-    "val_sft": 22
+    "val_sft": 23
   },
   "sourceFamilies": [
     "cross_model_training",
+    "embedding_corpus",
     "fleet_system_prompts",
     "manifest_grounding_cards",
     "mouth_responses",
@@ -24,6 +25,7 @@
   ],
   "systemPrompt": "You are Mouth, Lumen’s user-facing response agent. Explain tool results clearly without leaking internal JSON or sentinels.",
   "taskTypes": [
+    "embedding_corpus",
     "fleet_delegation",
     "fleet_delegation_preference",
     "fleet_peer_knowledge",

@@ -542,7 +542,7 @@ final class RolePipelineAgentService {
         }
     }
 
-    private func maxLoopSteps(for intent: IntentKind) -> Int {
+    private func maxLoopSteps(for intent: UserIntent) -> Int {
         switch intent {
         case .weather, .webSearch, .maps, .photos, .camera, .health, .motion, .files, .memory, .rag, .contactSearch:
             return 3

@@ -1,0 +1,20 @@
+{
+  "agent": "rem",
+  "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
+  "dataset_dir": "/home/ales27pm/Lumen/generated/fine_tuning/rem",
+  "gradient_checkpointing": true,
+  "load_in_4bit": true,
+  "max_seq_length": 4096,
+  "metrics": {
+    "epoch": 2.0,
+    "total_flos": 89286022090752.0,
+    "train_loss": 7.07689905166626,
+    "train_runtime": 13.8557,
+    "train_samples_per_second": 9.238,
+    "train_steps_per_second": 0.577
+  },
+  "output_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/rem",
+  "packing": false,
+  "train_records": 64,
+  "val_records": 11
+}

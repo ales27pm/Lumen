@@ -1,0 +1,20 @@
+{
+  "agent": "cortex",
+  "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
+  "dataset_dir": "/home/ales27pm/Lumen/generated/fine_tuning/cortex",
+  "gradient_checkpointing": true,
+  "load_in_4bit": true,
+  "max_seq_length": 4096,
+  "metrics": {
+    "epoch": 2.0,
+    "total_flos": 679869216251904.0,
+    "train_loss": 3.286497372847337,
+    "train_runtime": 62.7996,
+    "train_samples_per_second": 6.561,
+    "train_steps_per_second": 0.414
+  },
+  "output_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/cortex",
+  "packing": false,
+  "train_records": 206,
+  "val_records": 36
+}

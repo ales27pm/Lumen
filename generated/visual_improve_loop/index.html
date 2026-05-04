@@ -26,353 +26,41 @@ pre { white-space:pre-wrap; max-height:24rem; overflow:auto; background:#070b12;
 <body>
 <header><h1>Lumen Visual Improve-Loop v2</h1><p>Repo-rooted, adapter-first, release-bake explicit.</p></header>
 <main>
-<section class="grid"><section class="card"><span>status</span><strong>NEEDS WORK</strong></section><section class="card"><span>tools</span><strong>53</strong></section><section class="card"><span>intents</span><strong>22</strong></section><section class="card"><span>dataset records</span><strong>1363</strong></section><section class="card"><span>gaps</span><strong>0</strong></section><section class="card"><span>TestFlight scenarios</span><strong>120</strong></section><section class="card"><span>next prompts</span><strong>1</strong></section></section>
-<section class="panel"><h2>Pipeline</h2><svg viewBox="0 0 1120 246" width="100%" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" rx="20" fill="#090b10"/><text x="32" y="34" fill="#e8eefc" font-size="24" font-weight="800">Improve-loop pipeline</text><text x="32" y="53" fill="#8ea0bd" font-size="13">hard gaps: 0 · total gaps: 0 · scenarios: 120</text><rect x="32" y="58" width="1056" height="56" rx="15" fill="#111722" stroke="#44d483" stroke-width="2"/><text x="55" y="82" fill="#e8eefc" font-size="16" font-weight="700">1. preflight</text><text x="55" y="102" fill="#8ea0bd" font-size="12">passed · 0.0s · internal</text><rect x="32" y="136" width="1056" height="56" rx="15" fill="#111722" stroke="#ff6b7a" stroke-width="2"/><text x="55" y="160" fill="#e8eefc" font-size="16" font-weight="700">2. test manifest crawler</text><text x="55" y="180" fill="#8ea0bd" font-size="12">failed · 2.9s · /home/ales27pm/micromamba/envs/lumen311/bin/python -m pytest tools/lumen_manifest_crawler/tests</text></svg></section>
-<section class="two"><section class="panel"><h2>Dataset records</h2><svg viewBox="0 0 880 444" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="12" y="23" fill="#e8eefc" font-size="16" font-weight="700">Dataset family records</text><text x="12" y="53" fill="#8ea0bd" font-size="12">eval_scenarios</text><rect x="245" y="38" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="38" width="520" height="18" rx="9" fill="#73a7ff"/><text x="777" y="53" fill="#e8eefc" font-size="12">550</text><text x="12" y="81" fill="#8ea0bd" font-size="12">train_sft</text><rect x="245" y="66" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="66" width="281" height="18" rx="9" fill="#73a7ff"/><text x="777" y="81" fill="#e8eefc" font-size="12">298</text><text x="12" y="109" fill="#8ea0bd" font-size="12">approval_boundary_samples</text><rect x="245" y="94" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="94" width="108" height="18" rx="9" fill="#73a7ff"/><text x="777" y="109" fill="#e8eefc" font-size="12">115</text><text x="12" y="137" fill="#8ea0bd" font-size="12">cortex_routing</text><rect x="245" y="122" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="122" width="65" height="18" rx="9" fill="#73a7ff"/><text x="777" y="137" fill="#e8eefc" font-size="12">69</text><text x="12" y="165" fill="#8ea0bd" font-size="12">dpo_preference_pairs</text><rect x="245" y="150" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="150" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="165" fill="#e8eefc" font-size="12">53</text><text x="12" y="193" fill="#8ea0bd" font-size="12">executor_tool_calls</text><rect x="245" y="178" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="178" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="193" fill="#e8eefc" font-size="12">53</text><text x="12" y="221" fill="#8ea0bd" font-size="12">mouth_responses</text><rect x="245" y="206" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="206" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="221" fill="#e8eefc" font-size="12">53</text><text x="12" y="249" fill="#8ea0bd" font-size="12">negative_samples</text><rect x="245" y="234" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="234" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="249" fill="#e8eefc" font-size="12">53</text><text x="12" y="277" fill="#8ea0bd" font-size="12">tool_schema_cards</text><rect x="245" y="262" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="262" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="277" fill="#e8eefc" font-size="12">53</text><text x="12" y="305" fill="#8ea0bd" font-size="12">validation_sft</text><rect x="245" y="290" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="290" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="305" fill="#e8eefc" font-size="12">53</text><text x="12" y="333" fill="#8ea0bd" font-size="12">rem_reflection</text><rect x="245" y="318" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="318" width="4" height="18" rx="9" fill="#73a7ff"/><text x="777" y="333" fill="#e8eefc" font-size="12">5</text><text x="12" y="361" fill="#8ea0bd" font-size="12">manifest_grounding_cards</text><rect x="245" y="346" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="346" width="3" height="18" rx="9" fill="#73a7ff"/><text x="777" y="361" fill="#e8eefc" font-size="12">4</text><text x="12" y="389" fill="#8ea0bd" font-size="12">mimicry_style</text><rect x="245" y="374" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="374" width="2" height="18" rx="9" fill="#73a7ff"/><text x="777" y="389" fill="#e8eefc" font-size="12">3</text><text x="12" y="417" fill="#8ea0bd" font-size="12">runtime_audit_repairs</text><rect x="245" y="402" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="402" width="2" height="18" rx="9" fill="#73a7ff"/><text x="777" y="417" fill="#e8eefc" font-size="12">1</text></svg></section><section class="panel"><h2>Gap severities</h2><p>No data.</p></section></section>
-<section class="panel"><h2>Agent fine-tuning records</h2><svg viewBox="0 0 880 220" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="12" y="23" fill="#e8eefc" font-size="16" font-weight="700">Agent fine-tuning records</text><text x="12" y="53" fill="#8ea0bd" font-size="12">fleet</text><rect x="245" y="38" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="38" width="520" height="18" rx="9" fill="#73a7ff"/><text x="777" y="53" fill="#e8eefc" font-size="12">898</text><text x="12" y="81" fill="#8ea0bd" font-size="12">cortex</text><rect x="245" y="66" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="66" width="457" height="18" rx="9" fill="#73a7ff"/><text x="777" y="81" fill="#e8eefc" font-size="12">790</text><text x="12" y="109" fill="#8ea0bd" font-size="12">executor</text><rect x="245" y="94" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="94" width="383" height="18" rx="9" fill="#73a7ff"/><text x="777" y="109" fill="#e8eefc" font-size="12">662</text><text x="12" y="137" fill="#8ea0bd" font-size="12">mouth</text><rect x="245" y="122" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="122" width="96" height="18" rx="9" fill="#73a7ff"/><text x="777" y="137" fill="#e8eefc" font-size="12">166</text><text x="12" y="165" fill="#8ea0bd" font-size="12">rem</text><rect x="245" y="150" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="150" width="49" height="18" rx="9" fill="#73a7ff"/><text x="777" y="165" fill="#e8eefc" font-size="12">86</text><text x="12" y="193" fill="#8ea0bd" font-size="12">mimicry</text><rect x="245" y="178" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="178" width="37" height="18" rx="9" fill="#73a7ff"/><text x="777" y="193" fill="#e8eefc" font-size="12">64</text></svg></section>
-<section class="panel"><h2>Steps</h2><table><thead><tr><th>Step</th><th>Status</th><th>Time</th><th>Command</th></tr></thead><tbody><tr><td>preflight</td><td>passed</td><td>0.0s</td><td><code>internal</code></td></tr><tr><td>test manifest crawler</td><td>failed</td><td>2.9s</td><td><code>/home/ales27pm/micromamba/envs/lumen311/bin/python -m pytest tools/lumen_manifest_crawler/tests</code></td></tr></tbody></table></section>
-<section class="panel"><h2>Gaps</h2><table><thead><tr><th>Severity</th><th>Category</th><th>Title</th><th>Action</th></tr></thead><tbody><tr><td colspan="4">No gaps detected.</td></tr></tbody></table></section>
-<section class="panel"><h2>Next action prompts</h2><table><thead><tr><th>Task</th><th>Priority</th><th>ID</th></tr></thead><tbody><tr><td>loop_expansion</td><td>medium</td><td><code>73eb007d05a9980bc6aa06f2</code></td></tr></tbody></table></section>
+<section class="grid"><section class="card"><span>status</span><strong>PASS</strong></section><section class="card"><span>tools</span><strong>53</strong></section><section class="card"><span>intents</span><strong>22</strong></section><section class="card"><span>dataset records</span><strong>1362</strong></section><section class="card"><span>gaps</span><strong>2</strong></section><section class="card"><span>TestFlight scenarios</span><strong>120</strong></section><section class="card"><span>next prompts</span><strong>2</strong></section></section>
+<section class="panel"><h2>Pipeline</h2><svg viewBox="0 0 1120 402" width="100%" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" rx="20" fill="#090b10"/><text x="32" y="34" fill="#e8eefc" font-size="24" font-weight="800">Improve-loop pipeline</text><text x="32" y="53" fill="#8ea0bd" font-size="13">hard gaps: 0 · total gaps: 2 · scenarios: 120</text><rect x="32" y="58" width="1056" height="56" rx="15" fill="#111722" stroke="#44d483" stroke-width="2"/><text x="55" y="82" fill="#e8eefc" font-size="16" font-weight="700">1. preflight</text><text x="55" y="102" fill="#8ea0bd" font-size="12">passed · 0.0s · internal</text><rect x="32" y="136" width="1056" height="56" rx="15" fill="#111722" stroke="#44d483" stroke-width="2"/><text x="55" y="160" fill="#e8eefc" font-size="16" font-weight="700">2. test manifest crawler</text><text x="55" y="180" fill="#8ea0bd" font-size="12">passed · 2.6s · /home/ales27pm/micromamba/envs/lumen311/bin/python -m pytest tools/lumen_manifest_crawler/tests</text><rect x="32" y="214" width="1056" height="56" rx="15" fill="#111722" stroke="#44d483" stroke-width="2"/><text x="55" y="238" fill="#e8eefc" font-size="16" font-weight="700">3. improve-loop generation</text><text x="55" y="258" fill="#8ea0bd" font-size="12">passed · 0.7s · /home/ales27pm/micromamba/envs/lumen311/bin/python -m lumen_manifest_crawler improve-loop --root /h…</text><rect x="32" y="292" width="1056" height="56" rx="15" fill="#111722" stroke="#44d483" stroke-width="2"/><text x="55" y="316" fill="#e8eefc" font-size="16" font-weight="700">4. adapter-first release-bake manifest</text><text x="55" y="336" fill="#8ea0bd" font-size="12">passed · 0.0s · /home/ales27pm/micromamba/envs/lumen311/bin/python /home/ales27pm/Lumen/tools/fine_tuning/unsloth/e…</text></svg></section>
+<section class="two"><section class="panel"><h2>Dataset records</h2><svg viewBox="0 0 880 444" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="12" y="23" fill="#e8eefc" font-size="16" font-weight="700">Dataset family records</text><text x="12" y="53" fill="#8ea0bd" font-size="12">eval_scenarios</text><rect x="245" y="38" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="38" width="520" height="18" rx="9" fill="#73a7ff"/><text x="777" y="53" fill="#e8eefc" font-size="12">550</text><text x="12" y="81" fill="#8ea0bd" font-size="12">train_sft</text><rect x="245" y="66" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="66" width="281" height="18" rx="9" fill="#73a7ff"/><text x="777" y="81" fill="#e8eefc" font-size="12">298</text><text x="12" y="109" fill="#8ea0bd" font-size="12">approval_boundary_samples</text><rect x="245" y="94" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="94" width="108" height="18" rx="9" fill="#73a7ff"/><text x="777" y="109" fill="#e8eefc" font-size="12">115</text><text x="12" y="137" fill="#8ea0bd" font-size="12">cortex_routing</text><rect x="245" y="122" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="122" width="65" height="18" rx="9" fill="#73a7ff"/><text x="777" y="137" fill="#e8eefc" font-size="12">69</text><text x="12" y="165" fill="#8ea0bd" font-size="12">dpo_preference_pairs</text><rect x="245" y="150" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="150" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="165" fill="#e8eefc" font-size="12">53</text><text x="12" y="193" fill="#8ea0bd" font-size="12">executor_tool_calls</text><rect x="245" y="178" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="178" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="193" fill="#e8eefc" font-size="12">53</text><text x="12" y="221" fill="#8ea0bd" font-size="12">mouth_responses</text><rect x="245" y="206" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="206" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="221" fill="#e8eefc" font-size="12">53</text><text x="12" y="249" fill="#8ea0bd" font-size="12">negative_samples</text><rect x="245" y="234" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="234" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="249" fill="#e8eefc" font-size="12">53</text><text x="12" y="277" fill="#8ea0bd" font-size="12">tool_schema_cards</text><rect x="245" y="262" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="262" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="277" fill="#e8eefc" font-size="12">53</text><text x="12" y="305" fill="#8ea0bd" font-size="12">validation_sft</text><rect x="245" y="290" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="290" width="50" height="18" rx="9" fill="#73a7ff"/><text x="777" y="305" fill="#e8eefc" font-size="12">53</text><text x="12" y="333" fill="#8ea0bd" font-size="12">rem_reflection</text><rect x="245" y="318" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="318" width="4" height="18" rx="9" fill="#73a7ff"/><text x="777" y="333" fill="#e8eefc" font-size="12">5</text><text x="12" y="361" fill="#8ea0bd" font-size="12">manifest_grounding_cards</text><rect x="245" y="346" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="346" width="3" height="18" rx="9" fill="#73a7ff"/><text x="777" y="361" fill="#e8eefc" font-size="12">4</text><text x="12" y="389" fill="#8ea0bd" font-size="12">mimicry_style</text><rect x="245" y="374" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="374" width="2" height="18" rx="9" fill="#73a7ff"/><text x="777" y="389" fill="#e8eefc" font-size="12">3</text><text x="12" y="417" fill="#8ea0bd" font-size="12">runtime_audit_repairs</text><rect x="245" y="402" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="402" width="2" height="18" rx="9" fill="#73a7ff"/><text x="777" y="417" fill="#e8eefc" font-size="12">0</text></svg></section><section class="panel"><h2>Gap severities</h2><svg viewBox="0 0 880 80" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="12" y="23" fill="#e8eefc" font-size="16" font-weight="700">Gap severities</text><text x="12" y="53" fill="#8ea0bd" font-size="12">warning</text><rect x="245" y="38" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="38" width="520" height="18" rx="9" fill="#73a7ff"/><text x="777" y="53" fill="#e8eefc" font-size="12">2</text></svg></section></section>
+<section class="panel"><h2>Agent fine-tuning records</h2><svg viewBox="0 0 880 220" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="12" y="23" fill="#e8eefc" font-size="16" font-weight="700">Agent fine-tuning records</text><text x="12" y="53" fill="#8ea0bd" font-size="12">fleet</text><rect x="245" y="38" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="38" width="520" height="18" rx="9" fill="#73a7ff"/><text x="777" y="53" fill="#e8eefc" font-size="12">897</text><text x="12" y="81" fill="#8ea0bd" font-size="12">cortex</text><rect x="245" y="66" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="66" width="457" height="18" rx="9" fill="#73a7ff"/><text x="777" y="81" fill="#e8eefc" font-size="12">790</text><text x="12" y="109" fill="#8ea0bd" font-size="12">executor</text><rect x="245" y="94" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="94" width="383" height="18" rx="9" fill="#73a7ff"/><text x="777" y="109" fill="#e8eefc" font-size="12">662</text><text x="12" y="137" fill="#8ea0bd" font-size="12">mouth</text><rect x="245" y="122" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="122" width="96" height="18" rx="9" fill="#73a7ff"/><text x="777" y="137" fill="#e8eefc" font-size="12">166</text><text x="12" y="165" fill="#8ea0bd" font-size="12">rem</text><rect x="245" y="150" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="150" width="49" height="18" rx="9" fill="#73a7ff"/><text x="777" y="165" fill="#e8eefc" font-size="12">85</text><text x="12" y="193" fill="#8ea0bd" font-size="12">mimicry</text><rect x="245" y="178" width="520" height="18" rx="9" fill="#101827"/><rect x="245" y="178" width="37" height="18" rx="9" fill="#73a7ff"/><text x="777" y="193" fill="#e8eefc" font-size="12">64</text></svg></section>
+<section class="panel"><h2>Steps</h2><table><thead><tr><th>Step</th><th>Status</th><th>Time</th><th>Command</th></tr></thead><tbody><tr><td>preflight</td><td>passed</td><td>0.0s</td><td><code>internal</code></td></tr><tr><td>test manifest crawler</td><td>passed</td><td>2.6s</td><td><code>/home/ales27pm/micromamba/envs/lumen311/bin/python -m pytest tools/lumen_manifest_crawler/tests</code></td></tr><tr><td>improve-loop generation</td><td>passed</td><td>0.7s</td><td><code>/home/ales27pm/micromamba/envs/lumen311/bin/python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --fine-tuning-output /home/ales27pm/Lumen/generated/fine_tuning --testflight-scenario-limit 120 --app-run-mode testflight --strict --deterministic --pretty --generate-system-prompts --generate-agent-fine-tuning</code></td></tr><tr><td>adapter-first release-bake manifest</td><td>passed</td><td>0.0s</td><td><code>/home/ales27pm/micromamba/envs/lumen311/bin/python /home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py --config-dir /home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs --agents cortex,executor,mouth,mimicry,rem,fleet --quantization q4_k_m --output-root /home/ales27pm/Lumen/models/gguf_release_bake --manifest-output /home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json</code></td></tr></tbody></table></section>
+<section class="panel"><h2>Gaps</h2><table><thead><tr><th>Severity</th><th>Category</th><th>Title</th><th>Action</th></tr></thead><tbody><tr><td>warning</td><td>dataset_coverage</td><td>Empty dataset family: runtime_audit_repairs</td><td>Add generators or runtime inputs that produce runtime_audit_repairs records.</td></tr><tr><td>warning</td><td>testflight_runtime_pending</td><td>TestFlight in-app audit export has not been ingested yet</td><td>Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit &lt;json&gt;.</td></tr></tbody></table></section>
+<section class="panel"><h2>Next action prompts</h2><table><thead><tr><th>Task</th><th>Priority</th><th>ID</th></tr></thead><tbody><tr><td>codebase_improvement</td><td>medium</td><td><code>0d676b5e9a83fe8011cb6878</code></td></tr><tr><td>testflight_runtime_audit</td><td>medium</td><td><code>619a6f6c6df021f5e551f75b</code></td></tr></tbody></table></section>
 <section class="two"><section class="panel"><h2>Adapter runtime manifest</h2><pre>{
-  &quot;adapterCount&quot;: 0,
-  &quot;mode&quot;: null,
-  &quot;releaseBakePolicy&quot;: {}
+  &quot;adapterCount&quot;: 6,
+  &quot;mode&quot;: &quot;adapter_first&quot;,
+  &quot;releaseBakePolicy&quot;: {
+    &quot;allowedWhenRuntimeCannotLoadAdapters&quot;: true,
+    &quot;enabledByDefault&quot;: false,
+    &quot;manualOnly&quot;: true,
+    &quot;requiresPassingEvalGates&quot;: true
+  }
 }</pre></section><section class="panel"><h2>Release bake manifest</h2><pre>{
-  &quot;agentCount&quot;: 0,
-  &quot;mode&quot;: null,
-  &quot;releaseBakeRequested&quot;: null,
-  &quot;skipped&quot;: null
+  &quot;agentCount&quot;: 6,
+  &quot;mode&quot;: &quot;adapter_first&quot;,
+  &quot;releaseBakeRequested&quot;: false,
+  &quot;skipped&quot;: true
 }</pre></section></section>
 <section class="panel"><h2>Command output tails</h2><details><summary>preflight · passed</summary><pre>/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/cli.py
 /home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py
 /home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py
 /home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs
-/home/ales27pm/Lumen/ios/Lumen</pre></details><details><summary>test manifest crawler · failed</summary><pre>    ???
-&lt;frozen importlib._bootstrap&gt;:241: in _call_with_frames_removed
-    ???
-tools/run_visual_improve_loop_v2.py:51: in &lt;module&gt;
-    @dataclass(slots=True)
-     ^^^^^^^^^^^^^^^^^^^^^
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap
-    return _process_class(cls, init, repr, eq, order, unsafe_hash,
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class
-    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-
-annotation = &#x27;str&#x27;, cls = &lt;class &#x27;lumen_visual_improve_loop_v2.StepResult&#x27;&gt;
-a_module = &lt;module &#x27;dataclasses&#x27; from &#x27;/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py&#x27;&gt;
-a_type = &lt;dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910&gt;
-is_type_predicate = &lt;function _is_kw_only at 0x73e7d99f3f60&gt;
-
-    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):
-        # Given a type annotation string, does it refer to a_type in
-        # a_module?  For example, when checking that annotation denotes a
-        # ClassVar, then a_module is typing, and a_type is
-        # typing.ClassVar.
-    
-        # It&#x27;s possible to look up a_module given a_type, but it involves
-        # looking in sys.modules (again!), and seems like a waste since
-        # the caller already knows a_module.
-    
-        # - annotation is a string type annotation
-        # - cls is the class that this annotation was found in
-        # - a_module is the module we want to match
-        # - a_type is the type in that module we want to match
-        # - is_type_predicate is a function called with (obj, a_module)
-        #   that determines if obj is of the desired type.
-    
-        # Since this test does not do a local namespace lookup (and
-        # instead only a module (global) lookup), there are some things it
-        # gets wrong.
-    
-        # With string annotations, cv0 will be detected as a ClassVar:
-        #   CV = ClassVar
-        #   @dataclass
-        #   class C0:
-        #     cv0: CV
-    
-        # But in this example cv1 will not be detected as a ClassVar:
-        #   @dataclass
-        #   class C1:
-        #     CV = ClassVar
-        #     cv1: CV
-    
-        # In C1, the code in this function (_is_type) will look up &quot;CV&quot; in
-        # the module and not find it, so it will not consider cv1 as a
-        # ClassVar.  This is a fairly obscure corner case, and the best
-        # way to fix it would be to eval() the string &quot;CV&quot; with the
-        # correct global and local namespaces.  However that would involve
-        # a eval() penalty for every single field of every dataclass
-        # that&#x27;s defined.  It was judged not worth it.
-    
-        match = _MODULE_IDENTIFIER_RE.match(annotation)
-        if match:
-            ns = None
-            module_name = match.group(1)
-            if not module_name:
-                # No module name, assume the class&#x27;s module did
-                # &quot;from dataclasses import InitVar&quot;.
-&gt;               ns = sys.modules.get(cls.__module__).__dict__
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E               AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;__dict__&#x27;
-
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError
-_______________ test_release_bake_command_requires_explicit_flag _______________
-
-tmp_path = PosixPath(&#x27;/tmp/pytest-of-ales27pm/pytest-11/test_release_bake_command_requ0&#x27;)
-
-    def test_release_bake_command_requires_explicit_flag(tmp_path: Path) -&gt; None:
-&gt;       runner = _load_runner()
-                 ^^^^^^^^^^^^^^
-
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:77: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner
-    spec.loader.exec_module(module)
-&lt;frozen importlib._bootstrap_external&gt;:940: in exec_module
-    ???
-&lt;frozen importlib._bootstrap&gt;:241: in _call_with_frames_removed
-    ???
-tools/run_visual_improve_loop_v2.py:51: in &lt;module&gt;
-    @dataclass(slots=True)
-     ^^^^^^^^^^^^^^^^^^^^^
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap
-    return _process_class(cls, init, repr, eq, order, unsafe_hash,
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class
-    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-
-annotation = &#x27;str&#x27;, cls = &lt;class &#x27;lumen_visual_improve_loop_v2.StepResult&#x27;&gt;
-a_module = &lt;module &#x27;dataclasses&#x27; from &#x27;/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py&#x27;&gt;
-a_type = &lt;dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910&gt;
-is_type_predicate = &lt;function _is_kw_only at 0x73e7d99f3f60&gt;
-
-    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):
-        # Given a type annotation string, does it refer to a_type in
-        # a_module?  For example, when checking that annotation denotes a
-        # ClassVar, then a_module is typing, and a_type is
-        # typing.ClassVar.
-    
-        # It&#x27;s possible to look up a_module given a_type, but it involves
-        # looking in sys.modules (again!), and seems like a waste since
-        # the caller already knows a_module.
-    
-        # - annotation is a string type annotation
-        # - cls is the class that this annotation was found in
-        # - a_module is the module we want to match
-        # - a_type is the type in that module we want to match
-        # - is_type_predicate is a function called with (obj, a_module)
-        #   that determines if obj is of the desired type.
-    
-        # Since this test does not do a local namespace lookup (and
-        # instead only a module (global) lookup), there are some things it
-        # gets wrong.
-    
-        # With string annotations, cv0 will be detected as a ClassVar:
-        #   CV = ClassVar
-        #   @dataclass
-        #   class C0:
-        #     cv0: CV
-    
-        # But in this example cv1 will not be detected as a ClassVar:
-        #   @dataclass
-        #   class C1:
-        #     CV = ClassVar
-        #     cv1: CV
-    
-        # In C1, the code in this function (_is_type) will look up &quot;CV&quot; in
-        # the module and not find it, so it will not consider cv1 as a
-        # ClassVar.  This is a fairly obscure corner case, and the best
-        # way to fix it would be to eval() the string &quot;CV&quot; with the
-        # correct global and local namespaces.  However that would involve
-        # a eval() penalty for every single field of every dataclass
-        # that&#x27;s defined.  It was judged not worth it.
-    
-        match = _MODULE_IDENTIFIER_RE.match(annotation)
-        if match:
-            ns = None
-            module_name = match.group(1)
-            if not module_name:
-                # No module name, assume the class&#x27;s module did
-                # &quot;from dataclasses import InitVar&quot;.
-&gt;               ns = sys.modules.get(cls.__module__).__dict__
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E               AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;__dict__&#x27;
-
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError
-_ test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state _
-
-tmp_path = PosixPath(&#x27;/tmp/pytest-of-ales27pm/pytest-11/test_runtime_audit_discovery_a0&#x27;)
-
-    def test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state(tmp_path: Path) -&gt; None:
-&gt;       runner = _load_runner()
-                 ^^^^^^^^^^^^^^
-
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:107: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner
-    spec.loader.exec_module(module)
-&lt;frozen importlib._bootstrap_external&gt;:940: in exec_module
-    ???
-&lt;frozen importlib._bootstrap&gt;:241: in _call_with_frames_removed
-    ???
-tools/run_visual_improve_loop_v2.py:51: in &lt;module&gt;
-    @dataclass(slots=True)
-     ^^^^^^^^^^^^^^^^^^^^^
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap
-    return _process_class(cls, init, repr, eq, order, unsafe_hash,
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class
-    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-
-annotation = &#x27;str&#x27;, cls = &lt;class &#x27;lumen_visual_improve_loop_v2.StepResult&#x27;&gt;
-a_module = &lt;module &#x27;dataclasses&#x27; from &#x27;/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py&#x27;&gt;
-a_type = &lt;dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910&gt;
-is_type_predicate = &lt;function _is_kw_only at 0x73e7d99f3f60&gt;
-
-    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):
-        # Given a type annotation string, does it refer to a_type in
-        # a_module?  For example, when checking that annotation denotes a
-        # ClassVar, then a_module is typing, and a_type is
-        # typing.ClassVar.
-    
-        # It&#x27;s possible to look up a_module given a_type, but it involves
-        # looking in sys.modules (again!), and seems like a waste since
-        # the caller already knows a_module.
-    
-        # - annotation is a string type annotation
-        # - cls is the class that this annotation was found in
-        # - a_module is the module we want to match
-        # - a_type is the type in that module we want to match
-        # - is_type_predicate is a function called with (obj, a_module)
-        #   that determines if obj is of the desired type.
-    
-        # Since this test does not do a local namespace lookup (and
-        # instead only a module (global) lookup), there are some things it
-        # gets wrong.
-    
-        # With string annotations, cv0 will be detected as a ClassVar:
-        #   CV = ClassVar
-        #   @dataclass
-        #   class C0:
-        #     cv0: CV
-    
-        # But in this example cv1 will not be detected as a ClassVar:
-        #   @dataclass
-        #   class C1:
-        #     CV = ClassVar
-        #     cv1: CV
-    
-        # In C1, the code in this function (_is_type) will look up &quot;CV&quot; in
-        # the module and not find it, so it will not consider cv1 as a
-        # ClassVar.  This is a fairly obscure corner case, and the best
-        # way to fix it would be to eval() the string &quot;CV&quot; with the
-        # correct global and local namespaces.  However that would involve
-        # a eval() penalty for every single field of every dataclass
-        # that&#x27;s defined.  It was judged not worth it.
-    
-        match = _MODULE_IDENTIFIER_RE.match(annotation)
-        if match:
-            ns = None
-            module_name = match.group(1)
-            if not module_name:
-                # No module name, assume the class&#x27;s module did
-                # &quot;from dataclasses import InitVar&quot;.
-&gt;               ns = sys.modules.get(cls.__module__).__dict__
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E               AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;__dict__&#x27;
-
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError
-________________ test_dashboard_outputs_escape_dynamic_content _________________
-
-tmp_path = PosixPath(&#x27;/tmp/pytest-of-ales27pm/pytest-11/test_dashboard_outputs_escape_0&#x27;)
-
-    def test_dashboard_outputs_escape_dynamic_content(tmp_path: Path) -&gt; None:
-&gt;       runner = _load_runner()
-                 ^^^^^^^^^^^^^^
-
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:122: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner
-    spec.loader.exec_module(module)
-&lt;frozen importlib._bootstrap_external&gt;:940: in exec_module
-    ???
-&lt;frozen importlib._bootstrap&gt;:241: in _call_with_frames_removed
-    ???
-tools/run_visual_improve_loop_v2.py:51: in &lt;module&gt;
-    @dataclass(slots=True)
-     ^^^^^^^^^^^^^^^^^^^^^
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap
-    return _process_class(cls, init, repr, eq, order, unsafe_hash,
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class
-    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-
-annotation = &#x27;str&#x27;, cls = &lt;class &#x27;lumen_visual_improve_loop_v2.StepResult&#x27;&gt;
-a_module = &lt;module &#x27;dataclasses&#x27; from &#x27;/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py&#x27;&gt;
-a_type = &lt;dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910&gt;
-is_type_predicate = &lt;function _is_kw_only at 0x73e7d99f3f60&gt;
-
-    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):
-        # Given a type annotation string, does it refer to a_type in
-        # a_module?  For example, when checking that annotation denotes a
-        # ClassVar, then a_module is typing, and a_type is
-        # typing.ClassVar.
-    
-        # It&#x27;s possible to look up a_module given a_type, but it involves
-        # looking in sys.modules (again!), and seems like a waste since
-        # the caller already knows a_module.
-    
-        # - annotation is a string type annotation
-        # - cls is the class that this annotation was found in
-        # - a_module is the module we want to match
-        # - a_type is the type in that module we want to match
-        # - is_type_predicate is a function called with (obj, a_module)
-        #   that determines if obj is of the desired type.
-    
-        # Since this test does not do a local namespace lookup (and
-        # instead only a module (global) lookup), there are some things it
-        # gets wrong.
-    
-        # With string annotations, cv0 will be detected as a ClassVar:
-        #   CV = ClassVar
-        #   @dataclass
-        #   class C0:
-        #     cv0: CV
-    
-        # But in this example cv1 will not be detected as a ClassVar:
-        #   @dataclass
-        #   class C1:
-        #     CV = ClassVar
-        #     cv1: CV
-    
-        # In C1, the code in this function (_is_type) will look up &quot;CV&quot; in
-        # the module and not find it, so it will not consider cv1 as a
-        # ClassVar.  This is a fairly obscure corner case, and the best
-        # way to fix it would be to eval() the string &quot;CV&quot; with the
-        # correct global and local namespaces.  However that would involve
-        # a eval() penalty for every single field of every dataclass
-        # that&#x27;s defined.  It was judged not worth it.
-    
-        match = _MODULE_IDENTIFIER_RE.match(annotation)
-        if match:
-            ns = None
-            module_name = match.group(1)
-            if not module_name:
-                # No module name, assume the class&#x27;s module did
-                # &quot;from dataclasses import InitVar&quot;.
-&gt;               ns = sys.modules.get(cls.__module__).__dict__
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E               AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;__dict__&#x27;
-
-../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError
-=========================== short test summary info ============================
-FAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_relative_outputs_are_resolved_against_invocation_root
-FAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_command_queue_uses_repo_rooted_outputs
-FAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_release_bake_command_requires_explicit_flag
-FAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state
-FAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_dashboard_outputs_escape_dynamic_content
-5 failed, 52 passed in 2.72s
+/home/ales27pm/Lumen/ios/Lumen</pre></details><details><summary>test manifest crawler · passed</summary><pre>.........................................................                [100%]
+57 passed in 2.45s
+</pre></details><details><summary>improve-loop generation · passed</summary><pre>Loop passed: True
+Gaps: 2
+TestFlight scenarios: 120
+Next-action prompts: 2
+Wrote loop outputs to /home/ales27pm/Lumen/generated/agent_improvement_loop
+</pre></details><details><summary>adapter-first release-bake manifest · passed</summary><pre>Skipped GGUF release bake by default. Wrote adapter-first manifest: /home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json
+Pass --release-bake to explicitly merge adapters into GGUF artifacts.
 </pre></details></section>
 </main>
 </body>

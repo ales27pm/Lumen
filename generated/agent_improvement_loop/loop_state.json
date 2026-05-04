@@ -21,7 +21,7 @@
       "fleet": {
         "eval": 93,
         "trainDPO": 14,
-        "trainSFT": 670,
+        "trainSFT": 669,
         "valDPO": 3,
         "valSFT": 118
       },
@@ -42,7 +42,7 @@
       "rem": {
         "eval": 4,
         "trainDPO": 7,
-        "trainSFT": 63,
+        "trainSFT": 62,
         "valDPO": 1,
         "valSFT": 11
       }
@@ -58,53 +58,50 @@
       "mouth_responses": 53,
       "negative_samples": 53,
       "rem_reflection": 5,
-      "runtime_audit_repairs": 1,
+      "runtime_audit_repairs": 0,
       "tool_schema_cards": 53,
       "train_sft": 298,
       "validation_sft": 53
     },
     "familyCount": 14,
-    "recordCount": 1363
+    "recordCount": 1362
   },
   "errorGapCount": 0,
-  "gapCount": 0,
+  "gapCount": 2,
   "manifest": {
-    "commit": "3aa4534f69a0e7ce52af077c993e0b1ec29b1e83",
-    "fingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "commit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
+    "fingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
     "toolCount": 53
   },
-  "nextActionPromptCount": 1,
+  "nextActionPromptCount": 2,
   "output": "/home/ales27pm/Lumen/generated/agent_manifest",
   "passed": true,
   "root": "/home/ales27pm/Lumen",
   "runtime": {
     "failureCount": 0,
     "failureTypes": {},
-    "reportCount": 1,
+    "reportCount": 0,
     "sourceLayers": {}
   },
-  "runtimeAuditInputs": [
-    "runtime-audits/latest-testflight-export.json",
-    "runtime-audits/latest-e2e-report.txt"
-  ],
+  "runtimeAuditInputs": [],
   "schemaVersion": "1.1.0",
   "startedAt": "1970-01-01T00:00:00+00:00",
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "manifestFingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,
     "requiresTestFlightAppRun": true,
     "runbookPath": "TESTFLIGHT_RUNBOOK.md",
-    "runtimeAuditProvided": true,
+    "runtimeAuditProvided": false,
     "scenarioCount": 120,
     "scenarioQueuePath": "testflight_scenarios.jsonl",
-    "status": "runtime-audit-ingested"
+    "status": "awaiting-testflight-runtime-audit"
   },
   "validation": {
     "failureCount": 0,

@@ -1,8 +1,13 @@
 {
   "adapterRuntimeManifest": {
-    "adapterCount": 0,
-    "mode": null,
-    "releaseBakePolicy": {}
+    "adapterCount": 6,
+    "mode": "adapter_first",
+    "releaseBakePolicy": {
+      "allowedWhenRuntimeCannotLoadAdapters": true,
+      "enabledByDefault": false,
+      "manualOnly": true,
+      "requiresPassingEvalGates": true
+    }
   },
   "dataset": {
     "agentFineTuning": {
@@ -23,7 +28,7 @@
       "fleet": {
         "eval": 93,
         "trainDPO": 14,
-        "trainSFT": 670,
+        "trainSFT": 669,
         "valDPO": 3,
         "valSFT": 118
       },
@@ -44,7 +49,7 @@
       "rem": {
         "eval": 4,
         "trainDPO": 7,
-        "trainSFT": 63,
+        "trainSFT": 62,
         "valDPO": 1,
         "valSFT": 11
       }
@@ -60,61 +65,63 @@
       "mouth_responses": 53,
       "negative_samples": 53,
       "rem_reflection": 5,
-      "runtime_audit_repairs": 1,
+      "runtime_audit_repairs": 0,
       "tool_schema_cards": 53,
       "train_sft": 298,
       "validation_sft": 53
     },
     "familyCount": 14,
-    "recordCount": 1363
+    "recordCount": 1362
   },
-  "endedAt": "2026-05-03T23:33:04+00:00",
+  "endedAt": "2026-05-03T23:42:54+00:00",
   "fineTuningOutput": "/home/ales27pm/Lumen/generated/fine_tuning",
   "gaps": {
-    "bySeverity": {},
+    "bySeverity": {
+      "warning": 2
+    },
     "hard": 0,
-    "total": 0
+    "total": 2
   },
   "loopOutput": "/home/ales27pm/Lumen/generated/agent_improvement_loop",
   "manifest": {
-    "commit": "3aa4534f69a0e7ce52af077c993e0b1ec29b1e83",
-    "fingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "commit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
+    "fingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
     "toolCount": 53
   },
-  "nextPrompts": 1,
+  "nextPrompts": 2,
   "output": "/home/ales27pm/Lumen/generated/agent_manifest",
-  "passed": false,
+  "passed": true,
   "releaseBakeManifest": {
-    "agentCount": 0,
-    "mode": null,
-    "releaseBakeRequested": null,
-    "skipped": null
+    "agentCount": 6,
+    "mode": "adapter_first",
+    "releaseBakeRequested": false,
+    "skipped": true
   },
   "releaseBakeRequested": false,
   "root": "/home/ales27pm/Lumen",
   "runtime": {
     "failureCount": 0,
     "failureTypes": {},
-    "reportCount": 1,
+    "reportCount": 0,
     "sourceLayers": {}
   },
   "schemaVersion": "2.0.0",
-  "startedAt": "2026-05-03T23:33:01+00:00",
+  "startedAt": "2026-05-03T23:42:51+00:00",
   "steps": [
     {
       "command": [],
       "cwd": "/home/ales27pm/Lumen",
       "durationSeconds": 0.0,
-      "endedAt": "2026-05-03T23:33:01+00:00",
+      "endedAt": "2026-05-03T23:42:51+00:00",
       "name": "preflight",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-03T23:33:01+00:00",
+      "startedAt": "2026-05-03T23:42:51+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/cli.py\n/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs\n/home/ales27pm/Lumen/ios/Lumen"
@@ -127,32 +134,97 @@
         "tools/lumen_manifest_crawler/tests"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 2.875,
-      "endedAt": "2026-05-03T23:33:04+00:00",
+      "durationSeconds": 2.613,
+      "endedAt": "2026-05-03T23:42:53+00:00",
       "name": "test manifest crawler",
       "notes": [],
-      "passed": false,
-      "returncode": 1,
+      "passed": true,
+      "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-03T23:33:01+00:00",
-      "status": "failed",
+      "startedAt": "2026-05-03T23:42:51+00:00",
+      "status": "passed",
       "stderrTail": "",
-      "stdoutTail": "    ???\n<frozen importlib._bootstrap>:241: in _call_with_frames_removed\n    ???\ntools/run_visual_improve_loop_v2.py:51: in <module>\n    @dataclass(slots=True)\n     ^^^^^^^^^^^^^^^^^^^^^\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap\n    return _process_class(cls, init, repr, eq, order, unsafe_hash,\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class\n    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nannotation = 'str', cls = <class 'lumen_visual_improve_loop_v2.StepResult'>\na_module = <module 'dataclasses' from '/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py'>\na_type = <dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910>\nis_type_predicate = <function _is_kw_only at 0x73e7d99f3f60>\n\n    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):\n        # Given a type annotation string, does it refer to a_type in\n        # a_module?  For example, when checking that annotation denotes a\n        # ClassVar, then a_module is typing, and a_type is\n        # typing.ClassVar.\n    \n        # It's possible to look up a_module given a_type, but it involves\n        # looking in sys.modules (again!), and seems like a waste since\n        # the caller already knows a_module.\n    \n        # - annotation is a string type annotation\n        # - cls is the class that this annotation was found in\n        # - a_module is the module we want to match\n        # - a_type is the type in that module we want to match\n        # - is_type_predicate is a function called with (obj, a_module)\n        #   that determines if obj is of the desired type.\n    \n        # Since this test does not do a local namespace lookup (and\n        # instead only a module (global) lookup), there are some things it\n        # gets wrong.\n    \n        # With string annotations, cv0 will be detected as a ClassVar:\n        #   CV = ClassVar\n        #   @dataclass\n        #   class C0:\n        #     cv0: CV\n    \n        # But in this example cv1 will not be detected as a ClassVar:\n        #   @dataclass\n        #   class C1:\n        #     CV = ClassVar\n        #     cv1: CV\n    \n        # In C1, the code in this function (_is_type) will look up \"CV\" in\n        # the module and not find it, so it will not consider cv1 as a\n        # ClassVar.  This is a fairly obscure corner case, and the best\n        # way to fix it would be to eval() the string \"CV\" with the\n        # correct global and local namespaces.  However that would involve\n        # a eval() penalty for every single field of every dataclass\n        # that's defined.  It was judged not worth it.\n    \n        match = _MODULE_IDENTIFIER_RE.match(annotation)\n        if match:\n            ns = None\n            module_name = match.group(1)\n            if not module_name:\n                # No module name, assume the class's module did\n                # \"from dataclasses import InitVar\".\n>               ns = sys.modules.get(cls.__module__).__dict__\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE               AttributeError: 'NoneType' object has no attribute '__dict__'\n\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError\n_______________ test_release_bake_command_requires_explicit_flag _______________\n\ntmp_path = PosixPath('/tmp/pytest-of-ales27pm/pytest-11/test_release_bake_command_requ0')\n\n    def test_release_bake_command_requires_explicit_flag(tmp_path: Path) -> None:\n>       runner = _load_runner()\n                 ^^^^^^^^^^^^^^\n\ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:77: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner\n    spec.loader.exec_module(module)\n<frozen importlib._bootstrap_external>:940: in exec_module\n    ???\n<frozen importlib._bootstrap>:241: in _call_with_frames_removed\n    ???\ntools/run_visual_improve_loop_v2.py:51: in <module>\n    @dataclass(slots=True)\n     ^^^^^^^^^^^^^^^^^^^^^\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap\n    return _process_class(cls, init, repr, eq, order, unsafe_hash,\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class\n    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nannotation = 'str', cls = <class 'lumen_visual_improve_loop_v2.StepResult'>\na_module = <module 'dataclasses' from '/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py'>\na_type = <dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910>\nis_type_predicate = <function _is_kw_only at 0x73e7d99f3f60>\n\n    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):\n        # Given a type annotation string, does it refer to a_type in\n        # a_module?  For example, when checking that annotation denotes a\n        # ClassVar, then a_module is typing, and a_type is\n        # typing.ClassVar.\n    \n        # It's possible to look up a_module given a_type, but it involves\n        # looking in sys.modules (again!), and seems like a waste since\n        # the caller already knows a_module.\n    \n        # - annotation is a string type annotation\n        # - cls is the class that this annotation was found in\n        # - a_module is the module we want to match\n        # - a_type is the type in that module we want to match\n        # - is_type_predicate is a function called with (obj, a_module)\n        #   that determines if obj is of the desired type.\n    \n        # Since this test does not do a local namespace lookup (and\n        # instead only a module (global) lookup), there are some things it\n        # gets wrong.\n    \n        # With string annotations, cv0 will be detected as a ClassVar:\n        #   CV = ClassVar\n        #   @dataclass\n        #   class C0:\n        #     cv0: CV\n    \n        # But in this example cv1 will not be detected as a ClassVar:\n        #   @dataclass\n        #   class C1:\n        #     CV = ClassVar\n        #     cv1: CV\n    \n        # In C1, the code in this function (_is_type) will look up \"CV\" in\n        # the module and not find it, so it will not consider cv1 as a\n        # ClassVar.  This is a fairly obscure corner case, and the best\n        # way to fix it would be to eval() the string \"CV\" with the\n        # correct global and local namespaces.  However that would involve\n        # a eval() penalty for every single field of every dataclass\n        # that's defined.  It was judged not worth it.\n    \n        match = _MODULE_IDENTIFIER_RE.match(annotation)\n        if match:\n            ns = None\n            module_name = match.group(1)\n            if not module_name:\n                # No module name, assume the class's module did\n                # \"from dataclasses import InitVar\".\n>               ns = sys.modules.get(cls.__module__).__dict__\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE               AttributeError: 'NoneType' object has no attribute '__dict__'\n\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError\n_ test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state _\n\ntmp_path = PosixPath('/tmp/pytest-of-ales27pm/pytest-11/test_runtime_audit_discovery_a0')\n\n    def test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state(tmp_path: Path) -> None:\n>       runner = _load_runner()\n                 ^^^^^^^^^^^^^^\n\ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:107: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner\n    spec.loader.exec_module(module)\n<frozen importlib._bootstrap_external>:940: in exec_module\n    ???\n<frozen importlib._bootstrap>:241: in _call_with_frames_removed\n    ???\ntools/run_visual_improve_loop_v2.py:51: in <module>\n    @dataclass(slots=True)\n     ^^^^^^^^^^^^^^^^^^^^^\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap\n    return _process_class(cls, init, repr, eq, order, unsafe_hash,\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class\n    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nannotation = 'str', cls = <class 'lumen_visual_improve_loop_v2.StepResult'>\na_module = <module 'dataclasses' from '/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py'>\na_type = <dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910>\nis_type_predicate = <function _is_kw_only at 0x73e7d99f3f60>\n\n    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):\n        # Given a type annotation string, does it refer to a_type in\n        # a_module?  For example, when checking that annotation denotes a\n        # ClassVar, then a_module is typing, and a_type is\n        # typing.ClassVar.\n    \n        # It's possible to look up a_module given a_type, but it involves\n        # looking in sys.modules (again!), and seems like a waste since\n        # the caller already knows a_module.\n    \n        # - annotation is a string type annotation\n        # - cls is the class that this annotation was found in\n        # - a_module is the module we want to match\n        # - a_type is the type in that module we want to match\n        # - is_type_predicate is a function called with (obj, a_module)\n        #   that determines if obj is of the desired type.\n    \n        # Since this test does not do a local namespace lookup (and\n        # instead only a module (global) lookup), there are some things it\n        # gets wrong.\n    \n        # With string annotations, cv0 will be detected as a ClassVar:\n        #   CV = ClassVar\n        #   @dataclass\n        #   class C0:\n        #     cv0: CV\n    \n        # But in this example cv1 will not be detected as a ClassVar:\n        #   @dataclass\n        #   class C1:\n        #     CV = ClassVar\n        #     cv1: CV\n    \n        # In C1, the code in this function (_is_type) will look up \"CV\" in\n        # the module and not find it, so it will not consider cv1 as a\n        # ClassVar.  This is a fairly obscure corner case, and the best\n        # way to fix it would be to eval() the string \"CV\" with the\n        # correct global and local namespaces.  However that would involve\n        # a eval() penalty for every single field of every dataclass\n        # that's defined.  It was judged not worth it.\n    \n        match = _MODULE_IDENTIFIER_RE.match(annotation)\n        if match:\n            ns = None\n            module_name = match.group(1)\n            if not module_name:\n                # No module name, assume the class's module did\n                # \"from dataclasses import InitVar\".\n>               ns = sys.modules.get(cls.__module__).__dict__\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE               AttributeError: 'NoneType' object has no attribute '__dict__'\n\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError\n________________ test_dashboard_outputs_escape_dynamic_content _________________\n\ntmp_path = PosixPath('/tmp/pytest-of-ales27pm/pytest-11/test_dashboard_outputs_escape_0')\n\n    def test_dashboard_outputs_escape_dynamic_content(tmp_path: Path) -> None:\n>       runner = _load_runner()\n                 ^^^^^^^^^^^^^^\n\ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:122: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ntools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py:19: in _load_runner\n    spec.loader.exec_module(module)\n<frozen importlib._bootstrap_external>:940: in exec_module\n    ???\n<frozen importlib._bootstrap>:241: in _call_with_frames_removed\n    ???\ntools/run_visual_improve_loop_v2.py:51: in <module>\n    @dataclass(slots=True)\n     ^^^^^^^^^^^^^^^^^^^^^\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:1222: in wrap\n    return _process_class(cls, init, repr, eq, order, unsafe_hash,\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:947: in _process_class\n    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nannotation = 'str', cls = <class 'lumen_visual_improve_loop_v2.StepResult'>\na_module = <module 'dataclasses' from '/home/ales27pm/micromamba/envs/lumen311/lib/python3.11/dataclasses.py'>\na_type = <dataclasses._KW_ONLY_TYPE object at 0x73e7d99e6910>\nis_type_predicate = <function _is_kw_only at 0x73e7d99f3f60>\n\n    def _is_type(annotation, cls, a_module, a_type, is_type_predicate):\n        # Given a type annotation string, does it refer to a_type in\n        # a_module?  For example, when checking that annotation denotes a\n        # ClassVar, then a_module is typing, and a_type is\n        # typing.ClassVar.\n    \n        # It's possible to look up a_module given a_type, but it involves\n        # looking in sys.modules (again!), and seems like a waste since\n        # the caller already knows a_module.\n    \n        # - annotation is a string type annotation\n        # - cls is the class that this annotation was found in\n        # - a_module is the module we want to match\n        # - a_type is the type in that module we want to match\n        # - is_type_predicate is a function called with (obj, a_module)\n        #   that determines if obj is of the desired type.\n    \n        # Since this test does not do a local namespace lookup (and\n        # instead only a module (global) lookup), there are some things it\n        # gets wrong.\n    \n        # With string annotations, cv0 will be detected as a ClassVar:\n        #   CV = ClassVar\n        #   @dataclass\n        #   class C0:\n        #     cv0: CV\n    \n        # But in this example cv1 will not be detected as a ClassVar:\n        #   @dataclass\n        #   class C1:\n        #     CV = ClassVar\n        #     cv1: CV\n    \n        # In C1, the code in this function (_is_type) will look up \"CV\" in\n        # the module and not find it, so it will not consider cv1 as a\n        # ClassVar.  This is a fairly obscure corner case, and the best\n        # way to fix it would be to eval() the string \"CV\" with the\n        # correct global and local namespaces.  However that would involve\n        # a eval() penalty for every single field of every dataclass\n        # that's defined.  It was judged not worth it.\n    \n        match = _MODULE_IDENTIFIER_RE.match(annotation)\n        if match:\n            ns = None\n            module_name = match.group(1)\n            if not module_name:\n                # No module name, assume the class's module did\n                # \"from dataclasses import InitVar\".\n>               ns = sys.modules.get(cls.__module__).__dict__\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE               AttributeError: 'NoneType' object has no attribute '__dict__'\n\n../micromamba/envs/lumen311/lib/python3.11/dataclasses.py:712: AttributeError\n=========================== short test summary info ============================\nFAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_relative_outputs_are_resolved_against_invocation_root\nFAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_command_queue_uses_repo_rooted_outputs\nFAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_release_bake_command_requires_explicit_flag\nFAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_runtime_audit_discovery_accepts_realistic_export_and_rejects_loop_state\nFAILED tools/lumen_manifest_crawler/tests/test_visual_improve_loop_runner.py::test_dashboard_outputs_escape_dynamic_content\n5 failed, 52 passed in 2.72s\n"
+      "stdoutTail": ".........................................................                [100%]\n57 passed in 2.45s\n"
+    },
+    {
+      "command": [
+        "/home/ales27pm/micromamba/envs/lumen311/bin/python",
+        "-m",
+        "lumen_manifest_crawler",
+        "improve-loop",
+        "--root",
+        "/home/ales27pm/Lumen",
+        "--output",
+        "/home/ales27pm/Lumen/generated/agent_manifest",
+        "--loop-output",
+        "/home/ales27pm/Lumen/generated/agent_improvement_loop",
+        "--fine-tuning-output",
+        "/home/ales27pm/Lumen/generated/fine_tuning",
+        "--testflight-scenario-limit",
+        "120",
+        "--app-run-mode",
+        "testflight",
+        "--strict",
+        "--deterministic",
+        "--pretty",
+        "--generate-system-prompts",
+        "--generate-agent-fine-tuning"
+      ],
+      "cwd": "/home/ales27pm/Lumen",
+      "durationSeconds": 0.662,
+      "endedAt": "2026-05-03T23:42:54+00:00",
+      "name": "improve-loop generation",
+      "notes": [],
+      "passed": true,
+      "returncode": 0,
+      "skipped": false,
+      "startedAt": "2026-05-03T23:42:53+00:00",
+      "status": "passed",
+      "stderrTail": "",
+      "stdoutTail": "Loop passed: True\nGaps: 2\nTestFlight scenarios: 120\nNext-action prompts: 2\nWrote loop outputs to /home/ales27pm/Lumen/generated/agent_improvement_loop\n"
+    },
+    {
+      "command": [
+        "/home/ales27pm/micromamba/envs/lumen311/bin/python",
+        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py",
+        "--config-dir",
+        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs",
+        "--agents",
+        "cortex,executor,mouth,mimicry,rem,fleet",
+        "--quantization",
+        "q4_k_m",
+        "--output-root",
+        "/home/ales27pm/Lumen/models/gguf_release_bake",
+        "--manifest-output",
+        "/home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json"
+      ],
+      "cwd": "/home/ales27pm/Lumen",
+      "durationSeconds": 0.026,
+      "endedAt": "2026-05-03T23:42:54+00:00",
+      "name": "adapter-first release-bake manifest",
+      "notes": [],
+      "passed": true,
+      "returncode": 0,
+      "skipped": false,
+      "startedAt": "2026-05-03T23:42:54+00:00",
+      "status": "passed",
+      "stderrTail": "",
+      "stdoutTail": "Skipped GGUF release bake by default. Wrote adapter-first manifest: /home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json\nPass --release-bake to explicitly merge adapters into GGUF artifacts.\n"
     }
   ],
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "d807b040bc20aa64e017d082a0ae548e8f749ae6082b8778f833a3775ccaf875",
+    "manifestFingerprint": "bfe91c7aabb6a07adb2fa1da759652e1d302c2c439e18f66e7ba01a474f7a5f5",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,
     "requiresTestFlightAppRun": true,
     "runbookPath": "TESTFLIGHT_RUNBOOK.md",
-    "runtimeAuditProvided": true,
+    "runtimeAuditProvided": false,
     "scenarioCount": 120,
     "scenarioQueuePath": "testflight_scenarios.jsonl",
-    "status": "runtime-audit-ingested"
+    "status": "awaiting-testflight-runtime-audit"
   },
   "testFlightScenarios": 120
 }

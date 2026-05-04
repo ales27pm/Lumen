@@ -1,7 +1,7 @@
 # Lumen Agent Behavior Manifest
 
 ## Source Integrity
-- Commit: `3aa4534f69a0e7ce52af077c993e0b1ec29b1e83`
+- Commit: `9dba391f5d7a62431cfa3c4ddce41c90c8070680`
 - Source files: 13
 - Source map:
   - `ios/Lumen/Models/AgentJSONValue.swift`: json_protocol
@@ -24,7 +24,7 @@
 - Slots must coordinate as one coherent entity instead of acting like unrelated assistants.
 
 ## Model Fleet Slots
-- Contract version: `2026.04.29`
+- Contract version: `2026.05.03-adapter-first`
 ### `cortex`
 - Role: orchestrator
 - Source: `ios/Lumen/Services/ModelFleet.swift`

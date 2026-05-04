@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "3aa4534f69a0e7ce52af077c993e0b1ec29b1e83",
+    "commit": "9dba391f5d7a62431cfa3c4ddce41c90c8070680",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -47,7 +47,7 @@
       },
       {
         "path": "ios/Lumen/Services/ModelFleet.swift",
-        "sha256": "b4e4246da05c8ca833019f58a87b11e724578e10933b37c07ed304a120a8f1c3"
+        "sha256": "5e5b0ed1204cb9a01051dbcf7a9baa602c0690343ecde3c53bda3898df3e7e65"
       },
       {
         "path": "ios/Lumen/Services/RemCycleService.swift",
@@ -64,7 +64,7 @@
     ]
   },
   "fleet": {
-    "contractVersion": "2026.04.29",
+    "contractVersion": "2026.05.03-adapter-first",
     "slots": [
       {
         "id": "cortex",

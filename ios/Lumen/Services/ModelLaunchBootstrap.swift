@@ -20,9 +20,10 @@ enum ModelLaunchBootstrap {
     }
 
     static func repairFleet(appState: AppState, context: ModelContext, source: RepairSource = .manual) async {
-        let models = fleetModelsForInstall()
+        let family = LumenModelFamily.persistedSelected
+        let models = fleetModelsForInstall(family: family)
         guard !models.isEmpty else {
-            appState.runtime.updateBootStep(id: "models", detail: "No fleet catalog entries", state: .warning)
+            appState.runtime.updateBootStep(id: "models", detail: "No \(family.shortLabel) catalog entries", state: .warning)
             return
         }
 
@@ -34,7 +35,7 @@ enum ModelLaunchBootstrap {
         if requiredBytes > 0, availableBytes < requiredBytes {
             appState.runtime.updateBootStep(
                 id: "models",
-                detail: "Need \(formatBytesForBoot(requiredBytes)); only \(formatBytesForBoot(availableBytes)) free",
+                detail: "\(family.shortLabel): need \(formatBytesForBoot(requiredBytes)); only \(formatBytesForBoot(availableBytes)) free",
                 state: .warning
             )
             linkExistingFleetFiles(appState: appState, context: context)
@@ -43,7 +44,7 @@ enum ModelLaunchBootstrap {
 
         appState.runtime.updateBootStep(
             id: "models",
-            detail: source == .launch ? "Checking \(models.count) fleet model artifacts" : "Repairing \(models.count) fleet model artifacts",
+            detail: source == .launch ? "Checking \(models.count) \(family.shortLabel) artifacts" : "Repairing \(models.count) \(family.shortLabel) artifacts",
             state: .running
         )
 
@@ -69,8 +70,15 @@ enum ModelLaunchBootstrap {
             startedDownloads > 0 ? "\(startedDownloads) downloading" : nil
         ].compactMap { $0 }
 
-        let detail = fragments.isEmpty ? "Fleet model check complete" : fragments.joined(separator: " · ")
+        let detail = fragments.isEmpty ? "\(family.shortLabel) model check complete" : "\(family.shortLabel): " + fragments.joined(separator: " · ")
         appState.runtime.updateBootStep(id: "models", detail: detail, state: startedDownloads > 0 ? .running : .complete)
+    }
+
+    static func switchFamily(_ family: LumenModelFamily, appState: AppState, context: ModelContext) async {
+        LumenModelFamily.persistedSelected = family
+        appState.activeChatModelID = nil
+        appState.activeEmbeddingModelID = nil
+        await repairFleet(appState: appState, context: context, source: .manual)
     }
 
     enum RepairSource: Sendable {
@@ -85,8 +93,8 @@ enum ModelLaunchBootstrap {
         case startedDownload
     }
 
-    private static func fleetModelsForInstall() -> [CatalogModel] {
-        uniqueByArtifact(LumenModelFleetCatalog.defaultFleetModels)
+    private static func fleetModelsForInstall(family: LumenModelFamily = LumenModelFamily.persistedSelected) -> [CatalogModel] {
+        uniqueByArtifact(LumenModelFleetCatalog.bootstrapModels(for: family))
     }
 
     private static func ensureModelPresent(
@@ -181,7 +189,7 @@ enum ModelLaunchBootstrap {
         let state: BootStepState = readyCount >= expectedCount ? .complete : .running
         appState.runtime.updateBootStep(
             id: "models",
-            detail: "\(min(readyCount, expectedCount)) / \(expectedCount) fleet model artifacts ready",
+            detail: "\(min(readyCount, expectedCount)) / \(expectedCount) \(LumenModelFamily.persistedSelected.shortLabel) artifacts ready",
             state: state
         )
     }

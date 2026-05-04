@@ -72,6 +72,8 @@ def write_outputs(
             for record in records:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
+    _write_embedding_outputs(output_dir / "embedding", datasets)
+
     if fine_tuning_datasets is not None:
         _write_fine_tuning_outputs(fine_tuning_output_dir or (output_dir / "fine_tuning"), fine_tuning_datasets)
 
@@ -173,6 +175,33 @@ def _write_routing_matrix_csv(path: Path, manifest: AgentBehaviorManifest) -> No
         writer.writerow(["intent", "allowedTools", "forbiddenTools"])
         for entry in manifest.routingMatrix:
             writer.writerow([entry.intent, ";".join(entry.allowedTools), ";".join(entry.forbiddenTools)])
+
+
+def _write_embedding_outputs(root: Path, datasets: dict[str, list[dict[str, Any]]]) -> None:
+    embedding_files = {
+        "corpus.jsonl": datasets.get("embedding_corpus", []),
+        "train_pairs.jsonl": datasets.get("embedding_train_pairs", []),
+        "val_pairs.jsonl": datasets.get("embedding_val_pairs", []),
+        "train_triplets.jsonl": datasets.get("embedding_train_triplets", []),
+        "val_triplets.jsonl": datasets.get("embedding_val_triplets", []),
+        "hard_negatives.jsonl": datasets.get("embedding_hard_negatives", []),
+        "eval_retrieval.jsonl": datasets.get("embedding_eval_retrieval", []),
+    }
+    if not any(embedding_files.values()) and not datasets.get("embedding_dataset_card"):
+        return
+    root.mkdir(parents=True, exist_ok=True)
+    for filename, records in embedding_files.items():
+        _write_jsonl(root / filename, records)
+    card_records = datasets.get("embedding_dataset_card", [])
+    card = card_records[0] if card_records else {
+        "schemaVersion": "1.0.0",
+        "model": "Qwen/Qwen3-Embedding-0.6B",
+        "counts": {filename.removesuffix(".jsonl"): len(records) for filename, records in embedding_files.items()},
+    }
+    (root / "dataset_card.json").write_text(
+        json.dumps(card, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _write_fine_tuning_outputs(root: Path, datasets: dict[str, AgentFineTuningDataset]) -> None:

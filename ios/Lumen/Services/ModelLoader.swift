@@ -14,14 +14,16 @@ enum ModelLoader {
         await ensureEmbedLoaded(appState: appState, stored: stored)
     }
 
-    /// Attempts to load the v1 fleet chat runtimes and the active embedding model at launch.
+    /// Launch registration is assignment-first. Large role-baked GGUFs are not all
+    /// preloaded; the runtime lazily loads the specific slot that is about to run.
     static func loadAtLaunch(appState: AppState, stored: [StoredModel]) async {
         async let chat = ensureFleetChatLoaded(appState: appState, stored: stored)
         async let embed = ensureEmbedLoaded(appState: appState, stored: stored)
         _ = await (chat, embed)
     }
 
-    /// Backward-compatible entry point. In v1 this loads all available chat assignments.
+    /// Backward-compatible entry point. In v1 this registers all available chat
+    /// assignments for on-demand slot loading instead of loading all contexts.
     @discardableResult
     static func ensureChatLoaded(appState: AppState, stored: [StoredModel]) async -> Bool {
         await ensureFleetChatLoaded(appState: appState, stored: stored)
@@ -30,48 +32,21 @@ enum ModelLoader {
     @discardableResult
     static func ensureFleetChatLoaded(appState: AppState, stored: [StoredModel]) async -> Bool {
         let snapshot = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
-        var loadedAny = false
-        var failures: [LumenModelSlot: String] = [:]
+        await AppLlamaService.shared.configureFleetAssignments(
+            assignments: snapshot.assignments,
+            contextSize: appState.contextSize,
+            preferExclusiveChatRuntime: true
+        )
 
-        for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
-            guard let assignment = snapshot.assignment(for: slot) else { continue }
-            let resolvedPath = assignment.localPath
-            guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
-
-            if await AppLlamaService.shared.loadedChatPath(for: slot) == resolvedPath {
-                loadedAny = true
-                continue
-            }
-
-            do {
-                try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: appState.contextSize)
-                loadedAny = true
-            } catch {
-                logger.error(
-                    "Fleet chat load failed slot=\(slot.rawValue, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)"
-                )
-                failures[slot] = error.localizedDescription
-
-                do {
-                    try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: 2048)
-                    loadedAny = true
-                    failures.removeValue(forKey: slot)
-                } catch {
-                    logger.error(
-                        "Fleet chat fallback load failed slot=\(slot.rawValue, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)"
-                    )
-                }
-            }
+        let runnableSlots = [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem]
+            .filter { snapshot.assignment(for: $0) != nil }
+        guard !runnableSlots.isEmpty else {
+            return await ensurePrimaryChatLoaded(appState: appState, stored: stored)
         }
 
-        if !loadedAny {
-            loadedAny = await ensurePrimaryChatLoaded(appState: appState, stored: stored)
-        }
-
-        if !failures.isEmpty {
-            logger.warning("Fleet chat loaded with \(failures.count, privacy: .public) slot failures")
-        }
-        return loadedAny
+        // Optional prewarm: keep only one small active context, not the entire fleet.
+        // The concrete role models are loaded by AppLlamaService right before their slot runs.
+        return true
     }
 
     @discardableResult
@@ -80,6 +55,7 @@ enum ModelLoader {
         if let preferredID,
            let preferred = stored.first(where: { $0.id.uuidString == preferredID && $0.modelRole == .chat }) {
             let resolvedPath = ModelStorage.resolvedModelURL(from: preferred.localPath, fileName: preferred.fileName).path
+            guard FileManager.default.fileExists(atPath: resolvedPath) else { return false }
             if await AppLlamaService.shared.isChatLoaded,
                await AppLlamaService.shared.loadedChatPath == resolvedPath {
                 return true
@@ -88,25 +64,22 @@ enum ModelLoader {
             return true
         }
 
-        let candidates: [StoredModel] = candidateList(
-            preferredID: preferredID,
-            role: .chat,
-            stored: stored
-        )
+        let candidates: [StoredModel] = candidateList(preferredID: preferredID, role: .chat, stored: stored)
         for candidate in candidates {
             let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
+            guard ModelFileIntegrity.validateInstalledFile(candidate) else { continue }
             do {
+                try await AppLlamaService.shared.unloadAllChat()
                 try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                 if appState.activeChatModelID != candidate.id.uuidString {
                     appState.activeChatModelID = candidate.id.uuidString
                 }
                 return true
             } catch {
-                logger.error(
-                    "Primary chat load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)"
-                )
+                logger.error("Primary chat load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 do {
+                    try await AppLlamaService.shared.unloadAllChat()
                     try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
                     if appState.activeChatModelID != candidate.id.uuidString {
                         appState.activeChatModelID = candidate.id.uuidString
@@ -134,14 +107,11 @@ enum ModelLoader {
             return true
         }
 
-        let candidates: [StoredModel] = candidateList(
-            preferredID: preferredID,
-            role: .embedding,
-            stored: stored
-        )
+        let candidates: [StoredModel] = candidateList(preferredID: preferredID, role: .embedding, stored: stored)
         for candidate in candidates {
             let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
+            guard ModelFileIntegrity.validateInstalledFile(candidate) else { continue }
             do {
                 try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
                 if appState.activeEmbeddingModelID != candidate.id.uuidString {
@@ -149,6 +119,7 @@ enum ModelLoader {
                 }
                 return true
             } catch {
+                logger.error("Embedding load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 continue
             }
         }
@@ -156,7 +127,7 @@ enum ModelLoader {
     }
 
     private static func candidateList(preferredID: String?, role: ModelRole, stored: [StoredModel]) -> [StoredModel] {
-        let pool = stored.filter { $0.modelRole == role }
+        let pool = stored.filter { $0.modelRole == role && ModelFileIntegrity.validateInstalledFile($0) }
         var ordered: [StoredModel] = []
         if let id = preferredID, let preferred = pool.first(where: { $0.id.uuidString == id }) {
             ordered.append(preferred)

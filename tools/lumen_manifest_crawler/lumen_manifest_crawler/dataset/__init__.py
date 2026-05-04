@@ -11,6 +11,7 @@ from lumen_manifest_crawler.dataset.compiler import (
     DatasetCompilerConfig,
     compile_state_of_art_datasets,
 )
+from lumen_manifest_crawler.dataset.embedding import compile_embedding_datasets
 from lumen_manifest_crawler.dataset.executor import (
     generate_approval_boundary_records,
     generate_executor_records,
@@ -51,8 +52,13 @@ def generate_all_datasets(
         runtime_audit_reports=runtime_audit_reports,
         config=DatasetCompilerConfig(deterministic=deterministic),
     )
-    return {
+    datasets: dict[str, list[dict[str, Any]]] = {
         **role_records,
         **compiled.records,
+    }
+    embedding = compile_embedding_datasets(manifest, datasets)
+    return {
+        **datasets,
+        **embedding.as_dataset_families(),
         "dataset_manifest": [compiled.manifest],
     }

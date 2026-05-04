@@ -95,7 +95,7 @@ extension Dictionary where Key == String, Value == AgentJSONValue {
         }
     }
 
-    var stringCoerced: [String: String] {
+    nonisolated var stringCoerced: [String: String] {
         reduce(into: [String: String]()) { partialResult, element in
             partialResult[element.key] = element.value.stringValue
         }

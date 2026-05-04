@@ -28,6 +28,11 @@ def read_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def count_jsonl(path: Path) -> int:
     if not path.exists():
         return 0
@@ -68,17 +73,26 @@ def build_summary(embedding_dir: Path) -> dict[str, Any]:
     return summary
 
 
-def augment(loop_state_path: Path, embedding_dir: Path) -> dict[str, Any]:
+def apply_embedding(payload: dict[str, Any], embedding: dict[str, Any]) -> dict[str, Any]:
+    payload["embedding"] = embedding
+    dataset = payload.get("dataset") if isinstance(payload.get("dataset"), dict) else {}
+    dataset["embedding"] = embedding
+    payload["dataset"] = dataset
+    return payload
+
+
+def augment(loop_state_path: Path, embedding_dir: Path, visual_summary_path: Path | None = None) -> dict[str, Any]:
     state = read_json(loop_state_path)
     if not state:
         state = {"schemaVersion": "1.1.0", "dataset": {}}
     embedding = build_summary(embedding_dir)
-    state["embedding"] = embedding
-    dataset = state.get("dataset") if isinstance(state.get("dataset"), dict) else {}
-    dataset["embedding"] = embedding
-    state["dataset"] = dataset
-    loop_state_path.parent.mkdir(parents=True, exist_ok=True)
-    loop_state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    state = apply_embedding(state, embedding)
+    write_json(loop_state_path, state)
+
+    if visual_summary_path is not None:
+        visual_summary = read_json(visual_summary_path)
+        if visual_summary:
+            write_json(visual_summary_path, apply_embedding(visual_summary, embedding))
     return state
 
 
@@ -86,9 +100,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--loop-state", type=Path, default=Path("generated/agent_improvement_loop/loop_state.json"))
     parser.add_argument("--embedding-dir", type=Path, default=Path("generated/agent_manifest/embedding"))
+    parser.add_argument("--visual-summary", type=Path, default=Path("generated/visual_improve_loop/visual_improve_loop_summary.json"))
+    parser.add_argument("--no-visual-summary", action="store_true")
     parser.add_argument("--print-summary", action="store_true")
     args = parser.parse_args(argv)
-    state = augment(args.loop_state, args.embedding_dir)
+    visual_summary = None if args.no_visual_summary else args.visual_summary
+    state = augment(args.loop_state, args.embedding_dir, visual_summary)
     if args.print_summary:
         print(json.dumps(state["embedding"], ensure_ascii=False, indent=2, sort_keys=True))
     return 0

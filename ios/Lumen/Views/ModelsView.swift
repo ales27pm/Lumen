@@ -40,7 +40,7 @@ struct ModelsView: View {
                                 ForEach(featuredModels) { model in
                                     ModelCard(
                                         catalog: model,
-                                        stored: storedModel(for: model),
+                                        stored: installedStoredModel(for: model),
                                         progress: downloader.progresses[model.id],
                                         onDownload: { download(model) },
                                         onPause: { downloader.pause(model) },
@@ -57,7 +57,9 @@ struct ModelsView: View {
                             Text("Downloaded")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(Theme.textPrimary)
-                            if storedModels.isEmpty {
+                            let installedModels = storedModels.filter { modelFileExists($0) }
+                            let staleModels = storedModels.filter { !modelFileExists($0) }
+                            if installedModels.isEmpty && staleModels.isEmpty {
                                 Text("No models yet.")
                                     .font(.footnote)
                                     .foregroundStyle(Theme.textSecondary)
@@ -71,15 +73,28 @@ struct ModelsView: View {
                                     }
                             } else {
                                 VStack(spacing: 8) {
-                                    ForEach(storedModels) { sm in
+                                    ForEach(installedModels) { sm in
                                         DownloadedRow(model: sm,
                                                       isActiveChat: sm.id.uuidString == appState.activeChatModelID,
                                                       isActiveEmbed: sm.id.uuidString == appState.activeEmbeddingModelID,
                                                       isLoaded: loadedPaths.contains(ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path),
+                                                      isMissingFile: false,
                                                       onActivate: { activate(stored: sm) },
                                                       onLoad: { load(sm) },
                                                       onUnload: { unload(sm) },
                                                       onReload: { reload(sm) },
+                                                      onDelete: { deleteStoredModel(sm) })
+                                    }
+                                    ForEach(staleModels) { sm in
+                                        DownloadedRow(model: sm,
+                                                      isActiveChat: false,
+                                                      isActiveEmbed: false,
+                                                      isLoaded: false,
+                                                      isMissingFile: true,
+                                                      onActivate: {},
+                                                      onLoad: {},
+                                                      onUnload: {},
+                                                      onReload: {},
                                                       onDelete: { deleteStoredModel(sm) })
                                     }
                                 }
@@ -94,14 +109,11 @@ struct ModelsView: View {
             .navigationTitle("Models")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAddModel = true } label: {
-                        Image(systemName: "plus")
-                    }
+                    Button { showAddModel = true } label: { Image(systemName: "plus") }
                 }
             }
             .sheet(isPresented: $showAddModel) {
-                AddModelSheet()
-                    .presentationDetents([.medium, .large])
+                AddModelSheet().presentationDetents([.medium, .large])
             }
             .task {
                 selectedModelFamily = LumenModelFamily.persistedSelected
@@ -117,23 +129,18 @@ struct ModelsView: View {
 
     private var activeRow: some View {
         HStack(spacing: 10) {
-            ActivePill(title: "Chat", name: storedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
-            ActivePill(title: "Embed", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
+            ActivePill(title: "Chat", name: installedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
+            ActivePill(title: "Embed", name: installedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
         }
     }
 
     private var modelFamilyCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "switch.2")
-                    .foregroundStyle(Theme.accent)
+                Image(systemName: "switch.2").foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Model family")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("First launch and repair download only this family.")
-                        .font(.caption)
-                        .foregroundStyle(Theme.textSecondary)
+                    Text("Model family").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                    Text("First launch and repair download only this family.").font(.caption).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
             }
@@ -146,13 +153,9 @@ struct ModelsView: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("models.familyPicker")
 
-            Text(selectedModelFamily.description)
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
+            Text(selectedModelFamily.description).font(.caption).foregroundStyle(Theme.textSecondary)
 
-            Button {
-                repairSelectedFamily()
-            } label: {
+            Button { repairSelectedFamily() } label: {
                 HStack {
                     Label(isRepairingSelectedFamily ? "Repairing…" : "Download / repair \(selectedModelFamily.shortLabel)", systemImage: "arrow.down.circle")
                     Spacer()
@@ -168,34 +171,29 @@ struct ModelsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 14))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
     }
 
-    private var featuredModels: [CatalogModel] {
-        LumenModelFleetCatalog.bootstrapModels(for: selectedModelFamily)
-    }
+    private var featuredModels: [CatalogModel] { LumenModelFleetCatalog.bootstrapModels(for: selectedModelFamily) }
+    private var installedModels: [StoredModel] { storedModels.filter { modelFileExists($0) } }
+    private var runtimeAwareFleetSnapshot: LumenModelFleetSnapshot { fleetSnapshot.withRuntimeResidentPaths(loadedPaths) }
+    private var fleetSnapshot: LumenModelFleetSnapshot { LumenModelFleetResolver.resolveV1(appState: appState, storedModels: storedModels) }
 
-    private var runtimeAwareFleetSnapshot: LumenModelFleetSnapshot {
-        fleetSnapshot.withRuntimeResidentPaths(loadedPaths)
-    }
-
-    private var fleetSnapshot: LumenModelFleetSnapshot {
-        LumenModelFleetResolver.resolveV1(appState: appState, storedModels: storedModels)
+    private func installedStoredModel(for catalog: CatalogModel) -> StoredModel? {
+        storedModel(for: catalog).flatMap { modelFileExists($0) ? $0 : nil }
     }
 
     private func storedModel(for catalog: CatalogModel) -> StoredModel? {
         storedModels.first { stored in
-            stored.repoId.caseInsensitiveCompare(catalog.repoId) == .orderedSame
-            && stored.fileName.caseInsensitiveCompare(catalog.fileName) == .orderedSame
+            stored.repoId.caseInsensitiveCompare(catalog.repoId) == .orderedSame && stored.fileName.caseInsensitiveCompare(catalog.fileName) == .orderedSame
         }
     }
 
-    private func repairFleet() {
-        repairSelectedFamily()
+    private func modelFileExists(_ model: StoredModel) -> Bool {
+        FileManager.default.fileExists(atPath: ModelStorage.resolvedModelURL(from: model.localPath, fileName: model.fileName).path)
     }
+
+    private func repairFleet() { repairSelectedFamily() }
 
     private func repairSelectedFamily() {
         guard !isRepairingSelectedFamily else { return }
@@ -212,23 +210,19 @@ struct ModelsView: View {
     private func download(_ model: CatalogModel) {
         downloader.start(model) { localURL in
             Task { @MainActor in
-                if let existing = storedModel(for: model) {
+                if let existing = installedStoredModel(for: model) {
                     activate(stored: existing)
                     return
                 }
-                let stored = StoredModel(
-                    name: model.name, repoId: model.repoId, fileName: model.fileName,
-                    sizeBytes: model.sizeBytes, quantization: model.quantization,
-                    parameters: model.parameters, role: model.role, localPath: localURL.path
-                )
+                if let stale = storedModel(for: model), !modelFileExists(stale) {
+                    modelContext.delete(stale)
+                    try? modelContext.save()
+                }
+                let stored = StoredModel(name: model.name, repoId: model.repoId, fileName: model.fileName, sizeBytes: model.sizeBytes, quantization: model.quantization, parameters: model.parameters, role: model.role, localPath: localURL.path)
                 modelContext.insert(stored)
                 try? modelContext.save()
-                if model.role == .chat && appState.activeChatModelID == nil {
-                    appState.activeChatModelID = stored.id.uuidString
-                }
-                if model.role == .embedding && appState.activeEmbeddingModelID == nil {
-                    appState.activeEmbeddingModelID = stored.id.uuidString
-                }
+                if model.role == .chat && appState.activeChatModelID == nil { appState.activeChatModelID = stored.id.uuidString }
+                if model.role == .embedding && appState.activeEmbeddingModelID == nil { appState.activeEmbeddingModelID = stored.id.uuidString }
                 if model.role == .chat {
                     await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels + [stored])
                 } else {
@@ -241,56 +235,48 @@ struct ModelsView: View {
     }
 
     private func activate(_ catalog: CatalogModel) {
-        guard let stored = storedModel(for: catalog) else { return }
+        guard let stored = installedStoredModel(for: catalog) else { return }
         activate(stored: stored)
     }
 
     private func activate(stored: StoredModel) {
-        if stored.modelRole == .chat {
-            appState.activeChatModelID = stored.id.uuidString
-        } else {
-            appState.activeEmbeddingModelID = stored.id.uuidString
-        }
+        guard modelFileExists(stored) else { return }
+        if stored.modelRole == .chat { appState.activeChatModelID = stored.id.uuidString } else { appState.activeEmbeddingModelID = stored.id.uuidString }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
     }
 
     private func deleteStored(for catalog: CatalogModel) {
-        if let stored = storedModel(for: catalog) {
-            deleteStoredModel(stored)
-        }
+        if let stored = storedModel(for: catalog) { deleteStoredModel(stored) }
         downloader.deleteLocal(catalog)
     }
 
     private func refreshLoaded() async {
         var set: Set<String> = []
         let chatPaths = await AppLlamaService.shared.loadedChatPathsBySlot
-        for path in chatPaths.values {
+        for path in chatPaths.values where FileManager.default.fileExists(atPath: path) {
             let fileName = URL(fileURLWithPath: path).lastPathComponent
             set.insert(ModelStorage.resolvedModelURL(from: path, fileName: fileName).path)
         }
-        if let p = await AppLlamaService.shared.loadedEmbedPath {
-            if await AppLlamaService.shared.hasSemanticEmbeddingRuntime {
-                let fileName = URL(fileURLWithPath: p).lastPathComponent
-                set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
-            }
+        if let p = await AppLlamaService.shared.loadedEmbedPath,
+           await AppLlamaService.shared.hasSemanticEmbeddingRuntime,
+           FileManager.default.fileExists(atPath: p) {
+            let fileName = URL(fileURLWithPath: p).lastPathComponent
+            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
         }
         loadedPaths = set
     }
 
     private func load(_ sm: StoredModel) {
+        guard modelFileExists(sm) else { return }
         Task {
             do {
                 if sm.modelRole == .chat {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    let slots = fleetSnapshot.assignments
-                        .filter { $0.value.localPath == resolvedPath && $0.key != .embedding }
-                        .map(\.key)
+                    let slots = fleetSnapshot.assignments.filter { $0.value.localPath == resolvedPath && $0.key != .embedding }.map(\.key)
                     if slots.isEmpty {
                         try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
                     } else {
-                        for slot in slots {
-                            try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: appState.contextSize)
-                        }
+                        for slot in slots { try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: appState.contextSize) }
                     }
                 } else {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
@@ -308,12 +294,8 @@ struct ModelsView: View {
         Task {
             if sm.modelRole == .chat {
                 let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                let slots = await AppLlamaService.shared.loadedChatPathsBySlot
-                    .filter { $0.value == resolvedPath }
-                    .map(\.key)
-                for slot in slots {
-                    await AppLlamaService.shared.unloadChat(for: slot)
-                }
+                let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
+                for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
             } else {
                 await AppLlamaService.shared.unloadEmbed()
             }
@@ -323,19 +305,16 @@ struct ModelsView: View {
     }
 
     private func reload(_ sm: StoredModel) {
+        guard modelFileExists(sm) else { return }
         Task {
             do {
                 if sm.modelRole == .chat {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    let slots = await AppLlamaService.shared.loadedChatPathsBySlot
-                        .filter { $0.value == resolvedPath }
-                        .map(\.key)
+                    let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
                     if slots.isEmpty {
                         try await AppLlamaService.shared.reloadChat(contextSize: appState.contextSize)
                     } else {
-                        for slot in slots {
-                            try await AppLlamaService.shared.reloadChat(for: slot, contextSize: appState.contextSize)
-                        }
+                        for slot in slots { try await AppLlamaService.shared.reloadChat(for: slot, contextSize: appState.contextSize) }
                     }
                 } else {
                     try await AppLlamaService.shared.reloadEmbed()
@@ -353,20 +332,14 @@ struct ModelsView: View {
         let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName, fileManager: fm).path
         Task { @MainActor in
             if sm.modelRole == .chat {
-                let slots = await AppLlamaService.shared.loadedChatPathsBySlot
-                    .filter { $0.value == resolvedPath }
-                    .map(\.key)
-                for slot in slots {
-                    await AppLlamaService.shared.unloadChat(for: slot)
-                }
+                let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
+                for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
             } else {
                 await AppLlamaService.shared.unloadEmbed()
             }
         }
         try? fm.removeItem(atPath: sm.localPath)
-        if resolvedPath != sm.localPath {
-            try? fm.removeItem(atPath: resolvedPath)
-        }
+        if resolvedPath != sm.localPath { try? fm.removeItem(atPath: resolvedPath) }
         if sm.id.uuidString == appState.activeChatModelID { appState.activeChatModelID = nil }
         if sm.id.uuidString == appState.activeEmbeddingModelID { appState.activeEmbeddingModelID = nil }
         modelContext.delete(sm)
@@ -376,16 +349,8 @@ struct ModelsView: View {
 
 private extension LumenModelFleetSnapshot {
     func withRuntimeResidentPaths(_ loadedPaths: Set<String>) -> LumenModelFleetSnapshot {
-        let runtimeSlots = Set(assignments.compactMap { slot, assignment in
-            loadedPaths.contains(assignment.localPath) ? slot : nil
-        })
-        return LumenModelFleetSnapshot(
-            mode: mode,
-            assignments: assignments,
-            missingSlots: missingSlots,
-            targetResidentSlots: targetResidentSlots,
-            runtimeResidentSlots: runtimeSlots
-        )
+        let runtimeSlots = Set(assignments.compactMap { slot, assignment in loadedPaths.contains(assignment.localPath) ? slot : nil })
+        return LumenModelFleetSnapshot(mode: mode, assignments: assignments, missingSlots: missingSlots, targetResidentSlots: targetResidentSlots, runtimeResidentSlots: runtimeSlots)
     }
 }
 
@@ -396,26 +361,16 @@ struct ActivePill: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
+                Image(systemName: icon).font(.caption).foregroundStyle(Theme.textSecondary)
+                Text(title).font(.caption).foregroundStyle(Theme.textSecondary)
             }
-            Text(name)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
+            Text(name).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
     }
 }
 
@@ -433,62 +388,36 @@ struct ModelCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: catalog.role == .embedding ? "point.3.connected.trianglepath.dotted" : "cpu")
-                    .font(.body)
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 28, height: 28)
+                Image(systemName: catalog.role == .embedding ? "point.3.connected.trianglepath.dotted" : "cpu").font(.body).foregroundStyle(Theme.textSecondary).frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(catalog.name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("\(catalog.parameters) · \(catalog.quantization) · \(formatBytes(catalog.sizeBytes))")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(Theme.textSecondary)
+                    Text(catalog.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                    Text("\(catalog.parameters) · \(catalog.quantization) · \(formatBytes(catalog.sizeBytes))").font(.caption.monospaced()).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
                 actionButton
             }
-
-            Text(catalog.description)
-                .font(.footnote)
-                .foregroundStyle(Theme.textSecondary)
-
+            Text(catalog.description).font(.footnote).foregroundStyle(Theme.textSecondary)
             if !catalog.tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(catalog.tags, id: \.self) { tag in
-                        Text(tag)
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .foregroundStyle(Theme.textSecondary)
-                            .background(Theme.surfaceHigh)
-                            .clipShape(.rect(cornerRadius: 4))
+                        Text(tag).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2).foregroundStyle(Theme.textSecondary).background(Theme.surfaceHigh).clipShape(.rect(cornerRadius: 4))
                     }
                 }
             }
-
             if let progress {
                 switch progress.state {
                 case .downloading:
                     VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: progress.fractionCompleted)
-                            .tint(Theme.accent)
-                        Text("\(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(Theme.textSecondary)
+                        ProgressView(value: progress.fractionCompleted).tint(Theme.accent)
+                        Text("\(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))").font(.caption2.monospaced()).foregroundStyle(Theme.textSecondary)
                     }
                 case .paused:
                     VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: progress.fractionCompleted)
-                            .tint(Theme.textTertiary)
-                        Text("Paused — \(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(Theme.textSecondary)
+                        ProgressView(value: progress.fractionCompleted).tint(Theme.textTertiary)
+                        Text("Paused — \(formatBytes(progress.bytesReceived)) / \(formatBytes(progress.totalBytes))").font(.caption2.monospaced()).foregroundStyle(Theme.textSecondary)
                     }
                 case .failed(let msg):
-                    Text("Failed: \(msg)")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
+                    Text("Failed: \(msg)").font(.caption2).foregroundStyle(.red)
                 case .queued, .completed:
                     EmptyView()
                 }
@@ -498,56 +427,30 @@ struct ModelCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
     }
 
     @ViewBuilder
     private var actionButton: some View {
         if let progress, case .downloading = progress.state {
             HStack(spacing: 6) {
-                Button { onPause() } label: {
-                    Image(systemName: "pause.fill").font(.caption)
-                }
-                .buttonStyle(.bordered)
-                Button("Cancel") { onCancel() }
-                    .font(.caption.weight(.medium))
-                    .buttonStyle(.bordered)
-                    .tint(.red)
+                Button { onPause() } label: { Image(systemName: "pause.fill").font(.caption) }.buttonStyle(.bordered)
+                Button("Cancel") { onCancel() }.font(.caption.weight(.medium)).buttonStyle(.bordered).tint(.red)
             }
         } else if let progress, case .paused = progress.state {
             HStack(spacing: 6) {
-                Button { onResume() } label: {
-                    Image(systemName: "play.fill").font(.caption)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
-                Button("Cancel") { onCancel() }
-                    .font(.caption.weight(.medium))
-                    .buttonStyle(.bordered)
-                    .tint(.red)
+                Button { onResume() } label: { Image(systemName: "play.fill").font(.caption) }.buttonStyle(.borderedProminent).tint(Theme.accent)
+                Button("Cancel") { onCancel() }.font(.caption.weight(.medium)).buttonStyle(.bordered).tint(.red)
             }
         } else if stored != nil {
             Menu {
                 Button("Set as Active", systemImage: "checkmark") { onActivate() }
                 Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
             } label: {
-                Text("Installed")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Theme.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1)
-                    }
+                Text("Installed").font(.caption.weight(.medium)).foregroundStyle(Theme.textSecondary).padding(.horizontal, 8).padding(.vertical, 4).overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1) }
             }
         } else {
-            Button("Download") { onDownload() }
-                .font(.caption.weight(.medium))
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+            Button("Download") { onDownload() }.font(.caption.weight(.medium)).buttonStyle(.borderedProminent).tint(Theme.accent)
         }
     }
 }
@@ -557,6 +460,7 @@ struct DownloadedRow: View {
     let isActiveChat: Bool
     let isActiveEmbed: Bool
     let isLoaded: Bool
+    let isMissingFile: Bool
     var onActivate: () -> Void
     var onLoad: () -> Void
     var onUnload: () -> Void
@@ -565,50 +469,42 @@ struct DownloadedRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: model.modelRole == .embedding ? "point.3.connected.trianglepath.dotted" : "cpu")
-                .foregroundStyle(Theme.textSecondary)
+            Image(systemName: model.modelRole == .embedding ? "point.3.connected.trianglepath.dotted" : "cpu").foregroundStyle(isMissingFile ? .orange : Theme.textSecondary)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(model.name).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textPrimary)
-                    if isLoaded {
-                        Circle().fill(Theme.accent).frame(width: 6, height: 6)
-                    }
+                    if isLoaded { Circle().fill(Theme.accent).frame(width: 6, height: 6) }
                 }
-                Text("\(model.parameters) · \(model.quantization) · \(formatBytes(model.sizeBytes))")
+                Text(isMissingFile ? "Missing local file · stale record" : "\(model.parameters) · \(model.quantization) · \(formatBytes(model.sizeBytes))")
                     .font(.caption2.monospaced())
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(isMissingFile ? .orange : Theme.textSecondary)
             }
             Spacer()
-            if isActiveChat || isActiveEmbed {
-                Text("Active")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+            if isMissingFile {
+                Text("Missing").font(.caption.weight(.medium)).foregroundStyle(.orange)
+            } else if isActiveChat || isActiveEmbed {
+                Text("Active").font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
             } else {
-                Button("Use") { onActivate() }
-                    .font(.caption.weight(.medium))
-                    .buttonStyle(.bordered)
+                Button("Use") { onActivate() }.font(.caption.weight(.medium)).buttonStyle(.bordered)
             }
             Menu {
-                if isLoaded {
-                    Button("Reload", systemImage: "arrow.clockwise") { onReload() }
-                    Button("Unload", systemImage: "eject") { onUnload() }
-                } else {
-                    Button("Load", systemImage: "arrow.down.circle") { onLoad() }
+                if !isMissingFile {
+                    if isLoaded {
+                        Button("Reload", systemImage: "arrow.clockwise") { onReload() }
+                        Button("Unload", systemImage: "eject") { onUnload() }
+                    } else {
+                        Button("Load", systemImage: "arrow.down.circle") { onLoad() }
+                    }
+                    Divider()
                 }
-                Divider()
-                Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
-            } label: {
-                Image(systemName: "ellipsis.circle").foregroundStyle(Theme.textTertiary)
-            }
+                Button(isMissingFile ? "Remove stale record" : "Delete", systemImage: "trash", role: .destructive) { onDelete() }
+            } label: { Image(systemName: "ellipsis.circle").foregroundStyle(Theme.textTertiary) }
             .buttonStyle(.plain)
         }
         .padding(12)
         .background(Theme.surface)
         .clipShape(.rect(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.border, lineWidth: 1)
-        }
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
     }
 }
 
@@ -621,27 +517,13 @@ struct ModelPickerSheet: View {
         NavigationStack {
             List {
                 Section("Chat model") {
-                    ForEach(stored.filter { $0.modelRole == .chat }) { m in
-                        pickerRow(m, isActive: appState.activeChatModelID == m.id.uuidString) {
-                            appState.activeChatModelID = m.id.uuidString
-                            dismiss()
-                        }
-                    }
-                    if stored.filter({ $0.modelRole == .chat }).isEmpty {
-                        Text("Add a .gguf chat model from your app bundle or Files app.")
-                            .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    ForEach(stored.filter { $0.modelRole == .chat && FileManager.default.fileExists(atPath: ModelStorage.resolvedModelURL(from: $0.localPath, fileName: $0.fileName).path) }) { m in
+                        pickerRow(m, isActive: appState.activeChatModelID == m.id.uuidString) { appState.activeChatModelID = m.id.uuidString; dismiss() }
                     }
                 }
                 Section("Embedding model") {
-                    ForEach(stored.filter { $0.modelRole == .embedding }) { m in
-                        pickerRow(m, isActive: appState.activeEmbeddingModelID == m.id.uuidString) {
-                            appState.activeEmbeddingModelID = m.id.uuidString
-                            dismiss()
-                        }
-                    }
-                    if stored.filter({ $0.modelRole == .embedding }).isEmpty {
-                        Text("Add a .gguf embedding model from your app bundle or Files app.")
-                            .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    ForEach(stored.filter { $0.modelRole == .embedding && FileManager.default.fileExists(atPath: ModelStorage.resolvedModelURL(from: $0.localPath, fileName: $0.fileName).path) }) { m in
+                        pickerRow(m, isActive: appState.activeEmbeddingModelID == m.id.uuidString) { appState.activeEmbeddingModelID = m.id.uuidString; dismiss() }
                     }
                 }
             }
@@ -655,8 +537,7 @@ struct ModelPickerSheet: View {
             HStack {
                 VStack(alignment: .leading) {
                     Text(m.name)
-                    Text("\(m.parameters) · \(m.quantization)")
-                        .font(.caption.monospaced()).foregroundStyle(Theme.textSecondary)
+                    Text("\(m.parameters) · \(m.quantization)").font(.caption.monospaced()).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
                 if isActive { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
@@ -675,20 +556,13 @@ struct AddModelSheet: View {
         NavigationStack {
             List {
                 if candidates.isEmpty {
-                    Text("No .gguf files found in app bundle or Documents directory.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textSecondary)
+                    Text("No .gguf files found in app bundle or Documents directory.").font(.footnote).foregroundStyle(Theme.textSecondary)
                 } else {
                     ForEach(candidates) { model in
-                        Button {
-                            addLocal(model)
-                        } label: {
+                        Button { addLocal(model) } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(model.displayName)
-                                    .font(.body.weight(.medium))
-                                Text("\(model.fileName) • \(model.source)")
-                                    .font(.caption)
-                                    .foregroundStyle(Theme.textSecondary)
+                                Text(model.displayName).font(.body.weight(.medium))
+                                Text("\(model.fileName) • \(model.source)").font(.caption).foregroundStyle(Theme.textSecondary)
                             }
                         }
                     }
@@ -697,12 +571,8 @@ struct AddModelSheet: View {
             .navigationTitle("Select GGUF")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Refresh") { candidates = LocalModelDiscovery.discoverGGUF() }
-                }
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Refresh") { candidates = LocalModelDiscovery.discoverGGUF() } }
             }
             .task { candidates = LocalModelDiscovery.discoverGGUF() }
         }
@@ -713,27 +583,11 @@ struct AddModelSheet: View {
         let role: ModelRole = fileName.lowercased().contains("embed") ? .embedding : .chat
         let attrs = (try? FileManager.default.attributesOfItem(atPath: file.url.path)) ?? [:]
         let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
-
-        let stored = StoredModel(
-            name: file.displayName,
-            repoId: "local/\(file.source.lowercased())",
-            fileName: fileName,
-            sizeBytes: size,
-            quantization: "local",
-            parameters: "local",
-            role: role,
-            localPath: file.url.path
-        )
+        let stored = StoredModel(name: file.displayName, repoId: "local/\(file.source.lowercased())", fileName: fileName, sizeBytes: size, quantization: "local", parameters: "local", role: role, localPath: file.url.path)
         modelContext.insert(stored)
         try? modelContext.save()
-
-        if role == .chat && appState.activeChatModelID == nil {
-            appState.activeChatModelID = stored.id.uuidString
-        }
-        if role == .embedding && appState.activeEmbeddingModelID == nil {
-            appState.activeEmbeddingModelID = stored.id.uuidString
-        }
-
+        if role == .chat && appState.activeChatModelID == nil { appState.activeChatModelID = stored.id.uuidString }
+        if role == .embedding && appState.activeEmbeddingModelID == nil { appState.activeEmbeddingModelID = stored.id.uuidString }
         dismiss()
     }
 }

@@ -16,3 +16,4 @@ checkpoints/
 unsloth_compiled_cache/
 generated/fine_tuning/checkpoints/
 **/__pycache__/
+models/

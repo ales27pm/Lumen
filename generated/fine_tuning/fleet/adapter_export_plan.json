@@ -5,11 +5,11 @@
   "agent": "fleet",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "690cecfbcd8855d6779e230a8574692b4507bda1",
+    "manifestCommit": "10bf510cdefb31c04390253361a0f1435badbbad",
     "recordCounts": {
       "eval": 93,
       "train_dpo": 14,
-      "train_sft": 697,
+      "train_sft": 699,
       "val_dpo": 3,
       "val_sft": 123
     },
@@ -33,6 +33,7 @@
       "mouth_responses",
       "negative_samples",
       "rem_reflection",
+      "runtime_audit_repairs",
       "tool_schema_cards",
       "train_sft",
       "validation_sft"
@@ -70,6 +71,7 @@
       "reflection_and_memory_policy",
       "rem_reflection",
       "role_directory",
+      "runtime_manifest_drift_repair",
       "source_code_self_knowledge",
       "source_routing_knowledge",
       "source_tool_registry_knowledge",

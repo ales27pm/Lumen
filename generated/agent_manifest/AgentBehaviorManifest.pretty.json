@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "690cecfbcd8855d6779e230a8574692b4507bda1",
+    "commit": "10bf510cdefb31c04390253361a0f1435badbbad",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -47,7 +47,7 @@
       },
       {
         "path": "ios/Lumen/Services/ModelFleet.swift",
-        "sha256": "5e5b0ed1204cb9a01051dbcf7a9baa602c0690343ecde3c53bda3898df3e7e65"
+        "sha256": "ce1a0b8e129d8e839f2ceb50c486a0313122ff4aa4c0505265b5c9dc28b28e38"
       },
       {
         "path": "ios/Lumen/Services/RemCycleService.swift",

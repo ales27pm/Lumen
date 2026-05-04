@@ -1,0 +1,24 @@
+{
+  "app" : {
+    "buildNumber" : "148",
+    "bundleIdentifier" : "com.27pm.lumen",
+    "name" : "Lumen",
+    "shortVersion" : "1.0.0"
+  },
+  "exportPolicy" : {
+    "format" : "agent-runtime-traces-json",
+    "includesDeterministicStaticScenarios" : false,
+    "notes" : [
+      "Bounded recent traces captured by AgentBehaviorTraceRecorder.",
+      "Empty exports indicate the recorder is not wired or no real model interactions were exercised."
+    ],
+    "ownsLiveE2EScenarios" : false,
+    "privacy" : "Bounded diagnostic export generated from the local device. Review before sharing outside the improve-loop.",
+    "sourceLayer" : "agentBehaviorTraceRecorder"
+  },
+  "generatedAt" : "2026-05-04T07:01:43Z",
+  "payload" : [
+
+  ],
+  "schemaVersion" : "1.0.0"
+}

@@ -5,7 +5,7 @@
   "agent": "cortex",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "690cecfbcd8855d6779e230a8574692b4507bda1",
+    "manifestCommit": "10bf510cdefb31c04390253361a0f1435badbbad",
     "recordCounts": {
       "eval": 555,
       "train_dpo": 8,

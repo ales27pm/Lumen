@@ -1,27 +1,22 @@
 {
   "gaps": [
     {
-      "category": "dataset_coverage",
+      "category": "runtime_drift",
       "evidence": {
-        "family": "runtime_audit_repairs"
+        "actual": "payload is empty",
+        "agent": "runtime",
+        "expected": [
+          "Recent runtime trace layer should include at least one trace after exercising the app."
+        ],
+        "problem": "The runtime trace layer export is empty. Run real model/tool interactions or wire AgentBehaviorTraceRecorder.record into the live path.",
+        "scenario": "Agent Grounding > Export Recent Runtime Traces",
+        "sourceLayer": "agentBehaviorTraceRecorder.exportQuality",
+        "type": "agent_grounding_no_recent_model_traces"
       },
-      "id": "4f0100442bae63332fd99a1f",
-      "recommendedAction": "Add generators or runtime inputs that produce runtime_audit_repairs records.",
-      "severity": "warning",
-      "title": "Empty dataset family: runtime_audit_repairs"
-    },
-    {
-      "category": "testflight_runtime_pending",
-      "evidence": {
-        "expectedExport": "lumen-agent-grounding-audit-*.json or lumen-live-e2e-report-*.json",
-        "runbook": "/home/ales27pm/Lumen/generated/agent_improvement_loop/TESTFLIGHT_RUNBOOK.md",
-        "scenarioQueue": "/home/ales27pm/Lumen/generated/agent_improvement_loop/testflight_scenarios.jsonl",
-        "source": "Agent Grounding > Export Runtime Audit Package or End-to-end tests > Export Live E2E Report JSON"
-      },
-      "id": "754c6a9e4c6dd055b22d57d3",
-      "recommendedAction": "Compile/distribute the TestFlight build, run Agent Grounding and E2E in the app, export the Runtime Audit Package and/or Live E2E Report JSON, then rerun improve-loop with --runtime-audit <json>.",
-      "severity": "warning",
-      "title": "TestFlight in-app audit export has not been ingested yet"
+      "id": "36c6857e75dbe9d9d2cf29eb",
+      "recommendedAction": "Convert this failure into a REM repair sample and add a regression eval.",
+      "severity": "error",
+      "title": "agent_grounding_no_recent_model_traces"
     }
   ]
 }

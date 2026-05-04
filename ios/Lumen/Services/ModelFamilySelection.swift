@@ -4,6 +4,8 @@ nonisolated enum LumenModelFamily: String, CaseIterable, Identifiable, Codable, 
     case qwen25 = "qwen2.5"
     case qwen3 = "qwen3"
 
+    private static let defaultsKey = "selectedModelFamilyID"
+
     var id: String { rawValue }
 
     var displayName: String {
@@ -36,9 +38,9 @@ nonisolated enum LumenModelFamily: String, CaseIterable, Identifiable, Codable, 
         return family
     }
 
-    @MainActor
-    static func selected(from appState: AppState) -> LumenModelFamily {
-        fromStoredID(appState.selectedModelFamilyID)
+    static var persistedSelected: LumenModelFamily {
+        get { fromStoredID(UserDefaults.standard.string(forKey: defaultsKey)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey) }
     }
 }
 

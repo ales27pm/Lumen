@@ -201,7 +201,7 @@
     "valPairCount": 70,
     "valTripletCount": 72
   },
-  "endedAt": "2026-05-04T02:01:53+00:00",
+  "endedAt": "2026-05-04T02:17:43+00:00",
   "fineTuningOutput": "/home/ales27pm/Lumen/generated/fine_tuning",
   "gaps": {
     "bySeverity": {
@@ -212,8 +212,8 @@
   },
   "loopOutput": "/home/ales27pm/Lumen/generated/agent_improvement_loop",
   "manifest": {
-    "commit": "fd6fde6699ed66d64c614b4104cba8b37d736fc2",
-    "fingerprint": "95ece18e8c40a1e37fff5b1c93e56753e3ebed44ad7f7387143c42be5384408f",
+    "commit": "690cecfbcd8855d6779e230a8574692b4507bda1",
+    "fingerprint": "8f8bba45559c845330525e2d88087d8a99df1b85e8e23d6bc530aee5db98a4c6",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
@@ -237,19 +237,19 @@
     "sourceLayers": {}
   },
   "schemaVersion": "2.0.0",
-  "startedAt": "2026-05-04T02:01:29+00:00",
+  "startedAt": "2026-05-04T02:17:18+00:00",
   "steps": [
     {
       "command": [],
       "cwd": "/home/ales27pm/Lumen",
       "durationSeconds": 0.0,
-      "endedAt": "2026-05-04T02:01:29+00:00",
+      "endedAt": "2026-05-04T02:17:18+00:00",
       "name": "preflight",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T02:01:29+00:00",
+      "startedAt": "2026-05-04T02:17:18+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/cli.py\n/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs\n/home/ales27pm/Lumen/ios/Lumen"
@@ -262,17 +262,17 @@
         "tools/lumen_manifest_crawler/tests"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 22.373,
-      "endedAt": "2026-05-04T02:01:51+00:00",
+      "durationSeconds": 22.295,
+      "endedAt": "2026-05-04T02:17:41+00:00",
       "name": "test manifest crawler",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T02:01:29+00:00",
+      "startedAt": "2026-05-04T02:17:18+00:00",
       "status": "passed",
       "stderrTail": "",
-      "stdoutTail": "...............................................................          [100%]\n63 passed in 22.23s\n"
+      "stdoutTail": "...............................................................          [100%]\n63 passed in 22.14s\n"
     },
     {
       "command": [
@@ -299,14 +299,14 @@
         "--generate-agent-fine-tuning"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 2.199,
-      "endedAt": "2026-05-04T02:01:53+00:00",
+      "durationSeconds": 2.227,
+      "endedAt": "2026-05-04T02:17:43+00:00",
       "name": "improve-loop generation",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T02:01:51+00:00",
+      "startedAt": "2026-05-04T02:17:41+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "Loop passed: True\nGaps: 2\nTestFlight scenarios: 120\nNext-action prompts: 2\nWrote loop outputs to /home/ales27pm/Lumen/generated/agent_improvement_loop\n"
@@ -328,13 +328,13 @@
       ],
       "cwd": "/home/ales27pm/Lumen",
       "durationSeconds": 0.026,
-      "endedAt": "2026-05-04T02:01:53+00:00",
+      "endedAt": "2026-05-04T02:17:43+00:00",
       "name": "adapter-first release-bake manifest",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T02:01:53+00:00",
+      "startedAt": "2026-05-04T02:17:43+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "Skipped GGUF release bake by default. Wrote adapter-first manifest: /home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json\nPass --release-bake to explicitly merge adapters into GGUF artifacts.\n"
@@ -342,8 +342,8 @@
   ],
   "testFlight": {
     "buildLabel": null,
-    "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "95ece18e8c40a1e37fff5b1c93e56753e3ebed44ad7f7387143c42be5384408f",
+    "expectedExport": "lumen-agent-grounding-audit-*.json or lumen-live-e2e-report-*.json from Agent Grounding > Export Runtime Audit Package or End-to-end tests > Export Live E2E Report JSON",
+    "manifestFingerprint": "8f8bba45559c845330525e2d88087d8a99df1b85e8e23d6bc530aee5db98a4c6",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,

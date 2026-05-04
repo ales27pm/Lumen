@@ -14,7 +14,7 @@
 
 ## TestFlight handoff
 
-Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the in-app dataset package JSON, then rerun this command with `--runtime-audit <exported-json>`.
+Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the Runtime Audit Package JSON and/or Live E2E Report JSON, then rerun this command with `--runtime-audit <exported-json>`.
 
 ## Top gaps
 
@@ -26,4 +26,4 @@ Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the in-app datase
 ### WARNING — TestFlight in-app audit export has not been ingested yet
 
 - Category: `testflight_runtime_pending`
-- Recommendation: Compile/distribute the TestFlight build, run Agent Grounding in the app, export the in-app dataset package JSON, then rerun improve-loop with --runtime-audit <json>.
+- Recommendation: Compile/distribute the TestFlight build, run Agent Grounding in the app, export the Runtime Audit Package JSON and/or Live E2E Report JSON, then rerun improve-loop with --runtime-audit <json>.

@@ -19,6 +19,8 @@ public struct AgentGroundingAuditView: View {
     @State private var lastExportPackage: LumenInAppDatasetPackage?
     @State private var lastLayerExportURL: URL?
     @State private var lastLayerExportLabel: String?
+    @State private var isRunningLiveTraceSmokeTest = false
+    @State private var lastLiveTraceSmokeSummary: String?
 
     public init(registryProvider: RuntimeToolRegistryProviding) {
         self.auditor = RuntimeManifestAuditor(registryProvider: registryProvider)
@@ -30,12 +32,29 @@ public struct AgentGroundingAuditView: View {
                 Button("Run Agent Grounding Audit") {
                     runAudit()
                 }
+                Button {
+                    runLiveTraceSmokeTest()
+                } label: {
+                    if isRunningLiveTraceSmokeTest {
+                        Label("Running Live Trace Smoke Test…", systemImage: "timer")
+                    } else {
+                        Label("Run Live Trace Smoke Test", systemImage: "waveform.path.ecg")
+                    }
+                }
+                .disabled(isRunningLiveTraceSmokeTest)
+
                 Button("Export Runtime Audit Package") {
                     exportRuntimeAuditPackage()
                 }
                 .disabled(report == nil && behaviorReport == nil && scenarioResults.isEmpty)
+
+                if let lastLiveTraceSmokeSummary {
+                    Text(lastLiveTraceSmokeSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } footer: {
-                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes an Agent Grounding runtime audit package for the offline loop: audit failures, behavior violations, and bounded diagnostic traces. Static scenario checks stay visible here but are not exported as live E2E model results.")
+                Text("Compares the static crawler manifest against live runtime tools and recent model behaviour. Export writes an Agent Grounding runtime audit package for the offline loop: audit failures, behavior violations, and bounded diagnostic traces. Static scenario checks stay visible here but are not exported as live E2E model results. The live trace smoke test runs one real model pipeline turn and records it through AgentBehaviorTraceRecorder before export.")
             }
 
             Section {
@@ -91,7 +110,7 @@ public struct AgentGroundingAuditView: View {
                         LabeledContent("Runtime failures", value: "\(lastExportPackage.runtimeManifestAudit?.failures.count ?? 0)")
                         LabeledContent("Behavior violations", value: "\(lastExportPackage.behaviorAudit?.violations.count ?? 0)")
                         if lastExportPackage.recentTraces.isEmpty {
-                            Label("No recent model/tool traces were exported. Run real model interactions before exporting or wire AgentBehaviorTraceRecorder into the live path.", systemImage: "exclamationmark.triangle.fill")
+                            Label("No recent model/tool traces were exported. Run real model interactions before exporting or run the Live Trace Smoke Test above.", systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                         }
@@ -253,6 +272,52 @@ public struct AgentGroundingAuditView: View {
                 manifestSource = loadResult.source
                 usedRuntimeFallback = loadResult.usedRuntimeFallback
                 errorMessage = nil
+            }
+        }
+    }
+
+    private func runLiveTraceSmokeTest() {
+        isRunningLiveTraceSmokeTest = true
+        lastLiveTraceSmokeSummary = "Starting live model trace smoke test…"
+        errorMessage = nil
+        Task { @MainActor in
+            let before = AgentBehaviorTraceRecorder.recent(limit: 5_000).count
+            let req = AgentRequest(
+                systemPrompt: "You are Lumen. Answer concisely and do not expose hidden reasoning.",
+                history: [],
+                userMessage: "Live trace smoke test: explain in one sentence why a sharp chisel is safer than a dull one.",
+                temperature: 0.1,
+                topP: 0.7,
+                repetitionPenalty: 1.05,
+                maxTokens: 160,
+                maxSteps: 1,
+                availableTools: ToolRegistry.all,
+                relevantMemories: []
+            )
+
+            var finalText = ""
+            for await event in RolePipelineAgentService.shared.run(req) {
+                switch event {
+                case .finalDelta(let chunk):
+                    finalText += chunk
+                case .done(let text, _):
+                    if !text.isEmpty { finalText = text }
+                case .error(let message):
+                    errorMessage = message
+                case .step, .stepDelta:
+                    break
+                }
+            }
+
+            let after = AgentBehaviorTraceRecorder.recent(limit: 5_000).count
+            let added = max(0, after - before)
+            isRunningLiveTraceSmokeTest = false
+            if added > 0 {
+                lastLiveTraceSmokeSummary = "Live trace smoke test recorded \(added) trace(s). Export the runtime audit package again."
+            } else if !finalText.isEmpty {
+                lastLiveTraceSmokeSummary = "Smoke test generated output but no traces were recorded. Check that the latest build includes AppLlamaService trace recording."
+            } else {
+                lastLiveTraceSmokeSummary = "Smoke test completed without output and no traces were recorded. Confirm that a chat model is downloaded and assigned."
             }
         }
     }

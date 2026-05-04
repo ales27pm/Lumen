@@ -32,7 +32,7 @@ enum ModelLoader {
     @discardableResult
     static func ensureFleetChatLoaded(appState: AppState, stored: [StoredModel]) async -> Bool {
         let snapshot = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
-        await AppLlamaService.shared.configureFleetAssignments(
+        SlotModelRuntimeCoordinator.shared.configure(
             assignments: snapshot.assignments,
             contextSize: appState.contextSize,
             preferExclusiveChatRuntime: true
@@ -44,9 +44,10 @@ enum ModelLoader {
             return await ensurePrimaryChatLoaded(appState: appState, stored: stored)
         }
 
-        // Optional prewarm: keep only one small active context, not the entire fleet.
-        // The concrete role models are loaded by AppLlamaService right before their slot runs.
-        return true
+        // Keep one chat runtime warm for non-agent/plain chat. Slot-agent turns load
+        // each role-baked GGUF lazily, one slot at a time, through the coordinator.
+        let primaryReady = await SlotModelRuntimeCoordinator.shared.ensurePrimaryReady(preferredSlots: [.mouth, .cortex])
+        return primaryReady || !runnableSlots.isEmpty
     }
 
     @discardableResult

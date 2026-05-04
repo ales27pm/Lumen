@@ -54,6 +54,66 @@
         "valSFT": 11
       }
     },
+    "embedding": {
+      "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
+      "corpusCount": 489,
+      "datasetCard": {
+        "families": [
+          "agent_role_question_to_fleet_slot",
+          "code_domain_query_to_source_map",
+          "eval_scenarios_retrieval",
+          "manifest_grounding_cards_retrieval",
+          "memory_freshness_query",
+          "memory_rag_query_to_scope",
+          "natural_query_to_intent_rule",
+          "natural_query_to_routing_rule",
+          "natural_query_to_tool_schema",
+          "peer_boundary_query",
+          "permission_boundary_query",
+          "routing_rule_query",
+          "source_file_name_query",
+          "tool_contract_query",
+          "tool_id_to_tool_contract",
+          "tool_schema_cards_retrieval"
+        ],
+        "promotionMetrics": {
+          "embeddingHealthCheckPassRate": 1.0,
+          "hardNegativeAccuracyMinimum": 0.85,
+          "mrrMinimum": 0.78,
+          "ndcgAt5Minimum": 0.82,
+          "recallAt1Minimum": 0.72,
+          "recallAt5Minimum": 0.9,
+          "runtimeRepairRetrievalAccuracyMinimum": 0.78,
+          "sourceMapRetrievalAccuracyMinimum": 0.8,
+          "toolRetrievalAccuracyMinimum": 0.9
+        },
+        "schemaVersion": "1.0.0",
+        "task": "retrieval_similarity_ranking"
+      },
+      "evalCount": 658,
+      "fallbackModel": "current-baseline-embedding-model",
+      "generated": true,
+      "hardNegativeCount": 658,
+      "metrics": {
+        "hardNegativeAccuracy": 0.0,
+        "mrr": 0.0,
+        "ndcgAt5": 0.0,
+        "recallAt1": 0.0,
+        "recallAt5": 0.0,
+        "runtimeRepairRetrievalAccuracy": 0.0,
+        "sourceMapRetrievalAccuracy": 0.0,
+        "toolRetrievalAccuracy": 0.0
+      },
+      "model": "Qwen/Qwen3-Embedding-0.6B",
+      "pairCount": 658,
+      "teacherModel": "Qwen/Qwen3-Embedding-4B",
+      "trainPairCount": 588,
+      "trainTripletCount": 586,
+      "tripletCount": 658,
+      "usedFallback": false,
+      "valPairCount": 70,
+      "valTripletCount": 72
+    },
     "families": {
       "approval_boundary_samples": 115,
       "cortex_routing": 69,
@@ -81,7 +141,67 @@
     "familyCount": 22,
     "recordCount": 4484
   },
-  "endedAt": "2026-05-04T01:36:39+00:00",
+  "embedding": {
+    "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
+    "corpusCount": 489,
+    "datasetCard": {
+      "families": [
+        "agent_role_question_to_fleet_slot",
+        "code_domain_query_to_source_map",
+        "eval_scenarios_retrieval",
+        "manifest_grounding_cards_retrieval",
+        "memory_freshness_query",
+        "memory_rag_query_to_scope",
+        "natural_query_to_intent_rule",
+        "natural_query_to_routing_rule",
+        "natural_query_to_tool_schema",
+        "peer_boundary_query",
+        "permission_boundary_query",
+        "routing_rule_query",
+        "source_file_name_query",
+        "tool_contract_query",
+        "tool_id_to_tool_contract",
+        "tool_schema_cards_retrieval"
+      ],
+      "promotionMetrics": {
+        "embeddingHealthCheckPassRate": 1.0,
+        "hardNegativeAccuracyMinimum": 0.85,
+        "mrrMinimum": 0.78,
+        "ndcgAt5Minimum": 0.82,
+        "recallAt1Minimum": 0.72,
+        "recallAt5Minimum": 0.9,
+        "runtimeRepairRetrievalAccuracyMinimum": 0.78,
+        "sourceMapRetrievalAccuracyMinimum": 0.8,
+        "toolRetrievalAccuracyMinimum": 0.9
+      },
+      "schemaVersion": "1.0.0",
+      "task": "retrieval_similarity_ranking"
+    },
+    "evalCount": 658,
+    "fallbackModel": "current-baseline-embedding-model",
+    "generated": true,
+    "hardNegativeCount": 658,
+    "metrics": {
+      "hardNegativeAccuracy": 0.0,
+      "mrr": 0.0,
+      "ndcgAt5": 0.0,
+      "recallAt1": 0.0,
+      "recallAt5": 0.0,
+      "runtimeRepairRetrievalAccuracy": 0.0,
+      "sourceMapRetrievalAccuracy": 0.0,
+      "toolRetrievalAccuracy": 0.0
+    },
+    "model": "Qwen/Qwen3-Embedding-0.6B",
+    "pairCount": 658,
+    "teacherModel": "Qwen/Qwen3-Embedding-4B",
+    "trainPairCount": 588,
+    "trainTripletCount": 586,
+    "tripletCount": 658,
+    "usedFallback": false,
+    "valPairCount": 70,
+    "valTripletCount": 72
+  },
+  "endedAt": "2026-05-04T02:01:53+00:00",
   "fineTuningOutput": "/home/ales27pm/Lumen/generated/fine_tuning",
   "gaps": {
     "bySeverity": {
@@ -92,8 +212,8 @@
   },
   "loopOutput": "/home/ales27pm/Lumen/generated/agent_improvement_loop",
   "manifest": {
-    "commit": "d6fdee48094a5b42d6cb9d009daae0fbd93e2c73",
-    "fingerprint": "59f70dbb9e4e324dd4e6bf01ee88225275fa091dedb9ae0d3fafa3123f896f70",
+    "commit": "fd6fde6699ed66d64c614b4104cba8b37d736fc2",
+    "fingerprint": "95ece18e8c40a1e37fff5b1c93e56753e3ebed44ad7f7387143c42be5384408f",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
@@ -117,46 +237,46 @@
     "sourceLayers": {}
   },
   "schemaVersion": "2.0.0",
-  "startedAt": "2026-05-04T01:36:15+00:00",
+  "startedAt": "2026-05-04T02:01:29+00:00",
   "steps": [
     {
       "command": [],
       "cwd": "/home/ales27pm/Lumen",
       "durationSeconds": 0.0,
-      "endedAt": "2026-05-04T01:36:15+00:00",
+      "endedAt": "2026-05-04T02:01:29+00:00",
       "name": "preflight",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T01:36:15+00:00",
+      "startedAt": "2026-05-04T02:01:29+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/cli.py\n/home/ales27pm/Lumen/tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py\n/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs\n/home/ales27pm/Lumen/ios/Lumen"
     },
     {
       "command": [
-        "/home/ales27pm/micromamba/envs/lumen311/bin/python",
+        "/home/ales27pm/micromamba/envs/lumen-loop/bin/python",
         "-m",
         "pytest",
         "tools/lumen_manifest_crawler/tests"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 21.803,
-      "endedAt": "2026-05-04T01:36:37+00:00",
+      "durationSeconds": 22.373,
+      "endedAt": "2026-05-04T02:01:51+00:00",
       "name": "test manifest crawler",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T01:36:15+00:00",
+      "startedAt": "2026-05-04T02:01:29+00:00",
       "status": "passed",
       "stderrTail": "",
-      "stdoutTail": "...............................................................          [100%]\n63 passed in 21.62s\n"
+      "stdoutTail": "...............................................................          [100%]\n63 passed in 22.23s\n"
     },
     {
       "command": [
-        "/home/ales27pm/micromamba/envs/lumen311/bin/python",
+        "/home/ales27pm/micromamba/envs/lumen-loop/bin/python",
         "-m",
         "lumen_manifest_crawler",
         "improve-loop",
@@ -179,21 +299,21 @@
         "--generate-agent-fine-tuning"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 2.172,
-      "endedAt": "2026-05-04T01:36:39+00:00",
+      "durationSeconds": 2.199,
+      "endedAt": "2026-05-04T02:01:53+00:00",
       "name": "improve-loop generation",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T01:36:37+00:00",
+      "startedAt": "2026-05-04T02:01:51+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "Loop passed: True\nGaps: 2\nTestFlight scenarios: 120\nNext-action prompts: 2\nWrote loop outputs to /home/ales27pm/Lumen/generated/agent_improvement_loop\n"
     },
     {
       "command": [
-        "/home/ales27pm/micromamba/envs/lumen311/bin/python",
+        "/home/ales27pm/micromamba/envs/lumen-loop/bin/python",
         "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/export_gguf.py",
         "--config-dir",
         "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs",
@@ -207,14 +327,14 @@
         "/home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json"
       ],
       "cwd": "/home/ales27pm/Lumen",
-      "durationSeconds": 0.024,
-      "endedAt": "2026-05-04T01:36:39+00:00",
+      "durationSeconds": 0.026,
+      "endedAt": "2026-05-04T02:01:53+00:00",
       "name": "adapter-first release-bake manifest",
       "notes": [],
       "passed": true,
       "returncode": 0,
       "skipped": false,
-      "startedAt": "2026-05-04T01:36:39+00:00",
+      "startedAt": "2026-05-04T02:01:53+00:00",
       "status": "passed",
       "stderrTail": "",
       "stdoutTail": "Skipped GGUF release bake by default. Wrote adapter-first manifest: /home/ales27pm/Lumen/generated/fine_tuning/release_bake_gguf_manifest.json\nPass --release-bake to explicitly merge adapters into GGUF artifacts.\n"
@@ -223,7 +343,7 @@
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-in-app-dataset-*.json from Agent Grounding > Export In-App Dataset Package",
-    "manifestFingerprint": "59f70dbb9e4e324dd4e6bf01ee88225275fa091dedb9ae0d3fafa3123f896f70",
+    "manifestFingerprint": "95ece18e8c40a1e37fff5b1c93e56753e3ebed44ad7f7387143c42be5384408f",
     "mode": "testflight",
     "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,

@@ -59,7 +59,7 @@ enum AgentRunner {
 
         var final = ""
         var steps: [AgentStep] = []
-        for await event in SlotAgentService.shared.run(req) {
+        for await event in RolePipelineAgentService.shared.run(req) {
             switch event {
             case .step(let s):
                 if let idx = steps.firstIndex(where: { $0.id == s.id }) { steps[idx] = s }
@@ -110,11 +110,14 @@ enum AgentRunner {
 
         let runtimeMode = """
         Fleet runtime mode: \(fleetSnapshot.mode.displayName).
-        v1 target: each logical slot may eventually keep its own resident model. Current runtime status is explicit in the assignment list; slots marked runtime pending are planned assignments, not loaded contexts yet.
+        v1 target: slot assignments are resolved before runtime. The active pipeline loads only the slot currently generating: Cortex, Executor, Mouth, Mimicry, then asynchronous REM.
         """
 
         let fleetPrompt = """
-        Lumen model fleet v1 is enabled as a slot-assignment and routing plan. Do not claim a model is loaded unless it is marked runtime resident:
+        Lumen model fleet v1 is enabled as an explicit role pipeline:
+        User input → Cortex route/plan → Executor validate/repair action JSON → native tool execution → Cortex decides whether more evidence is needed → Mouth final answer → Mimicry style pass → user output. REM runs after the response as non-blocking audit/training signal.
+
+        Role contracts:
         \(contracts)
 
         \(runtimeMode)
@@ -125,8 +128,6 @@ enum AgentRunner {
         Missing slots: \(missingText).
 
         \(mimicry.promptFragment)
-
-        When acting as the agent, keep decisions separate from final user-facing wording. Prefer compact structured turns when a native capability is needed.
         """
 
         guard !trimmedBasePrompt.isEmpty else {

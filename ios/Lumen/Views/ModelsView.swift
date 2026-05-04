@@ -8,6 +8,8 @@ struct ModelsView: View {
     @State private var showAddModel = false
     @State private var downloader = ModelDownloader.shared
     @State private var loadedPaths: Set<String> = []
+    @State private var selectedModelFamily = LumenModelFamily.persistedSelected
+    @State private var isRepairingSelectedFamily = false
 
     var body: some View {
         NavigationStack {
@@ -16,6 +18,7 @@ struct ModelsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         activeRow
+                        modelFamilyCard
                         FleetStatusCard(
                             snapshot: runtimeAwareFleetSnapshot,
                             progresses: downloader.progresses,
@@ -24,11 +27,17 @@ struct ModelsView: View {
                         )
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Featured")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Theme.textPrimary)
+                            HStack {
+                                Text("Featured — \(selectedModelFamily.shortLabel)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Theme.textPrimary)
+                                Spacer()
+                                Text("\(featuredModels.count) artifacts")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
                             VStack(spacing: 10) {
-                                ForEach(ModelCatalog.featured) { model in
+                                ForEach(featuredModels) { model in
                                     ModelCard(
                                         catalog: model,
                                         stored: storedModel(for: model),
@@ -94,8 +103,15 @@ struct ModelsView: View {
                 AddModelSheet()
                     .presentationDetents([.medium, .large])
             }
+            .task {
+                selectedModelFamily = LumenModelFamily.persistedSelected
+                await refreshLoaded()
+            }
             .task(id: appState.activeChatModelID) { await refreshLoaded() }
             .task(id: appState.activeEmbeddingModelID) { await refreshLoaded() }
+            .onChange(of: selectedModelFamily) { _, family in
+                LumenModelFamily.persistedSelected = family
+            }
         }
     }
 
@@ -104,6 +120,62 @@ struct ModelsView: View {
             ActivePill(title: "Chat", name: storedModels.first { $0.id.uuidString == appState.activeChatModelID }?.name ?? "None", icon: "bubble.left.and.bubble.right")
             ActivePill(title: "Embed", name: storedModels.first { $0.id.uuidString == appState.activeEmbeddingModelID }?.name ?? "None", icon: "point.3.connected.trianglepath.dotted")
         }
+    }
+
+    private var modelFamilyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "switch.2")
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Model family")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("First launch and repair download only this family.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+            }
+
+            Picker("Model family", selection: $selectedModelFamily) {
+                ForEach(LumenModelFamily.allCases) { family in
+                    Text(family.displayName).tag(family)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("models.familyPicker")
+
+            Text(selectedModelFamily.description)
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+
+            Button {
+                repairSelectedFamily()
+            } label: {
+                HStack {
+                    Label(isRepairingSelectedFamily ? "Repairing…" : "Download / repair \(selectedModelFamily.shortLabel)", systemImage: "arrow.down.circle")
+                    Spacer()
+                    if isRepairingSelectedFamily { ProgressView() }
+                }
+            }
+            .disabled(isRepairingSelectedFamily)
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .accessibilityIdentifier("models.repairSelectedFamily")
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface)
+        .clipShape(.rect(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.border, lineWidth: 1)
+        }
+    }
+
+    private var featuredModels: [CatalogModel] {
+        LumenModelFleetCatalog.bootstrapModels(for: selectedModelFamily)
     }
 
     private var runtimeAwareFleetSnapshot: LumenModelFleetSnapshot {
@@ -122,10 +194,17 @@ struct ModelsView: View {
     }
 
     private func repairFleet() {
-        Task {
-            await ModelLaunchBootstrap.repairFleet(appState: appState, context: modelContext, source: .manual)
+        repairSelectedFamily()
+    }
+
+    private func repairSelectedFamily() {
+        guard !isRepairingSelectedFamily else { return }
+        isRepairingSelectedFamily = true
+        Task { @MainActor in
+            await ModelLaunchBootstrap.switchFamily(selectedModelFamily, appState: appState, context: modelContext)
             await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
             await refreshLoaded()
+            isRepairingSelectedFamily = false
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }

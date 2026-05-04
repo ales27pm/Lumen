@@ -209,7 +209,7 @@ pre {{ white-space:pre-wrap; max-height:34rem; overflow:auto; background:#060910
 </header>
 <section class="panel">
 <h2>Actions</h2>
-<button onclick="post('/run-loop')">Run visual improve-loop</button>
+<button onclick="post('/run-loop')">Run visual improve-loop + embedding state</button>
 <button onclick="post('/run-train')">Run fine-tuning command</button>
 <a class="button" href="/dashboard" target="_blank">Open generated dashboard</a>
 </section>
@@ -284,7 +284,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=Path("."), help="Repository root.")
     parser.add_argument("--host", default="127.0.0.1", help="Bind host. Keep this localhost unless you understand the risk.")
     parser.add_argument("--port", type=int, default=8765, help="Bind port.")
-    parser.add_argument("--visual-runner", type=Path, default=Path("tools/run_visual_improve_loop_v2.py"), help="Visual improve-loop runner path relative to --root.")
+    parser.add_argument("--visual-runner", type=Path, default=Path("tools/run_visual_improve_loop_with_embedding_state.py"), help="Visual improve-loop runner path relative to --root.")
     parser.add_argument("--output", type=Path, default=Path("generated/agent_manifest"), help="Manifest output path passed to visual runner.")
     parser.add_argument("--loop-output", type=Path, default=Path("generated/agent_improvement_loop"), help="Loop output path passed to visual runner.")
     parser.add_argument("--fine-tuning-output", type=Path, default=Path("generated/fine_tuning"), help="Fine-tuning output path passed to visual runner.")

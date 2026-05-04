@@ -2,7 +2,7 @@
 
 `tools/run_visual_improve_loop_v2.py` is the hardened one-command visual orchestrator for the Lumen improvement loop.
 
-It wraps the existing `lumen_manifest_crawler improve-loop` command, runs the adapter-first fine-tuning output pass, writes the TestFlight handoff queue, runs the release-bake manifest pass, and generates a standalone visual dashboard.
+It wraps the existing `lumen_manifest_crawler improve-loop` command, runs the adapter-first fine-tuning output pass, writes the TestFlight handoff queue, runs the release-bake manifest pass, writes first-class Qwen3 embedding retrieval datasets, and generates a standalone visual dashboard.
 
 The v2 runner is repo-rooted: every relative output path is resolved against `--root`, not against the shell's current working directory. This prevents generated loop artifacts from being scattered outside the repository when the script is invoked from another directory.
 
@@ -26,6 +26,7 @@ Default outputs, all rooted under `--root`:
 
 ```text
 generated/agent_manifest/
+generated/agent_manifest/embedding/
 generated/agent_improvement_loop/
 generated/fine_tuning/
 generated/fine_tuning/release_bake_gguf_manifest.json
@@ -35,6 +36,69 @@ generated/visual_improve_loop/visual_improve_loop_summary.json
 ```
 
 The default run is adapter-first. It does **not** merge LoRA adapters into full GGUF models. It writes a release-bake manifest that explicitly says the GGUF bake was skipped by default.
+
+## Local web control page
+
+Run a localhost web control panel:
+
+```bash
+python tools/serve_visual_improve_loop.py --open
+```
+
+The web page can trigger only preconfigured server-start commands. It does not accept arbitrary shell commands from HTTP requests.
+
+With a configured training command:
+
+```bash
+python tools/serve_visual_improve_loop.py \
+  --open \
+  --train-command "python tools/fine_tuning/unsloth/train_sft.py --config tools/fine_tuning/unsloth/configs/cortex.json"
+```
+
+Useful flow:
+
+1. click **Run visual improve-loop**;
+2. inspect the generated dashboard;
+3. click **Run fine-tuning command** when the dataset output is ready;
+4. run the app/TestFlight layer and export runtime evidence;
+5. rerun the loop with `--runtime-audit`.
+
+## Embedding dataset stage
+
+The loop now generates a dedicated embedding dataset for:
+
+```text
+Qwen/Qwen3-Embedding-0.6B
+```
+
+It is retrieval/ranking data, not chat SFT. Planned/generated files:
+
+```text
+generated/agent_manifest/embedding/
+├── corpus.jsonl
+├── train_pairs.jsonl
+├── val_pairs.jsonl
+├── train_triplets.jsonl
+├── val_triplets.jsonl
+├── hard_negatives.jsonl
+├── eval_retrieval.jsonl
+└── dataset_card.json
+```
+
+The same records are also indexed in the generic dataset family folder as:
+
+```text
+generated/agent_manifest/dataset/embedding_corpus.jsonl
+generated/agent_manifest/dataset/embedding_train_pairs.jsonl
+generated/agent_manifest/dataset/embedding_val_pairs.jsonl
+generated/agent_manifest/dataset/embedding_train_triplets.jsonl
+generated/agent_manifest/dataset/embedding_val_triplets.jsonl
+generated/agent_manifest/dataset/embedding_hard_negatives.jsonl
+generated/agent_manifest/dataset/embedding_eval_retrieval.jsonl
+generated/agent_manifest/dataset/embedding_dataset_card.jsonl
+```
+
+The corpus includes tool schemas, intents, routing rules, fleet slots, memory scopes, source-map entries, manifest grounding cards, eval scenarios, and runtime repair samples. The pair/triplet data is built for query → relevant document retrieval and hard-negative ranking.
 
 ## Open the visual dashboard automatically
 
@@ -52,11 +116,11 @@ python tools/run_visual_improve_loop_v2.py --skip-tests
 
 ## Ingest a TestFlight / in-app audit export
 
-After running the app on device and exporting the Agent Grounding dataset package:
+After running the app on device and exporting the Agent Grounding runtime audit package or the live E2E report JSON:
 
 ```bash
 python tools/run_visual_improve_loop_v2.py \
-  --runtime-audit exports/lumen-in-app-dataset-testflight.json
+  --runtime-audit exports/lumen-agent-grounding-audit-testflight.json
 ```
 
 Multiple audit files or directories are supported:
@@ -129,7 +193,7 @@ generated/agent_improvement_loop/testflight_scenarios.jsonl
 generated/agent_improvement_loop/TESTFLIGHT_RUNBOOK.md
 ```
 
-Run those scenarios in the real app, export the Agent Grounding dataset package, then feed that JSON back with `--runtime-audit`.
+Run those scenarios in the real app, export the Agent Grounding runtime audit package and/or live E2E report JSON, then feed that JSON back with `--runtime-audit`.
 
 ## Quick CI-friendly command
 
@@ -148,6 +212,7 @@ The generated HTML dashboard includes:
 - command output tails;
 - dataset family record counts;
 - per-agent fine-tuning record counts;
+- embedding dataset family counts;
 - gap severity distribution;
 - TestFlight scenario count;
 - next-action prompt count;
@@ -165,3 +230,11 @@ The generated HTML dashboard includes:
 - realistic TestFlight exports are auto-discoverable;
 - loop-state JSON is not mistaken for a runtime audit export;
 - dynamic dashboard content is HTML-escaped.
+
+`tools/lumen_manifest_crawler/tests/test_embedding_dataset.py` validates:
+
+- embedding dataset families are generated;
+- records are retrieval/ranking records, not chat SFT messages;
+- core object types are present;
+- the dedicated embedding output directory is written;
+- embedding generation is deterministic.

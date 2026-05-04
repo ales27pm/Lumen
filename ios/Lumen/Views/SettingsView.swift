@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var developerAlertMessage = ""
     @State private var parseFailureSummary = "• Parse-failure traces: loading…"
     @State private var parseNoiseSummary = "• Recoverable noise traces: loading…"
+    @State private var selectedModelFamily = LumenModelFamily.persistedSelected
+    @State private var isSwitchingModelFamily = false
 
     var body: some View {
         @Bindable var state = appState
@@ -44,12 +46,40 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Model family", selection: $selectedModelFamily) {
+                        ForEach(LumenModelFamily.allCases) { family in
+                            Text(family.displayName).tag(family)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.fleet.modelFamily")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(selectedModelFamily.description)
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("First launch downloads only this family’s bootstrap chat and embedding artifacts.")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+
                     Toggle("Auto-download fleet", isOn: Binding(get: { state.autoDownloadFleetModels }, set: { state.autoDownloadFleetModels = $0 }))
                     Toggle("Ask before fleet downloads", isOn: Binding(get: { state.confirmFleetDownloads }, set: { state.confirmFleetDownloads = $0 }))
+
+                    Button {
+                        switchModelFamily(selectedModelFamily)
+                    } label: {
+                        HStack {
+                            Label(isSwitchingModelFamily ? "Switching…" : "Download / repair selected family", systemImage: "arrow.down.circle")
+                            Spacer()
+                            if isSwitchingModelFamily { ProgressView() }
+                        }
+                    }
+                    .disabled(isSwitchingModelFamily)
+                    .accessibilityIdentifier("settings.fleet.repairSelectedFamily")
                 } header: {
                     Text("Fleet")
                 } footer: {
-                    Text("Auto-download installs the recommended v1 model fleet on launch when artifacts are missing and storage is available.")
+                    Text("Qwen3 is the default bootstrap family. Switching resets active model IDs and downloads only the selected family artifacts instead of the entire historical catalog.")
                 }
 
                 Section("Voice") {
@@ -175,7 +205,11 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .task {
+                selectedModelFamily = LumenModelFamily.persistedSelected
                 await refreshParseFailureSummary()
+            }
+            .onChange(of: selectedModelFamily) { _, family in
+                LumenModelFamily.persistedSelected = family
             }
             .alert("Run checks", isPresented: $showDeveloperAlert) {
                 Button("OK", role: .cancel) { }
@@ -191,6 +225,16 @@ struct SettingsView: View {
             return v.name
         }
         return "System default"
+    }
+
+    private func switchModelFamily(_ family: LumenModelFamily) {
+        guard !isSwitchingModelFamily else { return }
+        isSwitchingModelFamily = true
+        Task { @MainActor in
+            await ModelLaunchBootstrap.switchFamily(family, appState: appState, context: modelContext)
+            isSwitchingModelFamily = false
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
     }
 
     private func sliderRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
@@ -228,6 +272,7 @@ struct SettingsView: View {
         • maxAgentSteps: \(appState.maxAgentSteps)
 
         Fleet:
+        • selectedModelFamily: \(LumenModelFamily.persistedSelected.rawValue)
         • autoDownloadFleetModels: \(appState.autoDownloadFleetModels ? "true" : "false")
         • confirmFleetDownloads: \(appState.confirmFleetDownloads ? "true" : "false")
 

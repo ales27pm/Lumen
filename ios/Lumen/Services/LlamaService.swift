@@ -372,7 +372,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return output
+        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
     }
 
     func respond(
@@ -397,7 +397,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return output
+        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
     }
 
     func resetKVCache() async {
@@ -453,11 +453,24 @@ final actor AppLlamaService {
                         maxTokens: groundedRequest.maxTokens,
                         seed: groundedRequest.seed
                     )
+                    var rawOutput = ""
                     for try await chunk in stream {
-                        continuation.yield(.text(chunk))
+                        rawOutput += chunk
+                    }
+                    let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                    await self.recordModelTrace(
+                        slot: slot,
+                        request: groundedRequest,
+                        output: sanitized,
+                        parseError: AgentTurnParser.parse(sanitized).parseError?.rawValue
+                    )
+                    if !sanitized.isEmpty {
+                        continuation.yield(.text(sanitized))
                     }
                 } catch {
-                    continuation.yield(.text("Generation error: \(error.localizedDescription)"))
+                    let errorText = "Generation error: \(error.localizedDescription)"
+                    await self.recordModelTrace(slot: slot, request: req, output: errorText, parseError: "generation_error")
+                    continuation.yield(.text(errorText))
                 }
 
                 continuation.yield(.done)
@@ -563,6 +576,28 @@ final actor AppLlamaService {
 
     private func stopCompletion(for slot: LumenModelSlot) async {
         await chatRuntimes[slot]?.service.stopCompletion()
+    }
+
+    private func recordModelTrace(slot: LumenModelSlot, request: GenerateRequest, output: String, parseError: String?) async {
+        AgentBehaviorTraceRecorder.record(
+            AgentBehaviorTrace(
+                id: UUID(),
+                createdAt: Date(),
+                event: .modelTurn,
+                slot: slot.rawValue,
+                stage: request.modelName,
+                intent: nil,
+                promptPrefix: ModelOutputSanitizer.boundedPrefix(request.userMessage, limit: 1200),
+                rawOutputPrefix: ModelOutputSanitizer.boundedPrefix(output, limit: 1600),
+                selectedToolID: AgentTurnParser.parse(output).action.map { ToolRouteGuard.canonicalToolID($0.tool) },
+                toolArguments: AgentTurnParser.parse(output).action?.args.stringCoerced ?? [:],
+                allowedToolIDs: [],
+                requiresApproval: nil,
+                approvalMode: nil,
+                parseError: parseError,
+                emittedFinalInActionTurn: output.lowercased().contains("\"final\"")
+            )
+        )
     }
 
     private func normalize(_ vector: [Double]) -> [Double] {

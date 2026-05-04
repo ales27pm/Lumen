@@ -116,7 +116,6 @@ private struct ChatRuntime {
     var batchSize: UInt32
 }
 
-
 private enum LlamaErrorCode: String {
     case network = "network"
     case decode = "decode"
@@ -171,9 +170,7 @@ final actor AppLlamaService {
 
     func loadChatModel(path: String, for slot: LumenModelSlot, contextSize: Int = 2048) async throws {
         try loadChatModelSync(path: path, slot: slot, contextSize: contextSize, batchSize: 256)
-        if primaryChatSlot == .cortex || chatRuntimes[primaryChatSlot] == nil {
-            primaryChatSlot = slot
-        }
+        primaryChatSlot = slot
     }
 
     func loadFleetChatModels(assignments: [LumenModelSlot: LumenModelAssignment], contextSize: Int = 2048) async -> [LumenModelSlot: String] {
@@ -181,6 +178,7 @@ final actor AppLlamaService {
         for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
             guard let assignment = assignments[slot] else { continue }
             do {
+                await unloadAllChat()
                 try await loadChatModel(path: assignment.localPath, for: slot, contextSize: contextSize)
             } catch {
                 failures[slot] = error.localizedDescription
@@ -427,10 +425,7 @@ final actor AppLlamaService {
     }
 
     func stream(_ req: GenerateRequest, slot: LumenModelSlot) -> AsyncStream<GenerationToken> {
-        let groundedRequest = req.groundingSystemPrompt(for: slot)
-        let messages = buildMessages(req: groundedRequest, contextSize: chatRuntimes[slot]?.contextSize ?? 2048)
-
-        return AsyncStream { continuation in
+        AsyncStream { continuation in
             let generationTask = Task { [weak self] in
                 guard let self else {
                     continuation.yield(.done)
@@ -439,12 +434,16 @@ final actor AppLlamaService {
                 }
 
                 do {
-                    guard groundedRequest.maxTokens > 0 else {
+                    guard req.maxTokens > 0 else {
                         continuation.yield(.done)
                         continuation.finish()
                         return
                     }
 
+                    try await SlotModelRuntimeCoordinator.shared.ensureReady(slot: slot)
+                    let contextSize = await self.chatRuntimes[slot]?.contextSize ?? 2048
+                    let groundedRequest = req.groundingSystemPrompt(for: slot)
+                    let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize)
                     let stream = try await self.streamResponse(
                         slot: slot,
                         messages: messages,
@@ -548,6 +547,7 @@ final actor AppLlamaService {
             contextSize: contextSize,
             batchSize: batchSize
         )
+        primaryChatSlot = slot
     }
 
     private func makeEmbeddingContext(for model: LlamaModel) -> LlamaContext? {

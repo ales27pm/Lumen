@@ -7,5 +7,12 @@ tools/lumen_manifest_crawler/lumen_manifest_crawler/__pycache__/
 .venv-unsloth/
 models/lora/
 models/gguf_merged/
+models/base/
+models/adapters/
+models/embedding/
+models/release/
+artifacts/
+checkpoints/
 unsloth_compiled_cache/
+generated/fine_tuning/checkpoints/
 **/__pycache__/

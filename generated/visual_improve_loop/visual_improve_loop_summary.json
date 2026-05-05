@@ -56,7 +56,7 @@
     },
     "embedding": {
       "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-      "corpusCount": 501,
+      "corpusCount": 500,
       "datasetCard": {
         "families": [
           "agent_role_question_to_fleet_slot",
@@ -91,10 +91,10 @@
         "schemaVersion": "1.0.0",
         "task": "retrieval_similarity_ranking"
       },
-      "evalCount": 670,
+      "evalCount": 669,
       "fallbackModel": "current-baseline-embedding-model",
       "generated": true,
-      "hardNegativeCount": 670,
+      "hardNegativeCount": 669,
       "metrics": {
         "hardNegativeAccuracy": 0.0,
         "mrr": 0.0,
@@ -106,14 +106,14 @@
         "toolRetrievalAccuracy": 0.0
       },
       "model": "Qwen/Qwen3-Embedding-0.6B",
-      "pairCount": 670,
+      "pairCount": 669,
       "teacherModel": "Qwen/Qwen3-Embedding-4B",
       "trainPairCount": 597,
-      "trainTripletCount": 598,
-      "tripletCount": 670,
+      "trainTripletCount": 596,
+      "tripletCount": 669,
       "usedFallback": false,
-      "valPairCount": 73,
-      "valTripletCount": 72
+      "valPairCount": 72,
+      "valTripletCount": 73
     },
     "families": {
       "approval_boundary_samples": 115,
@@ -144,7 +144,7 @@
   },
   "embedding": {
     "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-    "corpusCount": 501,
+    "corpusCount": 500,
     "datasetCard": {
       "families": [
         "agent_role_question_to_fleet_slot",
@@ -179,10 +179,10 @@
       "schemaVersion": "1.0.0",
       "task": "retrieval_similarity_ranking"
     },
-    "evalCount": 670,
+    "evalCount": 669,
     "fallbackModel": "current-baseline-embedding-model",
     "generated": true,
-    "hardNegativeCount": 670,
+    "hardNegativeCount": 669,
     "metrics": {
       "hardNegativeAccuracy": 0.0,
       "mrr": 0.0,
@@ -194,14 +194,14 @@
       "toolRetrievalAccuracy": 0.0
     },
     "model": "Qwen/Qwen3-Embedding-0.6B",
-    "pairCount": 670,
+    "pairCount": 669,
     "teacherModel": "Qwen/Qwen3-Embedding-4B",
     "trainPairCount": 597,
-    "trainTripletCount": 598,
-    "tripletCount": 670,
+    "trainTripletCount": 596,
+    "tripletCount": 669,
     "usedFallback": false,
-    "valPairCount": 73,
-    "valTripletCount": 72
+    "valPairCount": 72,
+    "valTripletCount": 73
   },
   "endedAt": "2026-05-05T00:20:18+00:00",
   "fineTuningOutput": "/home/ales27pm/Lumen/generated/fine_tuning",

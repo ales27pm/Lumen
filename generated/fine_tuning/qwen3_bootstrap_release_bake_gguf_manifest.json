@@ -4,65 +4,48 @@
       "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/cortex",
       "agent": "cortex",
       "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
-      "gguf_file": "lumen-cortex-release-bake-q4_k_m.gguf",
-      "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/cortex_merged_gguf",
-      "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/cortex_merged_gguf/lumen-cortex-release-bake-q4_k_m.gguf",
-      "mode": "optional_release_bake",
-      "quantization": "q4_k_m",
-      "sha256": "7036210bdb3df6ffd1244864d76114ba3c1df63b2fc2916f3022e4969cc00935",
-      "size_bytes": 1107409184
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
     },
     "executor": {
       "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/executor",
       "agent": "executor",
       "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
-      "gguf_file": "lumen-executor-release-bake-q4_k_m.gguf",
-      "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/executor_merged_gguf",
-      "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/executor_merged_gguf/lumen-executor-release-bake-q4_k_m.gguf",
-      "mode": "optional_release_bake",
-      "quantization": "q4_k_m",
-      "sha256": "47bd35c14d67089f0542f98314214a3bcfbe26828f58fcae890f97b3108fdb48",
-      "size_bytes": 1107409184
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
+    },
+    "fleet": {
+      "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/fleet",
+      "agent": "fleet",
+      "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
     },
     "mimicry": {
       "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/mimicry",
       "agent": "mimicry",
       "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
-      "gguf_file": "lumen-mimicry-release-bake-q4_k_m.gguf",
-      "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mimicry_merged_gguf",
-      "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mimicry_merged_gguf/lumen-mimicry-release-bake-q4_k_m.gguf",
-      "mode": "optional_release_bake",
-      "quantization": "q4_k_m",
-      "sha256": "c1447f5bea2e12372af8a25bae60b7ec2afe9bfa2225e3089accaaeb4238895d",
-      "size_bytes": 1107409184
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
     },
     "mouth": {
       "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/mouth",
       "agent": "mouth",
       "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
-      "gguf_file": "lumen-mouth-release-bake-q4_k_m.gguf",
-      "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mouth_merged_gguf",
-      "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mouth_merged_gguf/lumen-mouth-release-bake-q4_k_m.gguf",
-      "mode": "optional_release_bake",
-      "quantization": "q4_k_m",
-      "sha256": "7b9b5dfe1267d350584ffb2915d7f64934d1381ebbc4c3cb1a04c55dbfd366a3",
-      "size_bytes": 1107409184
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
     },
     "rem": {
       "adapter_dir": "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/rem",
       "agent": "rem",
       "base_model_name": "unsloth/Qwen3-1.7B-unsloth-bnb-4bit",
-      "gguf_file": "lumen-rem-release-bake-q4_k_m.gguf",
-      "gguf_output_dir": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/rem_merged_gguf",
-      "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/rem_merged_gguf/lumen-rem-release-bake-q4_k_m.gguf",
-      "mode": "optional_release_bake",
-      "quantization": "q4_k_m",
-      "sha256": "e1806704c9c72ed51aedb72993b94f2e1c0888518115a06c34f901d2a51a2204",
-      "size_bytes": 1107409184
+      "merge_adapters_by_default": false,
+      "release_bake_enabled_by_default": false
     }
   },
-  "mode": "optional_release_bake",
-  "quantization_override": "q4_k_m",
-  "release_bake_requested": true,
-  "repo_id": null
+  "manifest_output": "/home/ales27pm/Lumen/generated/fine_tuning/qwen3_bootstrap_release_bake_gguf_manifest.json",
+  "mode": "adapter_first",
+  "reason": "Adapter-first training keeps LoRA adapters separate by default. Pass --release-bake to explicitly merge/export GGUF artifacts.",
+  "release_bake_requested": false,
+  "skipped": true
 }

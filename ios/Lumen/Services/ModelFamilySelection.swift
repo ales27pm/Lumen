@@ -11,7 +11,7 @@ nonisolated enum LumenModelFamily: String, CaseIterable, Identifiable, Codable, 
     var displayName: String {
         switch self {
         case .qwen25: return "Qwen 2.5 baseline"
-        case .qwen3: return "Qwen3 bootstrap"
+        case .qwen3: return "Qwen3 fast adapter bootstrap"
         }
     }
 
@@ -27,7 +27,7 @@ nonisolated enum LumenModelFamily: String, CaseIterable, Identifiable, Codable, 
         case .qwen25:
             return "Stable Qwen2.5 baseline fleet: Qwen2.5 chat base plus lightweight embedding fallback."
         case .qwen3:
-            return "Current bootstrap family: role-baked Qwen3 GGUF artifacts plus Qwen3 embedding candidate."
+            return "Fast Qwen3 adapter runtime: one shared chat base, role-specific LoRA GGUF adapters, and the Qwen3 embedding candidate."
         }
     }
 
@@ -53,14 +53,21 @@ nonisolated extension LumenModelFleetCatalog {
     }
 
     static var qwen3BootstrapModels: [CatalogModel] {
-        [
-            CatalogModel(id: "fleet-bootstrap-qwen3-cortex-q4", name: "Qwen3 Bootstrap Cortex", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-cortex-release-bake-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Role-baked Qwen3 Cortex artifact for routing, planning, and orchestration.", tags: ["bootstrap", "qwen3", "cortex", "release-bake"]),
-            CatalogModel(id: "fleet-bootstrap-qwen3-executor-q4", name: "Qwen3 Bootstrap Executor", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-executor-release-bake-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Role-baked Qwen3 Executor artifact for strict tool JSON and native action requests.", tags: ["bootstrap", "qwen3", "executor", "release-bake"]),
-            CatalogModel(id: "fleet-bootstrap-qwen3-mouth-q4", name: "Qwen3 Bootstrap Mouth", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-mouth-release-bake-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Role-baked Qwen3 Mouth artifact for final user-facing responses.", tags: ["bootstrap", "qwen3", "mouth", "release-bake"]),
-            CatalogModel(id: "fleet-bootstrap-qwen3-mimicry-q4", name: "Qwen3 Bootstrap Mimicry", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-mimicry-release-bake-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Role-baked Qwen3 Mimicry artifact for tone and style adaptation without changing facts.", tags: ["bootstrap", "qwen3", "mimicry", "release-bake"]),
-            CatalogModel(id: "fleet-bootstrap-qwen3-rem-q4", name: "Qwen3 Bootstrap REM", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-rem-release-bake-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Role-baked Qwen3 REM artifact for reflection, repair, and idle-cycle training signals.", tags: ["bootstrap", "qwen3", "rem", "release-bake"]),
-            CatalogModel(id: "fleet-bootstrap-qwen3-embedding-0.6b-q8", name: "Qwen3 Bootstrap Embedding 0.6B", repoId: "Qwen/Qwen3-Embedding-0.6B-GGUF", fileName: "Qwen3-Embedding-0.6B-Q8_0.gguf", parameters: "0.6B", quantization: "Q8_0", sizeBytes: 650_000_000, role: .embedding, description: "Qwen3 embedding candidate for source-map, tool-schema, memory, RAG, and repair retrieval.", tags: ["bootstrap", "qwen3", "embedding", "current", "q8"]),
+        let adapterRepo = "ales27pm/lumen-qwen3-bootstrap-adapters-gguf"
+        let adapters: [(roleID: String, fileName: String, sizeBytes: Int64)] = [
+            ("cortex", "lumen-cortex-lora.gguf", 70_000_000),
+            ("executor", "lumen-executor-lora.gguf", 70_000_000),
+            ("mouth", "lumen-mouth-lora.gguf", 70_000_000),
+            ("mimicry", "lumen-mimicry-lora.gguf", 70_000_000),
+            ("rem", "lumen-rem-lora.gguf", 70_000_000),
+            ("fleet", "lumen-fleet-lora.gguf", 70_000_000),
         ]
+        return [
+            CatalogModel(id: "fleet-bootstrap-qwen3-fast-shared-q4", name: "Qwen3 Fast Shared Chat Base", repoId: "ales27pm/lumen-qwen3-bootstrap-gguf", fileName: "lumen-qwen3-fast-shared-q4_k_m.gguf", parameters: "1.7B", quantization: "Q4_K_M", sizeBytes: 1_350_000_000, role: .chat, description: "Shared Qwen3 chat base loaded once for all Lumen role adapters.", tags: ["bootstrap", "qwen3", "adapter-runtime", "shared-base"]),
+            CatalogModel(id: "fleet-bootstrap-qwen3-embedding-0.6b-q8", name: "Qwen3 Bootstrap Embedding 0.6B", repoId: "Qwen/Qwen3-Embedding-0.6B-GGUF", fileName: "Qwen3-Embedding-0.6B-Q8_0.gguf", parameters: "0.6B", quantization: "Q8_0", sizeBytes: 650_000_000, role: .embedding, description: "Qwen3 embedding candidate for source-map, tool-schema, memory, RAG, and repair retrieval.", tags: ["bootstrap", "qwen3", "embedding", "current", "q8"]),
+        ] + adapters.map { adapter in
+            CatalogModel(id: "fleet-bootstrap-qwen3-\(adapter.roleID)-lora", name: "Qwen3 \(adapter.roleID.capitalized) LoRA Adapter", repoId: adapterRepo, fileName: adapter.fileName, parameters: "LoRA", quantization: "GGUF", sizeBytes: adapter.sizeBytes, role: .roleAdapter, description: "Role-specific Qwen3 LoRA adapter for the \(adapter.roleID) runtime role.", tags: ["bootstrap", "qwen3", "adapter-runtime", "role-adapter", adapter.roleID])
+        }
     }
 
     static func bootstrapModels(for family: LumenModelFamily) -> [CatalogModel] {

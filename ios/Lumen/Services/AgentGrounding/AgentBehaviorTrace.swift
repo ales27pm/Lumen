@@ -22,6 +22,73 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
     let approvalMode: String?
     let parseError: String?
     let emittedFinalInActionTurn: Bool
+    let modelFamily: String?
+    let baseModelPath: String?
+    let adapterID: String?
+    let adapterSlot: String?
+    let adapterPath: String?
+    let adapterApplied: Bool?
+    let adapterScale: Float?
+    let adapterFailureReason: String?
+    let generationElapsedMs: Int?
+    let firstTokenLatencyMs: Int?
+    let outputTokenCount: Int?
+
+    init(
+        id: UUID,
+        createdAt: Date,
+        event: Event,
+        slot: String,
+        stage: String,
+        intent: String?,
+        promptPrefix: String,
+        rawOutputPrefix: String,
+        selectedToolID: String?,
+        toolArguments: [String: String],
+        allowedToolIDs: [String],
+        requiresApproval: Bool?,
+        approvalMode: String?,
+        parseError: String?,
+        emittedFinalInActionTurn: Bool,
+        modelFamily: String? = nil,
+        baseModelPath: String? = nil,
+        adapterID: String? = nil,
+        adapterSlot: String? = nil,
+        adapterPath: String? = nil,
+        adapterApplied: Bool? = nil,
+        adapterScale: Float? = nil,
+        adapterFailureReason: String? = nil,
+        generationElapsedMs: Int? = nil,
+        firstTokenLatencyMs: Int? = nil,
+        outputTokenCount: Int? = nil
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.event = event
+        self.slot = slot
+        self.stage = stage
+        self.intent = intent
+        self.promptPrefix = promptPrefix
+        self.rawOutputPrefix = rawOutputPrefix
+        self.selectedToolID = selectedToolID
+        self.toolArguments = toolArguments
+        self.allowedToolIDs = allowedToolIDs
+        self.requiresApproval = requiresApproval
+        self.approvalMode = approvalMode
+        self.parseError = parseError
+        self.emittedFinalInActionTurn = emittedFinalInActionTurn
+        self.modelFamily = modelFamily
+        self.baseModelPath = baseModelPath
+        self.adapterID = adapterID
+        self.adapterSlot = adapterSlot
+        self.adapterPath = adapterPath
+        self.adapterApplied = adapterApplied
+        self.adapterScale = adapterScale
+        self.adapterFailureReason = adapterFailureReason
+        self.generationElapsedMs = generationElapsedMs
+        self.firstTokenLatencyMs = firstTokenLatencyMs
+        self.outputTokenCount = outputTokenCount
+    }
 }
 
 nonisolated struct AgentBehaviorAuditReport: Codable, Sendable, Hashable {

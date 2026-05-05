@@ -183,11 +183,12 @@ enum LumenModelFleetResolver {
                 assignments[slot] = assignment(slot: slot, model: sharedBase, family: .qwen3, adapter: adapter)
             }
         } else {
+            let fallbackFamily: LumenModelFamily? = selectedFamily == .qwen3 ? nil : selectedFamily
             for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
                 if let model = preferredFineTunedModel(for: slot, storedModels: textModels)
                     ?? preferredModel(for: slot, storedModels: textModels)
                     ?? fallbackText {
-                    assignments[slot] = assignment(slot: slot, model: model, family: selectedFamily, adapter: nil)
+                    assignments[slot] = assignment(slot: slot, model: model, family: fallbackFamily, adapter: nil)
                 }
             }
         }
@@ -202,10 +203,16 @@ enum LumenModelFleetResolver {
 
     private static func preferredAdapter(for slot: LumenModelSlot, storedModels: [StoredModel]) -> StoredModel? {
         let slotToken = slot.rawValue
-        return storedModels.filter { model in
+        let scored = storedModels.compactMap { model -> (model: StoredModel, rank: Int)? in
             let text = [model.name, model.repoId, model.fileName, model.localPath].joined(separator: " ").lowercased()
-            return text.contains(slotToken) || (slot == .cortex && text.contains("fleet"))
-        }.sorted { $0.downloadedAt > $1.downloadedAt }.first
+            if text.contains(slotToken) { return (model, 2) }
+            if slot == .cortex, text.contains("fleet") { return (model, 1) }
+            return nil
+        }
+        return scored.sorted { lhs, rhs in
+            if lhs.rank != rhs.rank { return lhs.rank > rhs.rank }
+            return lhs.model.downloadedAt > rhs.model.downloadedAt
+        }.first?.model
     }
 
     private static func preferredEmbedding(activeEmbeddingModelID: String?, storedModels: [StoredModel]) -> StoredModel? {

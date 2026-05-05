@@ -181,6 +181,8 @@ enum ModelLaunchBootstrap {
         case .embedding:
             guard appState.activeEmbeddingModelID == stored.id.uuidString else { return }
             _ = await ModelLoader.ensureEmbedLoaded(appState: appState, stored: allStored)
+        case .roleAdapter:
+            _ = await ModelLoader.ensureChatLoaded(appState: appState, stored: allStored)
         }
     }
 
@@ -239,6 +241,8 @@ enum ModelLaunchBootstrap {
             if appState.activeEmbeddingModelID == nil {
                 appState.activeEmbeddingModelID = stored.id.uuidString
             }
+        case .roleAdapter:
+            break
         }
     }
 

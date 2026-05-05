@@ -116,6 +116,132 @@ private struct ChatRuntime {
     var batchSize: UInt32
 }
 
+private final class AdapterChatRuntime {
+    let model: LlamaModel
+    let context: LlamaContext
+    let modelPath: String
+    let contextSize: Int
+    let batchSize: UInt32
+    private var batch: LlamaBatch
+    private var processedTokens: [llama_token] = []
+    private var currentTokenPosition: Int32 = 0
+
+    init(path: String, contextSize: Int, batchSize: UInt32) throws {
+        var modelParams = llama_model_default_params()
+        modelParams.n_gpu_layers = 0
+        guard let model = LlamaModel(path: path, parameters: modelParams) else {
+            throw LlamaError.failedToInitializeContext("Unable to load shared chat base GGUF")
+        }
+        var contextParams = llama_context_default_params()
+        contextParams.n_ctx = UInt32(max(1, contextSize))
+        contextParams.n_batch = batchSize
+        contextParams.n_ubatch = batchSize
+        contextParams.n_threads = 1
+        contextParams.n_threads_batch = 1
+        contextParams.offload_kqv = true
+        guard let context = LlamaContext(model: model, parameters: contextParams) else {
+            throw LlamaError.failedToInitializeContext("Unable to create shared chat context")
+        }
+        self.model = model
+        self.context = context
+        self.modelPath = path
+        self.contextSize = contextSize
+        self.batchSize = batchSize
+        self.batch = LlamaBatch(initialSize: Int32(batchSize))
+    }
+
+    func apply(adapter: LlamaLoraAdapter, scale: Float) throws {
+        try context.apply(loraAdapter: adapter, scale: scale)
+    }
+
+    func clearAdapters() {
+        context.removeAllLoraAdapters()
+    }
+
+    func resetKVCache() {
+        context.clearKVCache()
+        processedTokens.removeAll()
+        currentTokenPosition = 0
+        batch = LlamaBatch(initialSize: Int32(batchSize))
+    }
+
+    func streamCompletion(
+        of messages: [LlamaChatMessage],
+        samplingConfig: LlamaSamplingConfig,
+        maxTokens: Int?
+    ) throws -> AsyncThrowingStream<String, Error> {
+        try initializeCompletion(messages: messages)
+        var sampler = LlamaSampler(config: samplingConfig, model: model)
+        let limit = min(maxTokens ?? Int.max, max(0, contextSize - Int(currentTokenPosition) - 1))
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                var emitted = 0
+                do {
+                    while emitted < limit, !Task.isCancelled {
+                        let token = sampler.sample(context: context)
+                        if model.isEogToken(token) { break }
+                        batch.reset()
+                        batch.addToken(token, at: currentTokenPosition, logits: true)
+                        processedTokens.append(token)
+                        currentTokenPosition += 1
+                        try context.decode(batch: batch)
+                        continuation.yield(model.piece(from: token))
+                        emitted += 1
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { @Sendable _ in task.cancel() }
+        }
+    }
+
+    private func initializeCompletion(messages: [LlamaChatMessage]) throws {
+        let prompt = model.applyChatTemplate(to: messages, addAssistant: nil)
+        let tokens = model.tokenize(text: prompt, addBos: model.shouldAddBos(), special: true)
+        guard tokens.count < contextSize - 4 else {
+            throw LlamaError.failedToInitializeContext("Prompt exceeds shared chat context window")
+        }
+        context.clearKVCache()
+        processedTokens.removeAll()
+        currentTokenPosition = 0
+        batch.reset()
+        for (index, token) in tokens.enumerated() {
+            batch.addToken(token, at: Int32(index), logits: false)
+            processedTokens.append(token)
+            if batch.size == Int32(batchSize) {
+                try context.decode(batch: batch)
+                batch.reset()
+            }
+        }
+        if batch.size > 0 {
+            batch.setLastTokenLogits(true)
+            try context.decode(batch: batch)
+        }
+        currentTokenPosition = Int32(processedTokens.count)
+    }
+}
+
+private struct LoadedRoleAdapter {
+    let slot: LumenModelSlot
+    let path: String
+    let scale: Float
+    let adapter: LlamaLoraAdapter
+    let loadedAt: Date
+}
+
+nonisolated struct LlamaAdapterTraceMetadata: Codable, Sendable, Hashable {
+    let modelFamily: String?
+    let baseModelPath: String?
+    let adapterID: String?
+    let adapterSlot: String?
+    let adapterPath: String?
+    let adapterApplied: Bool
+    let adapterScale: Float?
+    let adapterFailureReason: String?
+}
+
 private enum LlamaErrorCode: String {
     case network = "network"
     case decode = "decode"
@@ -129,6 +255,11 @@ final actor AppLlamaService {
 
     private var chatRuntimes: [LumenModelSlot: ChatRuntime] = [:]
     private var primaryChatSlot: LumenModelSlot = .cortex
+    private var sharedChatRuntime: AdapterChatRuntime?
+    private var sharedChatBasePath: String?
+    private var roleAdapters: [LumenModelSlot: LoadedRoleAdapter] = [:]
+    private var activeAdapterSlot: LumenModelSlot?
+    private var lastAdapterFailureReason: String?
 
     private var embeddingModelPath: String?
     private var embeddingModel: LlamaModel?
@@ -139,22 +270,76 @@ final actor AppLlamaService {
 
     private init() {}
 
-    var isChatLoaded: Bool { chatRuntimes[primaryChatSlot] != nil || !chatRuntimes.isEmpty }
+    var isChatLoaded: Bool { sharedChatRuntime != nil || chatRuntimes[primaryChatSlot] != nil || !chatRuntimes.isEmpty }
     var isEmbedLoaded: Bool { embeddingContext != nil }
     var hasSemanticEmbeddingRuntime: Bool { embeddingContext != nil }
-    var loadedChatPath: String? { chatRuntimes[primaryChatSlot]?.modelPath ?? chatRuntimes.values.first?.modelPath }
+    var loadedChatPath: String? { sharedChatBasePath ?? chatRuntimes[primaryChatSlot]?.modelPath ?? chatRuntimes.values.first?.modelPath }
     var loadedEmbedPath: String? { embeddingModelPath }
 
     var loadedChatPathsBySlot: [LumenModelSlot: String] {
         Dictionary(uniqueKeysWithValues: chatRuntimes.map { ($0.key, $0.value.modelPath) })
     }
 
+    var activeAdapterSlotValue: LumenModelSlot? { activeAdapterSlot }
+
     func isChatLoaded(for slot: LumenModelSlot) -> Bool {
-        chatRuntimes[slot] != nil
+        sharedChatRuntime != nil || chatRuntimes[slot] != nil
     }
 
     func loadedChatPath(for slot: LumenModelSlot) -> String? {
-        chatRuntimes[slot]?.modelPath
+        sharedChatBasePath ?? chatRuntimes[slot]?.modelPath
+    }
+
+    func loadSharedChatModel(path: String, contextSize: Int, batchSize: UInt32 = 256) async throws {
+        if sharedChatBasePath == path, sharedChatRuntime != nil { return }
+        guard FileManager.default.fileExists(atPath: path) else { throw LlamaError.modelFileNotFound(path) }
+        sharedChatRuntime = try AdapterChatRuntime(path: path, contextSize: contextSize, batchSize: batchSize)
+        sharedChatBasePath = path
+        activeAdapterSlot = nil
+        roleAdapters.removeAll()
+        chatRuntimes.removeAll()
+    }
+
+    func loadRoleAdapter(slot: LumenModelSlot, path: String, scale: Float = 1.0) async throws {
+        guard let runtime = sharedChatRuntime else { throw LlamaError.noModelLoaded }
+        guard FileManager.default.fileExists(atPath: path) else { throw LlamaError.modelFileNotFound(path) }
+        if roleAdapters[slot]?.path == path { return }
+        let adapter = try LlamaLoraAdapter(model: runtime.model, path: path)
+        roleAdapters[slot] = LoadedRoleAdapter(slot: slot, path: path, scale: scale, adapter: adapter, loadedAt: Date())
+    }
+
+    func activateRoleAdapter(slot: LumenModelSlot) async throws {
+        guard let runtime = sharedChatRuntime else { throw LlamaError.noModelLoaded }
+        guard let loaded = roleAdapters[slot] else {
+            runtime.clearAdapters()
+            activeAdapterSlot = nil
+            return
+        }
+        do {
+            try runtime.apply(adapter: loaded.adapter, scale: loaded.scale)
+            activeAdapterSlot = slot
+            lastAdapterFailureReason = nil
+        } catch {
+            runtime.clearAdapters()
+            activeAdapterSlot = nil
+            lastAdapterFailureReason = error.localizedDescription
+            throw error
+        }
+    }
+
+    func clearActiveRoleAdapter() async {
+        sharedChatRuntime?.clearAdapters()
+        activeAdapterSlot = nil
+    }
+
+    func unloadRoleAdapter(slot: LumenModelSlot) async {
+        if activeAdapterSlot == slot { await clearActiveRoleAdapter() }
+        roleAdapters.removeValue(forKey: slot)
+    }
+
+    func unloadAllRoleAdapters() async {
+        await clearActiveRoleAdapter()
+        roleAdapters.removeAll()
     }
 
     func loadModel(named name: String, contextSize: UInt32 = 2048, batchSize: UInt32 = 256) throws {
@@ -178,8 +363,15 @@ final actor AppLlamaService {
         for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] {
             guard let assignment = assignments[slot] else { continue }
             do {
-                await unloadAllChat()
-                try await loadChatModel(path: assignment.localPath, for: slot, contextSize: contextSize)
+                if assignment.usesRoleAdapter || assignment.modelFamily == .qwen3 {
+                    try await loadSharedChatModel(path: assignment.localPath, contextSize: contextSize)
+                    if let adapterPath = assignment.adapterPath {
+                        try await loadRoleAdapter(slot: slot, path: adapterPath, scale: assignment.adapterScale)
+                    }
+                } else {
+                    await unloadAllChat()
+                    try await loadChatModel(path: assignment.localPath, for: slot, contextSize: contextSize)
+                }
             } catch {
                 failures[slot] = error.localizedDescription
             }
@@ -227,6 +419,10 @@ final actor AppLlamaService {
 
     func unloadAllChat() async {
         chatRuntimes.removeAll()
+        sharedChatRuntime = nil
+        sharedChatBasePath = nil
+        roleAdapters.removeAll()
+        activeAdapterSlot = nil
         primaryChatSlot = .cortex
     }
 
@@ -259,6 +455,17 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
+        if let runtime = sharedChatRuntime {
+            return try await streamResponse(
+                adapterRuntime: runtime,
+                messages: messages,
+                temperature: temperature,
+                topP: topP,
+                repetitionPenalty: repetitionPenalty,
+                maxTokens: maxTokens,
+                seed: seed
+            )
+        }
         guard let runtime = chatRuntimes[primaryChatSlot] ?? chatRuntimes.values.first else {
             throw LlamaError.noModelLoaded
         }
@@ -283,6 +490,17 @@ final actor AppLlamaService {
         maxTokens: Int? = nil,
         seed: UInt32? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
+        if let runtime = sharedChatRuntime {
+            return try await streamResponse(
+                adapterRuntime: runtime,
+                messages: messages,
+                temperature: temperature,
+                topP: topP,
+                repetitionPenalty: repetitionPenalty,
+                maxTokens: maxTokens,
+                seed: seed
+            )
+        }
         guard let runtime = chatRuntimes[slot] else {
             throw LlamaError.slotModelNotLoaded(slot.rawValue)
         }
@@ -296,6 +514,26 @@ final actor AppLlamaService {
             maxTokens: maxTokens,
             seed: seed
         )
+    }
+
+
+    private func streamResponse(
+        adapterRuntime runtime: AdapterChatRuntime,
+        messages: [LlamaChatMessage],
+        temperature: Float,
+        topP: Float,
+        repetitionPenalty: Float,
+        maxTokens: Int?,
+        seed: UInt32?
+    ) async throws -> AsyncThrowingStream<String, Error> {
+        let resolvedSeed = seed ?? makeRandomSeed()
+        let sampling = LlamaSamplingConfig(
+            temperature: temperature,
+            seed: resolvedSeed,
+            topP: topP,
+            repetitionPenaltyConfig: LlamaRepetitionPenaltyConfig(repeatPenalty: repetitionPenalty)
+        )
+        return try runtime.streamCompletion(of: messages, samplingConfig: sampling, maxTokens: maxTokens)
     }
 
     private func streamResponse(
@@ -401,6 +639,10 @@ final actor AppLlamaService {
     }
 
     func resetKVCache() async {
+        if let sharedChatRuntime {
+            sharedChatRuntime.resetKVCache()
+            return
+        }
         let runtimes = chatRuntimes
         for (slot, runtime) in runtimes {
             do {
@@ -412,6 +654,10 @@ final actor AppLlamaService {
     }
 
     func resetKVCache(for slot: LumenModelSlot) async {
+        if let sharedChatRuntime {
+            sharedChatRuntime.resetKVCache()
+            return
+        }
         guard let runtime = chatRuntimes[slot] else { return }
         do {
             try loadChatModelSync(path: runtime.modelPath, slot: slot, contextSize: runtime.contextSize, batchSize: runtime.batchSize)
@@ -440,8 +686,9 @@ final actor AppLlamaService {
                         return
                     }
 
+                    let startedAt = Date()
                     try await SlotModelRuntimeCoordinator.shared.ensureReady(slot: slot)
-                    let contextSize = await self.chatRuntimes[slot]?.contextSize ?? 2048
+                    let contextSize = await self.sharedChatRuntime?.contextSize ?? self.chatRuntimes[slot]?.contextSize ?? 2048
                     let groundedRequest = req.groundingSystemPrompt(for: slot)
                     let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize)
                     let stream = try await self.streamResponse(
@@ -458,11 +705,14 @@ final actor AppLlamaService {
                         rawOutput += chunk
                     }
                     let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                    let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(
                         slot: slot,
                         request: groundedRequest,
                         output: sanitized,
-                        parseError: AgentTurnParser.parse(sanitized).parseError?.rawValue
+                        parseError: AgentTurnParser.parse(sanitized).parseError?.rawValue,
+                        generationElapsedMs: elapsedMs,
+                        outputTokenCount: max(0, sanitized.split(whereSeparator: { $0.isWhitespace }).count)
                     )
                     if !sanitized.isEmpty {
                         continuation.yield(.text(sanitized))
@@ -578,7 +828,8 @@ final actor AppLlamaService {
         await chatRuntimes[slot]?.service.stopCompletion()
     }
 
-    private func recordModelTrace(slot: LumenModelSlot, request: GenerateRequest, output: String, parseError: String?) async {
+    private func recordModelTrace(slot: LumenModelSlot, request: GenerateRequest, output: String, parseError: String?, generationElapsedMs: Int? = nil, outputTokenCount: Int? = nil) async {
+        let adapterMetadata = currentAdapterTraceMetadata(slot: slot)
         AgentBehaviorTraceRecorder.record(
             AgentBehaviorTrace(
                 id: UUID(),
@@ -591,12 +842,62 @@ final actor AppLlamaService {
                 rawOutputPrefix: ModelOutputSanitizer.boundedPrefix(output, limit: 1600),
                 selectedToolID: AgentTurnParser.parse(output).action.map { ToolRouteGuard.canonicalToolID($0.tool) },
                 toolArguments: AgentTurnParser.parse(output).action?.args.stringCoerced ?? [:],
-                allowedToolIDs: [],
+                allowedToolIDs: allowedToolIDs(for: request.userMessage),
                 requiresApproval: nil,
                 approvalMode: nil,
                 parseError: parseError,
-                emittedFinalInActionTurn: output.lowercased().contains("\"final\"")
+                emittedFinalInActionTurn: output.lowercased().contains("\"final\""),
+                modelFamily: adapterMetadata.modelFamily,
+                baseModelPath: adapterMetadata.baseModelPath,
+                adapterID: adapterMetadata.adapterID,
+                adapterSlot: adapterMetadata.adapterSlot,
+                adapterPath: adapterMetadata.adapterPath,
+                adapterApplied: adapterMetadata.adapterApplied,
+                adapterScale: adapterMetadata.adapterScale,
+                adapterFailureReason: adapterMetadata.adapterFailureReason,
+                generationElapsedMs: generationElapsedMs,
+                firstTokenLatencyMs: nil,
+                outputTokenCount: outputTokenCount
             )
+        )
+    }
+
+
+
+    private func allowedToolIDs(for prompt: String) -> [String] {
+        var ids: Set<String> = []
+        let lines = prompt.split(whereSeparator: \.isNewline).map(String.init)
+        var insideAvailableTools = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed == "Available tools:" {
+                insideAvailableTools = true
+                continue
+            }
+            if insideAvailableTools, trimmed.hasSuffix(":") && !trimmed.hasPrefix("-") {
+                insideAvailableTools = false
+            }
+            guard insideAvailableTools, trimmed.hasPrefix("- ") else { continue }
+            let candidate = String(trimmed.dropFirst(2)).split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
+            if !candidate.isEmpty { ids.insert(ToolRouteGuard.canonicalToolID(candidate)) }
+        }
+        if ids.isEmpty {
+            ids = IntentRouter.classify(prompt).allowedToolIDs
+        }
+        return Array(ids).sorted()
+    }
+
+    private func currentAdapterTraceMetadata(slot: LumenModelSlot) -> LlamaAdapterTraceMetadata {
+        let loaded = roleAdapters[slot]
+        return LlamaAdapterTraceMetadata(
+            modelFamily: sharedChatRuntime == nil ? nil : LumenModelFamily.qwen3.rawValue,
+            baseModelPath: sharedChatBasePath,
+            adapterID: loaded.map { "\($0.slot.rawValue):\($0.path)" },
+            adapterSlot: loaded?.slot.rawValue,
+            adapterPath: loaded?.path,
+            adapterApplied: activeAdapterSlot == slot && loaded != nil,
+            adapterScale: loaded?.scale,
+            adapterFailureReason: lastAdapterFailureReason
         )
     }
 

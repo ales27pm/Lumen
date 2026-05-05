@@ -177,3 +177,51 @@ struct LumenFleetTests {
         #expect(snapshot.assignments.values.allSatisfy { $0.modelID != cortexAdapter.id })
     }
 }
+
+struct Qwen3AdapterRuntimeCatalogTests {
+    @Test func qwen3BootstrapCatalogUsesOneSharedChatBaseAndSixAdapters() async throws {
+        let models = LumenModelFleetCatalog.qwen3BootstrapModels
+        let chatModels = models.filter { $0.role == .chat }
+        let adapters = models.filter { $0.role == .roleAdapter }
+        #expect(chatModels.map(\.fileName) == ["lumen-qwen3-fast-shared-q4_k_m.gguf"])
+        #expect(models.contains { $0.role == .embedding && $0.fileName == "Qwen3-Embedding-0.6B-Q8_0.gguf" })
+        #expect(Set(adapters.map(\.fileName)) == [
+            "lumen-cortex-lora.gguf",
+            "lumen-executor-lora.gguf",
+            "lumen-mouth-lora.gguf",
+            "lumen-mimicry-lora.gguf",
+            "lumen-rem-lora.gguf",
+            "lumen-fleet-lora.gguf",
+        ])
+        #expect(models.allSatisfy { !$0.fileName.contains("release-bake") })
+    }
+
+    @Test func qwen25BootstrapCatalogStillProvidesBaselineChatAndEmbedding() async throws {
+        let models = LumenModelFleetCatalog.qwen25BootstrapModels
+        #expect(models.contains { $0.role == .chat && $0.fileName.contains("qwen2.5") })
+        #expect(models.contains { $0.role == .embedding })
+    }
+
+    @Test func traceInitializerDefaultsAdapterMetadataForBackwardCompatibility() async throws {
+        let trace = AgentBehaviorTrace(
+            id: UUID(),
+            createdAt: Date(),
+            event: .modelTurn,
+            slot: "cortex",
+            stage: "unit",
+            intent: nil,
+            promptPrefix: "",
+            rawOutputPrefix: "",
+            selectedToolID: nil,
+            toolArguments: [:],
+            allowedToolIDs: ["calendar.create"],
+            requiresApproval: nil,
+            approvalMode: nil,
+            parseError: nil,
+            emittedFinalInActionTurn: false
+        )
+        #expect(trace.allowedToolIDs == ["calendar.create"])
+        #expect(trace.adapterApplied == nil)
+        #expect(trace.adapterSlot == nil)
+    }
+}

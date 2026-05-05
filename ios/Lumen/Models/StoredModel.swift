@@ -30,7 +30,7 @@ final class StoredModel {
 }
 
 enum ModelRole: String, Codable, CaseIterable, Sendable {
-    case chat, embedding
+    case chat, embedding, roleAdapter
 }
 
 nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
@@ -139,7 +139,7 @@ nonisolated struct CatalogModel: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum ModelCatalog {
-    static let defaultOnboardingModelID = "fleet-bootstrap-qwen3-chat-base-q4"
+    static let defaultOnboardingModelID = "fleet-bootstrap-qwen3-fast-shared-q4"
     static let featured: [CatalogModel] = uniqueByArtifact(LumenModelFleetCatalog.selectableBootstrapModels)
 
     // Keeps compatibility if a build expects the previous default identifiers.

@@ -48,7 +48,7 @@ RUNTIME_AUDIT_EXCLUDE_HINTS = (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class StepResult:
     """Execution outcome for a single pipeline step."""
 
@@ -95,7 +95,7 @@ class StepResult:
         }
 
 
-@dataclass(slots=True)
+@dataclass
 class LoopArtifacts:
     """Loaded improve-loop artifacts consumed by the dashboard."""
 

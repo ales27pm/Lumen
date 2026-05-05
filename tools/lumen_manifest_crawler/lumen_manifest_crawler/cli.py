@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 import typer
 from rich.console import Console
@@ -29,7 +29,7 @@ app.add_typer(generate_app, name="generate")
 console = Console()
 
 
-def _split_command(value: str | None) -> tuple[str, ...]:
+def _split_command(value: Optional[str]) -> tuple[str, ...]:
     if not value or not value.strip():
         return ()
     return tuple(shlex.split(value))
@@ -40,11 +40,11 @@ def generate(
     root: Path = typer.Option(Path("."), "--root", help="Repository root to scan."),
     output: Path = typer.Option(Path("generated/agent_manifest"), "--output", help="Output directory."),
     pretty: bool = typer.Option(False, "--pretty", help="Also write pretty formatted manifest."),
-    runtime_audit: Annotated[list[Path] | None, typer.Option("--runtime-audit", help="RuntimeManifestAuditor JSON report file or directory. Can be passed multiple times.")] = None,
+    runtime_audit: Annotated[Optional[list[Path]], typer.Option("--runtime-audit", help="RuntimeManifestAuditor JSON report file or directory. Can be passed multiple times.")] = None,
     deterministic: bool = typer.Option(True, "--deterministic/--non-deterministic", help="Use deterministic timestamps and splits for CI-stable generated files."),
     generate_system_prompts: bool = typer.Option(False, "--generate-system-prompts", help="Generate fleet_system_prompts.json, AgentBehaviorManifest.md, and cross-model training artifacts."),
     export_md: bool = typer.Option(False, "--export-md", help="Generate only AgentBehaviorManifest.md, unless full fleet artifact generation is also requested."),
-    cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross_model_training.jsonl. Defaults to <output>/cross_model_training."),
+    cross_model_train_dir: Optional[Path] = typer.Option(None, "--cross-model-train-dir", help="Directory for cross_model_training.jsonl. Defaults to <output>/cross_model_training."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Generate into a temporary directory and print a machine-readable diff without changing output."),
     diff: bool = typer.Option(False, "--diff", help="Alias for --dry-run."),
     incremental: bool = typer.Option(False, "--incremental", help="Skip generation when the current manifest fingerprint matches the previous output and no runtime audit is provided."),
@@ -52,9 +52,9 @@ def generate(
     fail_on_change: bool = typer.Option(False, "--fail-on-change", help="Exit non-zero if generated outputs leave tracked or untracked git changes."),
     fail_on_validation: bool = typer.Option(True, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero on hard validation failures."),
     generate_agent_fine_tuning: bool = typer.Option(False, "--generate-agent-fine-tuning", help="Generate per-agent fine-tuning datasets."),
-    fine_tuning_output: Path | None = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
-    unsloth_output: Path | None = typer.Option(None, "--unsloth-output", help="Alias for --fine-tuning-output."),
-    agent_filter: str | None = typer.Option(None, "--agent-filter", help="Comma-separated agent names to output."),
+    fine_tuning_output: Optional[Path] = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
+    unsloth_output: Optional[Path] = typer.Option(None, "--unsloth-output", help="Alias for --fine-tuning-output."),
+    agent_filter: Optional[str] = typer.Option(None, "--agent-filter", help="Comma-separated agent names to output."),
 ) -> None:
     """Generate AgentBehaviorManifest.json and state-of-the-art grounded datasets."""
     root = root.resolve()
@@ -159,20 +159,20 @@ def improve_loop(
     root: Path = typer.Option(Path("."), "--root", help="Repository root to scan."),
     output: Path = typer.Option(Path("generated/agent_manifest"), "--output", help="Manifest and dataset output directory."),
     loop_output: Path = typer.Option(Path("generated/agent_improvement_loop"), "--loop-output", help="Loop state, gap report, and next-action prompt output directory."),
-    runtime_audit: Annotated[list[Path] | None, typer.Option("--runtime-audit", help="In-app dataset package JSON file or directory. Can be passed multiple times.")] = None,
+    runtime_audit: Annotated[Optional[list[Path]], typer.Option("--runtime-audit", help="In-app dataset package JSON file or directory. Can be passed multiple times.")] = None,
     deterministic: bool = typer.Option(True, "--deterministic/--non-deterministic", help="Use deterministic timestamps and splits."),
     pretty: bool = typer.Option(True, "--pretty/--no-pretty", help="Write pretty manifest output."),
     strict: bool = typer.Option(True, "--strict/--no-strict", help="Promote selected validation warnings to gaps."),
     generate_system_prompts: bool = typer.Option(True, "--generate-system-prompts/--no-generate-system-prompts", help="Generate fleet prompts and cross-model artifacts."),
     generate_agent_fine_tuning: bool = typer.Option(True, "--generate-agent-fine-tuning/--no-generate-agent-fine-tuning", help="Generate per-agent fine-tuning datasets."),
-    fine_tuning_output: Path | None = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
-    cross_model_train_dir: Path | None = typer.Option(None, "--cross-model-train-dir", help="Directory for cross-model training artifacts."),
-    build_command: str | None = typer.Option(None, "--build-command", help="Optional build/TestFlight archive command to run after generation. Space-separated."),
-    test_command: str | None = typer.Option(None, "--test-command", help="Optional local validation command to run before generation. Space-separated."),
-    train_command: str | None = typer.Option(None, "--train-command", help="Optional training command to run after generation. Space-separated."),
+    fine_tuning_output: Optional[Path] = typer.Option(None, "--fine-tuning-output", help="Output directory for per-agent fine-tuning datasets."),
+    cross_model_train_dir: Optional[Path] = typer.Option(None, "--cross-model-train-dir", help="Directory for cross-model training artifacts."),
+    build_command: Optional[str] = typer.Option(None, "--build-command", help="Optional build/TestFlight archive command to run after generation. Space-separated."),
+    test_command: Optional[str] = typer.Option(None, "--test-command", help="Optional local validation command to run before generation. Space-separated."),
+    train_command: Optional[str] = typer.Option(None, "--train-command", help="Optional training command to run after generation. Space-separated."),
     dry_run_commands: bool = typer.Option(False, "--dry-run-commands", help="Record build/test/train commands without executing them."),
     app_run_mode: str = typer.Option("testflight", "--app-run-mode", help="Live app runtime mode. Default: testflight."),
-    testflight_build_label: str | None = typer.Option(None, "--testflight-build-label", help="Human-readable TestFlight build/version label for the runbook."),
+    testflight_build_label: Optional[str] = typer.Option(None, "--testflight-build-label", help="Human-readable TestFlight build/version label for the runbook."),
     require_testflight_runtime_audit: bool = typer.Option(False, "--require-testflight-runtime-audit", help="Treat missing TestFlight in-app audit JSON as an error gap."),
     testflight_scenario_limit: int = typer.Option(120, "--testflight-scenario-limit", min=1, help="Maximum scenarios to write for TestFlight replay."),
     fail_on_validation: bool = typer.Option(False, "--fail-on-validation/--no-fail-on-validation", help="Exit non-zero if the loop finds critical/error gaps."),

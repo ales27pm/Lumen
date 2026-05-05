@@ -30,6 +30,7 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -178,6 +179,16 @@ def env(root: Path, args: argparse.Namespace) -> dict[str, str]:
         out.setdefault("PYTHONHASHSEED", str(int(args.seed)))
         out.setdefault("LUMEN_TRAIN_SEED", str(int(args.seed)))
     return out
+
+
+def training_python() -> str:
+    configured = os.environ.get("LUMEN_TRAIN_PYTHON", "").strip()
+    if configured:
+        return configured
+    if sys.version_info >= (3, 10):
+        return sys.executable
+    py310 = shutil.which("python3.10")
+    return py310 or sys.executable
 
 
 # ---------------------------------------------------------------------------
@@ -712,6 +723,8 @@ def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineS
         for err in config_errors:
             term.fail(err)
         raise SystemExit(2)
+    train_py = training_python()
+    term.info(f"training interpreter: {train_py}")
 
     results: list[RunResult] = []
     for agent in parse_agents(args.agents):
@@ -719,7 +732,7 @@ def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineS
         if not cfg.exists():
             raise SystemExit(f"Missing config: {cfg}")
         argv: list[str | Path] = [
-            sys.executable,
+            train_py,
             "tools/fine_tuning/unsloth/train_sft.py",
             "--config",
             str(cfg),
@@ -840,7 +853,7 @@ def upload_adapters(term: Terminal, root: Path, args: argparse.Namespace, state:
     out_dir = resolve(root, args.lora_gguf_dir)
     if not out_dir.exists() and not args.dry_run:
         raise SystemExit(f"Missing adapter GGUF dir: {out_dir}")
-    create = ["hf", "repos", "create", args.adapter_repo, "--type", "model", "--exist-ok", "--yes"]
+    create = ["hf", "repos", "create", args.adapter_repo, "--type", "model", "--exist-ok"]
     if args.hf_private:
         create.append("--private")
     return [
@@ -872,7 +885,7 @@ def upload_base(term: Terminal, root: Path, args: argparse.Namespace, state: Pip
     base = resolve(root, args.base_file)
     if not base.exists() and not args.dry_run:
         raise SystemExit(f"Missing shared base GGUF: {base}")
-    create = ["hf", "repos", "create", args.base_repo, "--type", "model", "--exist-ok", "--yes"]
+    create = ["hf", "repos", "create", args.base_repo, "--type", "model", "--exist-ok"]
     if args.hf_private:
         create.append("--private")
     upload_cmd = ["hf"]

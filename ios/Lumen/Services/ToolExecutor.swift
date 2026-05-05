@@ -22,6 +22,9 @@ final class ToolExecutor {
         guard ToolRouteGuard.canExecuteTool(id, arguments: stringArguments, approval: approval) else {
             return ToolRouteGuard.approvalRequiredMessage(for: id)
         }
+        if let permissionFailure = await ToolRouteGuard.ensurePermissionIfNeeded(for: id, arguments: stringArguments) {
+            return permissionFailure
+        }
 
         switch id {
         case "calendar.create":
@@ -156,6 +159,42 @@ final class ToolExecutor {
 }
 
 nonisolated enum ToolRouteGuard {
+    @MainActor
+    static func ensurePermissionIfNeeded(for canonicalToolID: String, arguments: [String: String]) async -> String? {
+        if canonicalToolID == "weather" {
+            let value = (arguments["location"] ?? arguments["city"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !value.isEmpty, value != "here", value != "current", value != "current location" {
+                return nil
+            }
+        }
+        guard let tool = ToolRegistry.find(id: canonicalToolID),
+              let permissionKind = tool.permissionKind else {
+            return nil
+        }
+
+        let permissions = PermissionsCenter.shared
+        let initial = permissions.state(permissionKind)
+        switch initial {
+        case .granted:
+            return nil
+        case .notDetermined:
+            await permissions.request(permissionKind)
+            let updated = permissions.state(permissionKind)
+            if updated == .granted || updated == .limited {
+                return nil
+            }
+            return permissionUnavailableMessage(for: permissionKind)
+        case .limited:
+            return nil
+        case .denied, .restricted, .unavailable:
+            return permissionUnavailableMessage(for: permissionKind)
+        }
+    }
+
+    private static func permissionUnavailableMessage(for permissionKind: PermissionKind) -> String {
+        "I need \(permissionKind.title.lowercased()) access to do that. Please enable it in Settings or provide an alternative."
+    }
+
     static func canonicalToolID(_ raw: String) -> String {
         let id = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             .replacingOccurrences(of: "-", with: ".")

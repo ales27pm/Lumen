@@ -4,6 +4,8 @@ import CoreLocation
 /// One-shot location fetch with a per-call delegate — no shared singleton state.
 @MainActor
 enum LocationProbe {
+    @MainActor private static var activeDelegates: [UUID: AnyObject] = [:]
+
     static func currentCoordinate(timeout: TimeInterval = 8) async -> CLLocationCoordinate2D? {
         let manager = CLLocationManager()
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
@@ -12,12 +14,13 @@ enum LocationProbe {
             return nil
         }
 
-        let holder = DelegateHolder()
         return await withCheckedContinuation { (cont: CheckedContinuation<CLLocationCoordinate2D?, Never>) in
+            let token = UUID()
             let delegate = SingleShotLocationDelegate(manager: manager) { coord in
+                activeDelegates[token] = nil
                 cont.resume(returning: coord)
             }
-            holder.delegate = delegate
+            activeDelegates[token] = delegate
             manager.delegate = delegate
 
             Task { @MainActor in
@@ -26,7 +29,6 @@ enum LocationProbe {
             }
 
             delegate.begin()
-            _ = holder
         }
     }
 
@@ -38,12 +40,13 @@ enum LocationProbe {
             return "Location access was denied."
         }
 
-        let holder = DelegateHolder()
         return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
+            let token = UUID()
             let delegate = SingleShotDescriptionDelegate(manager: manager) { text in
+                activeDelegates[token] = nil
                 cont.resume(returning: text)
             }
-            holder.delegate = delegate
+            activeDelegates[token] = delegate
             manager.delegate = delegate
 
             Task { @MainActor in
@@ -52,14 +55,8 @@ enum LocationProbe {
             }
 
             delegate.begin()
-            _ = holder
         }
     }
-}
-
-@MainActor
-private final class DelegateHolder {
-    var delegate: AnyObject?
 }
 
 private enum LocationAuthorizationAction {

@@ -177,7 +177,8 @@ outputs:
   models/lora_qwen3_bootstrap/fleet
 ```
 
-Expected adapter conversion:
+Expected adapter conversion (base model is mandatory — either `--base-model-id`
+or `--base` pointing at a local config dir):
 
 ```bash
 mkdir -p models/lora_qwen3_gguf
@@ -185,16 +186,19 @@ mkdir -p models/lora_qwen3_gguf
 for agent in cortex executor mouth mimicry rem fleet; do
   python ~/.unsloth/llama.cpp/convert_lora_to_gguf.py \
     "models/lora_qwen3_bootstrap/$agent" \
-    --outfile "models/lora_qwen3_gguf/lumen-$agent-lora.gguf"
+    --outfile "models/lora_qwen3_gguf/lumen-$agent-lora.gguf" \
+    --base-model-id Qwen/Qwen3-1.7B
 done
 ```
 
-Expected adapter upload:
+Expected adapter upload (current Hugging Face CLI uses `hf repos create`, not
+the legacy `hf repo create`):
 
 ```bash
-hf repo create ales27pm/lumen-qwen3-bootstrap-adapters-gguf \
+hf repos create ales27pm/lumen-qwen3-bootstrap-adapters-gguf \
   --type model \
   --private \
+  --exist-ok \
   --yes
 
 hf upload ales27pm/lumen-qwen3-bootstrap-adapters-gguf \
@@ -202,6 +206,43 @@ hf upload ales27pm/lumen-qwen3-bootstrap-adapters-gguf \
   . \
   --repo-type model
 ```
+
+For the shared base GGUF (large file, resumable), prefer:
+
+```bash
+hf upload-large-folder ales27pm/lumen-qwen3-bootstrap-gguf \
+  models/base_qwen3_fast \
+  --repo-type model
+```
+
+### Resumable terminal AIO loop
+
+The terminal launcher `tools/lumen_terminal_improve_loop.py` is the single
+entrypoint for running the full local cycle. It records each stage's argv,
+input hash, output paths and status to `pipeline_state.json`, so reruns can
+skip stages whose inputs are unchanged.
+
+```bash
+python tools/lumen_terminal_improve_loop.py \
+  --mode full \
+  --resume \
+  --state-file generated/agent_improvement_loop/pipeline_state.json \
+  --config-dir tools/fine_tuning/unsloth/configs_qwen3_bootstrap \
+  --agents cortex,executor,mouth,mimicry,rem,fleet \
+  --base-model-id Qwen/Qwen3-1.7B \
+  --seed 42 \
+  --assistant-only-loss \
+  --hf-private \
+  --fail-if-missing-qwen3-config \
+  --stop-on-error
+```
+
+Preflight strictness:
+
+- Fails if `tools/fine_tuning/unsloth/configs_qwen3_bootstrap/` is missing.
+- Fails if any agent config in that dir still references a Qwen2.x base.
+- Fails if `merge_adapters_by_default` or `release_bake_enabled_by_default`
+  is true in any Qwen3 bootstrap config.
 
 ### Release-bake policy
 
@@ -280,6 +321,9 @@ A future improve-loop or Codex change should be rejected if any of these become 
 8. `outputTokenCount` is populated from whitespace word count.
 9. Runtime traces omit `adapterApplied` or `adapterSlot` for Qwen3 model turns.
 10. `export_gguf.py` merges adapters by default without `--release-bake`.
+11. `tools/lumen_terminal_improve_loop.py` calls the legacy `hf repo create`
+    or invokes `convert_lora_to_gguf.py` without `--base` / `--base-model-id`.
+12. Any Qwen3 bootstrap config references a non-Qwen3 base model.
 
 ## Required test coverage
 

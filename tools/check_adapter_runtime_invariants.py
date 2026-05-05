@@ -11,6 +11,7 @@ regressing to the slow five-full-GGUF runtime shape.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -24,6 +25,9 @@ SLOT_COORDINATOR = ROOT / "ios/Lumen/Services/SlotModelRuntimeCoordinator.swift"
 MODELS_VIEW = ROOT / "ios/Lumen/Views/ModelsView.swift"
 EXPORT_GGUF = ROOT / "tools/fine_tuning/unsloth/export_gguf.py"
 DOC = ROOT / "docs/ADAPTER_RUNTIME_IMPROVE_LOOP.md"
+TERMINAL_LOOP = ROOT / "tools/lumen_terminal_improve_loop.py"
+TRAIN_SFT = ROOT / "tools/fine_tuning/unsloth/train_sft.py"
+QWEN3_CONFIG_DIR = ROOT / "tools/fine_tuning/unsloth/configs_qwen3_bootstrap"
 
 EXPECTED_ADAPTERS = {
     "lumen-cortex-lora.gguf",
@@ -162,6 +166,83 @@ def check_docs() -> None:
     require("Improve-loop drift checks" in text, "Adapter runtime doctrine doc must include improve-loop drift checks.")
 
 
+def check_terminal_loop() -> None:
+    text = read(TERMINAL_LOOP)
+    require(
+        "hf\", \"repos\", \"create\"" in text or '"repos", "create"' in text,
+        "Terminal improve-loop must call 'hf repos create' (current Hugging Face CLI), not the legacy 'hf repo create'.",
+    )
+    require(
+        "hf repo create" not in text,
+        "Terminal improve-loop must not reference the legacy 'hf repo create' subcommand.",
+    )
+    require(
+        "--base-model-id" in text and "--base" in text,
+        "Terminal improve-loop convert stage must thread an explicit --base / --base-model-id to convert_lora_to_gguf.py.",
+    )
+    require(
+        "_resolve_base_for_convert" in text,
+        "Terminal improve-loop must validate base model resolution before invoking the LoRA→GGUF converter.",
+    )
+    require(
+        "pipeline_state.json" in text and "--resume" in text and "--state-file" in text,
+        "Terminal improve-loop must support resumable pipeline_state.json with --resume / --state-file.",
+    )
+    require(
+        "configs_qwen3_bootstrap" in text,
+        "Terminal improve-loop must default to the Qwen3 bootstrap config dir.",
+    )
+    require(
+        "validate_qwen3_configs" in text,
+        "Terminal improve-loop must include a strict Qwen3 config validator (no Qwen2.x base in the bootstrap dir).",
+    )
+
+
+def check_qwen3_configs_alignment() -> None:
+    require(QWEN3_CONFIG_DIR.exists(), f"missing Qwen3 bootstrap config dir: {QWEN3_CONFIG_DIR.relative_to(ROOT)}")
+    forbidden = ("qwen2", "qwen-2")
+    for cfg_path in sorted(QWEN3_CONFIG_DIR.glob("*.json")):
+        try:
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            fail(f"invalid JSON in {cfg_path.relative_to(ROOT)}: {exc}")
+        base = str(cfg.get("base_model_name", "")).lower()
+        require(
+            "qwen3" in base,
+            f"{cfg_path.relative_to(ROOT)}: base_model_name must reference Qwen3 (got '{cfg.get('base_model_name')}').",
+        )
+        for token in forbidden:
+            require(
+                token not in base,
+                f"{cfg_path.relative_to(ROOT)}: base_model_name still references a pre-Qwen3 family ('{cfg.get('base_model_name')}').",
+            )
+        require(
+            cfg.get("merge_adapters_by_default", False) is False,
+            f"{cfg_path.relative_to(ROOT)}: merge_adapters_by_default must remain false (adapter-first).",
+        )
+        require(
+            cfg.get("release_bake_enabled_by_default", False) is False,
+            f"{cfg_path.relative_to(ROOT)}: release_bake_enabled_by_default must remain false (adapter-first).",
+        )
+
+
+def check_train_sft_reproducibility() -> None:
+    text = read(TRAIN_SFT)
+    require("--seed" in text, "train_sft.py must accept --seed for reproducibility.")
+    require(
+        "--resume-from-checkpoint" in text,
+        "train_sft.py must accept --resume-from-checkpoint for resumable training.",
+    )
+    require(
+        "--assistant-only-loss" in text or "assistant_only_loss" in text,
+        "train_sft.py must support assistant-only loss for instruction-tuning.",
+    )
+    require(
+        "train_manifest.json" in text,
+        "train_sft.py must write a train_manifest.json with reproducibility metadata.",
+    )
+
+
 def main() -> int:
     checks = [
         check_catalog,
@@ -171,6 +252,9 @@ def main() -> int:
         check_models_view,
         check_export_policy,
         check_docs,
+        check_terminal_loop,
+        check_qwen3_configs_alignment,
+        check_train_sft_reproducibility,
     ]
     failures: list[str] = []
     for check in checks:

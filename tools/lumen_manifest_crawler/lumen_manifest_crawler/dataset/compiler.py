@@ -948,7 +948,24 @@ def _repair_for_runtime_failure(failure: dict[str, Any], known_tools: list[str])
     if failure_type in {"argument_mismatch", "missing_live_argument", "unmanifested_live_argument", "missing_required_tool_argument"}:
         return {"action": "regenerate_executor_tool_call_samples", "focusToolID": scenario, "expectedArguments": failure.get("expected"), "actualArgument": actual}
     if failure_type in {"approval_mismatch", "approval_sensitive_tool_selected"}:
-        return {"action": "regenerate_approval_boundary_samples", "focusToolID": scenario}
+        return {
+            "action": "regenerate_approval_boundary_samples",
+            "focusToolID": scenario,
+            "alsoAdd": ["approval_boundary_dpo_pairs", "approval_confirmation_ui_regression_eval"],
+        }
+    if failure_type == "trace_tool_without_allowed_set":
+        return {
+            "action": "add_tool_allowed_set_trace_repairs",
+            "focusToolID": actual or scenario,
+            "alsoAdd": ["rem_repair_sample", "trace_allowed_set_regression_eval"],
+            "knownToolIDs": known_tools,
+        }
+    if failure_type == "trace_parse_error":
+        return {
+            "action": "add_strict_trace_json_format_samples",
+            "failure": actual,
+            "alsoAdd": ["rem_repair_sample", "trace_parse_regression_eval"],
+        }
     if "sentinel" in failure_type:
         return {"action": "add_sentinel_suppression_samples", "focus": scenario}
     if "tool" in failure_type:

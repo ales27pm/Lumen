@@ -137,3 +137,72 @@ Because `SwiftLlama.LlamaService` hides its internal `Llama` actor/context, the 
 - Codex could inspect the pinned Swift package from GitHub but could not compile the iOS target locally because `xcodebuild` is unavailable.
 - If the locally resolved Swift package differs from exact version `1.2.0`, adapter method spellings may differ. Re-resolve packages in Xcode and verify the methods above.
 - The direct app-side adapter runtime intentionally avoids fake APIs, but its generation loop should be validated with a real GGUF base and LoRA adapter on device/simulator.
+
+## Follow-up hardening pass
+
+This follow-up was added after PR #171 review to harden the adapter runtime without re-architecting the already-open PR.
+
+### Adapter stacking fix
+
+`AppLlamaService.activateRoleAdapter(slot:)` now clears all active LoRA adapters immediately before applying the selected role adapter. This makes each role switch explicitly single-adapter:
+
+1. clear all active adapters
+2. apply selected role adapter
+3. set `activeAdapterSlot` only after successful apply
+
+If apply fails, the runtime clears adapters again, sets `activeAdapterSlot = nil`, stores `lastAdapterFailureReason = error.localizedDescription`, and lets the coordinator continue with shared-base + role prompt fallback.
+
+### Fleet adapter behavior
+
+`lumen-fleet-lora.gguf` is cataloged and downloaded as a `.roleAdapter` artifact with role tag `fleet`. It is not mapped through `.embedding`, is not selected as the active embedding model, and is not used by any live generation slot yet. The live runtime currently activates only cortex, executor, mouth, mimicry, and rem adapters. The fleet adapter is downloaded-only until a safe live Fleet runtime role is introduced deliberately.
+
+### SwiftLlama symbol validation status
+
+The pinned `swift-llama-cpp` package version remains `1.2.0`. The follow-up rechecked these public symbols in that package:
+
+- `LlamaModel(path:parameters:)`
+- `LlamaContext(model:parameters:)`
+- `LlamaBatch(initialSize:)`
+- `LlamaBatch.size`
+- `LlamaBatch.setLastTokenLogits(_:)`
+- `LlamaSampler(config:model:)`
+- `LlamaSampler.sample(context:)`
+- `LlamaModel.applyChatTemplate(to:addAssistant:)`
+- `LlamaModel.tokenize(text:addBos:special:)`
+- `LlamaModel.shouldAddBos()`
+- `LlamaModel.isEogToken(_:)`
+- `LlamaModel.piece(from:)`
+- `LlamaLoraAdapter(model:path:)`
+- `LlamaContext.apply(loraAdapter:scale:)`
+- `LlamaContext.removeAllLoraAdapters()`
+- `LlamaContext.clearKVCache()`
+- `LlamaContext.decode(batch:)`
+
+`LlamaSampler.sample(context:)` is documented by the wrapper as using `llama_sampler_sample(..., idx: -1)` and accepting/updating sampler state internally. No extra manual `accept(token:)` call was added.
+
+### Direct generation loop risks
+
+The direct generation loop still needs local Xcode validation because Codex cannot run `xcodebuild`. It deliberately clears KV cache for each completion for correctness and to avoid prompt residue between roles. This is not optimal for latency, but it is the safer behavior until a local Xcode/device smoke test validates adapter switching and output quality.
+
+### Local validation command
+
+Do not run this in Codex. Run locally on a Mac with Xcode:
+
+```bash
+xcodebuild -project ios/Lumen.xcodeproj -scheme Lumen -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
+```
+
+### Real-device smoke test plan
+
+1. Pull branch `codex/refactor-lumen-ios-model-runtime-architecture`.
+2. Build locally with Xcode.
+3. Install on device.
+4. Settings → Fleet → Qwen3 fast adapter bootstrap.
+5. Download / repair selected family.
+6. Confirm one shared base + embedding + adapters downloaded.
+7. Run a simple chat.
+8. Confirm first response is Mouth-only and no Cortex/Executor/Mimicry synchronous path ran.
+9. Run a tool request.
+10. Confirm Cortex → Executor → Mouth path.
+11. Export runtime audit.
+12. Check traces show `adapterApplied=true` for relevant slots and no adapter stacking.

@@ -316,6 +316,7 @@ final actor AppLlamaService {
             return
         }
         do {
+            runtime.clearAdapters()
             try runtime.apply(adapter: loaded.adapter, scale: loaded.scale)
             activeAdapterSlot = slot
             lastAdapterFailureReason = nil
@@ -842,7 +843,7 @@ final actor AppLlamaService {
                 rawOutputPrefix: ModelOutputSanitizer.boundedPrefix(output, limit: 1600),
                 selectedToolID: AgentTurnParser.parse(output).action.map { ToolRouteGuard.canonicalToolID($0.tool) },
                 toolArguments: AgentTurnParser.parse(output).action?.args.stringCoerced ?? [:],
-                allowedToolIDs: allowedToolIDs(for: request.userMessage),
+                allowedToolIDs: allowedToolIDs(for: request.userMessage, slot: slot),
                 requiresApproval: nil,
                 approvalMode: nil,
                 parseError: parseError,
@@ -864,7 +865,7 @@ final actor AppLlamaService {
 
 
 
-    private func allowedToolIDs(for prompt: String) -> [String] {
+    private func allowedToolIDs(for prompt: String, slot: LumenModelSlot) -> [String] {
         var ids: Set<String> = []
         let lines = prompt.split(whereSeparator: \.isNewline).map(String.init)
         var insideAvailableTools = false
@@ -881,7 +882,7 @@ final actor AppLlamaService {
             let candidate = String(trimmed.dropFirst(2)).split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
             if !candidate.isEmpty { ids.insert(ToolRouteGuard.canonicalToolID(candidate)) }
         }
-        if ids.isEmpty {
+        if ids.isEmpty, slot == .cortex || slot == .executor {
             ids = IntentRouter.classify(prompt).allowedToolIDs
         }
         return Array(ids).sorted()

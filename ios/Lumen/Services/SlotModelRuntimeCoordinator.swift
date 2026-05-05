@@ -78,7 +78,7 @@ final class SlotModelRuntimeCoordinator {
             try await AppLlamaService.shared.activateRoleAdapter(slot: slot)
         } catch {
             logger.error("role_adapter_activation_failed slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
-            await AppLlamaService.shared.clearActiveRoleAdapter()
+            await AppLlamaService.shared.unloadRoleAdapter(slot: slot)
         }
     }
 

@@ -54,6 +54,8 @@ DEFAULT_BASE_FILE_NAME = "lumen-qwen3-fast-shared-q4_k_m.gguf"
 DEFAULT_BASE_FILE = Path("models/base_qwen3_fast") / DEFAULT_BASE_FILE_NAME
 DEFAULT_STATE_FILE = Path("generated/agent_improvement_loop/pipeline_state.json")
 DEFAULT_BASE_MODEL_ID = "Qwen/Qwen3-1.7B"
+ADAPTER_RUNTIME_INVARIANTS_SCRIPT = Path("tools/check_adapter_runtime_invariants.py")
+LOOP_STATE_FILE_NAME = "loop_state.json"
 
 # Substrings that indicate a config still points at the pre-Qwen3 family. The
 # Qwen3 bootstrap config dir must NEVER reference Qwen2.x bases.
@@ -83,6 +85,15 @@ RUNTIME_EXCLUDE_HINTS = (
     "dataset_manifest",
     "visual_improve_loop_summary",
 )
+RUNTIME_JSON_KEY_HINTS = {
+    "traces",
+    "events",
+    "failures",
+    "runtime",
+    "toolcalls",
+    "tool_calls",
+    "scenarioresults",
+}
 
 
 @dataclass
@@ -180,7 +191,7 @@ def _hash_paths(root: Path, paths: Iterable[Path]) -> str:
     for path in paths:
         try:
             resolved = path.resolve()
-        except Exception:
+        except (OSError, RuntimeError):
             continue
         if not resolved.exists():
             continue
@@ -188,7 +199,7 @@ def _hash_paths(root: Path, paths: Iterable[Path]) -> str:
     for path in sorted(seen):
         try:
             stat = path.stat()
-        except Exception:
+        except OSError:
             continue
         hasher.update(rel(root, path).encode("utf-8"))
         hasher.update(b"|")
@@ -213,7 +224,7 @@ class PipelineState:
             return
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             return
         for name, raw in (payload.get("stages") or {}).items():
             if not isinstance(raw, dict):
@@ -269,6 +280,47 @@ class PipelineState:
         )
 
 
+def _record_stage(
+    state: PipelineState | None,
+    *,
+    root: Path,
+    name: str,
+    status: str,
+    argv: Sequence[str],
+    input_paths: Sequence[Path],
+    input_hash: str,
+    output_paths: Sequence[Path],
+    returncode: int = 0,
+    elapsed_s: float = 0.0,
+    started_at: str = "",
+    finished_at: str = "",
+    note: str = "",
+) -> None:
+    if state is None:
+        return
+    state.records[name] = StageRecord(
+        name=name,
+        status=status,
+        returncode=returncode,
+        elapsed_s=elapsed_s,
+        started_at=started_at,
+        finished_at=finished_at,
+        argv=list(argv),
+        inputs=[rel(root, p) for p in input_paths],
+        input_hash=input_hash,
+        outputs=[rel(root, p) for p in output_paths],
+        note=note,
+    )
+    state.write()
+
+
+def _stream_output(process: subprocess.Popen[str], quiet_commands: bool) -> None:
+    assert process.stdout is not None
+    for line in process.stdout:
+        if not quiet_commands:
+            print(line.rstrip())
+
+
 def run(
     term: Terminal,
     root: Path,
@@ -297,19 +349,19 @@ def run(
 
     if args.dry_run:
         term.warn("dry-run: command not executed")
-        if state is not None:
-            state.records[name] = StageRecord(
-                name=name,
-                status="skipped",
-                argv=printable,
-                inputs=[rel(root, p) for p in input_paths],
-                input_hash=input_hash,
-                outputs=[rel(root, p) for p in (outputs or [])],
-                started_at=started_iso,
-                finished_at=started_iso,
-                note="dry-run",
-            )
-            state.write()
+        _record_stage(
+            state,
+            root=root,
+            name=name,
+            status="skipped",
+            argv=printable,
+            input_paths=input_paths,
+            input_hash=input_hash,
+            output_paths=list(outputs or []),
+            started_at=started_iso,
+            finished_at=started_iso,
+            note="dry-run",
+        )
         return RunResult(name, 0, 0.0)
 
     process = subprocess.Popen(
@@ -322,10 +374,7 @@ def run(
         bufsize=1,
         errors="replace",
     )
-    assert process.stdout is not None
-    for line in process.stdout:
-        if not args.quiet_commands:
-            print(line.rstrip())
+    _stream_output(process, args.quiet_commands)
     code = process.wait()
     elapsed = time.perf_counter() - started
     finished_iso = datetime.now(timezone.utc).isoformat()
@@ -334,20 +383,20 @@ def run(
     else:
         term.fail(f"{name} failed with {code} after {elapsed:.1f}s")
 
-    if state is not None:
-        state.records[name] = StageRecord(
-            name=name,
-            status="ok" if code == 0 else "fail",
-            returncode=code,
-            elapsed_s=elapsed,
-            started_at=started_iso,
-            finished_at=finished_iso,
-            argv=printable,
-            inputs=[rel(root, p) for p in input_paths],
-            input_hash=input_hash,
-            outputs=[rel(root, p) for p in (outputs or [])],
-        )
-        state.write()
+    _record_stage(
+        state,
+        root=root,
+        name=name,
+        status="ok" if code == 0 else "fail",
+        returncode=code,
+        elapsed_s=elapsed,
+        started_at=started_iso,
+        finished_at=finished_iso,
+        argv=printable,
+        input_paths=input_paths,
+        input_hash=input_hash,
+        output_paths=list(outputs or []),
+    )
 
     if code != 0 and args.stop_on_error:
         raise SystemExit(code)
@@ -369,12 +418,12 @@ def runtime_json_candidate(path: Path) -> bool:
         return False
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return False
     if not isinstance(payload, dict):
         return False
     lowered_keys = {str(k).lower() for k in payload.keys()}
-    if lowered_keys.intersection({"traces", "events", "failures", "runtime", "toolcalls", "tool_calls", "scenarioresults"}):
+    if lowered_keys.intersection(RUNTIME_JSON_KEY_HINTS):
         return True
     sample = json.dumps(payload, ensure_ascii=False)[:30000].lower()
     return "adapterapplied" in sample or "agent grounding" in sample or "runtime" in sample or "trace" in sample
@@ -413,12 +462,52 @@ def print_runtime_jsons(term: Terminal, root: Path, paths: Sequence[Path]) -> No
         term.info(rel(root, path))
 
 
+def _audit_has_adapter_applied(audit_path: Path) -> bool:
+    try:
+        blob = audit_path.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+    return "adapterapplied" in blob
+
+
 # ---------------------------------------------------------------------------
 # Strict Qwen3 config validation
 # ---------------------------------------------------------------------------
 
 
-def validate_qwen3_configs(term: Terminal, root: Path, args: argparse.Namespace) -> list[str]:
+def _validate_qwen3_agent_config(root: Path, cfg_path: Path, agent: str) -> list[str]:
+    errors: list[str] = []
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"invalid JSON in {rel(root, cfg_path)}: {exc}"]
+
+    base = str(cfg.get("base_model_name", "")).lower()
+    if not base:
+        return [f"{rel(root, cfg_path)}: base_model_name is empty"]
+
+    if any(token in base for token in FORBIDDEN_BASE_TOKENS):
+        errors.append(
+            f"{rel(root, cfg_path)}: base_model_name '{cfg.get('base_model_name')}' "
+            "still points at a pre-Qwen3 family in the Qwen3 bootstrap config dir."
+        )
+    if not any(token in base for token in REQUIRED_BASE_TOKENS):
+        errors.append(
+            f"{rel(root, cfg_path)}: base_model_name '{cfg.get('base_model_name')}' "
+            "must reference Qwen3 in the Qwen3 bootstrap config dir."
+        )
+    if cfg.get("agent", "").strip().lower() != agent:
+        errors.append(f"{rel(root, cfg_path)}: agent field must equal '{agent}'")
+    if cfg.get("merge_adapters_by_default", False):
+        errors.append(f"{rel(root, cfg_path)}: merge_adapters_by_default must be false (adapter-first).")
+    if cfg.get("release_bake_enabled_by_default", False):
+        errors.append(
+            f"{rel(root, cfg_path)}: release_bake_enabled_by_default must be false (adapter-first)."
+        )
+    return errors
+
+
+def validate_qwen3_configs(root: Path, args: argparse.Namespace) -> list[str]:
     """Return a list of human-readable validation errors. Empty list = OK."""
     errors: list[str] = []
     cfg_dir = resolve(root, args.config_dir)
@@ -431,34 +520,7 @@ def validate_qwen3_configs(term: Terminal, root: Path, args: argparse.Namespace)
         if not cfg_path.exists():
             errors.append(f"missing Qwen3 bootstrap config: {rel(root, cfg_path)}")
             continue
-        try:
-            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            errors.append(f"invalid JSON in {rel(root, cfg_path)}: {exc}")
-            continue
-
-        base = str(cfg.get("base_model_name", "")).lower()
-        if not base:
-            errors.append(f"{rel(root, cfg_path)}: base_model_name is empty")
-            continue
-        if any(token in base for token in FORBIDDEN_BASE_TOKENS):
-            errors.append(
-                f"{rel(root, cfg_path)}: base_model_name '{cfg.get('base_model_name')}' "
-                "still points at a pre-Qwen3 family in the Qwen3 bootstrap config dir."
-            )
-        if not any(token in base for token in REQUIRED_BASE_TOKENS):
-            errors.append(
-                f"{rel(root, cfg_path)}: base_model_name '{cfg.get('base_model_name')}' "
-                "must reference Qwen3 in the Qwen3 bootstrap config dir."
-            )
-        if cfg.get("agent", "").strip().lower() != agent:
-            errors.append(f"{rel(root, cfg_path)}: agent field must equal '{agent}'")
-        if cfg.get("merge_adapters_by_default", False):
-            errors.append(f"{rel(root, cfg_path)}: merge_adapters_by_default must be false (adapter-first).")
-        if cfg.get("release_bake_enabled_by_default", False):
-            errors.append(
-                f"{rel(root, cfg_path)}: release_bake_enabled_by_default must be false (adapter-first)."
-            )
+        errors.extend(_validate_qwen3_agent_config(root, cfg_path, agent))
 
     return errors
 
@@ -475,7 +537,7 @@ def preflight(term: Terminal, root: Path, args: argparse.Namespace, state: Pipel
         root / "tools/lumen_manifest_crawler/lumen_manifest_crawler/improvement_loop.py",
         root / "tools/fine_tuning/unsloth/train_sft.py",
         root / "tools/fine_tuning/unsloth/export_gguf.py",
-        root / "tools/check_adapter_runtime_invariants.py",
+        root / ADAPTER_RUNTIME_INVARIANTS_SCRIPT,
         root / "docs/ADAPTER_RUNTIME_IMPROVE_LOOP.md",
         root / "ios/Lumen",
     ]
@@ -488,7 +550,7 @@ def preflight(term: Terminal, root: Path, args: argparse.Namespace, state: Pipel
     else:
         term.ok("required files are present")
 
-    config_errors = validate_qwen3_configs(term, root, args)
+    config_errors = validate_qwen3_configs(root, args)
     if config_errors:
         for err in config_errors:
             term.fail(err)
@@ -502,11 +564,11 @@ def preflight(term: Terminal, root: Path, args: argparse.Namespace, state: Pipel
             term,
             root,
             "adapter runtime drift guard",
-            [sys.executable, "tools/check_adapter_runtime_invariants.py"],
+            [sys.executable, str(ADAPTER_RUNTIME_INVARIANTS_SCRIPT)],
             args=args,
             state=state,
             inputs=[
-                root / "tools/check_adapter_runtime_invariants.py",
+                root / ADAPTER_RUNTIME_INVARIANTS_SCRIPT,
                 root / "tools/lumen_terminal_improve_loop.py",
             ],
         )
@@ -531,21 +593,15 @@ def crawl_ingest_generate(term: Terminal, root: Path, args: argparse.Namespace, 
     print_runtime_jsons(term, root, audits)
 
     if args.require_adapter_traces:
-        ok = False
-        for audit in audits:
-            try:
-                blob = audit.read_text(encoding="utf-8", errors="replace").lower()
-            except Exception:
-                continue
-            if "adapterapplied" in blob:
-                ok = True
-                break
-        if not ok:
+        has_trace = any(_audit_has_adapter_applied(audit) for audit in audits)
+        if not has_trace:
             term.fail(
                 "--require-adapter-traces: no in-app audit contains 'adapterApplied' evidence."
             )
             if args.stop_on_error or args.fail_if_missing_qwen3_config:
                 raise SystemExit(2)
+
+    loop_state_path = resolve(root, args.loop_output) / LOOP_STATE_FILE_NAME
 
     improve = [
         sys.executable,
@@ -586,7 +642,7 @@ def crawl_ingest_generate(term: Terminal, root: Path, args: argparse.Namespace, 
             inputs=[root / "ios/Lumen", *audits],
             outputs=[
                 resolve(root, args.output) / "dataset_manifest.json",
-                resolve(root, args.loop_output) / "loop_state.json",
+                loop_state_path,
             ],
         )
     ]
@@ -595,7 +651,7 @@ def crawl_ingest_generate(term: Terminal, root: Path, args: argparse.Namespace, 
         sys.executable,
         "tools/augment_loop_state_embedding.py",
         "--loop-state",
-        str(resolve(root, args.loop_output) / "loop_state.json"),
+        str(loop_state_path),
         "--embedding-dir",
         str(resolve(root, args.output) / "embedding"),
         "--print-summary",
@@ -609,7 +665,7 @@ def crawl_ingest_generate(term: Terminal, root: Path, args: argparse.Namespace, 
             args=args,
             state=state,
             inputs=[
-                resolve(root, args.loop_output) / "loop_state.json",
+                loop_state_path,
                 resolve(root, args.output) / "embedding",
             ],
         )
@@ -651,7 +707,7 @@ def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineS
     cfg_dir = resolve(root, args.config_dir)
     if not cfg_dir.exists():
         raise SystemExit(f"Missing config dir: {cfg_dir}")
-    config_errors = validate_qwen3_configs(term, root, args)
+    config_errors = validate_qwen3_configs(root, args)
     if config_errors:
         for err in config_errors:
             term.fail(err)
@@ -866,7 +922,7 @@ def status(term: Terminal, root: Path, args: argparse.Namespace) -> None:
         if path.suffix == ".json":
             try:
                 text = json.dumps(json.loads(text), indent=2, ensure_ascii=False)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
         print(text[:12000])
 

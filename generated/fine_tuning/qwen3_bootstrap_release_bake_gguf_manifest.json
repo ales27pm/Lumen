@@ -9,8 +9,7 @@
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/cortex_merged_gguf/lumen-cortex-release-bake-q4_k_m.gguf",
       "mode": "optional_release_bake",
       "quantization": "q4_k_m",
-      "reused_existing": true,
-      "sha256": "fa6d5390b904760d1287af2c61a1ab6884eb2f178c042412c15043fd6d5bf661",
+      "sha256": "7036210bdb3df6ffd1244864d76114ba3c1df63b2fc2916f3022e4969cc00935",
       "size_bytes": 1107409184
     },
     "executor": {
@@ -22,7 +21,7 @@
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/executor_merged_gguf/lumen-executor-release-bake-q4_k_m.gguf",
       "mode": "optional_release_bake",
       "quantization": "q4_k_m",
-      "sha256": "15e897852a9643379f53f8eb0f76a263cf92966468c409a6b70cfcf196a0388a",
+      "sha256": "47bd35c14d67089f0542f98314214a3bcfbe26828f58fcae890f97b3108fdb48",
       "size_bytes": 1107409184
     },
     "mimicry": {
@@ -34,7 +33,7 @@
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mimicry_merged_gguf/lumen-mimicry-release-bake-q4_k_m.gguf",
       "mode": "optional_release_bake",
       "quantization": "q4_k_m",
-      "sha256": "e55b88ab85f61284a205165b6e12e1cb9fffd15293d9db73b119942ea5939b3a",
+      "sha256": "c1447f5bea2e12372af8a25bae60b7ec2afe9bfa2225e3089accaaeb4238895d",
       "size_bytes": 1107409184
     },
     "mouth": {
@@ -46,7 +45,7 @@
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/mouth_merged_gguf/lumen-mouth-release-bake-q4_k_m.gguf",
       "mode": "optional_release_bake",
       "quantization": "q4_k_m",
-      "sha256": "4e6f780c04dbbc235a7cdbf149489f0638fd0e15458e32c14548bce1f9d66ae1",
+      "sha256": "7b9b5dfe1267d350584ffb2915d7f64934d1381ebbc4c3cb1a04c55dbfd366a3",
       "size_bytes": 1107409184
     },
     "rem": {
@@ -58,7 +57,7 @@
       "gguf_path": "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap/rem_merged_gguf/lumen-rem-release-bake-q4_k_m.gguf",
       "mode": "optional_release_bake",
       "quantization": "q4_k_m",
-      "sha256": "6389467ca4c800a020b3cdd80c4d2ce7f71ae0484d70f169276b730150dc445d",
+      "sha256": "e1806704c9c72ed51aedb72993b94f2e1c0888518115a06c34f901d2a51a2204",
       "size_bytes": 1107409184
     }
   },

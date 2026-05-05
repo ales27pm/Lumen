@@ -7,11 +7,11 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "10bf510cdefb31c04390253361a0f1435badbbad",
+    "commit": "78718100a10d97fc209842f85c63dbb13962d793",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
-        "sha256": "7b76d461d05a8ca659c0635359aff0dbe2e17347a3fec28eaae77ee8c1bdf9d3"
+        "sha256": "c37009d36b6bde3aa8def916b4af7655e89a1ae1e76b15db3725bd12762db465"
       },
       {
         "path": "ios/Lumen/Models/MemoryContextItem.swift",

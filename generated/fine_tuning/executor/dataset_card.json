@@ -1,17 +1,17 @@
 {
   "agent": "executor",
-  "availableSFTRecords": 1244,
+  "availableSFTRecords": 1245,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "10bf510cdefb31c04390253361a0f1435badbbad",
+  "manifestCommit": "78718100a10d97fc209842f85c63dbb13962d793",
   "recordCounts": {
     "eval": 111,
     "train_dpo": 11,
-    "train_sft": 645,
+    "train_sft": 646,
     "val_dpo": 2,
     "val_sft": 114
   },
@@ -30,6 +30,7 @@
     "fleet_system_prompts",
     "manifest_grounding_cards",
     "negative_samples",
+    "runtime_audit_repairs",
     "tool_schema_cards",
     "train_sft",
     "validation_sft"
@@ -61,6 +62,7 @@
     "negative_samples",
     "permission_unavailable",
     "role_directory",
+    "runtime_manifest_drift_repair",
     "source_code_self_knowledge",
     "source_routing_knowledge",
     "source_tool_registry_knowledge",

@@ -185,6 +185,7 @@ struct Qwen3AdapterRuntimeCatalogTests {
         let adapters = models.filter { $0.role == .roleAdapter }
         #expect(chatModels.map(\.fileName) == ["lumen-qwen3-fast-shared-q4_k_m.gguf"])
         #expect(models.filter { $0.role == .embedding }.map(\.fileName) == ["Qwen3-Embedding-0.6B-Q8_0.gguf"])
+        #expect(adapters.count == 6)
         #expect(adapters.contains { $0.fileName == "lumen-fleet-lora.gguf" && $0.tags.contains("fleet") })
         #expect(!models.contains { $0.fileName == "lumen-fleet-lora.gguf" && $0.role == .embedding })
         #expect(Set(adapters.map(\.fileName)) == [

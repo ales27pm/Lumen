@@ -43,7 +43,8 @@ final class RolePipelineAgentService {
 
                 if !requiresTool {
                     let mouth = await mouthFinal(req: req, resolution: resolution, routing: routing, observations: [], draft: nil)
-                    await finish(mouth, req: req, steps: steps, continuation: continuation, remContext: .init(observations: observations, routingIntent: routing.intent.rawValue))
+                    let styled = await mimicryFinal(req: req, draft: mouth)
+                    await finish(styled, req: req, steps: steps, continuation: continuation, remContext: .init(observations: observations, routingIntent: routing.intent.rawValue))
                     return
                 }
 

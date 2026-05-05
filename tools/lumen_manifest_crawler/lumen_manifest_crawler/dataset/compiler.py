@@ -960,16 +960,16 @@ def _repair_for_runtime_failure(failure: dict[str, Any], known_tools: list[str])
             "alsoAdd": ["rem_repair_sample", "trace_allowed_set_regression_eval"],
             "knownToolIDs": known_tools,
         }
-    if "sentinel" in failure_type:
-        return {"action": "add_sentinel_suppression_samples", "focus": scenario}
-    if "tool" in failure_type:
-        return {"action": "add_tool_routing_contrast_samples", "focusToolID": actual or scenario, "knownToolIDs": known_tools}
     if failure_type == "trace_parse_error":
         return {
             "action": "add_strict_trace_json_format_samples",
             "failure": actual,
             "alsoAdd": ["rem_repair_sample", "trace_parse_regression_eval"],
         }
+    if "sentinel" in failure_type:
+        return {"action": "add_sentinel_suppression_samples", "focus": scenario}
+    if "tool" in failure_type:
+        return {"action": "add_tool_routing_contrast_samples", "focusToolID": actual or scenario, "knownToolIDs": known_tools}
     if "parse" in failure_type:
         return {"action": "add_strict_json_format_samples", "failure": actual}
     return {"action": "add_rem_reflection_sample", "focusToolID": scenario or actual}

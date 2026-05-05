@@ -8,6 +8,7 @@ def test_trace_parse_error_adds_rem_and_regression_eval() -> None:
     )
     assert repair["action"] == "add_strict_trace_json_format_samples"
     assert repair["alsoAdd"] == ["rem_repair_sample", "trace_parse_regression_eval"]
+    assert repair["failure"] == "noJSONObject"
 
 
 def test_trace_tool_without_allowed_set_adds_rem_and_regression_eval() -> None:

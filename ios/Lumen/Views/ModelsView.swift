@@ -79,6 +79,7 @@ struct ModelsView: View {
                                                       isActiveEmbed: sm.id.uuidString == appState.activeEmbeddingModelID,
                                                       isLoaded: loadedPaths.contains(ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path),
                                                       isMissingFile: false,
+                                                      isAdapter: sm.modelRole == .roleAdapter,
                                                       onActivate: { activate(stored: sm) },
                                                       onLoad: { load(sm) },
                                                       onUnload: { unload(sm) },
@@ -91,6 +92,7 @@ struct ModelsView: View {
                                                       isActiveEmbed: false,
                                                       isLoaded: false,
                                                       isMissingFile: true,
+                                                      isAdapter: sm.modelRole == .roleAdapter,
                                                       onActivate: {},
                                                       onLoad: {},
                                                       onUnload: {},
@@ -235,12 +237,20 @@ struct ModelsView: View {
     }
 
     private func activate(_ catalog: CatalogModel) {
+        guard catalog.role != .roleAdapter else {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
         guard let stored = installedStoredModel(for: catalog) else { return }
         activate(stored: stored)
     }
 
     private func activate(stored: StoredModel) {
         guard modelFileExists(stored) else { return }
+        guard stored.modelRole != .roleAdapter else {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
         if stored.modelRole == .chat { appState.activeChatModelID = stored.id.uuidString }
         if stored.modelRole == .embedding { appState.activeEmbeddingModelID = stored.id.uuidString }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
@@ -271,14 +281,8 @@ struct ModelsView: View {
         guard modelFileExists(sm) else { return }
         Task {
             do {
-                if sm.modelRole == .chat {
-                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    let slots = fleetSnapshot.assignments.filter { $0.value.localPath == resolvedPath && $0.key != .embedding }.map(\.key)
-                    if slots.isEmpty {
-                        try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
-                    } else {
-                        for slot in slots { try await AppLlamaService.shared.loadChatModel(path: resolvedPath, for: slot, contextSize: appState.contextSize) }
-                    }
+                if sm.modelRole == .chat || sm.modelRole == .roleAdapter {
+                    await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
                 } else {
                     let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
                     try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
@@ -297,6 +301,8 @@ struct ModelsView: View {
                 let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
                 let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
                 for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
+            } else if sm.modelRole == .roleAdapter {
+                if let slot = adapterSlot(for: sm) { await AppLlamaService.shared.unloadRoleAdapter(slot: slot) }
             } else {
                 await AppLlamaService.shared.unloadEmbed()
             }
@@ -309,14 +315,8 @@ struct ModelsView: View {
         guard modelFileExists(sm) else { return }
         Task {
             do {
-                if sm.modelRole == .chat {
-                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
-                    if slots.isEmpty {
-                        try await AppLlamaService.shared.reloadChat(contextSize: appState.contextSize)
-                    } else {
-                        for slot in slots { try await AppLlamaService.shared.reloadChat(for: slot, contextSize: appState.contextSize) }
-                    }
+                if sm.modelRole == .chat || sm.modelRole == .roleAdapter {
+                    await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
                 } else {
                     try await AppLlamaService.shared.reloadEmbed()
                 }
@@ -335,6 +335,8 @@ struct ModelsView: View {
             if sm.modelRole == .chat {
                 let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
                 for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
+            } else if sm.modelRole == .roleAdapter {
+                if let slot = adapterSlot(for: sm) { await AppLlamaService.shared.unloadRoleAdapter(slot: slot) }
             } else {
                 await AppLlamaService.shared.unloadEmbed()
             }
@@ -345,6 +347,14 @@ struct ModelsView: View {
         if sm.id.uuidString == appState.activeEmbeddingModelID { appState.activeEmbeddingModelID = nil }
         modelContext.delete(sm)
         try? modelContext.save()
+    }
+
+    private func adapterSlot(for model: StoredModel) -> LumenModelSlot? {
+        let text = [model.name, model.fileName, model.localPath].joined(separator: " ").lowercased()
+        for slot in [LumenModelSlot.cortex, .executor, .mouth, .mimicry, .rem] where text.contains(slot.rawValue) {
+            return slot
+        }
+        return nil
     }
 }
 
@@ -443,6 +453,12 @@ struct ModelCard: View {
                 Button { onResume() } label: { Image(systemName: "play.fill").font(.caption) }.buttonStyle(.borderedProminent).tint(Theme.accent)
                 Button("Cancel") { onCancel() }.font(.caption.weight(.medium)).buttonStyle(.bordered).tint(.red)
             }
+        } else if stored != nil, catalog.role == .roleAdapter {
+            Menu {
+                Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+            } label: {
+                Text("Adapter").font(.caption.weight(.medium)).foregroundStyle(Theme.textSecondary).padding(.horizontal, 8).padding(.vertical, 4).overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1) }
+            }
         } else if stored != nil {
             Menu {
                 Button("Set as Active", systemImage: "checkmark") { onActivate() }
@@ -462,6 +478,7 @@ struct DownloadedRow: View {
     let isActiveEmbed: Bool
     let isLoaded: Bool
     let isMissingFile: Bool
+    let isAdapter: Bool
     var onActivate: () -> Void
     var onLoad: () -> Void
     var onUnload: () -> Void
@@ -483,13 +500,15 @@ struct DownloadedRow: View {
             Spacer()
             if isMissingFile {
                 Text("Missing").font(.caption.weight(.medium)).foregroundStyle(.orange)
+            } else if isAdapter {
+                Text("Adapter").font(.caption.weight(.medium)).foregroundStyle(Theme.textSecondary)
             } else if isActiveChat || isActiveEmbed {
                 Text("Active").font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
             } else {
                 Button("Use") { onActivate() }.font(.caption.weight(.medium)).buttonStyle(.bordered)
             }
             Menu {
-                if !isMissingFile {
+                if !isMissingFile, !isAdapter {
                     if isLoaded {
                         Button("Reload", systemImage: "arrow.clockwise") { onReload() }
                         Button("Unload", systemImage: "eject") { onUnload() }

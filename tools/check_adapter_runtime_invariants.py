@@ -104,11 +104,20 @@ def check_fleet_resolver() -> None:
 def check_runtime() -> None:
     text = read(LLAMA_SERVICE)
     require("private actor AdapterChatRuntime" in text, "AdapterChatRuntime must remain actor-isolated.")
-    require("clearAdapters()" in text and "context.apply(loraAdapter: adapter, scale: scale)" in text, "Adapter activation must clear before applying LoRA.")
+    require(
+        "clearAdapters()" in text and "context.apply(loraAdapter: adapter, scale: scale)" in text,
+        "Adapter activation must clear before applying LoRA.",
+    )
     require("let isLast = index == lastIndex" in text, "Prompt decode must mark the final prompt token for logits.")
     require("outputTokenCount: nil" in text, "outputTokenCount must stay nil unless real token counts are threaded through.")
-    require("sanitized.split(whereSeparator: { $0.isWhitespace }).count" not in text, "Do not report whitespace word count as outputTokenCount.")
-    require("adapterApplied" in text and "adapterSlot" in text, "Runtime trace metadata must include adapterApplied and adapterSlot.")
+    require(
+        "sanitized.split(whereSeparator: { $0.isWhitespace }).count" not in text,
+        "Do not report whitespace word count as outputTokenCount.",
+    )
+    require(
+        "adapterApplied" in text and "adapterSlot" in text,
+        "Runtime trace metadata must include adapterApplied and adapterSlot.",
+    )
 
 
 def check_slot_coordinator() -> None:
@@ -122,17 +131,28 @@ def check_slot_coordinator() -> None:
 
 def check_models_view() -> None:
     text = read(MODELS_VIEW)
-    require("isAdapter: sm.modelRole == .roleAdapter" in text, "Downloaded model rows must know when a row is a role adapter.")
-    require("catalog.role == .roleAdapter" in text, "Featured model cards must treat role adapters as non-activatable adapter artifacts.")
-    require("stored.modelRole != .roleAdapter" in text, "Stored role adapters must not be activatable as chat/embedding models.")
+    require(
+        "isAdapter: sm.modelRole == .roleAdapter" in text,
+        "Downloaded model rows must know when a row is a role adapter.",
+    )
+    require(
+        "catalog.role == .roleAdapter" in text,
+        "Featured model cards must treat role adapters as non-activatable adapter artifacts.",
+    )
+    require(
+        "stored.modelRole != .roleAdapter" in text,
+        "Stored role adapters must not be activatable as chat/embedding models.",
+    )
 
 
 def check_export_policy() -> None:
     text = read(EXPORT_GGUF)
     require("--release-bake" in text, "export_gguf.py must require explicit --release-bake for merged GGUF export.")
     require("Skipped GGUF release bake by default" in text, "export_gguf.py must skip release-bake by default.")
-    require("merge_adapters_by_default") in text if False else None
-    require("merge_adapters_by_default" in text and "release_bake_enabled_by_default" in text, "export_gguf.py must validate adapter-first config flags.")
+    require(
+        "merge_adapters_by_default" in text and "release_bake_enabled_by_default" in text,
+        "export_gguf.py must validate adapter-first config flags.",
+    )
 
 
 def check_docs() -> None:

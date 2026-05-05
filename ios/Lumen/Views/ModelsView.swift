@@ -223,7 +223,7 @@ struct ModelsView: View {
                 try? modelContext.save()
                 if model.role == .chat && appState.activeChatModelID == nil { appState.activeChatModelID = stored.id.uuidString }
                 if model.role == .embedding && appState.activeEmbeddingModelID == nil { appState.activeEmbeddingModelID = stored.id.uuidString }
-                if model.role == .chat {
+                if model.role == .chat || model.role == .roleAdapter {
                     await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels + [stored])
                 } else {
                     _ = await ModelLoader.ensureEmbedLoaded(appState: appState, stored: storedModels + [stored])
@@ -241,7 +241,8 @@ struct ModelsView: View {
 
     private func activate(stored: StoredModel) {
         guard modelFileExists(stored) else { return }
-        if stored.modelRole == .chat { appState.activeChatModelID = stored.id.uuidString } else { appState.activeEmbeddingModelID = stored.id.uuidString }
+        if stored.modelRole == .chat { appState.activeChatModelID = stored.id.uuidString }
+        if stored.modelRole == .embedding { appState.activeEmbeddingModelID = stored.id.uuidString }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
     }
 

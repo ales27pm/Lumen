@@ -43,8 +43,7 @@ final class RolePipelineAgentService {
 
                 if !requiresTool {
                     let mouth = await mouthFinal(req: req, resolution: resolution, routing: routing, observations: [], draft: nil)
-                    let styled = await mimicryFinal(req: req, draft: mouth)
-                    await finish(styled, req: req, steps: steps, continuation: continuation, remContext: .init(observations: observations, routingIntent: routing.intent.rawValue))
+                    await finish(mouth, req: req, steps: steps, continuation: continuation, remContext: .init(observations: observations, routingIntent: routing.intent.rawValue))
                     return
                 }
 
@@ -65,7 +64,7 @@ final class RolePipelineAgentService {
                         userMessage: cortexPrompt,
                         temperature: observations.isEmpty ? 0.0 : min(req.temperature, 0.25),
                         topP: observations.isEmpty ? 0.05 : min(req.topP, 0.75),
-                        maxTokens: mode == .mustAct ? 220 : 320,
+                        maxTokens: mode == .mustAct ? 192 : 256,
                         modelName: "cortex-route-plan-loop"
                     )
                     let cortexTurn = AgentTurnParser.parse(cortexRaw)
@@ -264,7 +263,7 @@ final class RolePipelineAgentService {
             userMessage: prompt,
             temperature: 0.0,
             topP: 0.05,
-            maxTokens: 220,
+            maxTokens: 192,
             modelName: "executor-action-validator"
         )
         let repaired = AgentTurnParser.parse(raw)
@@ -317,7 +316,7 @@ final class RolePipelineAgentService {
             userMessage: prompt,
             temperature: min(req.temperature, 0.35),
             topP: min(req.topP, 0.8),
-            maxTokens: req.maxTokens,
+            maxTokens: min(req.maxTokens, 384),
             modelName: "mouth-final-user-answer"
         )
         let candidate = raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (draft ?? "I’m here.") : raw
@@ -326,6 +325,10 @@ final class RolePipelineAgentService {
     }
 
     private func mimicryFinal(req: AgentRequest, draft: String) async -> String {
+        guard req.userMessage.localizedCaseInsensitiveContains("rewrite in my style")
+            || req.userMessage.localizedCaseInsensitiveContains("use my tone")
+            || req.userMessage.localizedCaseInsensitiveContains("mimicry")
+        else { return draft }
         let clean = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, !clean.lowercased().contains("generation error:") else { return draft }
         let prompt = """
@@ -350,7 +353,7 @@ final class RolePipelineAgentService {
             userMessage: prompt,
             temperature: min(req.temperature, 0.25),
             topP: min(req.topP, 0.8),
-            maxTokens: min(max(96, req.maxTokens), 420),
+            maxTokens: min(max(96, req.maxTokens), 256),
             modelName: "mimicry-user-facing-style"
         ).trimmingCharacters(in: .whitespacesAndNewlines)
         if styled.isEmpty || styled.lowercased().contains("generation error:") { return draft }

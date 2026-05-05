@@ -41,6 +41,48 @@ final class SlotModelRuntimeCoordinator {
             throw LlamaError.modelFileNotFound(assignment.localPath)
         }
 
+        if assignment.usesRoleAdapter || assignment.modelFamily == .qwen3 {
+            try await ensureAdapterRuntimeReady(slot: slot, assignment: assignment)
+            return
+        }
+
+        try await ensureLegacyRuntimeReady(slot: slot, assignment: assignment)
+    }
+
+    private func ensureAdapterRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {
+        if await AppLlamaService.shared.loadedChatPath != assignment.localPath {
+            do {
+                try await AppLlamaService.shared.loadSharedChatModel(path: assignment.localPath, contextSize: contextSize)
+            } catch {
+                logger.error("shared_base_load_failed slot=\(slot.rawValue, privacy: .public) path=\(assignment.localPath, privacy: .public) context=\(self.contextSize, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                if contextSize > 2048 {
+                    try await AppLlamaService.shared.loadSharedChatModel(path: assignment.localPath, contextSize: 2048)
+                } else {
+                    throw error
+                }
+            }
+        }
+
+        guard let adapterPath = assignment.adapterPath else {
+            await AppLlamaService.shared.clearActiveRoleAdapter()
+            return
+        }
+        guard FileManager.default.fileExists(atPath: adapterPath) else {
+            logger.error("role_adapter_missing slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public)")
+            await AppLlamaService.shared.clearActiveRoleAdapter()
+            return
+        }
+
+        do {
+            try await AppLlamaService.shared.loadRoleAdapter(slot: slot, path: adapterPath, scale: assignment.adapterScale)
+            try await AppLlamaService.shared.activateRoleAdapter(slot: slot)
+        } catch {
+            logger.error("role_adapter_activation_failed slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            await AppLlamaService.shared.clearActiveRoleAdapter()
+        }
+    }
+
+    private func ensureLegacyRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {
         if await AppLlamaService.shared.loadedChatPath(for: slot) == assignment.localPath {
             return
         }

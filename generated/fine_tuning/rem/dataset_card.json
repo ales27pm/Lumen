@@ -1,19 +1,19 @@
 {
   "agent": "rem",
-  "availableSFTRecords": 181,
+  "availableSFTRecords": 313,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "c65812e1b95fba5f5fe08d7a67064326f1b48f67",
+  "manifestCommit": "c4f2c5a36b3172ec5125abf20a7467c641499b67",
   "recordCounts": {
     "eval": 4,
     "train_dpo": 7,
-    "train_sft": 80,
+    "train_sft": 98,
     "val_dpo": 1,
-    "val_sft": 14
+    "val_sft": 17
   },
   "sourceFamilies": [
     "cross_model_training",

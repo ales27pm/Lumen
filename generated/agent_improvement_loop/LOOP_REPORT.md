@@ -4,13 +4,13 @@
 - Tools: `53`
 - Intents: `22`
 - Model slots: `6`
-- Dataset records: `4550`
-- Runtime audit reports: `2`
-- Runtime failures: `11`
+- Dataset records: `4682`
+- Runtime audit reports: `1`
+- Runtime failures: `33`
 - TestFlight status: `runtime-audit-ingested`
 - TestFlight scenarios: `120`
-- Gaps: `11`
-- Next action prompts: `11`
+- Gaps: `33`
+- Next action prompts: `33`
 
 ## TestFlight handoff
 
@@ -18,10 +18,15 @@ Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the Runtime Audit
 
 ## Top gaps
 
-### ERROR — agent_grounding_no_recent_model_traces
+### ERROR — approval_sensitive_tool_selected
 
 - Category: `runtime_drift`
-- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+- Recommendation: Add approval-boundary SFT/DPO records and verify the UI confirmation path.
+
+### ERROR — approval_sensitive_tool_selected
+
+- Category: `runtime_drift`
+- Recommendation: Add approval-boundary SFT/DPO records and verify the UI confirmation path.
 
 ### ERROR — approval_sensitive_tool_selected
 
@@ -54,6 +59,96 @@ Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the Runtime Audit
 - Recommendation: Convert this failure into a REM repair sample and add a regression eval.
 
 ### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_parse_error
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_tool_without_allowed_set
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_tool_without_allowed_set
+
+- Category: `runtime_drift`
+- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+
+### ERROR — trace_tool_without_allowed_set
 
 - Category: `runtime_drift`
 - Recommendation: Convert this failure into a REM repair sample and add a regression eval.

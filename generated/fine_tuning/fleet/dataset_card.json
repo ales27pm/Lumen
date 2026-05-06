@@ -1,19 +1,19 @@
 {
   "agent": "fleet",
-  "availableSFTRecords": 1391,
+  "availableSFTRecords": 1435,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "c65812e1b95fba5f5fe08d7a67064326f1b48f67",
+  "manifestCommit": "c4f2c5a36b3172ec5125abf20a7467c641499b67",
   "recordCounts": {
     "eval": 93,
     "train_dpo": 14,
-    "train_sft": 706,
+    "train_sft": 724,
     "val_dpo": 3,
-    "val_sft": 125
+    "val_sft": 128
   },
   "sourceFamilies": [
     "approval_boundary_samples",

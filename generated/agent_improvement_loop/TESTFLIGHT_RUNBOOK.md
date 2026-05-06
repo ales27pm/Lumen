@@ -4,8 +4,8 @@ This is the live-runtime phase of the Lumen improvement loop. Do not replace thi
 
 ## Build identity
 
-- Manifest fingerprint: `f62382a30b4bb414d1e60fa4f223937bc73ff185e4bc3c655c5b795dc69df093`
-- Manifest commit: `c65812e1b95fba5f5fe08d7a67064326f1b48f67`
+- Manifest fingerprint: `d531cff80f77c4d6fbf1bac0cf65f670200e833e2e6f7d22d30aa41fa3583f5f`
+- Manifest commit: `c4f2c5a36b3172ec5125abf20a7467c641499b67`
 - Build label: `None`
 - Expected export: `lumen-agent-grounding-audit-*.json or lumen-live-e2e-report-*.json from Agent Grounding > Export Runtime Audit Package or End-to-end tests > Export Live E2E Report JSON`
 

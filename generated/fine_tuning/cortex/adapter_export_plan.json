@@ -5,13 +5,13 @@
   "agent": "cortex",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "c65812e1b95fba5f5fe08d7a67064326f1b48f67",
+    "manifestCommit": "c4f2c5a36b3172ec5125abf20a7467c641499b67",
     "recordCounts": {
       "eval": 555,
       "train_dpo": 8,
-      "train_sft": 209,
+      "train_sft": 216,
       "val_dpo": 1,
-      "val_sft": 37
+      "val_sft": 38
     },
     "sourceFamilies": [
       "cortex_routing",

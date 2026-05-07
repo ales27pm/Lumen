@@ -42,7 +42,7 @@ final class SlotModelRuntimeCoordinator {
         for (index, candidate) in orderedCandidates.enumerated() {
             let path = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             logger.info("transition event=attempt role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
-            guard FileManager.default.fileExists(atPath: path), ModelFileIntegrity.validateInstalledFile(candidate) else {
+            guard FileManager.default.fileExists(atPath: path) else {
                 logger.info("transition event=skip_missing role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
                 continue
             }
@@ -83,7 +83,7 @@ final class SlotModelRuntimeCoordinator {
         for (index, candidate) in orderedCandidates.enumerated() {
             let path = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
             logger.info("transition event=attempt role=embedding index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
-            guard FileManager.default.fileExists(atPath: path), ModelFileIntegrity.validateInstalledFile(candidate) else {
+            guard FileManager.default.fileExists(atPath: path) else {
                 logger.info("transition event=skip_missing role=embedding index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
                 continue
             }
@@ -210,9 +210,9 @@ final class SlotModelRuntimeCoordinator {
     }
 
     private func isContextInitFailed(_ error: Error) -> Bool {
-        guard case let LlamaError.failedToInitializeContext(details) = error else {
+        guard case LlamaError.failedToInitializeContext = error else {
             return false
         }
-        return details.localizedCaseInsensitiveContains("context")
+        return true
     }
 }

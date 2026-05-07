@@ -38,6 +38,10 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
+    private static let cachedRawToolPayloadRegex: NSRegularExpression = {
+        let pattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
 
     static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
         var text = raw
@@ -81,6 +85,12 @@ nonisolated enum FinalOutputSanitizer {
             text = loosePayloadRemoval.text
             mark(.rawToolPayload)
         }
+        
+        let markerLineRemoval = removingRawToolPayloadMarkerLines(from: text)
+        if markerLineRemoval.removedAny {
+            text = markerLineRemoval.text
+            mark(.rawToolPayload)
+        }
 
         text = normalizeWhitespace(text)
 
@@ -116,7 +126,16 @@ nonisolated enum FinalOutputSanitizer {
 
 
     private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
-        let pattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        if cachedRawToolPayloadRegex.firstMatch(in: source, options: [], range: range) == nil {
+            return (source, false)
+        }
+        let redacted = cachedRawToolPayloadRegex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
+        return (redacted, redacted != source)
+    }
+
+    private static func removingRawToolPayloadMarkerLines(from source: String) -> (text: String, removedAny: Bool) {
+        let pattern = #"(?im)^.*("kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl").*$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return (source, false)
         }

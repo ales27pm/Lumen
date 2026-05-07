@@ -32,6 +32,75 @@ final class SlotModelRuntimeCoordinator {
         assignments
     }
 
+    @discardableResult
+    func ensureChatModel(
+        appState: AppState,
+        candidates: [StoredModel],
+        preferredID: String?
+    ) async -> Bool {
+        let orderedCandidates = orderedCandidates(candidates: candidates, preferredID: preferredID)
+        for (index, candidate) in orderedCandidates.enumerated() {
+            let path = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
+            logger.info("transition event=attempt role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+            guard FileManager.default.fileExists(atPath: path), ModelFileIntegrity.validateInstalledFile(candidate) else {
+                logger.info("transition event=skip_missing role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                continue
+            }
+
+            do {
+                try await AppLlamaService.shared.unloadAllChat()
+                try await AppLlamaService.shared.loadChatModel(path: path, contextSize: contextSize)
+                appState.activeChatModelID = candidate.id.uuidString
+                logger.info("transition event=fallback_selected role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                return true
+            } catch {
+                if isContextInitFailed(error) {
+                    do {
+                        logger.info("transition event=retry_context_2048 role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                        try await AppLlamaService.shared.unloadAllChat()
+                        try await AppLlamaService.shared.loadChatModel(path: path, contextSize: 2048)
+                        appState.activeChatModelID = candidate.id.uuidString
+                        logger.info("transition event=fallback_selected role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) context=2048")
+                        return true
+                    } catch {
+                        continue
+                    }
+                }
+                continue
+            }
+        }
+        logger.error("transition event=failed_all role=chat")
+        return false
+    }
+
+    @discardableResult
+    func ensureEmbeddingModel(
+        appState: AppState,
+        candidates: [StoredModel],
+        preferredID: String?
+    ) async -> Bool {
+        let orderedCandidates = orderedCandidates(candidates: candidates, preferredID: preferredID)
+        for (index, candidate) in orderedCandidates.enumerated() {
+            let path = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
+            logger.info("transition event=attempt role=embedding index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+            guard FileManager.default.fileExists(atPath: path), ModelFileIntegrity.validateInstalledFile(candidate) else {
+                logger.info("transition event=skip_missing role=embedding index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                continue
+            }
+
+            do {
+                try await AppLlamaService.shared.loadEmbeddingModel(path: path)
+                appState.activeEmbeddingModelID = candidate.id.uuidString
+                logger.info("transition event=fallback_selected role=embedding model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                return true
+            } catch {
+                continue
+            }
+        }
+        logger.error("transition event=failed_all role=embedding")
+        return false
+    }
+
     func ensureReady(slot: LumenModelSlot) async throws {
         guard slot != .embedding else { return }
         guard let assignment = assignments[slot] else {
@@ -126,5 +195,24 @@ final class SlotModelRuntimeCoordinator {
             }
         }
         return false
+    }
+
+    private func orderedCandidates(candidates: [StoredModel], preferredID: String?) -> [StoredModel] {
+        let pool = candidates.filter { ModelFileIntegrity.validateInstalledFile($0) }
+        var ordered: [StoredModel] = []
+        if let preferredID, let preferred = pool.first(where: { $0.id.uuidString == preferredID }) {
+            ordered.append(preferred)
+        }
+        for candidate in pool where !ordered.contains(where: { $0.id == candidate.id }) {
+            ordered.append(candidate)
+        }
+        return ordered
+    }
+
+    private func isContextInitFailed(_ error: Error) -> Bool {
+        guard case let LlamaError.failedToInitializeContext(details) = error else {
+            return false
+        }
+        return details.localizedCaseInsensitiveContains("context")
     }
 }

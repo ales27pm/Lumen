@@ -70,8 +70,8 @@ extension E2ETestResult {
     }
 
     private static func merged(_ lhs: [String], _ rhs: [String]) -> [String] {
-        var result = lhs
-        for item in rhs where !result.contains(item) {
+        var result: [String] = []
+        for item in lhs + rhs where !result.contains(item) {
             result.append(item)
         }
         return result

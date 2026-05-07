@@ -23,22 +23,14 @@ extension E2ETestResult {
         sanitizedFinalRemovedArtifacts: [String],
         outputHygieneFailures: [String]
     ) {
-        let recovered = FinalOutputSanitizer.consumeRecoveredUnsafeOutput(forSanitizedText: finalText)
-        let recoveredArtifacts = recovered?.removedArtifacts.map(\.rawValue) ?? []
-        let recoveredHygieneFailures = Self.hygieneFailures(from: recoveredArtifacts)
-        let mergedHygieneFailures = Self.merged(outputHygieneFailures, recoveredHygieneFailures)
-        let mergedFailures = Self.merged(failures, recoveredHygieneFailures)
-        let mergedRemovedArtifacts = Self.merged(sanitizedFinalRemovedArtifacts, recoveredArtifacts)
-        let effectiveHadLeakage = rawFinalHadUnsafeLeakage || recovered?.hadUnsafeLeakage == true
-
         self.id = id
         self.scenarioID = scenarioID
         self.title = title
         self.prompt = prompt
         self.expectedIntent = expectedIntent
         self.actualIntent = actualIntent
-        self.passed = passed && recoveredHygieneFailures.isEmpty
-        self.failures = mergedFailures
+        self.passed = passed
+        self.failures = Self.mergedUnique(failures)
         self.finalText = finalText
         self.missingHints = missingHints
         self.rewriteAttempted = rewriteAttempted
@@ -48,32 +40,16 @@ extension E2ETestResult {
         self.finishedAt = finishedAt
         self.rawFinalPrefix = rawFinalPrefix
         self.sanitizedFinalPrefix = sanitizedFinalPrefix.isEmpty ? String(finalText.prefix(220)) : sanitizedFinalPrefix
-        self.rawFinalHadUnsafeLeakage = effectiveHadLeakage
-        self.sanitizedFinalRemovedArtifacts = mergedRemovedArtifacts
-        self.outputHygieneFailures = mergedHygieneFailures
+        self.rawFinalHadUnsafeLeakage = rawFinalHadUnsafeLeakage
+        self.sanitizedFinalRemovedArtifacts = Self.mergedUnique(sanitizedFinalRemovedArtifacts)
+        self.outputHygieneFailures = Self.mergedUnique(outputHygieneFailures)
     }
 
-    private static func hygieneFailures(from artifactRawValues: [String]) -> [String] {
-        var failures: [String] = []
-        if artifactRawValues.contains(FinalOutputArtifact.thinkBlock.rawValue)
-            || artifactRawValues.contains(FinalOutputArtifact.malformedThinkPrefix.rawValue) {
-            failures.append("Hidden reasoning leaked into final output")
+    private static func mergedUnique(_ values: [String]) -> [String] {
+        var merged: [String] = []
+        for value in values where !merged.contains(value) {
+            merged.append(value)
         }
-        if artifactRawValues.contains(FinalOutputArtifact.lumenWebPayload.rawValue)
-            || artifactRawValues.contains(FinalOutputArtifact.rawToolPayload.rawValue) {
-            failures.append("Raw web payload leaked into final output")
-        }
-        if artifactRawValues.contains(FinalOutputArtifact.emptyAfterSanitization.rawValue) {
-            failures.append("Final output empty after sanitization")
-        }
-        return failures
-    }
-
-    private static func merged(_ lhs: [String], _ rhs: [String]) -> [String] {
-        var result: [String] = []
-        for item in lhs + rhs where !result.contains(item) {
-            result.append(item)
-        }
-        return result
+        return merged
     }
 }

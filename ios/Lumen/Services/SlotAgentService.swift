@@ -1023,11 +1023,10 @@ final class SlotAgentService {
     }
 
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
-        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(text)
-        for chunk in chunk(sanitized.text) {
+        for chunk in chunk(text) {
             continuation.yield(.finalDelta(chunk))
         }
-        continuation.yield(.done(finalText: sanitized.text, steps: steps))
+        continuation.yield(.done(finalText: text, steps: steps))
         continuation.finish()
     }
 

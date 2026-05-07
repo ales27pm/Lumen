@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+FIND_BIN="find"
 
 bold() { printf "\033[1m%s\033[0m\n" "$1"; }
 info() { printf "\n➡️  %s\n" "$1"; }
@@ -49,6 +50,8 @@ install_xcode_cli_tools() {
 
 ensure_find() {
   if command -v find >/dev/null 2>&1; then
+    FIND_BIN="$(command -v find)"
+    export FIND_BIN
     return 0
   fi
 
@@ -59,9 +62,18 @@ ensure_find() {
 
   brew install findutils
   if command -v find >/dev/null 2>&1; then
+    FIND_BIN="$(command -v find)"
+    export FIND_BIN
     return 0
   fi
-  [[ -x /opt/homebrew/opt/findutils/libexec/gnubin/find ]] || [[ -x /usr/local/opt/findutils/libexec/gnubin/find ]] || fail "find installation did not expose expected binary."
+  if [[ -x /opt/homebrew/opt/findutils/libexec/gnubin/find ]]; then
+    FIND_BIN="/opt/homebrew/opt/findutils/libexec/gnubin/find"
+  elif [[ -x /usr/local/opt/findutils/libexec/gnubin/find ]]; then
+    FIND_BIN="/usr/local/opt/findutils/libexec/gnubin/find"
+  else
+    fail "find installation did not expose expected binary under /opt/homebrew or /usr/local gnubin paths."
+  fi
+  export FIND_BIN
 }
 
 ensure_xcodebuild_and_xcrun() {
@@ -175,7 +187,7 @@ fi
 info "Export IPA"
 xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportPath "$EXPORT_DIR" -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
 
-IPA_PATH="$(find "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+IPA_PATH="$("$FIND_BIN" "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
 [[ -n "$IPA_PATH" ]] || fail "No IPA found in $EXPORT_DIR"
 
 bold "Built IPA: $IPA_PATH"
@@ -191,10 +203,10 @@ if [[ "$AUTH_MODE" == "1" ]]; then
   export API_PRIVATE_KEYS_DIR="$API_KEY_DIR"
   UPLOAD_CMD+=(--apiKey "$API_KEY" --apiIssuer "$API_ISSUER")
 else
-  export ALTOOL_APP_SPECIFIC_PASSWORD="$APP_SPECIFIC_PASSWORD"
-  UPLOAD_CMD+=(--username "$APPLE_ID" --password @env:ALTOOL_APP_SPECIFIC_PASSWORD)
+  export APP_SPECIFIC_PASSWORD
+  UPLOAD_CMD+=(--username "$APPLE_ID" --password @env:APP_SPECIFIC_PASSWORD)
 fi
 
 "${UPLOAD_CMD[@]}"
-unset ALTOOL_APP_SPECIFIC_PASSWORD || true
+unset APP_SPECIFIC_PASSWORD || true
 bold "✅ Upload complete. Check App Store Connect for processing status."

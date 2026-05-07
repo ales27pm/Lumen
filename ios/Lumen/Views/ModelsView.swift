@@ -10,6 +10,7 @@ struct ModelsView: View {
     @State private var loadedPaths: Set<String> = []
     @State private var selectedModelFamily = LumenModelFamily.persistedSelected
     @State private var isRepairingSelectedFamily = false
+    @State private var runtimeController = ModelRuntimeController()
 
     var body: some View {
         NavigationStack {
@@ -118,8 +119,10 @@ struct ModelsView: View {
                 AddModelSheet().presentationDetents([.medium, .large])
             }
             .task {
-                selectedModelFamily = LumenModelFamily.persistedSelected
-                await refreshLoaded()
+                runtimeController.startupIfNeeded {
+                    selectedModelFamily = LumenModelFamily.persistedSelected
+                    await refreshLoaded()
+                }
             }
             .task(id: appState.activeChatModelID) { await refreshLoaded() }
             .task(id: appState.activeEmbeddingModelID) { await refreshLoaded() }
@@ -262,31 +265,15 @@ struct ModelsView: View {
     }
 
     private func refreshLoaded() async {
-        var set: Set<String> = []
-        let chatPaths = await AppLlamaService.shared.loadedChatPathsBySlot
-        for path in chatPaths.values where FileManager.default.fileExists(atPath: path) {
-            let fileName = URL(fileURLWithPath: path).lastPathComponent
-            set.insert(ModelStorage.resolvedModelURL(from: path, fileName: fileName).path)
-        }
-        if let p = await AppLlamaService.shared.loadedEmbedPath,
-           await AppLlamaService.shared.hasSemanticEmbeddingRuntime,
-           FileManager.default.fileExists(atPath: p) {
-            let fileName = URL(fileURLWithPath: p).lastPathComponent
-            set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
-        }
-        loadedPaths = set
+        let set = await runtimeController.refreshLoadedPaths()
+        if !set.isEmpty || loadedPaths.isEmpty { loadedPaths = set }
     }
 
     private func load(_ sm: StoredModel) {
         guard modelFileExists(sm) else { return }
         Task {
             do {
-                if sm.modelRole == .chat || sm.modelRole == .roleAdapter {
-                    await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
-                } else {
-                    let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                    try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
-                }
+                try await runtimeController.load(sm, appState: appState, storedModels: storedModels)
                 await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
@@ -297,15 +284,7 @@ struct ModelsView: View {
 
     private func unload(_ sm: StoredModel) {
         Task {
-            if sm.modelRole == .chat {
-                let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
-                let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
-                for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
-            } else if sm.modelRole == .roleAdapter {
-                if let slot = adapterSlot(for: sm) { await AppLlamaService.shared.unloadRoleAdapter(slot: slot) }
-            } else {
-                await AppLlamaService.shared.unloadEmbed()
-            }
+            await runtimeController.unload(sm) { adapterSlot(for: $0) }
             await refreshLoaded()
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         }
@@ -315,11 +294,7 @@ struct ModelsView: View {
         guard modelFileExists(sm) else { return }
         Task {
             do {
-                if sm.modelRole == .chat || sm.modelRole == .roleAdapter {
-                    await ModelLoader.ensureFleetChatLoaded(appState: appState, stored: storedModels)
-                } else {
-                    try await AppLlamaService.shared.reloadEmbed()
-                }
+                try await runtimeController.reload(sm, appState: appState, storedModels: storedModels)
                 await refreshLoaded()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {

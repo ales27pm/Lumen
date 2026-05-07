@@ -67,6 +67,7 @@ struct ChatView: View {
     @State private var streamingSteps: [AgentStep] = []
     @State private var streamingTask: Task<Void, Never>?
     @State private var activeTurnID: UUID?
+    @State private var generationController = GenerationTaskController<UUID>()
     @State private var showVoiceMode = false
     @State private var showFilePicker = false
     @State private var attachments: [ChatAttachment] = []
@@ -202,7 +203,7 @@ struct ChatView: View {
         let turnID = UUID()
         activeTurnID = turnID
 
-        streamingTask = Task {
+        let task = Task {
             if !(await ensureChatModelLoaded()) {
                 guard activeTurnID == turnID else { return }
                 let msg = ChatMessage(role: .assistant, content: "No chat model is loaded. Open the Models tab, download a chat model, and tap Use to activate it.")
@@ -220,6 +221,8 @@ struct ChatView: View {
                 await runPlain(turnID: turnID, text: text, memories: memories, attachments: turnAttachments)
             }
         }
+        _ = generationController.begin(for: conversation.id, task: task)
+        streamingTask = task
     }
 
     private func runAgent(turnID: UUID, text: String, routing: IntentRoutingDecision, memories: [MemoryContextItem], attachments: [ChatAttachment], recentContext: [(role: MessageRole, content: String)]) async {
@@ -247,7 +250,7 @@ struct ChatView: View {
         var finalText = ""
 
         for await event in SlotAgentService.shared.run(req) {
-            if Task.isCancelled || activeTurnID != turnID { break }
+            if Task.isCancelled || activeTurnID != turnID || !generationController.isCurrent(turnID, for: conversation.id) { break }
             switch event {
             case .step(let step):
                 if let idx = steps.firstIndex(where: { $0.id == step.id }) { steps[idx] = step } else { steps.append(step) }
@@ -270,7 +273,7 @@ struct ChatView: View {
             }
         }
 
-        guard !Task.isCancelled, activeTurnID == turnID else { return }
+        guard !Task.isCancelled, activeTurnID == turnID, generationController.isCurrent(turnID, for: conversation.id) else { return }
         finalText = await repairSchemaPlaceholderFinalIfNeeded(finalText, userText: text, routing: routing, memories: memories, attachments: attachments)
         finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
         finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
@@ -281,6 +284,7 @@ struct ChatView: View {
         streamingText = ""
         streamingSteps = []
         activeTurnID = nil
+        generationController.clearIfCurrent(turnID, for: conversation.id)
 
         if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
             await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
@@ -310,7 +314,7 @@ struct ChatView: View {
 
         var accumulated = ""
         for await token in await AppLlamaService.shared.stream(request) {
-            if Task.isCancelled || activeTurnID != turnID { break }
+            if Task.isCancelled || activeTurnID != turnID || !generationController.isCurrent(turnID, for: conversation.id) { break }
             switch token {
             case .text(let s):
                 accumulated += s
@@ -320,12 +324,13 @@ struct ChatView: View {
             }
         }
 
-        guard !Task.isCancelled, activeTurnID == turnID else { return }
+        guard !Task.isCancelled, activeTurnID == turnID, generationController.isCurrent(turnID, for: conversation.id) else { return }
         let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
         let assistantMsg = ChatMessage(role: .assistant, content: sanitized)
         conversation.messages.append(assistantMsg)
         streamingText = ""
         activeTurnID = nil
+        generationController.clearIfCurrent(turnID, for: conversation.id)
 
         if appState.autoMemory, sanitized.count > 60 {
             await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
@@ -401,6 +406,7 @@ struct ChatView: View {
         streamingTask = nil
         let stoppedTurnID = activeTurnID
         activeTurnID = nil
+        generationController.cancel(for: conversation.id)
         task?.cancel()
         let captured = AssistantOutputSanitizer.sanitize(streamingText)
         let capturedSteps = AgentVisibleContentSanitizer.sanitizedSteps(streamingSteps)

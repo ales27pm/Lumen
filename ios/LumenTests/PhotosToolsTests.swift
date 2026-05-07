@@ -1,6 +1,7 @@
 import XCTest
 @testable import Lumen
 
+@MainActor
 final class PhotosToolsTests: XCTestCase {
     func testPreviousDayRangeUsesCalendarMathWhenAvailable() {
         var calendar = Calendar(identifier: .gregorian)

@@ -5,6 +5,7 @@
 //  Created by Rork on April 20, 2026.
 //
 
+import Foundation
 import Testing
 import XCTest
 @testable import Lumen
@@ -334,7 +335,7 @@ struct LumenTests {
     }
 
     @Test @MainActor func toolExecutorReturnsUnknownToolMessage() async throws {
-        let result = await ToolExecutor.shared.execute("tool.that.does.not.exist", arguments: [:])
+        let result = await ToolExecutor.shared.execute("tool.that.does.not.exist", arguments: [String: String]())
         #expect(result == "Unknown tool: tool.that.does.not.exist")
     }
 
@@ -355,7 +356,7 @@ struct LumenTests {
         #expect(decoded[1].toolArgs?["city"] == "Boston")
     }
 
-    @Test func sanitizeHistoryContentStripsMarkdownXmlAndToolWrappers() async throws {
+    @Test @MainActor func sanitizeHistoryContentStripsMarkdownXmlAndToolWrappers() async throws {
         let raw = """
         <tool_call>
         ```json
@@ -368,19 +369,19 @@ struct LumenTests {
         #expect(sanitized == "Sure — let's continue with your question.")
     }
 
-    @Test func sanitizeHistoryContentCollapsesRepeatedStructuralPunctuation() async throws {
+    @Test @MainActor func sanitizeHistoryContentCollapsesRepeatedStructuralPunctuation() async throws {
         let raw = #"Answer:::: {{{{done}}}} [[ok]] <final>Great!!!</final> ##"#
         let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
         #expect(sanitized == "Answer:::: {done} [ok] Great!!! ##")
     }
 
-    @Test func sanitizeHistoryContentPreservesURLPathAndMarkupTokens() async throws {
+    @Test @MainActor func sanitizeHistoryContentPreservesURLPathAndMarkupTokens() async throws {
         let raw = #"Noise {{{{ https://example.com/a//b?x=1::2#frag /Users/me/Hybrid Coder/Models/model.gguf ./Sources//AgentService.swift **bold** __under__ ~~strike~~ }}"#
         let sanitized = AgentService.shared.sanitizeHistoryContentForTests(raw)
         #expect(sanitized == "Noise { https://example.com/a//b?x=1::2#frag /Users/me/Hybrid Coder/Models/model.gguf ./Sources//AgentService.swift **bold** __under__ ~~strike~~ }")
     }
 
-    @Test func sanitizeSystemPromptForStructuredOutputRemovesCoderFormattingPressure() async throws {
+    @Test @MainActor func sanitizeSystemPromptForStructuredOutputRemovesCoderFormattingPressure() async throws {
         let sanitized = AgentService.shared.sanitizeSystemPromptForStructuredOutputForTests(Presets.coder.prompt)
         #expect(!sanitized.lowercased().contains("fenced code"))
         #expect(!sanitized.lowercased().contains("markdown"))
@@ -388,7 +389,7 @@ struct LumenTests {
         #expect(sanitized.contains("Prefer Swift/SwiftUI for iOS."))
     }
 
-    @Test func sanitizeSystemPromptForStructuredOutputRemovesResearcherFormattingPressure() async throws {
+    @Test @MainActor func sanitizeSystemPromptForStructuredOutputRemovesResearcherFormattingPressure() async throws {
         let sanitized = AgentService.shared.sanitizeSystemPromptForStructuredOutputForTests(Presets.researcher.prompt)
         #expect(!sanitized.lowercased().contains("headings"))
         #expect(!sanitized.lowercased().contains("step-by-step"))
@@ -603,7 +604,7 @@ struct LumenTests {
         #expect(!normalizedAssembly.systemPrompt.contains("```text"))
     }
 
-    @Test func sanitizeInternalErrorNoiseRemovesRepairPrefixArtifacts() async throws {
+    @Test @MainActor func sanitizeInternalErrorNoiseRemovesRepairPrefixArtifacts() async throws {
         let raw = """
         I hit an internal formatting issue and repaired it into a plain answer. Prefix noise: Generation error: The operation couldn't be completed.
         (SwiftLlama.LlamaError error 0.) No valid JSON object found in raw model output.
@@ -613,7 +614,7 @@ struct LumenTests {
         #expect(cleaned == "Here's the real answer: hi there.")
     }
 
-    @Test func sanitizeInternalErrorNoiseRemovesStandaloneGenerationError() async throws {
+    @Test @MainActor func sanitizeInternalErrorNoiseRemovesStandaloneGenerationError() async throws {
         let raw = """
         Generation error: The operation couldn't be completed.
         (SwiftLlama.LlamaError error 0.)
@@ -650,8 +651,7 @@ private func makeParseFailureTraceLine(
     )
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
-    let encodedTrace: Data = XCTAssertNoThrow(try encoder.encode(trace), "Encoding parse failure trace should succeed so summary tests validate aggregation behavior.")
-    let data = try XCTUnwrap(encodedTrace, "Expected encoded parse failure trace data to be non-nil after successful encoding.")
+    let data = try encoder.encode(trace)
     return String(decoding: data, as: UTF8.self)
 }
 
@@ -679,8 +679,7 @@ private func makeParseNoiseTraceLine(
     )
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
-    let encodedTrace: Data = XCTAssertNoThrow(try encoder.encode(trace), "Encoding parse noise trace should succeed so summary tests validate grouping behavior.")
-    let data = try XCTUnwrap(encodedTrace, "Expected encoded parse noise trace data to be non-nil after successful encoding.")
+    let data = try encoder.encode(trace)
     return String(decoding: data, as: UTF8.self)
 }
 

@@ -254,6 +254,31 @@ enum E2ETestRunner {
         return report
     }
 
+    private struct FinalHygieneState {
+        var rawFinalText: String
+        var finalText: String
+        var rawSanitized: SanitizedFinalOutput
+        var postRewriteSanitized: SanitizedFinalOutput
+        var recoveredBeforeRewrite: SanitizedFinalOutput?
+        var recoveredAfterRewrite: SanitizedFinalOutput?
+
+        var hadUnsafeLeakage: Bool {
+            rawSanitized.hadUnsafeLeakage
+                || postRewriteSanitized.hadUnsafeLeakage
+                || recoveredBeforeRewrite?.hadUnsafeLeakage == true
+                || recoveredAfterRewrite?.hadUnsafeLeakage == true
+        }
+
+        var removedArtifacts: [FinalOutputArtifact] {
+            E2ETestRunner.mergedArtifacts(
+                rawSanitized.removedArtifacts,
+                postRewriteSanitized.removedArtifacts,
+                recoveredBeforeRewrite?.removedArtifacts ?? [],
+                recoveredAfterRewrite?.removedArtifacts ?? []
+            )
+        }
+    }
+
     private static func runScenario(_ scenario: E2ETestScenario, appState: AppState, context: ModelContext) async -> E2ETestResult {
         let started = Date()
         var events: [E2ETestEvent] = []
@@ -263,8 +288,14 @@ enum E2ETestRunner {
         var rewriteAttempted = false
         var rewriteSuccess = false
         var rawFinalText = ""
-        var sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText("")
-        var outputHygieneFailures: [String] = []
+        var hygieneState = FinalHygieneState(
+            rawFinalText: "",
+            finalText: "",
+            rawSanitized: FinalOutputSanitizer.sanitizeUserVisibleText(""),
+            postRewriteSanitized: FinalOutputSanitizer.sanitizeUserVisibleText(""),
+            recoveredBeforeRewrite: nil,
+            recoveredAfterRewrite: nil
+        )
 
         func event(_ phase: String, _ message: String) {
             events.append(E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message))
@@ -323,14 +354,29 @@ enum E2ETestRunner {
                     }
                 }
                 rawFinalText = FinalIntentValidator.validate(rawFinalText, routing: routing, fallback: nil)
-                sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(rawFinalText)
-                finalText = sanitizedOutput.text
+
+                let recoveredBeforeRewrite = FinalOutputSanitizer.consumeRecoveredUnsafeOutput(forSanitizedText: rawFinalText)
+                let rawSanitized = mergeSanitizerOutputs(FinalOutputSanitizer.sanitizeUserVisibleText(rawFinalText), recovered: recoveredBeforeRewrite)
+                finalText = rawSanitized.text
+
                 let rewriteOutcome = await validateAndRewriteFinalTextIfNeeded(
                     scenario: scenario,
                     routing: routing,
                     originalFinal: finalText
                 )
-                finalText = FinalOutputSanitizer.sanitizeUserVisibleText(rewriteOutcome.finalText).text
+
+                let recoveredAfterRewrite = FinalOutputSanitizer.consumeRecoveredUnsafeOutput(forSanitizedText: rewriteOutcome.finalText)
+                let postRewriteSanitized = mergeSanitizerOutputs(FinalOutputSanitizer.sanitizeUserVisibleText(rewriteOutcome.finalText), recovered: recoveredAfterRewrite)
+                finalText = postRewriteSanitized.text
+
+                hygieneState = FinalHygieneState(
+                    rawFinalText: rawFinalText,
+                    finalText: finalText,
+                    rawSanitized: rawSanitized,
+                    postRewriteSanitized: postRewriteSanitized,
+                    recoveredBeforeRewrite: recoveredBeforeRewrite,
+                    recoveredAfterRewrite: recoveredAfterRewrite
+                )
                 missingHints = rewriteOutcome.missingHints
                 rewriteAttempted = rewriteOutcome.rewriteAttempted
                 rewriteSuccess = rewriteOutcome.rewriteSuccess
@@ -339,32 +385,27 @@ enum E2ETestRunner {
             } else {
                 finalText = "No model loaded; routing-only checks completed."
                 rawFinalText = finalText
-                sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
+                let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
+                hygieneState = FinalHygieneState(rawFinalText: rawFinalText, finalText: finalText, rawSanitized: sanitized, postRewriteSanitized: sanitized, recoveredBeforeRewrite: nil, recoveredAfterRewrite: nil)
             }
         } else {
             finalText = "Routing guard checks completed."
             rawFinalText = finalText
-            sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
+            let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
+            hygieneState = FinalHygieneState(rawFinalText: rawFinalText, finalText: finalText, rawSanitized: sanitized, postRewriteSanitized: sanitized, recoveredBeforeRewrite: nil, recoveredAfterRewrite: nil)
         }
 
         let lowerFinal = finalText.lowercased()
         let lowerRawFinal = rawFinalText.lowercased()
-        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") || lowerFinal.contains("<think") || lowerFinal.contains("</think>") {
-            outputHygieneFailures.append("Hidden reasoning leaked into final output")
-        }
-        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") || lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") {
-            outputHygieneFailures.append("Raw web payload leaked into final output")
-        }
-        if lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") {
-            outputHygieneFailures.append("Raw web payload leaked into final output")
-        }
-        if sanitizedOutput.removedArtifacts.contains(.emptyAfterSanitization) {
-            outputHygieneFailures.append("Final output empty after sanitization")
-        }
-        if scenario.expectedIntent == .weather && weatherGroundingOverreach(finalText: finalText, observations: events.filter { $0.phase == "step" }.map(\.message).joined(separator: "\n")) {
-            outputHygieneFailures.append("Weather precipitation recommendation not grounded")
-        }
-        failures.append(contentsOf: outputHygieneFailures)
+        let observations = events.filter { $0.phase == "step" }.map(\.message).joined(separator: "\n")
+        let outputHygieneFailures = hygieneFailures(
+            lowerRawFinal: lowerRawFinal,
+            lowerFinal: lowerFinal,
+            removedArtifacts: hygieneState.removedArtifacts,
+            scenario: scenario,
+            observations: observations
+        )
+        failures = mergedStrings(failures, outputHygieneFailures)
         for hint in scenario.requiredTextHints where !lowerFinal.contains(hint.lowercased()) {
             failures.append("Required final hint missing: \(hint)")
         }
@@ -389,7 +430,52 @@ enum E2ETestRunner {
             }
         }
 
-        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: String(rawFinalText.prefix(220)), sanitizedFinalPrefix: String(finalText.prefix(220)), rawFinalHadUnsafeLeakage: sanitizedOutput.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: sanitizedOutput.removedArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: String(rawFinalText.prefix(220)), sanitizedFinalPrefix: String(finalText.prefix(220)), rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: hygieneState.removedArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+    }
+
+    static func mergeSanitizerOutputs(_ primary: SanitizedFinalOutput, recovered: SanitizedFinalOutput?) -> SanitizedFinalOutput {
+        guard let recovered else { return primary }
+        return SanitizedFinalOutput(
+            text: primary.text,
+            removedArtifacts: mergedArtifacts(primary.removedArtifacts, recovered.removedArtifacts),
+            hadUnsafeLeakage: primary.hadUnsafeLeakage || recovered.hadUnsafeLeakage
+        )
+    }
+
+    static func mergedArtifacts(_ groups: [FinalOutputArtifact]...) -> [FinalOutputArtifact] {
+        var merged: [FinalOutputArtifact] = []
+        for artifact in groups.flatMap({ $0 }) where !merged.contains(artifact) {
+            merged.append(artifact)
+        }
+        return merged
+    }
+
+    static func mergedStrings(_ groups: [String]...) -> [String] {
+        var merged: [String] = []
+        for item in groups.flatMap({ $0 }) where !merged.contains(item) {
+            merged.append(item)
+        }
+        return merged
+    }
+
+    static func hygieneFailures(lowerRawFinal: String, lowerFinal: String, removedArtifacts: [FinalOutputArtifact], scenario: E2ETestScenario, observations: String) -> [String] {
+        var failures: [String] = []
+        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") || lowerFinal.contains("<think") || lowerFinal.contains("</think>") || removedArtifacts.contains(.thinkBlock) || removedArtifacts.contains(.malformedThinkPrefix) {
+            failures.append("Hidden reasoning leaked into final output")
+        }
+        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") || lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") || removedArtifacts.contains(.lumenWebPayload) {
+            failures.append("Raw lumen_web_payload marker leaked into final output")
+        }
+        if lowerRawFinal.contains("{\"kind\":\"searchresults\"") || lowerRawFinal.contains("\"mediakind\":\"page\"") || lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") || removedArtifacts.contains(.rawToolPayload) {
+            failures.append("Raw search-results JSON leaked into final output")
+        }
+        if removedArtifacts.contains(.emptyAfterSanitization) {
+            failures.append("Final output empty after sanitization")
+        }
+        if scenario.expectedIntent == .weather && weatherGroundingOverreach(finalText: lowerFinal, observations: observations) {
+            failures.append("Weather precipitation recommendation not grounded")
+        }
+        return mergedStrings(failures)
     }
 
     private static func weatherGroundingOverreach(finalText: String, observations: String) -> Bool {

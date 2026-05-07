@@ -88,8 +88,29 @@ nonisolated enum FinalOutputSanitizer {
         return output
     }
 
-    static func consumeRecoveredUnsafeOutput(forSanitizedText sanitizedText: String) -> SanitizedFinalOutput? {
-        recoveryCache.consumeRecovery(forSanitizedText: sanitizedText)
+    static func consumeRecoveredUnsafeOutput(forSanitizedText text: String) -> SanitizedFinalOutput? {
+        if let direct = recoveryCache.consumeRecovery(forSanitizedText: text) {
+            return direct
+        }
+
+        let sanitizedKey = sanitizedRecoveryKey(for: text)
+        guard sanitizedKey != text else { return nil }
+        return recoveryCache.consumeRecovery(forSanitizedText: sanitizedKey)
+    }
+
+    private static func sanitizedRecoveryKey(for raw: String) -> String {
+        var text = raw
+        text = text.replacingOccurrences(of: "(?is)<think>.*?</think>", with: " ", options: .regularExpression)
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("<think>") {
+            text = ""
+        }
+        text = text.replacingOccurrences(of: "(?is)^\\s*<think>.*$", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?is)<lumen_web_payload>.*?</lumen_web_payload>", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?is)<lumen_web_payload[^>]*>.*$", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?is)</lumen_web_payload>", with: " ", options: .regularExpression)
+        text = removingRawToolPayloadObjects(from: text).text
+        text = normalizeWhitespace(text)
+        return text.isEmpty ? fallback : text
     }
 
     private static func normalizeWhitespace(_ text: String) -> String {

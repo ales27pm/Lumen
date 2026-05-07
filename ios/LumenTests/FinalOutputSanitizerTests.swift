@@ -25,6 +25,15 @@ struct FinalOutputSanitizerTests {
         #expect(out.removedArtifacts.contains(.lumenWebPayload))
     }
 
+    @Test func removesRawSearchResultsJSONObjectOutsidePayloadTags() {
+        let raw = "Before {\"kind\":\"searchResults\",\"results\":[{\"mediaKind\":\"page\",\"title\":\"Doc\"}]} after"
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        #expect(out.text == "Before after")
+        #expect(out.removedArtifacts.contains(.rawToolPayload))
+        #expect(!out.text.contains("searchResults"))
+        #expect(!out.text.contains("mediaKind"))
+    }
+
     @Test func handlesOutputThatBecomesEmpty() {
         let out = FinalOutputSanitizer.sanitizeUserVisibleText("<think>only</think>")
         #expect(out.removedArtifacts.contains(.emptyAfterSanitization))

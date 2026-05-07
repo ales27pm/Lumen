@@ -964,6 +964,51 @@ final actor AppLlamaService {
         UInt32.random(in: UInt32.min...UInt32.max)
     }
 
+    private struct HiddenBlockStreamSanitizer {
+        private var carry = ""
+        private var insideHidden = false
+
+        mutating func sanitize(_ chunk: String) -> String {
+            guard !chunk.isEmpty else { return "" }
+            carry += chunk
+            let lower = carry.lowercased()
+            var out = ""
+            var cursor = lower.startIndex
+            var flushed = lower.startIndex
+
+            while cursor < lower.endIndex {
+                if !insideHidden,
+                   let open = lower[cursor...].range(of: "<think>") ?? lower[cursor...].range(of: "<thinking>") {
+                    if flushed < open.lowerBound {
+                        out += String(carry[flushed..<open.lowerBound])
+                    }
+                    insideHidden = true
+                    cursor = open.upperBound
+                    flushed = cursor
+                    continue
+                }
+                if insideHidden,
+                   let close = lower[cursor...].range(of: "</think>") ?? lower[cursor...].range(of: "</thinking>") {
+                    insideHidden = false
+                    cursor = close.upperBound
+                    flushed = cursor
+                    continue
+                }
+                break
+            }
+
+            if !insideHidden {
+                if flushed < lower.endIndex {
+                    out += String(carry[flushed..<lower.endIndex])
+                }
+                carry = ""
+            } else {
+                carry = String(carry[flushed...])
+            }
+            return out
+        }
+    }
+
     private func buildMessages(req: GenerateRequest, contextSize: Int? = nil) -> [LlamaChatMessage] {
         let budget = PromptBudget.make(
             contextSize: contextSize ?? 2048,

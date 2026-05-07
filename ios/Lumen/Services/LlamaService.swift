@@ -733,8 +733,15 @@ final actor AppLlamaService {
                         seed: groundedRequest.seed
                     )
                     var rawOutput = ""
+                    var streamedAnyChunk = false
+                    var streamSanitizer = HiddenBlockStreamSanitizer()
                     for try await chunk in stream {
                         rawOutput += chunk
+                        let delta = streamSanitizer.sanitize(chunk)
+                        if !delta.isEmpty {
+                            streamedAnyChunk = true
+                            continuation.yield(.text(delta))
+                        }
                     }
                     let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -747,7 +754,7 @@ final actor AppLlamaService {
                         // Do not report a word count as token count; leave nil until exact runtime token counts are threaded through both runtime paths.
                         outputTokenCount: nil
                     )
-                    if !sanitized.isEmpty {
+                    if !streamedAnyChunk && !sanitized.isEmpty {
                         continuation.yield(.text(sanitized))
                     }
                 } catch {
@@ -950,6 +957,51 @@ final actor AppLlamaService {
 
     private func makeRandomSeed() -> UInt32 {
         UInt32.random(in: UInt32.min...UInt32.max)
+    }
+
+    private struct HiddenBlockStreamSanitizer {
+        private var carry = ""
+        private var insideHidden = false
+
+        mutating func sanitize(_ chunk: String) -> String {
+            guard !chunk.isEmpty else { return "" }
+            carry += chunk
+            let lower = carry.lowercased()
+            var out = ""
+            var cursor = lower.startIndex
+            var flushed = lower.startIndex
+
+            while cursor < lower.endIndex {
+                if !insideHidden,
+                   let open = lower[cursor...].range(of: "<think>") ?? lower[cursor...].range(of: "<thinking>") {
+                    if flushed < open.lowerBound {
+                        out += String(carry[flushed..<open.lowerBound])
+                    }
+                    insideHidden = true
+                    cursor = open.upperBound
+                    flushed = cursor
+                    continue
+                }
+                if insideHidden,
+                   let close = lower[cursor...].range(of: "</think>") ?? lower[cursor...].range(of: "</thinking>") {
+                    insideHidden = false
+                    cursor = close.upperBound
+                    flushed = cursor
+                    continue
+                }
+                break
+            }
+
+            if !insideHidden {
+                if flushed < lower.endIndex {
+                    out += String(carry[flushed..<lower.endIndex])
+                }
+                carry = ""
+            } else {
+                carry = String(carry[flushed...])
+            }
+            return out
+        }
     }
 
     private func buildMessages(req: GenerateRequest, contextSize: Int? = nil) -> [LlamaChatMessage] {

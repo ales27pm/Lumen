@@ -43,6 +43,22 @@ struct AgentGroundingRegressionTests {
         #expect(!audit.violations.contains(where: { $0.code == "missing_required_tool_action" }))
     }
 
+    @MainActor
+    @Test func behaviorAuditorFailsOnHiddenReasoningLeak() async throws {
+        let manifest = makeManifest(tools: [], intent: "chat", allowed: [])
+        let now = Date()
+        let messages: [ChatMessage] = [
+            ChatMessage(role: .user, content: "hello"),
+            ChatMessage(role: .assistant, content: "<think>secret</think>Hi")
+        ].enumerated().map { idx, msg in
+            msg.createdAt = now.addingTimeInterval(TimeInterval(idx))
+            return msg
+        }
+        let audit = AgentModelBehaviorAuditor().audit(manifest: manifest, messages: messages)
+        #expect(!audit.passed)
+        #expect(audit.violations.contains(where: { $0.code == "hiddenReasoningLeak" }))
+    }
+
     @Test func requiredToolFallbackRoutesCameraMapsAndOutlookPrompts() {
         #expect(SlotAgentService.resolveRequiredToolFallback(intent: .camera, prompt: "Open camera and take a picture", allowedToolIDs: ["camera.capture"]) == "camera.capture")
         #expect(SlotAgentService.resolveRequiredToolFallback(intent: .maps, prompt: "Where are we", allowedToolIDs: ["location.current", "maps.search", "maps.directions"]) == "location.current")

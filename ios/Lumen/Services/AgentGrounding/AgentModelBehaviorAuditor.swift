@@ -25,7 +25,31 @@ final class AgentModelBehaviorAuditor {
             let runtimeAllowedTools = routing.allowedToolIDs
             let actionSteps = message.agentSteps.filter { $0.kind == .action }
             let visibleFinal = AssistantOutputSanitizer.sanitize(message.content)
+            let sanitizedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(message.content)
             auditedTraceCount += 1
+
+            if message.content.localizedCaseInsensitiveContains("<think") || message.content.localizedCaseInsensitiveContains("<lumen_web_payload") {
+                violations.append(violation(
+                    severity: .critical,
+                    code: "hiddenReasoningLeak",
+                    agent: "mouth",
+                    expected: "No hidden reasoning or raw payload markers in user-visible final text.",
+                    actual: String(message.content.prefix(600)),
+                    prompt: prompt,
+                    problem: "Final output contained hidden reasoning or raw payload markers."
+                ))
+            }
+            if sanitizedFinal.hadUnsafeLeakage {
+                violations.append(violation(
+                    severity: .error,
+                    code: "finalSanitizerRecoveredUnsafeOutput",
+                    agent: "mouth",
+                    expected: "Model should emit clean final output without sanitizer recovery.",
+                    actual: sanitizedFinal.removedArtifacts.map(\.rawValue).joined(separator: ","),
+                    prompt: prompt,
+                    problem: "Final sanitizer had to recover unsafe output artifacts."
+                ))
+            }
 
             if containsSentinel(visibleFinal, sentinels: forbiddenSentinels) {
                 violations.append(violation(

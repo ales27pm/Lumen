@@ -642,7 +642,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
+        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
     }
 
     func respond(
@@ -667,7 +667,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
+        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
     }
 
     func resetKVCache() async {
@@ -733,22 +733,10 @@ final actor AppLlamaService {
                         seed: groundedRequest.seed
                     )
                     var rawOutput = ""
-                    var streamedAnyChunk = false
-                    var sanitizedEmittedCount = 0
                     for try await chunk in stream {
                         rawOutput += chunk
-                        let sanitizedSoFar = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
-                        if sanitizedSoFar.count > sanitizedEmittedCount {
-                            let start = sanitizedSoFar.index(sanitizedSoFar.startIndex, offsetBy: sanitizedEmittedCount)
-                            let delta = String(sanitizedSoFar[start...])
-                            if !delta.isEmpty {
-                                streamedAnyChunk = true
-                                continuation.yield(.text(delta))
-                                sanitizedEmittedCount = sanitizedSoFar.count
-                            }
-                        }
                     }
-                    let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                    let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(rawOutput).text
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(
                         slot: slot,
@@ -759,7 +747,7 @@ final actor AppLlamaService {
                         // Do not report a word count as token count; leave nil until exact runtime token counts are threaded through both runtime paths.
                         outputTokenCount: nil
                     )
-                    if !streamedAnyChunk && !sanitized.isEmpty {
+                    if !sanitized.isEmpty {
                         continuation.yield(.text(sanitized))
                     }
                 } catch {

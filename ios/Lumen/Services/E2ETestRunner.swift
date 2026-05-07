@@ -151,6 +151,35 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
     let events: [E2ETestEvent]
     let startedAt: Date
     let finishedAt: Date
+    let rawFinalPrefix: String
+    let sanitizedFinalPrefix: String
+    let rawFinalHadUnsafeLeakage: Bool
+    let sanitizedFinalRemovedArtifacts: [String]
+    let outputHygieneFailures: [String]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        scenarioID = try c.decode(String.self, forKey: .scenarioID)
+        title = try c.decode(String.self, forKey: .title)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        expectedIntent = try c.decode(String.self, forKey: .expectedIntent)
+        actualIntent = try c.decode(String.self, forKey: .actualIntent)
+        passed = try c.decode(Bool.self, forKey: .passed)
+        failures = try c.decode([String].self, forKey: .failures)
+        finalText = try c.decode(String.self, forKey: .finalText)
+        missingHints = try c.decode([String].self, forKey: .missingHints)
+        rewriteAttempted = try c.decode(Bool.self, forKey: .rewriteAttempted)
+        rewriteSuccess = try c.decode(Bool.self, forKey: .rewriteSuccess)
+        events = try c.decode([E2ETestEvent].self, forKey: .events)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        finishedAt = try c.decode(Date.self, forKey: .finishedAt)
+        rawFinalPrefix = try c.decodeIfPresent(String.self, forKey: .rawFinalPrefix) ?? ""
+        sanitizedFinalPrefix = try c.decodeIfPresent(String.self, forKey: .sanitizedFinalPrefix) ?? ""
+        rawFinalHadUnsafeLeakage = try c.decodeIfPresent(Bool.self, forKey: .rawFinalHadUnsafeLeakage) ?? false
+        sanitizedFinalRemovedArtifacts = try c.decodeIfPresent([String].self, forKey: .sanitizedFinalRemovedArtifacts) ?? []
+        outputHygieneFailures = try c.decodeIfPresent([String].self, forKey: .outputHygieneFailures) ?? []
+    }
 }
 
 nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
@@ -233,6 +262,9 @@ enum E2ETestRunner {
         var missingHints: [String] = []
         var rewriteAttempted = false
         var rewriteSuccess = false
+        var rawFinalText = ""
+        var sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText("")
+        var outputHygieneFailures: [String] = []
 
         func event(_ phase: String, _ message: String) {
             events.append(E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message))
@@ -282,21 +314,23 @@ enum E2ETestRunner {
                     case .stepDelta:
                         break
                     case .finalDelta(let chunk):
-                        finalText += chunk
+                        rawFinalText += chunk
                     case .done(let text, let allSteps):
-                        if !text.isEmpty { finalText = text }
+                        if !text.isEmpty { rawFinalText = text }
                         steps = allSteps.isEmpty ? steps : allSteps
                     case .error(let message):
                         failures.append("Agent error: \(message)")
                     }
                 }
-                finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
+                rawFinalText = FinalIntentValidator.validate(rawFinalText, routing: routing, fallback: nil)
+                sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(rawFinalText)
+                finalText = sanitizedOutput.text
                 let rewriteOutcome = await validateAndRewriteFinalTextIfNeeded(
                     scenario: scenario,
                     routing: routing,
                     originalFinal: finalText
                 )
-                finalText = rewriteOutcome.finalText
+                finalText = FinalOutputSanitizer.sanitizeUserVisibleText(rewriteOutcome.finalText).text
                 missingHints = rewriteOutcome.missingHints
                 rewriteAttempted = rewriteOutcome.rewriteAttempted
                 rewriteSuccess = rewriteOutcome.rewriteSuccess
@@ -304,12 +338,33 @@ enum E2ETestRunner {
                 event("final", finalText)
             } else {
                 finalText = "No model loaded; routing-only checks completed."
+                rawFinalText = finalText
+                sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
             }
         } else {
             finalText = "Routing guard checks completed."
+            rawFinalText = finalText
+            sanitizedOutput = FinalOutputSanitizer.sanitizeUserVisibleText(finalText)
         }
 
         let lowerFinal = finalText.lowercased()
+        let lowerRawFinal = rawFinalText.lowercased()
+        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") || lowerFinal.contains("<think") || lowerFinal.contains("</think>") {
+            outputHygieneFailures.append("Hidden reasoning leaked into final output")
+        }
+        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") || lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") {
+            outputHygieneFailures.append("Raw web payload leaked into final output")
+        }
+        if lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") {
+            outputHygieneFailures.append("Raw web payload leaked into final output")
+        }
+        if sanitizedOutput.removedArtifacts.contains(.emptyAfterSanitization) {
+            outputHygieneFailures.append("Final output empty after sanitization")
+        }
+        if scenario.expectedIntent == .weather && weatherGroundingOverreach(finalText: finalText, observations: events.filter { $0.phase == "step" }.map(\.message).joined(separator: "\n")) {
+            outputHygieneFailures.append("Weather precipitation recommendation not grounded")
+        }
+        failures.append(contentsOf: outputHygieneFailures)
         for hint in scenario.requiredTextHints where !lowerFinal.contains(hint.lowercased()) {
             failures.append("Required final hint missing: \(hint)")
         }
@@ -334,7 +389,16 @@ enum E2ETestRunner {
             }
         }
 
-        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date())
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: String(rawFinalText.prefix(220)), sanitizedFinalPrefix: String(finalText.prefix(220)), rawFinalHadUnsafeLeakage: sanitizedOutput.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: sanitizedOutput.removedArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+    }
+
+    private static func weatherGroundingOverreach(finalText: String, observations: String) -> Bool {
+        let answer = finalText.lowercased()
+        let obs = observations.lowercased()
+        let recommendsUmbrella = answer.contains("umbrella") || answer.contains("likely raining") || answer.contains("it's raining") || answer.contains("it is raining")
+        guard recommendsUmbrella else { return false }
+        let precipitationSignals = ["rain", "raining", "drizzle", "precip", "precipitation", "shower", "forecasted rain", "chance of rain", "probability of precipitation"]
+        return !precipitationSignals.contains(where: { obs.contains($0) })
     }
 
     private static func referencesRetrievedSnippet(_ lowerFinal: String) -> Bool {

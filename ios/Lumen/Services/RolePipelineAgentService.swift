@@ -368,21 +368,21 @@ final class RolePipelineAgentService {
         continuation: AsyncStream<AgentEvent>.Continuation,
         remContext: REMContext
     ) async {
-        let final = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
-        continuation.yield(.finalDelta(final))
-        continuation.yield(.done(finalText: final, steps: steps))
+        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(finalText.trimmingCharacters(in: .whitespacesAndNewlines))
+        continuation.yield(.finalDelta(sanitized.text))
+        continuation.yield(.done(finalText: sanitized.text, steps: steps))
         continuation.finish()
-        scheduleREMAudit(req: req, finalText: final, context: remContext)
+        scheduleREMAudit(req: req, rawFinalText: finalText, sanitized: sanitized, context: remContext)
     }
 
-    private func scheduleREMAudit(req: AgentRequest, finalText: String, context: REMContext) {
+    private func scheduleREMAudit(req: AgentRequest, rawFinalText: String, sanitized: SanitizedFinalOutput, context: REMContext) {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            await runREMAudit(req: req, finalText: finalText, context: context)
+            await runREMAudit(req: req, rawFinalText: rawFinalText, sanitized: sanitized, context: context)
         }
     }
 
-    private func runREMAudit(req: AgentRequest, finalText: String, context: REMContext) async {
+    private func runREMAudit(req: AgentRequest, rawFinalText: String, sanitized: SanitizedFinalOutput, context: REMContext) async {
         let observationBlock = context.observations.isEmpty ? "none" : context.observations.joined(separator: "\n")
         let prompt = """
         You are Lumen REM. Produce a compact post-turn audit record for the improvement loop.
@@ -398,7 +398,7 @@ final class RolePipelineAgentService {
         \(observationBlock)
 
         Final user answer:
-        \(finalText)
+        \(sanitized.text)
         """
         let audit = await generateText(
             slot: .rem,
@@ -409,10 +409,10 @@ final class RolePipelineAgentService {
             maxTokens: 240,
             modelName: "rem-post-turn-audit"
         )
-        persistREMAudit(req: req, finalText: finalText, audit: audit)
+        persistREMAudit(req: req, rawFinalText: rawFinalText, sanitized: sanitized, context: context, audit: audit)
     }
 
-    private func persistREMAudit(req: AgentRequest, finalText: String, audit: String) {
+    private func persistREMAudit(req: AgentRequest, rawFinalText: String, sanitized: SanitizedFinalOutput, context: REMContext, audit: String) {
         do {
             let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
             let directory = base.appendingPathComponent("Diagnostics", isDirectory: true).appendingPathComponent("REM", isDirectory: true)
@@ -422,7 +422,13 @@ final class RolePipelineAgentService {
                 "id": UUID().uuidString,
                 "createdAt": ISO8601DateFormatter().string(from: Date()),
                 "userMessagePrefix": String(req.userMessage.prefix(800)),
-                "finalTextPrefix": String(finalText.prefix(1200)),
+                "finalTextPrefix": String(sanitized.text.prefix(1200)),
+                "rawFinalPrefix": String(rawFinalText.prefix(1200)),
+                "rawFinalHadUnsafeLeakage": sanitized.hadUnsafeLeakage,
+                "sanitizedFinalRemovedArtifacts": sanitized.removedArtifacts.map(\.rawValue),
+                "finalSanitizationApplied": true,
+                "routingIntent": context.routingIntent,
+                "observationsPrefix": String(context.observations.joined(separator: "\n").prefix(1200)),
                 "auditPrefix": String(audit.prefix(2000))
             ]
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])

@@ -4,8 +4,6 @@ import OSLog
 
 @MainActor
 enum ModelLoader {
-    private static let logger = Logger(subsystem: "com.lumen.ios", category: "ModelLoader")
-
     static func syncChat(appState: AppState, stored: [StoredModel]) async {
         await ensureFleetChatLoaded(appState: appState, stored: stored)
     }
@@ -64,34 +62,17 @@ enum ModelLoader {
         } else if await AppLlamaService.shared.isChatLoaded {
             return true
         }
-
-        let candidates: [StoredModel] = candidateList(preferredID: preferredID, role: .chat, stored: stored)
-        for candidate in candidates {
-            let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
-            guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
-            guard ModelFileIntegrity.validateInstalledFile(candidate) else { continue }
-            do {
-                try await AppLlamaService.shared.unloadAllChat()
-                try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: appState.contextSize)
-                if appState.activeChatModelID != candidate.id.uuidString {
-                    appState.activeChatModelID = candidate.id.uuidString
-                }
-                return true
-            } catch {
-                logger.error("Primary chat load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
-                do {
-                    try await AppLlamaService.shared.unloadAllChat()
-                    try await AppLlamaService.shared.loadChatModel(path: resolvedPath, contextSize: 2048)
-                    if appState.activeChatModelID != candidate.id.uuidString {
-                        appState.activeChatModelID = candidate.id.uuidString
-                    }
-                    return true
-                } catch {
-                    continue
-                }
-            }
-        }
-        return false
+        let candidates = stored.filter { $0.modelRole == .chat }
+        SlotModelRuntimeCoordinator.shared.configure(
+            assignments: [:],
+            contextSize: appState.contextSize,
+            preferExclusiveChatRuntime: true
+        )
+        return await SlotModelRuntimeCoordinator.shared.ensureChatModel(
+            appState: appState,
+            candidates: candidates,
+            preferredID: preferredID
+        )
     }
 
     @discardableResult
@@ -108,34 +89,16 @@ enum ModelLoader {
             return true
         }
 
-        let candidates: [StoredModel] = candidateList(preferredID: preferredID, role: .embedding, stored: stored)
-        for candidate in candidates {
-            let resolvedPath = ModelStorage.resolvedModelURL(from: candidate.localPath, fileName: candidate.fileName).path
-            guard FileManager.default.fileExists(atPath: resolvedPath) else { continue }
-            guard ModelFileIntegrity.validateInstalledFile(candidate) else { continue }
-            do {
-                try await AppLlamaService.shared.loadEmbeddingModel(path: resolvedPath)
-                if appState.activeEmbeddingModelID != candidate.id.uuidString {
-                    appState.activeEmbeddingModelID = candidate.id.uuidString
-                }
-                return true
-            } catch {
-                logger.error("Embedding load failed for candidate=\(candidate.id.uuidString, privacy: .public) path=\(resolvedPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
-                continue
-            }
-        }
-        return false
-    }
-
-    private static func candidateList(preferredID: String?, role: ModelRole, stored: [StoredModel]) -> [StoredModel] {
-        let pool = stored.filter { $0.modelRole == role && ModelFileIntegrity.validateInstalledFile($0) }
-        var ordered: [StoredModel] = []
-        if let id = preferredID, let preferred = pool.first(where: { $0.id.uuidString == id }) {
-            ordered.append(preferred)
-        }
-        for m in pool where !ordered.contains(where: { $0.id == m.id }) {
-            ordered.append(m)
-        }
-        return ordered
+        let candidates = stored.filter { $0.modelRole == .embedding }
+        SlotModelRuntimeCoordinator.shared.configure(
+            assignments: SlotModelRuntimeCoordinator.shared.configuredAssignments,
+            contextSize: appState.contextSize,
+            preferExclusiveChatRuntime: true
+        )
+        return await SlotModelRuntimeCoordinator.shared.ensureEmbeddingModel(
+            appState: appState,
+            candidates: candidates,
+            preferredID: preferredID
+        )
     }
 }

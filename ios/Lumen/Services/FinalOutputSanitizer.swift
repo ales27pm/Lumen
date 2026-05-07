@@ -14,10 +14,36 @@ nonisolated enum FinalOutputArtifact: String, Codable, Sendable, Equatable {
     case emptyAfterSanitization
 }
 
+private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recoveredBySanitizedText: [String: SanitizedFinalOutput] = [:]
+
+    func remember(_ output: SanitizedFinalOutput, forSanitizedText sanitizedText: String) {
+        guard output.hadUnsafeLeakage else { return }
+        lock.lock()
+        recoveredBySanitizedText[sanitizedText] = output
+        if recoveredBySanitizedText.count > 64 {
+            recoveredBySanitizedText.remove(at: recoveredBySanitizedText.startIndex)
+        }
+        lock.unlock()
+    }
+
+    func consumeRecovery(forSanitizedText sanitizedText: String) -> SanitizedFinalOutput? {
+        lock.lock()
+        defer { lock.unlock() }
+        return recoveredBySanitizedText.removeValue(forKey: sanitizedText)
+    }
+}
+
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
+    private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
 
     static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
+        if let recovered = recoveryCache.consumeRecovery(forSanitizedText: raw) {
+            return recovered
+        }
+
         var text = raw
         var removed: [FinalOutputArtifact] = []
 
@@ -61,7 +87,9 @@ nonisolated enum FinalOutputSanitizer {
             text = fallback
         }
 
-        return SanitizedFinalOutput(text: text, removedArtifacts: removed, hadUnsafeLeakage: !removed.isEmpty)
+        let output = SanitizedFinalOutput(text: text, removedArtifacts: removed, hadUnsafeLeakage: !removed.isEmpty)
+        recoveryCache.remember(output, forSanitizedText: text)
+        return output
     }
 
     private static func normalizeWhitespace(_ text: String) -> String {

@@ -124,6 +124,7 @@ AUTH_MODE="$(read_required 'Select [1/2]: ')"
 
 API_KEY=""
 API_ISSUER=""
+API_KEY_DIR=""
 APPLE_ID=""
 APP_SPECIFIC_PASSWORD=""
 ASC_PROVIDER=""
@@ -132,6 +133,9 @@ case "$AUTH_MODE" in
   1)
     API_KEY="$(read_required 'API key ID: ')"
     API_ISSUER="$(read_required 'API issuer ID (UUID): ')"
+    API_KEY_DIR="$(read_required 'Directory containing AuthKey_<KEYID>.p8: ')"
+    [[ -d "$API_KEY_DIR" ]] || fail "API key directory not found: $API_KEY_DIR"
+    [[ -f "$API_KEY_DIR/AuthKey_${API_KEY}.p8" ]] || fail "Missing API key file: $API_KEY_DIR/AuthKey_${API_KEY}.p8"
     read -r -p "Optional provider short name (leave blank to skip): " ASC_PROVIDER
     ;;
   2)
@@ -184,10 +188,13 @@ info "Upload via altool"
 UPLOAD_CMD=(xcrun altool --upload-app --type ios --file "$IPA_PATH")
 [[ -n "$ASC_PROVIDER" ]] && UPLOAD_CMD+=(--asc-provider "$ASC_PROVIDER")
 if [[ "$AUTH_MODE" == "1" ]]; then
+  export API_PRIVATE_KEYS_DIR="$API_KEY_DIR"
   UPLOAD_CMD+=(--apiKey "$API_KEY" --apiIssuer "$API_ISSUER")
 else
-  UPLOAD_CMD+=(--username "$APPLE_ID" --password "$APP_SPECIFIC_PASSWORD")
+  export ALTOOL_APP_SPECIFIC_PASSWORD="$APP_SPECIFIC_PASSWORD"
+  UPLOAD_CMD+=(--username "$APPLE_ID" --password @env:ALTOOL_APP_SPECIFIC_PASSWORD)
 fi
 
 "${UPLOAD_CMD[@]}"
+unset ALTOOL_APP_SPECIFIC_PASSWORD || true
 bold "✅ Upload complete. Check App Store Connect for processing status."

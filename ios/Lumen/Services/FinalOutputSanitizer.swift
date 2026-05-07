@@ -40,10 +40,6 @@ nonisolated enum FinalOutputSanitizer {
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
 
     static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
-        if let recovered = recoveryCache.consumeRecovery(forSanitizedText: raw) {
-            return recovered
-        }
-
         var text = raw
         var removed: [FinalOutputArtifact] = []
 
@@ -90,6 +86,10 @@ nonisolated enum FinalOutputSanitizer {
         let output = SanitizedFinalOutput(text: text, removedArtifacts: removed, hadUnsafeLeakage: !removed.isEmpty)
         recoveryCache.remember(output, forSanitizedText: text)
         return output
+    }
+
+    static func consumeRecoveredUnsafeOutput(forSanitizedText sanitizedText: String) -> SanitizedFinalOutput? {
+        recoveryCache.consumeRecovery(forSanitizedText: sanitizedText)
     }
 
     private static func normalizeWhitespace(_ text: String) -> String {

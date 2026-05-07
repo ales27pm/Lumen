@@ -5,13 +5,13 @@
   "agent": "mouth",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "c4f2c5a36b3172ec5125abf20a7467c641499b67",
+    "manifestCommit": "bd86b9afe5fad9baaee8e3b3a043fb9b9373267c",
     "recordCounts": {
       "eval": 5,
       "train_dpo": 10,
-      "train_sft": 144,
+      "train_sft": 133,
       "val_dpo": 2,
-      "val_sft": 26
+      "val_sft": 23
     },
     "sourceFamilies": [
       "cross_model_training",

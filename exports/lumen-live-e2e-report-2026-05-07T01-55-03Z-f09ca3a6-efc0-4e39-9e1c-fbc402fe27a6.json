@@ -1,0 +1,1740 @@
+{
+  "app" : {
+    "buildNumber" : "154",
+    "bundleIdentifier" : "com.27pm.lumen",
+    "name" : "Lumen",
+    "shortVersion" : "1.0.0"
+  },
+  "exportPolicy" : {
+    "format" : "live-e2e-test-report-json",
+    "includesDeterministicStaticScenarios" : false,
+    "notes" : [
+      "This is the live E2E model/test layer export.",
+      "Scenarios with requiresAgentRun=true are intended to exercise the loaded SlotAgentService path.",
+      "If a scenario says no model loaded or routing-only checks completed, the offline ingester treats it as invalid E2E evidence."
+    ],
+    "ownsLiveE2EScenarios" : true,
+    "privacy" : "Contains prompts, final outputs, failures, and event logs from the current local E2E run. Review before sharing outside the improve-loop.",
+    "sourceLayer" : "e2eTestReport"
+  },
+  "generatedAt" : "2026-05-07T01:55:03Z",
+  "payload" : {
+    "failed" : 0,
+    "finishedAt" : "2026-05-07T01:54:59Z",
+    "id" : "475591F7-C421-45C9-A84B-03B9CAFEC023",
+    "passed" : 43,
+    "results" : [
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:49:19Z",
+            "id" : "D7349171-0AC1-4473-BBBD-93283E88E123",
+            "message" : "What is the weather here?",
+            "phase" : "start",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:49:19Z",
+            "id" : "F9643D2C-147B-4592-AF43-ADF6D83A72EC",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:49:19Z",
+            "id" : "4544C70B-E0A8-4575-A22E-4485B2B4CFA8",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:49:49Z",
+            "id" : "8181FDC1-A362-4B1E-9C4E-1C62D42E6E22",
+            "message" : "action: weather(location=current location)",
+            "phase" : "step",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:49:49Z",
+            "id" : "04C623A0-50F7-4728-8EEA-8FAF1AAE5011",
+            "message" : "observation: I need location access, or a city name, to check the weather. Try asking `weather in Montreal` or enable Location permission.",
+            "phase" : "step",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:16Z",
+            "id" : "9783C75B-71EE-4FBF-B247-C1A92F70352B",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:16Z",
+            "id" : "92F0FDB3-6CA5-4AD4-8D71-9B92D7EBC0D9",
+            "message" : "<think>\nOkay, the user asked, \"What is the weather here?\" And the system noted that it needs location access or a city name. The draft response suggests trying \"weather in Montreal\" or enabling location permission. Since the user hasn't provided a specific location, the best approach is to guide them to provide a city name or enable location permissions. The answer should be concise, informing them about the required action without assuming a specific location. So, the final answer would be something like, \"To check the weather, please provide a city name or enable location permission.\"",
+            "phase" : "final",
+            "scenarioID" : "weather-here-no-calendar"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "<think>\nOkay, the user asked, \"What is the weather here?\" And the system noted that it needs location access or a city name. The draft response suggests trying \"weather in Montreal\" or enabling location permission. Since the user hasn't provided a specific location, the best approach is to guide them to provide a city name or enable location permissions. The answer should be concise, informing them about the required action without assuming a specific location. So, the final answer would be something like, \"To check the weather, please provide a city name or enable location permission.\"",
+        "finishedAt" : "2026-05-07T01:50:16Z",
+        "id" : "16250ED7-327F-421B-8204-41E6BF949F8A",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What is the weather here?",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "weather-here-no-calendar",
+        "startedAt" : "2026-05-07T01:49:19Z",
+        "title" : "Weather here must not create events"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:50:16Z",
+            "id" : "3C198DF1-B9D1-4B12-A768-22AB33603573",
+            "message" : "Search web for diy underground shelter",
+            "phase" : "start",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:16Z",
+            "id" : "242E081A-4DAD-4443-8EF5-34044BC7ACA6",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:16Z",
+            "id" : "B46CE3E7-5CF8-4EAE-A4E1-5F97A7C347B3",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:50Z",
+            "id" : "2AA167BC-CF86-477E-99FC-CB66242E2971",
+            "message" : "action: web.search(query=diy underground shelter)",
+            "phase" : "step",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:50:51Z",
+            "id" : "FE3FA7B4-8E1B-43E8-9B29-8C239818FD3C",
+            "message" : "observation: Search results for: diy underground shelter\n\n1. 10 Steps to Build a DIY Underground Bushcraft Survival Shelter\nhttps://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter/\n\n2. Underground Survival Shelters: How to Build, Live, and Thrive Safely\nhttps://prepperswill.com/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface/\n\n3. Building a Secret Underground Shelter - Digging the Ground and ...\nhttps://m.youtube.com/watch?v=T7TeQDXHpIU\n\n4. Building an Underground Shelter: Complete Engineering Guide with Costs\nhttps://survivalstronghold.com/underground-shelter-engineering-guide/\n\n5. How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\nhttps://www.primalsurvivor.net/wilderness-survival-shelter-no-supplies/\n\n6. How To Build An Underground Shelter: A Comprehensive Guide\nhttps://www.battlbox.com/blogs/outdoors/how-to-build-an-underground-shelter-a-comprehensive-guide\n\n<lumen_web_payload>{\"generatedAt\":\"2026-05-07T01:50:51Z\",\"query\":\"diy underground shelter\",\"kind\":\"searchResults\",\"results\":[{\"source\":\"www.bushcraftbasecamp.com\",\"mediaKind\":\"page\",\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"source\":\"prepperswill.com\",\"mediaKind\":\"page\",\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"source\":\"m.youtube.com\",\"mediaKind\":\"video\",\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"source\":\"survivalstronghold.com\",\"mediaKind\":\"page\",\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"source\":\"www.primalsurvivor.net\",\"mediaKind\":\"page\",\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"source\":\"www.battlbox.com\",\"mediaKind\":\"page\",\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"source\":\"www.survivalsullivan.com\",\"mediaKind\":\"page\",\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\"},{\"source\":\"www.owntheyard.com\",\"mediaKind\":\"page\",\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\"}],\"media\":[{\"kind\":\"page\",\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"sourcePageURL\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"kind\":\"page\",\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"sourcePageURL\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"kind\":\"video\",\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"sourcePageURL\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"kind\":\"page\",\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"sourcePageURL\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"kind\":\"page\",\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"sourcePageURL\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"kind\":\"page\",\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"sourcePageURL\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"kind\":\"page\",\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\",\"sourcePageURL\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\"},{\"kind\":\"page\",\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\",\"sourcePageURL\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\"}]}</lumen_web_payload>",
+            "phase" : "step",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "9472460C-655A-4910-B45C-668A66C2819D",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "3FBB1983-B12A-4FB3-A1A3-7228F82DA209",
+            "message" : "<think>\nOkay, the user asked to search the web for \"diy underground shelter.\" I need to provide the final answer based on the search results. Let me check the sources.\n\nThe results include articles and videos about building DIY underground shelters. The first link talks about 10 steps for a bushcraft survival shelter. The second one gives tips for living and thriving below the surface. The third is a YouTube video on digging. The fourth has an engineering guide. The fifth is a simple design, and the sixth is a comprehensive guide.\n\nI should summarize these findings. Mention the different methods and resources available. Make sure to highlight the key points from each source without listing all links. Keep it concise and helpful. Also, note that the user can explore more details on the provided links. Avoid any markdown and keep the response natural.\n\n<lumen_web_payload>{\"kind\":\"searchResults\",\"results\":[{\"mediaKind\":\"page\",\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"source\":\"www.bushcraftbasecamp.com\"},{\"mediaKind\":\"page\",\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"source\":\"prepperswill.com\"},{\"mediaKind\":\"video\",\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"source\":\"m.youtube.com\"},{\"mediaKind\":\"page\",\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"source\":\"survivalstronghold.com\"},{\"mediaKind\":\"page\",\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"source\":\"www.primalsurvivor.net\"},{\"mediaKind\":\"page\",\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"source\":\"www.battlbox.com\"},{\"mediaKind\":\"page\",\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\",\"source\":\"www.survivalsullivan.com\"},{\"mediaKind\":\"page\",\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\",\"source\":\"www.owntheyard.com\"}],\"generatedAt\":\"2026-05-07T01:50:51Z\",\"query\":\"diy underground shelter\",\"media\":[{\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"kind\":\"video\",\"sourcePageURL\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\"},{\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\"}]}</lumen_web_payload>",
+            "phase" : "final",
+            "scenarioID" : "web-search-no-calendar"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "<think>\nOkay, the user asked to search the web for \"diy underground shelter.\" I need to provide the final answer based on the search results. Let me check the sources.\n\nThe results include articles and videos about building DIY underground shelters. The first link talks about 10 steps for a bushcraft survival shelter. The second one gives tips for living and thriving below the surface. The third is a YouTube video on digging. The fourth has an engineering guide. The fifth is a simple design, and the sixth is a comprehensive guide.\n\nI should summarize these findings. Mention the different methods and resources available. Make sure to highlight the key points from each source without listing all links. Keep it concise and helpful. Also, note that the user can explore more details on the provided links. Avoid any markdown and keep the response natural.\n\n<lumen_web_payload>{\"kind\":\"searchResults\",\"results\":[{\"mediaKind\":\"page\",\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"source\":\"www.bushcraftbasecamp.com\"},{\"mediaKind\":\"page\",\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"source\":\"prepperswill.com\"},{\"mediaKind\":\"video\",\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"source\":\"m.youtube.com\"},{\"mediaKind\":\"page\",\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"source\":\"survivalstronghold.com\"},{\"mediaKind\":\"page\",\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"source\":\"www.primalsurvivor.net\"},{\"mediaKind\":\"page\",\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"source\":\"www.battlbox.com\"},{\"mediaKind\":\"page\",\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\",\"source\":\"www.survivalsullivan.com\"},{\"mediaKind\":\"page\",\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\",\"source\":\"www.owntheyard.com\"}],\"generatedAt\":\"2026-05-07T01:50:51Z\",\"query\":\"diy underground shelter\",\"media\":[{\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"kind\":\"video\",\"sourcePageURL\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"title\":\"7 Underground Bunker Kits to Install Yourself - Survival Sullivan\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.survivalsullivan.com\\/diy-bunker-kits\\/\"},{\"title\":\"How to build an Underground Room: Complete Guide for 2026\",\"url\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.owntheyard.com\\/build-an-underground-room\\/\"}]}</lumen_web_payload>",
+        "finishedAt" : "2026-05-07T01:51:46Z",
+        "id" : "8C3E0B75-4858-4F0B-AF18-18CB6CF4A780",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search web for diy underground shelter",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "web-search-no-calendar",
+        "startedAt" : "2026-05-07T01:50:16Z",
+        "title" : "Web search must not create calendar event"
+      },
+      {
+        "actualIntent" : "emailDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "8BEFAE1E-91D8-4560-B936-47E4F1B639E0",
+            "message" : "Draft a email",
+            "phase" : "start",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "D2D4E4C5-3AE8-4698-8869-CC37540DC046",
+            "message" : "actual=emailDraft, expected=emailDraft",
+            "phase" : "intent",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "08C26915-C20A-4664-846D-1548038A8F76",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "AB85AB5F-ADC1-4CC0-B2A8-D04A6EC53BD2",
+            "message" : "reflection: Who should I send it to, and what should it say?",
+            "phase" : "step",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "136C8403-4274-44BE-8278-DCA853E64E5D",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "11AAB8BF-0AD4-4CE1-9F0B-CE12EAE6C5B0",
+            "message" : "Who should I send it to, and what should it say?",
+            "phase" : "final",
+            "scenarioID" : "vague-email-clarifies"
+          }
+        ],
+        "expectedIntent" : "emailDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Who should I send it to, and what should it say?",
+        "finishedAt" : "2026-05-07T01:51:46Z",
+        "id" : "081E8394-A712-4F53-91CB-CB50F3B3DC4C",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Draft a email",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "vague-email-clarifies",
+        "startedAt" : "2026-05-07T01:51:46Z",
+        "title" : "Vague email draft asks clarification"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "BF00E36B-69F1-4585-BA9F-6B4754D26C73",
+            "message" : "Explain why a sharp chisel is safer than a dull one.",
+            "phase" : "start",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "95CC591C-DC97-45B0-B272-0854F0E4643F",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-07T01:51:46Z",
+            "id" : "6F90DA65-3AF5-48D0-882E-B70A6BF241C7",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "66D5AB6B-5286-4D77-8804-F5988CA02886",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "0A8A6B08-4333-4926-826E-ED9A121300F3",
+            "message" : "<think>\nOkay, the user is asking why a sharp chisel is safer than a dull one. Let me think about this.\n\nFirst, I know that a sharp chisel has a better edge. When you use a sharp tool, it can cut or shape materials more precisely. The edge is thinner, so it can apply more force with less pressure. That means the tool is more efficient and less likely to break. \n\nBut wait, safety? If the chisel is dull, the edge is thicker, which might make it harder to control. A dull chisel could slip or not cut properly, leading to accidents. So, a sharp chisel is easier to handle and reduces the risk of slipping. \n\nAlso, sharp tools are better at precision work, which might prevent mistakes that could lead to injury. The user might be interested in safety tips, so explaining the mechanics behind it makes sense. \n\nI should make sure to explain the reasons clearly without technical jargon. Highlight the benefits of sharpness in terms of control and safety. Maybe mention how a dull chisel is harder to use and more prone to slipping. Yeah, that covers the main points.",
+            "phase" : "final",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "<think>\nOkay, the user is asking why a sharp chisel is safer than a dull one. Let me think about this.\n\nFirst, I know that a sharp chisel has a better edge. When you use a sharp tool, it can cut or shape materials more precisely. The edge is thinner, so it can apply more force with less pressure. That means the tool is more efficient and less likely to break. \n\nBut wait, safety? If the chisel is dull, the edge is thicker, which might make it harder to control. A dull chisel could slip or not cut properly, leading to accidents. So, a sharp chisel is easier to handle and reduces the risk of slipping. \n\nAlso, sharp tools are better at precision work, which might prevent mistakes that could lead to injury. The user might be interested in safety tips, so explaining the mechanics behind it makes sense. \n\nI should make sure to explain the reasons clearly without technical jargon. Highlight the benefits of sharpness in terms of control and safety. Maybe mention how a dull chisel is harder to use and more prone to slipping. Yeah, that covers the main points.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "81E010BC-9FEB-43F6-863E-359CCA2D4958",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Explain why a sharp chisel is safer than a dull one.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "normal-chat-no-forced-tool",
+        "startedAt" : "2026-05-07T01:51:46Z",
+        "title" : "Normal chat does not force tools"
+      },
+      {
+        "actualIntent" : "calendar",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "0EF4BFB0-9E9D-46E6-82E5-27C9370A1489",
+            "message" : "Create an event tomorrow at 5 called test appointment",
+            "phase" : "start",
+            "scenarioID" : "tool-calendar-create"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "99A23C3F-743E-4412-9799-B5FC92A3D7EB",
+            "message" : "actual=calendar, expected=calendar",
+            "phase" : "intent",
+            "scenarioID" : "tool-calendar-create"
+          }
+        ],
+        "expectedIntent" : "calendar",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "3888C1A9-9FFB-4AC3-B95D-52D6EB5A7418",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Create an event tomorrow at 5 called test appointment",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-calendar-create",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "calendar.create scoped"
+      },
+      {
+        "actualIntent" : "calendar",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "C09E9FB9-BBE8-4031-88C3-83154A069D8A",
+            "message" : "List my upcoming calendar events",
+            "phase" : "start",
+            "scenarioID" : "tool-calendar-list"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "24A185A3-0F44-4FB9-8376-EA9E4F083DFD",
+            "message" : "actual=calendar, expected=calendar",
+            "phase" : "intent",
+            "scenarioID" : "tool-calendar-list"
+          }
+        ],
+        "expectedIntent" : "calendar",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "34B7C562-0E80-4F6A-AD37-74F0EBE8CC78",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List my upcoming calendar events",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-calendar-list",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "calendar.list scoped"
+      },
+      {
+        "actualIntent" : "reminder",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "C4321A31-3FBF-4D39-8356-D7F95078807F",
+            "message" : "Remind me to call Alex tomorrow",
+            "phase" : "start",
+            "scenarioID" : "tool-reminders-create"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "AC88D306-9427-4480-9678-DF3E890E3DD5",
+            "message" : "actual=reminder, expected=reminder",
+            "phase" : "intent",
+            "scenarioID" : "tool-reminders-create"
+          }
+        ],
+        "expectedIntent" : "reminder",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "7159C5D0-4946-46DD-9CE5-2154E7BAE1FD",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Remind me to call Alex tomorrow",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-reminders-create",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "reminders.create scoped"
+      },
+      {
+        "actualIntent" : "reminder",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "878C4EB5-A8EE-4AF4-AED0-B68724FFF8A7",
+            "message" : "List my pending reminders",
+            "phase" : "start",
+            "scenarioID" : "tool-reminders-list"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "44745E1C-FED9-48D5-8AB8-C5D4A5A0525C",
+            "message" : "actual=reminder, expected=reminder",
+            "phase" : "intent",
+            "scenarioID" : "tool-reminders-list"
+          }
+        ],
+        "expectedIntent" : "reminder",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "A7BA0D2E-ACD7-4921-B77D-32987B6232F0",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List my pending reminders",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-reminders-list",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "reminders.list scoped"
+      },
+      {
+        "actualIntent" : "contactSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "3D486469-39C0-4FAC-80C7-5B7F4504EDFD",
+            "message" : "Search contacts for Alex",
+            "phase" : "start",
+            "scenarioID" : "tool-contacts-search"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "D27BE196-7475-4056-AE1D-3AFADFC571B6",
+            "message" : "actual=contactSearch, expected=contactSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-contacts-search"
+          }
+        ],
+        "expectedIntent" : "contactSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "FA060F6A-51E7-4B9D-8154-31417E03FD4E",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search contacts for Alex",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-contacts-search",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "contacts.search scoped"
+      },
+      {
+        "actualIntent" : "messageDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "278A1C66-2958-46CE-A967-42885A70CD19",
+            "message" : "Draft a text message to Alex saying I am running late",
+            "phase" : "start",
+            "scenarioID" : "tool-messages-draft"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "0F4B54FC-9748-4A4B-8B6C-8E7C0241BC43",
+            "message" : "actual=messageDraft, expected=messageDraft",
+            "phase" : "intent",
+            "scenarioID" : "tool-messages-draft"
+          }
+        ],
+        "expectedIntent" : "messageDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "4C1B9F16-C7BF-481E-A5BF-C13893E2E193",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Draft a text message to Alex saying I am running late",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-messages-draft",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "messages.draft scoped"
+      },
+      {
+        "actualIntent" : "emailDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "EE0FBC4A-19A9-40F5-84CA-8FC4DB354DFC",
+            "message" : "Write an email to alex@example.com saying the plans are ready",
+            "phase" : "start",
+            "scenarioID" : "tool-mail-draft"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "E8871BEB-1DAF-47C8-996D-48B467BF7982",
+            "message" : "actual=emailDraft, expected=emailDraft",
+            "phase" : "intent",
+            "scenarioID" : "tool-mail-draft"
+          }
+        ],
+        "expectedIntent" : "emailDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "03C1E66F-D630-4FE4-8E22-4C79AEE4C037",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Write an email to alex@example.com saying the plans are ready",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-mail-draft",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "mail.draft scoped"
+      },
+      {
+        "actualIntent" : "phoneCall",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "DCA74EB8-5807-4724-94F5-D78969D0D97E",
+            "message" : "Call 5145551234",
+            "phase" : "start",
+            "scenarioID" : "tool-phone-call"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5ACE2BFB-9E3F-4F35-B0E3-B3A5757A995B",
+            "message" : "actual=phoneCall, expected=phoneCall",
+            "phase" : "intent",
+            "scenarioID" : "tool-phone-call"
+          }
+        ],
+        "expectedIntent" : "phoneCall",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "90978A68-8E53-4E84-A415-55D2F6990D7F",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Call 5145551234",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-phone-call",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "phone.call scoped"
+      },
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "7C3BC5C2-3C05-4E9D-8DE3-330CC7FCA4D1",
+            "message" : "Use my current location for the weather here",
+            "phase" : "start",
+            "scenarioID" : "tool-location-current"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "020F9C69-7F5F-4D60-A013-9D103F21BCAA",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "tool-location-current"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "46F700EB-7CB3-4E66-8DA7-4D5DD57148F8",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Use my current location for the weather here",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-location-current",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "location.current scoped through local weather"
+      },
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "47DE259D-958B-474E-8840-B791C471D523",
+            "message" : "What is the temperature outside right now?",
+            "phase" : "start",
+            "scenarioID" : "tool-weather"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "8F3C1787-D622-4E10-9D71-47BBEBFA480F",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "tool-weather"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "EE694D71-FD99-486D-9EE5-886CC92227E9",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What is the temperature outside right now?",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-weather",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "weather scoped"
+      },
+      {
+        "actualIntent" : "maps",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "C61187E7-A55C-43F7-9A4C-06E13F2CEB9A",
+            "message" : "Get directions to 123 Main Street",
+            "phase" : "start",
+            "scenarioID" : "tool-maps-directions"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "FE8D643C-4ECB-41BB-9439-09436281F820",
+            "message" : "actual=maps, expected=maps",
+            "phase" : "intent",
+            "scenarioID" : "tool-maps-directions"
+          }
+        ],
+        "expectedIntent" : "maps",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "286C08CB-53E7-434D-A4BB-2C452C47E50A",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Get directions to 123 Main Street",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-maps-directions",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "maps.directions scoped"
+      },
+      {
+        "actualIntent" : "maps",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "F4309D4F-8F7F-4EFF-AD23-0FB105617143",
+            "message" : "Find the closest hardware store near me",
+            "phase" : "start",
+            "scenarioID" : "tool-maps-search"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "914A9FB5-1110-4E3D-8A55-0BCF18B1B090",
+            "message" : "actual=maps, expected=maps",
+            "phase" : "intent",
+            "scenarioID" : "tool-maps-search"
+          }
+        ],
+        "expectedIntent" : "maps",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "CC284061-365F-40E5-9526-C5D8766A4438",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Find the closest hardware store near me",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-maps-search",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "maps.search scoped"
+      },
+      {
+        "actualIntent" : "photos",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5FE8BB6D-38FB-47C3-9533-ABCFC4057885",
+            "message" : "Search photos from last month",
+            "phase" : "start",
+            "scenarioID" : "tool-photos-search"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "CF7A4612-1E2E-4439-A874-43AF3402C66F",
+            "message" : "actual=photos, expected=photos",
+            "phase" : "intent",
+            "scenarioID" : "tool-photos-search"
+          }
+        ],
+        "expectedIntent" : "photos",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "A7EEE9D7-0F22-4966-89CA-2667CC37D0B9",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search photos from last month",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-photos-search",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "photos.search scoped"
+      },
+      {
+        "actualIntent" : "camera",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "9FEBA320-D802-4F11-A84E-3382C1E061A7",
+            "message" : "Take a photo with the camera",
+            "phase" : "start",
+            "scenarioID" : "tool-camera-capture"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "4DCA085A-3B5C-4292-BF99-8C5F99899D6E",
+            "message" : "actual=camera, expected=camera",
+            "phase" : "intent",
+            "scenarioID" : "tool-camera-capture"
+          }
+        ],
+        "expectedIntent" : "camera",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "BF3E5619-12CD-4723-921F-7BEA149B8A59",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Take a photo with the camera",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-camera-capture",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "camera.capture scoped"
+      },
+      {
+        "actualIntent" : "health",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "CC782817-C0A4-4E3A-BCF7-045599EAE0A9",
+            "message" : "Show my health summary and steps",
+            "phase" : "start",
+            "scenarioID" : "tool-health-summary"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "210EB5B4-051F-46D6-BD64-96D274A0AC60",
+            "message" : "actual=health, expected=health",
+            "phase" : "intent",
+            "scenarioID" : "tool-health-summary"
+          }
+        ],
+        "expectedIntent" : "health",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "19B3B965-9187-49D3-A67F-AD08437E38D8",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Show my health summary and steps",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-health-summary",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "health.summary scoped"
+      },
+      {
+        "actualIntent" : "motion",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "78CF4DBA-7543-4DDB-98F0-63C7A13B05EA",
+            "message" : "Detect my recent motion activity",
+            "phase" : "start",
+            "scenarioID" : "tool-motion-activity"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "B31163A4-FF78-4A43-80BA-CCDF8DD73F7D",
+            "message" : "actual=motion, expected=motion",
+            "phase" : "intent",
+            "scenarioID" : "tool-motion-activity"
+          }
+        ],
+        "expectedIntent" : "motion",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "4721DCC8-7D05-4ABA-9454-18E86B3C2D53",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Detect my recent motion activity",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-motion-activity",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "motion.activity scoped"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "E7AD82AA-D6DC-4BF6-B997-88FF47761A11",
+            "message" : "Search the web for latest SwiftData tips",
+            "phase" : "start",
+            "scenarioID" : "tool-web-search"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "222E09D2-78CB-4D84-9EC2-A86A16ADB27C",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-web-search"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "83690D3E-F7AE-4606-BD9E-45C771F26410",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search the web for latest SwiftData tips",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-web-search",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "web.search scoped"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5EDCA743-DCF6-438E-B69A-E2B607CC6B12",
+            "message" : "Read this URL https://example.com",
+            "phase" : "start",
+            "scenarioID" : "tool-web-fetch"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "73A751A2-807F-4382-92A0-D8841BB62603",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-web-fetch"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "FA9CCB31-656F-47A5-AB7B-652F86F8502C",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Read this URL https://example.com",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-web-fetch",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "web.fetch scoped"
+      },
+      {
+        "actualIntent" : "files",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5BEA0447-AB91-4094-BAFA-4E2CD8E7159A",
+            "message" : "Read file project-notes.md",
+            "phase" : "start",
+            "scenarioID" : "tool-files-read"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "C8083988-05D9-4DF2-B244-CCEC8AC4B4A3",
+            "message" : "actual=files, expected=files",
+            "phase" : "intent",
+            "scenarioID" : "tool-files-read"
+          }
+        ],
+        "expectedIntent" : "files",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "2F079F0A-8B79-4C57-9B99-CE40058084F8",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Read file project-notes.md",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-files-read",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "files.read scoped"
+      },
+      {
+        "actualIntent" : "memory",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "B286730C-09E8-4639-BD0E-050690EE9C3E",
+            "message" : "Remember this: I prefer concise answers",
+            "phase" : "start",
+            "scenarioID" : "tool-memory-save"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "9DD5A10C-9E68-47FB-9C9F-6CB1CA1B13C5",
+            "message" : "actual=memory, expected=memory",
+            "phase" : "intent",
+            "scenarioID" : "tool-memory-save"
+          }
+        ],
+        "expectedIntent" : "memory",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "DDF3CD4A-C1EE-41F8-9AB7-3F31F132E3DD",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Remember this: I prefer concise answers",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-memory-save",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "memory.save scoped"
+      },
+      {
+        "actualIntent" : "memory",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "04056F08-7571-40C4-B848-49950BA1DB48",
+            "message" : "What do you remember about my preferences?",
+            "phase" : "start",
+            "scenarioID" : "tool-memory-recall"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "FA60B803-2F00-4A01-AEBD-9251054719D6",
+            "message" : "actual=memory, expected=memory",
+            "phase" : "intent",
+            "scenarioID" : "tool-memory-recall"
+          }
+        ],
+        "expectedIntent" : "memory",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "380B1919-75C9-4E0E-A519-BA47579E2039",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What do you remember about my preferences?",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-memory-recall",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "memory.recall scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "FE3049D2-E245-4391-9ED6-38898461F990",
+            "message" : "Search my files for the Lumen architecture notes",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-search"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "CE29733D-9424-417B-9888-99737C68036A",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-search"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "D3B6EDFC-F541-4EE2-ADFF-8176E86FB941",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search my files for the Lumen architecture notes",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-rag-search",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "rag.search scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "0F24BEAC-5222-470E-9B89-4324EE7DA40E",
+            "message" : "Reindex files",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-index-files"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "AD18097F-050A-4324-A862-63BC952E4A87",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-index-files"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "66DDB4A9-402F-4820-A650-2E62C2CCE428",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Reindex files",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-rag-index-files",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "rag.index_files scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5075F345-F7CA-4699-9DEA-E8C75CB71323",
+            "message" : "Reindex photos",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-index-photos"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "21BA994F-5054-4710-9B56-B2A30A633447",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-index-photos"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "87A82D08-74D7-4DB0-AC21-B0C7DBD3C903",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Reindex photos",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-rag-index-photos",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "rag.index_photos scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "7D63985F-9A6E-4A83-892B-D6DCA00D25B6",
+            "message" : "Schedule agent run in 10 minutes to summarize reminders",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-create"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "95EFD6EC-113F-4664-8B63-D464A16B053E",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-create"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "FA259E02-3086-442E-A597-4B3E39A6BE7E",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Schedule agent run in 10 minutes to summarize reminders",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-trigger-create",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "trigger.create scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "67D650C0-D8C8-4437-AAB9-CA5EFF43EA17",
+            "message" : "List triggers",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-list"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "9723D59F-0CBA-4522-8BB6-3B4D3262B656",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-list"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "338F9592-9CAF-4546-91C4-403EB09768CD",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List triggers",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-trigger-list",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "trigger.list scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "B9BD57E4-B39F-44C1-9A5E-BA11B4893A5A",
+            "message" : "Cancel trigger named morning summary",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-cancel"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "3590345D-FF6D-4074-B0E7-52B55FEAC2C7",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-cancel"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "268BFC54-776B-4F1A-B4B2-CA0BDA26A2D1",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Cancel trigger named morning summary",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-trigger-cancel",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "trigger.cancel scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "BDF80B3D-0291-4B7D-A4F3-C14C9294C492",
+            "message" : "Check alarm authorization status",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-auth-status"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "66162727-F194-4C28-BBAD-5E3C72456E0F",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-auth-status"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "F5A623B4-3135-4DED-8C56-67C9BBFF67A3",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Check alarm authorization status",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-auth-status",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.authorization_status scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "D4CBABAB-906D-4A16-953B-D3C3BA8CA137",
+            "message" : "Request alarm authorization",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-request-auth"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "44D5F415-AFE1-4213-99B4-C2DC14296169",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-request-auth"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "62F53C44-7B31-4ADD-8FE3-584F50F49645",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Request alarm authorization",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-request-auth",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.request_authorization scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "F2CBB468-CAE2-4CAA-BC6A-D81048E0C35B",
+            "message" : "Set an alarm for tomorrow at 7",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-schedule"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "484DFFC4-7225-45C7-8933-9D0C17070C10",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-schedule"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "9C602B82-913D-4252-8F0D-4C3360D3162A",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Set an alarm for tomorrow at 7",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-schedule",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.schedule scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "77946078-764A-496D-9A72-CBDE7C2741A1",
+            "message" : "Start a countdown timer for 10 minutes",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-countdown"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "72EFFD80-699A-48D1-BC62-CF6915378C71",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-countdown"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "EC5D5C27-88F4-48DB-8430-2B34AA9F8262",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Start a countdown timer for 10 minutes",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-countdown",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.countdown scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "846CB5E0-4D08-4D3D-8123-F0C2D3FECFA2",
+            "message" : "List alarms",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-list"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "9538923C-14B7-4311-9E95-44CA43AE569E",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-list"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "EBA38530-9C7D-43D5-BCC9-022AB6A1DDA9",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List alarms",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-list",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.list scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "36E54E05-FD55-4F17-8289-FE13949E048D",
+            "message" : "Pause alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-pause"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "0EB1B84F-F3B1-44DF-84E5-C2C9D8953BDD",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-pause"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "A25BA965-E560-4D92-99C5-73D89DCC109F",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Pause alarm 00000000-0000-0000-0000-000000000000",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-pause",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.pause scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "3D3A603F-F563-40A9-933A-4E02D5FF15BF",
+            "message" : "Resume alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-resume"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "F32C43BB-E568-43E2-BB40-AFD5E8057F95",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-resume"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "E8D70470-E53F-48A0-92A2-F6D1872FCD1C",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Resume alarm 00000000-0000-0000-0000-000000000000",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-resume",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.resume scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "3B4F174B-7687-4C7F-A9D8-EC93243FC027",
+            "message" : "Stop alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-stop"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "BD547EB4-2290-4B91-83B2-544C1ABC01E3",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-stop"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "9243E0D0-4C5E-4DEC-818D-3D0C9D3B30A5",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Stop alarm 00000000-0000-0000-0000-000000000000",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-stop",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.stop scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "432255B0-DEE1-46BB-8C60-53A054AE316B",
+            "message" : "Snooze alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-snooze"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "1A076454-5D6A-4309-BEEE-D1B3B0AABAD3",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-snooze"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "CA5812B8-1E04-4DCC-ADE1-448B84A4493C",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Snooze alarm 00000000-0000-0000-0000-000000000000",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-snooze",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.snooze scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "17BF88BA-5C49-4938-8728-641439F13786",
+            "message" : "Cancel alarm named morning wakeup",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-cancel"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "BBCF1851-24FE-43B9-AC5E-4FCC9CCE98FE",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-cancel"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-07T01:52:38Z",
+        "id" : "F09C8AE5-72D5-4617-9768-C838C7DA364F",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Cancel alarm named morning wakeup",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "scenarioID" : "tool-alarm-cancel",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "alarm.cancel scoped"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "5BFC897E-E92B-40D4-BBB7-B160C952D4F5",
+            "message" : "Give me three tips for fitting a door hinge cleanly.",
+            "phase" : "start",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "AD2B605E-528E-4582-9340-78CE37875EDF",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-07T01:52:38Z",
+            "id" : "3014B7B5-C696-4A5C-A280-B6138F73C017",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-07T01:53:50Z",
+            "id" : "ED9A2A62-3BD1-4E43-A8EB-51FE4D12BF14",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-07T01:53:50Z",
+            "id" : "79757771-14E2-4D18-A374-C324399DEEFE",
+            "message" : "<think>\nOkay, the user is asking for three tips on how to fit a door hinge cleanly. Let me think about the best way to approach this.\n\nFirst, I need to recall the steps involved in fitting a door hinge. The hinge is usually part of the door's structure, so the process involves preparing the door, measuring, and installing the hinge. But the user wants it cleaned, so maybe they're concerned about the hinge's alignment or the surrounding area.\n\nWait, \"fitting a door hinge cleanly\" might refer to ensuring the hinge is properly aligned and secure without any issues. So tips could include using the right tools, measuring accurately, and ensuring the hinge is tight. But I should make sure the tips are practical and step-by-step.\n\nI should check if there are common techniques for this. For example, using a level to ensure the hinge is straight, marking the position with a pencil, and then drilling the holes. Also, using a screwdriver to tighten the screws once the hinge is in place. Maybe also mention checking for any gaps or misalignments after installation.\n\nAnother thing to consider is the materials needed, like a drill, screwdriver, level, and maybe some measuring tape. But the user didn't ask for materials, just tips. So focus on the steps and techniques.\n\nI need to present three clear tips. Let me structure them as numbered points. First, measure and mark the door. Second, use a level for alignment. Third, secure the hinge properly. That makes sense. Each tip should be concise and actionable.\n\nI should also make sure the language is natural and helpful, avoiding any technical jargon. The user wants it to be helpful, so the tips should be straightforward. Let me put it all together now.",
+            "phase" : "final",
+            "scenarioID" : "chat-carpentry-advice"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "<think>\nOkay, the user is asking for three tips on how to fit a door hinge cleanly. Let me think about the best way to approach this.\n\nFirst, I need to recall the steps involved in fitting a door hinge. The hinge is usually part of the door's structure, so the process involves preparing the door, measuring, and installing the hinge. But the user wants it cleaned, so maybe they're concerned about the hinge's alignment or the surrounding area.\n\nWait, \"fitting a door hinge cleanly\" might refer to ensuring the hinge is properly aligned and secure without any issues. So tips could include using the right tools, measuring accurately, and ensuring the hinge is tight. But I should make sure the tips are practical and step-by-step.\n\nI should check if there are common techniques for this. For example, using a level to ensure the hinge is straight, marking the position with a pencil, and then drilling the holes. Also, using a screwdriver to tighten the screws once the hinge is in place. Maybe also mention checking for any gaps or misalignments after installation.\n\nAnother thing to consider is the materials needed, like a drill, screwdriver, level, and maybe some measuring tape. But the user didn't ask for materials, just tips. So focus on the steps and techniques.\n\nI need to present three clear tips. Let me structure them as numbered points. First, measure and mark the door. Second, use a level for alignment. Third, secure the hinge properly. That makes sense. Each tip should be concise and actionable.\n\nI should also make sure the language is natural and helpful, avoiding any technical jargon. The user wants it to be helpful, so the tips should be straightforward. Let me put it all together now.",
+        "finishedAt" : "2026-05-07T01:53:50Z",
+        "id" : "655D873B-EAB7-4D3E-8357-047CE863A970",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Give me three tips for fitting a door hinge cleanly.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "chat-carpentry-advice",
+        "startedAt" : "2026-05-07T01:52:38Z",
+        "title" : "Carpentry chat stays direct"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-07T01:53:50Z",
+            "id" : "E9F52DA8-B893-4273-A57D-1A747F268567",
+            "message" : "Explain actor isolation in Swift in simple terms.",
+            "phase" : "start",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-07T01:53:50Z",
+            "id" : "2D2AFB8F-7406-427B-BF25-7A5BD1916CDE",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-07T01:53:50Z",
+            "id" : "8E7B6AA0-584B-41AC-BD0E-A81CC280FEDF",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-07T01:54:59Z",
+            "id" : "3A955C16-FE60-4E8E-BAD5-159C4B619963",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-07T01:54:59Z",
+            "id" : "7DF6136F-EA89-403A-B5FD-8E623C8A5E9B",
+            "message" : "<think>\nOkay, the user wants to know about actor isolation in Swift. Let me start by recalling what I know. Actors in Swift are like threads but more manageable. They ensure that only one thread can execute code in a particular actor at a time, which helps prevent race conditions.\n\nSo, actor isolation is about isolating different parts of the code so that they don't interfere with each other. Each actor has its own set of variables and methods, and they can't access each other's variables directly. That means if one actor modifies a variable, others can't see it unless they're part of the same actor.\n\nWait, maybe I should explain it with an example. Like, if you have two actors, they can't access each other's variables. So, they're isolated. But how does that work in practice? Maybe when you define an actor, its variables are private to that actor. So, any method in the actor can only modify its own variables.\n\nAlso, when you use the actor keyword, it's like creating a sandbox for the code. So, actors are like separate compartments where code can run without interfering with other parts of the app.\n\nI should make sure to keep it simple. Avoid technical jargon where possible. Use analogies if needed. Maybe compare it to a room where only one person can use the stove at a time. Each actor is a room, and they can't access each other's stuff.\n\nCheck if there's anything else. The user might be looking for why actor isolation is important. It helps in preventing data races and ensures thread safety. So, explaining that actors isolate code so it's safe to run in parallel without conflicting.\n\nI need to make sure the explanation is clear and not too technical. Avoid using terms like \"race condition\" unless necessary. Keep it straightforward.",
+            "phase" : "final",
+            "scenarioID" : "chat-code-explanation"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "<think>\nOkay, the user wants to know about actor isolation in Swift. Let me start by recalling what I know. Actors in Swift are like threads but more manageable. They ensure that only one thread can execute code in a particular actor at a time, which helps prevent race conditions.\n\nSo, actor isolation is about isolating different parts of the code so that they don't interfere with each other. Each actor has its own set of variables and methods, and they can't access each other's variables directly. That means if one actor modifies a variable, others can't see it unless they're part of the same actor.\n\nWait, maybe I should explain it with an example. Like, if you have two actors, they can't access each other's variables. So, they're isolated. But how does that work in practice? Maybe when you define an actor, its variables are private to that actor. So, any method in the actor can only modify its own variables.\n\nAlso, when you use the actor keyword, it's like creating a sandbox for the code. So, actors are like separate compartments where code can run without interfering with other parts of the app.\n\nI should make sure to keep it simple. Avoid technical jargon where possible. Use analogies if needed. Maybe compare it to a room where only one person can use the stove at a time. Each actor is a room, and they can't access each other's stuff.\n\nCheck if there's anything else. The user might be looking for why actor isolation is important. It helps in preventing data races and ensures thread safety. So, explaining that actors isolate code so it's safe to run in parallel without conflicting.\n\nI need to make sure the explanation is clear and not too technical. Avoid using terms like \"race condition\" unless necessary. Keep it straightforward.",
+        "finishedAt" : "2026-05-07T01:54:59Z",
+        "id" : "4591F757-7CC0-48FE-B948-1AF22ECC102A",
+        "missingHints" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Explain actor isolation in Swift in simple terms.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "scenarioID" : "chat-code-explanation",
+        "startedAt" : "2026-05-07T01:53:50Z",
+        "title" : "Code explanation stays chat"
+      }
+    ],
+    "startedAt" : "2026-05-07T01:49:19Z"
+  },
+  "schemaVersion" : "1.0.0"
+}

@@ -5,11 +5,11 @@
   "agent": "mimicry",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "c4f2c5a36b3172ec5125abf20a7467c641499b67",
+    "manifestCommit": "bd86b9afe5fad9baaee8e3b3a043fb9b9373267c",
     "recordCounts": {
       "eval": 3,
       "train_dpo": 9,
-      "train_sft": 45,
+      "train_sft": 44,
       "val_dpo": 2,
       "val_sft": 8
     },
@@ -19,7 +19,6 @@
       "fleet_system_prompts",
       "manifest_grounding_cards",
       "mimicry_style",
-      "runtime_audit_repairs",
       "train_sft"
     ],
     "taskTypes": [
@@ -34,7 +33,6 @@
       "manifest_grounding_cards",
       "mimicry_style",
       "role_directory",
-      "runtime_manifest_drift_repair",
       "source_code_self_knowledge",
       "source_routing_knowledge",
       "source_tool_registry_knowledge",

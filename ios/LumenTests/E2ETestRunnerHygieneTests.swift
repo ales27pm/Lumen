@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import Lumen
 
+@MainActor
 struct E2ETestRunnerHygieneTests {
     @Test func rawThinkLeakFailsEvenWhenSanitizedFinalIsClean() {
         let scenario = E2ETestScenario(id: "s", title: "t", kind: .chat, prompt: "p", expectedIntent: .chat, forbiddenToolIDs: [], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)

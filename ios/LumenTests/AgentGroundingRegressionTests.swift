@@ -56,7 +56,9 @@ struct AgentGroundingRegressionTests {
         }
         let audit = AgentModelBehaviorAuditor().audit(manifest: manifest, messages: messages)
         #expect(!audit.passed)
-        #expect(audit.violations.contains(where: { $0.code == "hiddenReasoningLeak" }))
+        #expect(audit.violations.contains(where: { $0.code == "hidden_reasoning_leak" }))
+        #expect(!audit.violations.contains(where: { $0.code == "hiddenReasoningLeak" }))
+        #expect(!audit.violations.contains(where: { $0.code == "final_sanitizer_recovered_unsafe_output" }))
     }
 
     @Test func requiredToolFallbackRoutesCameraMapsAndOutlookPrompts() {

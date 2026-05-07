@@ -34,12 +34,24 @@ struct FinalOutputSanitizerTests {
         #expect(!out.text.contains("mediaKind"))
     }
 
-
     @Test func removesBareSearchResultsJSONObject() {
         let raw = "{\"kind\":\"searchResults\",\"results\":[{\"mediaKind\":\"page\"}]}"
         let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
         #expect(out.removedArtifacts.contains(.rawToolPayload))
         #expect(!out.text.lowercased().contains("searchresults"))
+    }
+
+    @Test func recoveredUnsafeOutputCanBeConsumedWithRawOrSanitizedText() {
+        let raw = "<think>x</think>safe"
+        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        let recoveredByRaw = FinalOutputSanitizer.consumeRecoveredUnsafeOutput(forSanitizedText: raw)
+        #expect(recoveredByRaw?.text == sanitized.text)
+        #expect(recoveredByRaw?.removedArtifacts.contains(.thinkBlock) == true)
+
+        _ = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        let recoveredBySanitized = FinalOutputSanitizer.consumeRecoveredUnsafeOutput(forSanitizedText: sanitized.text)
+        #expect(recoveredBySanitized?.text == sanitized.text)
+        #expect(recoveredBySanitized?.removedArtifacts.contains(.thinkBlock) == true)
     }
 
     @Test func handlesOutputThatBecomesEmpty() {

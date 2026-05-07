@@ -1,5 +1,19 @@
 import Foundation
 
+nonisolated enum OrderedDeduper {
+    static func mergedUnique<T: Equatable>(_ values: [T]) -> [T] {
+        var merged: [T] = []
+        for value in values where !merged.contains(value) {
+            merged.append(value)
+        }
+        return merged
+    }
+
+    static func mergedUnique<T: Equatable>(_ groups: [T]...) -> [T] {
+        mergedUnique(groups.flatMap { $0 })
+    }
+}
+
 extension E2ETestResult {
     init(
         id: UUID,
@@ -30,7 +44,7 @@ extension E2ETestResult {
         self.expectedIntent = expectedIntent
         self.actualIntent = actualIntent
         self.passed = passed
-        self.failures = Self.mergedUnique(failures)
+        self.failures = OrderedDeduper.mergedUnique(failures)
         self.finalText = finalText
         self.missingHints = missingHints
         self.rewriteAttempted = rewriteAttempted
@@ -41,15 +55,7 @@ extension E2ETestResult {
         self.rawFinalPrefix = rawFinalPrefix
         self.sanitizedFinalPrefix = sanitizedFinalPrefix.isEmpty ? String(finalText.prefix(220)) : sanitizedFinalPrefix
         self.rawFinalHadUnsafeLeakage = rawFinalHadUnsafeLeakage
-        self.sanitizedFinalRemovedArtifacts = Self.mergedUnique(sanitizedFinalRemovedArtifacts)
-        self.outputHygieneFailures = Self.mergedUnique(outputHygieneFailures)
-    }
-
-    private static func mergedUnique(_ values: [String]) -> [String] {
-        var merged: [String] = []
-        for value in values where !merged.contains(value) {
-            merged.append(value)
-        }
-        return merged
+        self.sanitizedFinalRemovedArtifacts = OrderedDeduper.mergedUnique(sanitizedFinalRemovedArtifacts)
+        self.outputHygieneFailures = OrderedDeduper.mergedUnique(outputHygieneFailures)
     }
 }

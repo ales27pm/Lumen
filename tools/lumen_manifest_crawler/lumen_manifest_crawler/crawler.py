@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -78,11 +79,11 @@ def _validated_scan_root(root: Path) -> Path:
 
 
 def _iter_swift_files(root: Path):
-    for path in sorted(root.rglob("*.swift"), key=lambda candidate: normalized_repo_path(root, candidate)):
-        parts = set(path.relative_to(root).parts)
-        if parts.intersection(IGNORED_DIRS):
-            continue
-        yield path
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(name for name in dirnames if name not in IGNORED_DIRS)
+        for filename in sorted(filenames):
+            if filename.endswith(".swift"):
+                yield Path(dirpath) / filename
 
 
 def _is_source_of_truth_file(path: Path) -> bool:
@@ -140,18 +141,22 @@ def _read_app_info(root: Path) -> AppManifestInfo:
 
 
 def _select_info_plist(root: Path) -> Path | None:
-    candidates: list[Path] = []
-    for plist in sorted(root.rglob("Info.plist"), key=lambda candidate: normalized_repo_path(root, candidate)):
-        parts = set(plist.relative_to(root).parts)
-        if parts.intersection(IGNORED_PLIST_DIRS):
+    preferred: Path | None = None
+    fallback: Path | None = None
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(name for name in dirnames if name not in IGNORED_PLIST_DIRS)
+        if "Info.plist" not in filenames:
             continue
+        plist = Path(dirpath) / "Info.plist"
         text = plist.read_text(encoding="utf-8", errors="replace")
-        if "CFBundleIdentifier" in text:
-            candidates.append(plist)
-    if not candidates:
-        return None
-    preferred = [plist for plist in candidates if any(part in {"Lumen", "ios"} for part in plist.relative_to(root).parts)]
-    return (preferred or candidates)[0]
+        if "CFBundleIdentifier" not in text:
+            continue
+        if fallback is None:
+            fallback = plist
+        if preferred is None and any(part in {"Lumen", "ios"} for part in plist.relative_to(root).parts):
+            preferred = plist
+            break
+    return preferred or fallback
 
 
 def _plist_value_after_key(text: str, key: str) -> str | None:

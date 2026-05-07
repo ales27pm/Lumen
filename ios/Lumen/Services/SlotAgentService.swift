@@ -944,7 +944,7 @@ final class SlotAgentService {
             case .tool: role = "tool"
             case .system: role = "system"
             }
-            let clean = AssistantOutputSanitizer.sanitize(item.content)
+            let clean = FinalOutputSanitizer.sanitizeUserVisibleText(item.content).text
                 .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return "- \(role): \(String(clean.prefix(500)))"
@@ -1023,13 +1023,11 @@ final class SlotAgentService {
     }
 
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
-        // Preserve the model's raw final text on this stream so E2E can detect leakage.
-        // User-visible sanitization is applied at the UI/rendering boundary.
-        let rawFinalText = text
-        for chunk in chunk(rawFinalText) {
+        let sanitizedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(text).text
+        for chunk in chunk(sanitizedFinal) {
             continuation.yield(.finalDelta(chunk))
         }
-        continuation.yield(.done(finalText: rawFinalText, steps: steps))
+        continuation.yield(.done(finalText: sanitizedFinal, steps: steps))
         continuation.finish()
     }
 

@@ -4,6 +4,15 @@ nonisolated struct SanitizedFinalOutput: Sendable, Equatable {
     let text: String
     let removedArtifacts: [FinalOutputArtifact]
     let hadUnsafeLeakage: Bool
+    let artifactAudit: FinalOutputArtifactAudit
+}
+
+nonisolated struct FinalOutputArtifactAudit: Sendable, Equatable {
+    let rawPrefix: String
+    let sanitizedPrefix: String
+    let hadUnsafeLeakage: Bool
+    let removedArtifacts: Bool
+    let removedArtifactTypes: [FinalOutputArtifact]
 }
 
 nonisolated enum FinalOutputArtifact: String, Codable, Sendable, Equatable {
@@ -107,7 +116,19 @@ nonisolated enum FinalOutputSanitizer {
             text = fallback
         }
 
-        let output = SanitizedFinalOutput(text: text, removedArtifacts: removed, hadUnsafeLeakage: !removed.isEmpty)
+        let hadUnsafeLeakage = !removed.isEmpty
+        let output = SanitizedFinalOutput(
+            text: text,
+            removedArtifacts: removed,
+            hadUnsafeLeakage: hadUnsafeLeakage,
+            artifactAudit: FinalOutputArtifactAudit(
+                rawPrefix: String(raw.prefix(220)),
+                sanitizedPrefix: String(text.prefix(220)),
+                hadUnsafeLeakage: hadUnsafeLeakage,
+                removedArtifacts: !removed.isEmpty,
+                removedArtifactTypes: removed
+            )
+        )
         recoveryCache.remember(output, forSanitizedText: text)
         return output
     }

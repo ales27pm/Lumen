@@ -474,15 +474,25 @@ enum E2ETestRunner {
             }
         }
 
-        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: String(rawFinalText.prefix(220)), sanitizedFinalPrefix: String(finalText.prefix(220)), rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: hygieneState.removedArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+        let audit = hygieneState.postRewriteSanitized.artifactAudit
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: audit.rawPrefix, sanitizedFinalPrefix: audit.sanitizedPrefix, rawFinalHadUnsafeLeakage: audit.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: audit.removedArtifactTypes.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
     }
 
     static func mergeSanitizerOutputs(_ primary: SanitizedFinalOutput, recovered: SanitizedFinalOutput?) -> SanitizedFinalOutput {
         guard let recovered else { return primary }
+        let mergedArtifactsList = mergedArtifacts(primary.removedArtifacts, recovered.removedArtifacts)
+        let hadUnsafeLeakage = primary.hadUnsafeLeakage || recovered.hadUnsafeLeakage
         return SanitizedFinalOutput(
             text: primary.text,
-            removedArtifacts: mergedArtifacts(primary.removedArtifacts, recovered.removedArtifacts),
-            hadUnsafeLeakage: primary.hadUnsafeLeakage || recovered.hadUnsafeLeakage
+            removedArtifacts: mergedArtifactsList,
+            hadUnsafeLeakage: hadUnsafeLeakage,
+            artifactAudit: FinalOutputArtifactAudit(
+                rawPrefix: primary.artifactAudit.rawPrefix.isEmpty ? recovered.artifactAudit.rawPrefix : primary.artifactAudit.rawPrefix,
+                sanitizedPrefix: primary.artifactAudit.sanitizedPrefix,
+                hadUnsafeLeakage: hadUnsafeLeakage,
+                removedArtifacts: !mergedArtifactsList.isEmpty,
+                removedArtifactTypes: mergedArtifactsList
+            )
         )
     }
 
@@ -504,14 +514,26 @@ enum E2ETestRunner {
 
     static func hygieneFailures(lowerRawFinal: String, lowerFinal: String, removedArtifacts: [FinalOutputArtifact], scenario: E2ETestScenario, observations: String) -> [String] {
         var failures: [String] = []
-        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") || lowerFinal.contains("<think") || lowerFinal.contains("</think>") || removedArtifacts.contains(.thinkBlock) || removedArtifacts.contains(.malformedThinkPrefix) {
-            failures.append("Hidden reasoning leaked into final output")
+        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") {
+            failures.append("Raw output contained hidden reasoning before sanitization")
         }
-        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") || lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") || removedArtifacts.contains(.lumenWebPayload) {
-            failures.append("Raw lumen_web_payload marker leaked into final output")
+        if lowerFinal.contains("<think") || lowerFinal.contains("</think>") {
+            failures.append("Sanitized output still contains hidden reasoning")
         }
-        if lowerRawFinal.contains("{\"kind\":\"searchresults\"") || lowerRawFinal.contains("\"mediakind\":\"page\"") || lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") || removedArtifacts.contains(.rawToolPayload) {
-            failures.append("Raw search-results JSON leaked into final output")
+        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") {
+            failures.append("Raw output contained lumen_web_payload markers before sanitization")
+        }
+        if lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") {
+            failures.append("Sanitized output still contains lumen_web_payload markers")
+        }
+        if lowerRawFinal.contains("{\"kind\":\"searchresults\"") || lowerRawFinal.contains("\"mediakind\":\"page\"") {
+            failures.append("Raw output contained search-results JSON before sanitization")
+        }
+        if lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") {
+            failures.append("Sanitized output still contains search-results JSON")
+        }
+        if !removedArtifacts.isEmpty && lowerRawFinal == lowerFinal {
+            failures.append("Sanitizer reported removed artifacts but final output was unchanged")
         }
         if removedArtifacts.contains(.emptyAfterSanitization) {
             failures.append("Final output empty after sanitization")

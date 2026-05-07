@@ -147,7 +147,7 @@ final class VoiceService: NSObject {
     // MARK: - Speaking
 
     func speak(_ text: String, voiceID: String?, rate: Double, onComplete: (() -> Void)? = nil) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = FinalOutputSanitizer.sanitizeUserVisibleText(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { onComplete?(); return }
         onSpeechEnd = onComplete
         let utterance = AVSpeechUtterance(string: trimmed)
@@ -165,7 +165,7 @@ final class VoiceService: NSObject {
     }
 
     func speakChunk(_ text: String, voiceID: String?, rate: Double) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = FinalOutputSanitizer.sanitizeUserVisibleText(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: trimmed)
         if let voiceID, let v = AVSpeechSynthesisVoice(identifier: voiceID) {

@@ -642,7 +642,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
+        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
     }
 
     func respond(
@@ -667,7 +667,7 @@ final actor AppLlamaService {
         for try await chunk in stream {
             output += chunk
         }
-        return ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(output)
+        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
     }
 
     func resetKVCache() async {
@@ -737,7 +737,7 @@ final actor AppLlamaService {
                     var sanitizedEmittedCount = 0
                     for try await chunk in stream {
                         rawOutput += chunk
-                        let sanitizedSoFar = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                        let sanitizedSoFar = FinalOutputSanitizer.sanitizeUserVisibleText(rawOutput).text
                         if sanitizedSoFar.count > sanitizedEmittedCount {
                             let start = sanitizedSoFar.index(sanitizedSoFar.startIndex, offsetBy: sanitizedEmittedCount)
                             let delta = String(sanitizedSoFar[start...])
@@ -748,7 +748,7 @@ final actor AppLlamaService {
                             }
                         }
                     }
-                    let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                    let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(rawOutput).text
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(
                         slot: slot,

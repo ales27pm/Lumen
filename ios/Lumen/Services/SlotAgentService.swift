@@ -1023,10 +1023,13 @@ final class SlotAgentService {
     }
 
     private func yieldFinal(_ text: String, steps: [AgentStep], continuation: AsyncStream<AgentEvent>.Continuation) {
-        for chunk in chunk(text) {
+        // Preserve the model's raw final text on this stream so E2E can detect leakage.
+        // User-visible sanitization is applied at the UI/rendering boundary.
+        let rawFinalText = text
+        for chunk in chunk(rawFinalText) {
             continuation.yield(.finalDelta(chunk))
         }
-        continuation.yield(.done(finalText: text, steps: steps))
+        continuation.yield(.done(finalText: rawFinalText, steps: steps))
         continuation.finish()
     }
 

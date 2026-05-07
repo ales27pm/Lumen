@@ -92,6 +92,14 @@ nonisolated enum FinalOutputSanitizer {
             mark(.rawToolPayload)
         }
 
+        if containsRawToolPayloadMarker(text.lowercased()) {
+            let trailingRemoval = removingTrailingRawToolPayload(from: text)
+            if trailingRemoval.removedAny {
+                text = trailingRemoval.text
+                mark(.rawToolPayload)
+            }
+        }
+
         text = normalizeWhitespace(text)
 
         if text.isEmpty {
@@ -145,6 +153,18 @@ nonisolated enum FinalOutputSanitizer {
         }
         let redacted = regex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
         return (redacted, redacted != source)
+    }
+
+    private static func removingTrailingRawToolPayload(from source: String) -> (text: String, removedAny: Bool) {
+        let lower = source.lowercased()
+        let markers = ["\"kind\":\"searchresults\"", "\"kind\" : \"searchresults\"", "\"mediakind\":\"page\"", "\"mediakind\" : \"page\"", "\"sourcepageurl\""]
+        guard let markerIndex = markers.compactMap({ lower.range(of: $0)?.lowerBound }).min() else {
+            return (source, false)
+        }
+
+        let lineStart = source[..<markerIndex].lastIndex(of: "\n").map { source.index(after: $0) } ?? source.startIndex
+        let redacted = String(source[..<lineStart]) + " "
+        return (redacted, true)
     }
 
     private static func removingRawToolPayloadObjects(from source: String) -> (text: String, removedAny: Bool) {

@@ -38,6 +38,10 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
+    private static let cachedRawToolPayloadRegex: NSRegularExpression = {
+        let pattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
 
     static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
         var text = raw
@@ -74,6 +78,26 @@ nonisolated enum FinalOutputSanitizer {
         if rawPayloadRemoval.removedAny {
             text = rawPayloadRemoval.text
             mark(.rawToolPayload)
+        }
+
+        let loosePayloadRemoval = removingRawToolPayloadFragments(from: text)
+        if loosePayloadRemoval.removedAny {
+            text = loosePayloadRemoval.text
+            mark(.rawToolPayload)
+        }
+        
+        let markerLineRemoval = removingRawToolPayloadMarkerLines(from: text)
+        if markerLineRemoval.removedAny {
+            text = markerLineRemoval.text
+            mark(.rawToolPayload)
+        }
+
+        if containsRawToolPayloadMarker(text.lowercased()) {
+            let trailingRemoval = removingTrailingRawToolPayload(from: text)
+            if trailingRemoval.removedAny {
+                text = trailingRemoval.text
+                mark(.rawToolPayload)
+            }
         }
 
         text = normalizeWhitespace(text)
@@ -127,6 +151,41 @@ nonisolated enum FinalOutputSanitizer {
             || lowercasedText.contains("\"mediakind\":\"page\"")
             || lowercasedText.contains("\"mediakind\" : \"page\"")
             || lowercasedText.contains("\"sourcepageurl\"")
+    }
+
+
+    private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        if cachedRawToolPayloadRegex.firstMatch(in: source, options: [], range: range) == nil {
+            return (source, false)
+        }
+        let redacted = cachedRawToolPayloadRegex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
+        return (redacted, redacted != source)
+    }
+
+    private static func removingRawToolPayloadMarkerLines(from source: String) -> (text: String, removedAny: Bool) {
+        let pattern = #"(?im)^.*("kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl").*$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return (source, false)
+        }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        if regex.firstMatch(in: source, options: [], range: range) == nil {
+            return (source, false)
+        }
+        let redacted = regex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
+        return (redacted, redacted != source)
+    }
+
+    private static func removingTrailingRawToolPayload(from source: String) -> (text: String, removedAny: Bool) {
+        let lower = source.lowercased()
+        let markers = ["\"kind\":\"searchresults\"", "\"kind\" : \"searchresults\"", "\"mediakind\":\"page\"", "\"mediakind\" : \"page\"", "\"sourcepageurl\""]
+        guard let markerIndex = markers.compactMap({ lower.range(of: $0)?.lowerBound }).min() else {
+            return (source, false)
+        }
+
+        let lineStart = source[..<markerIndex].lastIndex(of: "\n").map { source.index(after: $0) } ?? source.startIndex
+        let redacted = String(source[..<lineStart]) + " "
+        return (redacted, true)
     }
 
     private static func removingRawToolPayloadObjects(from source: String) -> (text: String, removedAny: Bool) {

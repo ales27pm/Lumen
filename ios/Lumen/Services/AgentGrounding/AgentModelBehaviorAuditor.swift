@@ -25,7 +25,44 @@ final class AgentModelBehaviorAuditor {
             let runtimeAllowedTools = routing.allowedToolIDs
             let actionSteps = message.agentSteps.filter { $0.kind == .action }
             let visibleFinal = AssistantOutputSanitizer.sanitize(message.content)
+            let sanitizedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(message.content)
             auditedTraceCount += 1
+
+            let hasRawThinkLeak = message.content.localizedCaseInsensitiveContains("<think") || message.content.localizedCaseInsensitiveContains("</think>")
+            let hasRawLumenPayloadLeak = message.content.localizedCaseInsensitiveContains("<lumen_web_payload") || message.content.localizedCaseInsensitiveContains("</lumen_web_payload>")
+            if hasRawThinkLeak || hasRawLumenPayloadLeak {
+                violations.append(violation(
+                    severity: .critical,
+                    code: "hidden_reasoning_leak",
+                    agent: "mouth",
+                    expected: "No hidden reasoning or raw payload markers in user-visible final text.",
+                    actual: String(message.content.prefix(600)),
+                    prompt: prompt,
+                    problem: "Final output contained hidden reasoning or raw payload markers."
+                ))
+            }
+
+            let sanitizerOnlyArtifacts = sanitizedFinal.removedArtifacts.filter { artifact in
+                switch artifact {
+                case .thinkBlock, .malformedThinkPrefix:
+                    return !hasRawThinkLeak
+                case .lumenWebPayload:
+                    return !hasRawLumenPayloadLeak
+                case .rawToolPayload, .emptyAfterSanitization:
+                    return true
+                }
+            }
+            if !sanitizerOnlyArtifacts.isEmpty {
+                violations.append(violation(
+                    severity: .error,
+                    code: "final_sanitizer_recovered_unsafe_output",
+                    agent: "mouth",
+                    expected: "Model should emit clean final output without sanitizer recovery.",
+                    actual: sanitizerOnlyArtifacts.map(\.rawValue).joined(separator: ","),
+                    prompt: prompt,
+                    problem: "Final sanitizer had to recover unsafe output artifacts."
+                ))
+            }
 
             if containsSentinel(visibleFinal, sentinels: forbiddenSentinels) {
                 violations.append(violation(
@@ -287,6 +324,9 @@ final class AgentModelBehaviorAuditor {
         if violations.contains(where: { $0.code.contains("sentinel") }) {
             out.insert("Add Mouth/step sanitizer regression samples for forbidden sentinel leakage.")
         }
+        if violations.contains(where: { $0.code == "hidden_reasoning_leak" || $0.code == "final_sanitizer_recovered_unsafe_output" }) {
+            out.insert("Add Mouth output-hygiene samples that forbid hidden reasoning, raw payloads, and sanitizer-recovered final answers.")
+        }
         if violations.contains(where: { $0.code.contains("approval") }) {
             out.insert("Add approval-boundary samples for requiresApproval tools and verify UI confirmation paths.")
         }
@@ -318,8 +358,8 @@ final class AgentModelBehaviorAuditor {
             return violation.expected
         case "missing_required_tool_argument":
             return "Emit a tool call with every required manifest argument populated, or ask for clarification before tool execution."
-        case "final_sentinel_leak", "agent_step_sentinel_leak":
-            return "Remove all forbidden sentinels and provide only user-safe final text or structured manifest-valid tool JSON."
+        case "final_sentinel_leak", "agent_step_sentinel_leak", "hidden_reasoning_leak", "final_sanitizer_recovered_unsafe_output":
+            return "Return only clean user-visible final text. Remove hidden reasoning, raw payload markers, internal sentinels, and JSON/debug blobs."
         case "approval_sensitive_tool_selected":
             return "Stop at the approval boundary and request explicit user confirmation before execution."
         case "missing_required_tool_action":
@@ -341,6 +381,8 @@ final class AgentModelBehaviorAuditor {
             return "Executor must satisfy required argument schemas exactly or request clarification."
         case "final_sentinel_leak", "agent_step_sentinel_leak":
             return "Mouth and persisted steps must suppress forbidden internal sentinels."
+        case "hidden_reasoning_leak", "final_sanitizer_recovered_unsafe_output":
+            return "Mouth must emit clean final answers directly; hidden reasoning and raw tool/debug payloads are never user-visible output."
         case "approval_sensitive_tool_selected":
             return "RequiresApproval tools need an approval boundary before execution unless the request is clearly user-initiated and confirmation has been captured."
         case "missing_required_tool_action":
@@ -353,6 +395,7 @@ final class AgentModelBehaviorAuditor {
     private func curriculum(for violation: AgentBehaviorViolation) -> String {
         if violation.code.contains("sentinel") { return "sentinel_safety" }
         if violation.code.contains("approval") { return "approval_boundary" }
+        if violation.code == "hidden_reasoning_leak" || violation.code == "final_sanitizer_recovered_unsafe_output" { return "output_hygiene" }
         if violation.code.contains("tool") { return "tool_routing" }
         if violation.code.contains("argument") { return "schema_adherence" }
         return "runtime_repair"

@@ -17,6 +17,7 @@ struct VoiceModeView: View {
     @State private var finishedStreaming = false
     @State private var stepsBuffer: [AgentStep] = []
     @State private var activeVoiceTurnID: UUID?
+    @State private var generationController = GenerationTaskController<String>()
 
     enum Phase { case idle, listening, thinking, speaking }
 
@@ -102,7 +103,7 @@ struct VoiceModeView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { startListening() }
+        .onAppear { generationController.startupIfNeeded(for: "voice") { startListening() } }
         .onDisappear { cleanup() }
     }
 
@@ -207,9 +208,10 @@ struct VoiceModeView: View {
         finishedStreaming = false
         stepsBuffer = []
         let turnID = UUID()
+        let controllerRequestID = UUID()
         activeVoiceTurnID = turnID
 
-        responseTask = Task {
+        let task = Task {
             let convo = conversations.first ?? {
                 let c = Conversation(title: String(text.prefix(36)), systemPrompt: appState.systemPrompt)
                 modelContext.insert(c)
@@ -244,7 +246,7 @@ struct VoiceModeView: View {
 
             var finalText = ""
             for await event in SlotAgentService.shared.run(req) {
-                if Task.isCancelled || activeVoiceTurnID != turnID { break }
+                if Task.isCancelled || activeVoiceTurnID != turnID || !generationController.isCurrent(controllerRequestID, for: "voice") { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)
                 case .stepDelta: break
@@ -263,7 +265,7 @@ struct VoiceModeView: View {
                 }
             }
 
-            guard !Task.isCancelled, activeVoiceTurnID == turnID else { return }
+            guard !Task.isCancelled, activeVoiceTurnID == turnID, generationController.isCurrent(controllerRequestID, for: "voice") else { return }
             finishedStreaming = true
             finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
             finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
@@ -285,7 +287,10 @@ struct VoiceModeView: View {
             }
 
             activeVoiceTurnID = nil
+            generationController.clearIfCurrent(controllerRequestID, for: "voice")
         }
+        _ = generationController.begin(for: "voice", task: task, requestID: controllerRequestID)
+        responseTask = task
     }
 
     private func safeShortTermContext(in conversation: Conversation, excludingCurrentUserMessageID currentID: UUID) -> [(role: MessageRole, content: String)] {
@@ -361,6 +366,7 @@ struct VoiceModeView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         let turnID = activeVoiceTurnID
         activeVoiceTurnID = nil
+        generationController.cancel(for: "voice")
         responseTask?.cancel()
         voice.stopSpeaking()
         voice.stopListening()
@@ -380,6 +386,7 @@ struct VoiceModeView: View {
 
     private func cleanup() {
         activeVoiceTurnID = nil
+        generationController.cancel(for: "voice")
         responseTask?.cancel()
         voice.stopListening()
         voice.stopSpeaking()

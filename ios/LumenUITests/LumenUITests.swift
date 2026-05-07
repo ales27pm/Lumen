@@ -260,7 +260,6 @@ final class LumenUITests: XCTestCase {
         }
     }
 
-    @MainActor
     private func dismissOnboardingIfNeeded() {
         let skip = app.buttons["Skip for now"]
         if skip.waitForExistence(timeout: 2) {

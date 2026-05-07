@@ -243,8 +243,13 @@ struct VoiceModeView: View {
             )
 
             var finalText = ""
+<<<<<<< HEAD
             for await event in SlotAgentService.shared.run(req) {
                 if Task.isCancelled || activeVoiceTurnID != turnID { break }
+=======
+            for await event in AgentService.shared.run(req) {
+                if Task.isCancelled { break }
+>>>>>>> f48cc7c (Refactor VoiceModeView to simplify event handling and remove unnecessary await)
                 switch event {
                 case .step(let s): stepsBuffer.append(s)
                 case .stepDelta: break

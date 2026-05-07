@@ -208,6 +208,7 @@ struct VoiceModeView: View {
         finishedStreaming = false
         stepsBuffer = []
         let turnID = UUID()
+        let controllerRequestID = UUID()
         activeVoiceTurnID = turnID
 
         let task = Task {
@@ -245,7 +246,7 @@ struct VoiceModeView: View {
 
             var finalText = ""
             for await event in SlotAgentService.shared.run(req) {
-                if Task.isCancelled || activeVoiceTurnID != turnID || !generationController.isCurrent(turnID, for: "voice") { break }
+                if Task.isCancelled || activeVoiceTurnID != turnID || !generationController.isCurrent(controllerRequestID, for: "voice") { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)
                 case .stepDelta: break
@@ -264,7 +265,7 @@ struct VoiceModeView: View {
                 }
             }
 
-            guard !Task.isCancelled, activeVoiceTurnID == turnID, generationController.isCurrent(turnID, for: "voice") else { return }
+            guard !Task.isCancelled, activeVoiceTurnID == turnID, generationController.isCurrent(controllerRequestID, for: "voice") else { return }
             finishedStreaming = true
             finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
             finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
@@ -286,9 +287,9 @@ struct VoiceModeView: View {
             }
 
             activeVoiceTurnID = nil
-            generationController.clearIfCurrent(turnID, for: "voice")
+            generationController.clearIfCurrent(controllerRequestID, for: "voice")
         }
-        _ = generationController.begin(for: "voice", task: task)
+        _ = generationController.begin(for: "voice", task: task, requestID: controllerRequestID)
         responseTask = task
     }
 

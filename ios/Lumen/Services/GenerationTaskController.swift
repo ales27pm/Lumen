@@ -12,9 +12,8 @@ final class GenerationTaskController<Key: Hashable> {
         action()
     }
 
-    func begin(for key: Key, task: Task<Void, Never>) -> UUID {
+    func begin(for key: Key, task: Task<Void, Never>, requestID: UUID = UUID()) -> UUID {
         tasks[key]?.cancel()
-        let requestID = UUID()
         activeRequestIDs[key] = requestID
         tasks[key] = task
         return requestID

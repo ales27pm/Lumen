@@ -734,11 +734,18 @@ final actor AppLlamaService {
                     )
                     var rawOutput = ""
                     var streamedAnyChunk = false
+                    var sanitizedEmittedCount = 0
                     for try await chunk in stream {
                         rawOutput += chunk
-                        if !chunk.isEmpty {
-                            streamedAnyChunk = true
-                            continuation.yield(.text(chunk))
+                        let sanitizedSoFar = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
+                        if sanitizedSoFar.count > sanitizedEmittedCount {
+                            let start = sanitizedSoFar.index(sanitizedSoFar.startIndex, offsetBy: sanitizedEmittedCount)
+                            let delta = String(sanitizedSoFar[start...])
+                            if !delta.isEmpty {
+                                streamedAnyChunk = true
+                                continuation.yield(.text(delta))
+                                sanitizedEmittedCount = sanitizedSoFar.count
+                            }
                         }
                     }
                     let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)

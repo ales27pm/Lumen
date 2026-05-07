@@ -1738,9 +1738,7 @@ final class AgentService {
         min(max(userTopP, 0.1), 0.85)
     }
 
-    private func structuredTurnMaxTokens(from requestedMaxTokens: Int, req: AgentRequest, stepIndex: Int) -> Int {
-        _ = req
-        _ = stepIndex
+    private func structuredTurnMaxTokens(from requestedMaxTokens: Int, req _: AgentRequest, stepIndex _: Int) -> Int {
         return min(max(requestedMaxTokens, Self.structuredTurnMinTokenCap), Self.structuredTurnMaxTokenCap)
     }
 

@@ -76,6 +76,12 @@ nonisolated enum FinalOutputSanitizer {
             mark(.rawToolPayload)
         }
 
+        let loosePayloadRemoval = removingRawToolPayloadFragments(from: text)
+        if loosePayloadRemoval.removedAny {
+            text = loosePayloadRemoval.text
+            mark(.rawToolPayload)
+        }
+
         text = normalizeWhitespace(text)
 
         if text.isEmpty {
@@ -106,6 +112,20 @@ nonisolated enum FinalOutputSanitizer {
             || lowercasedText.contains("\"mediakind\":\"page\"")
             || lowercasedText.contains("\"mediakind\" : \"page\"")
             || lowercasedText.contains("\"sourcepageurl\"")
+    }
+
+
+    private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
+        let pattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return (source, false)
+        }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        if regex.firstMatch(in: source, options: [], range: range) == nil {
+            return (source, false)
+        }
+        let redacted = regex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
+        return (redacted, redacted != source)
     }
 
     private static func removingRawToolPayloadObjects(from source: String) -> (text: String, removedAny: Bool) {

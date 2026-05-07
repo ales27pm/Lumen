@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct MemoryCascadeTests {
-    @Test func recallReturnsTieredPrefixesForVectorizedAndCondensed() async throws {
+    @Test func recallReturnsTieredItemsForVectorizedAndCondensed() async throws {
         let context = try makeInMemoryContext()
         seedRecallFixture(context: context)
 
@@ -19,8 +19,8 @@ struct MemoryCascadeTests {
         )
 
         #expect(!result.condensed.isEmpty)
-        #expect(result.condensed.allSatisfy { $0.hasPrefix("Tier 3 Condensed:") })
-        #expect(result.vectorized.allSatisfy { $0.hasPrefix("Tier 2 Vectorized:") })
+        #expect(result.condensed.allSatisfy { $0.scope == .remCondensed })
+        #expect(result.vectorized.allSatisfy { $0.scope == .conversation || $0.scope == .project || $0.scope == .userPreference })
 
         let hasEmbeddingRuntime = await AppLlamaService.shared.hasSemanticEmbeddingRuntime
         if hasEmbeddingRuntime {

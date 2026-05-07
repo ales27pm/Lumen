@@ -733,8 +733,13 @@ final actor AppLlamaService {
                         seed: groundedRequest.seed
                     )
                     var rawOutput = ""
+                    var streamedAnyChunk = false
                     for try await chunk in stream {
                         rawOutput += chunk
+                        if !chunk.isEmpty {
+                            streamedAnyChunk = true
+                            continuation.yield(.text(chunk))
+                        }
                     }
                     let sanitized = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(rawOutput)
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -747,7 +752,7 @@ final actor AppLlamaService {
                         // Do not report a word count as token count; leave nil until exact runtime token counts are threaded through both runtime paths.
                         outputTokenCount: nil
                     )
-                    if !sanitized.isEmpty {
+                    if !streamedAnyChunk && !sanitized.isEmpty {
                         continuation.yield(.text(sanitized))
                     }
                 } catch {

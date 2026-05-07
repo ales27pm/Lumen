@@ -1344,9 +1344,9 @@ final class AgentService {
                 temperature: agentTemperature(from: req.temperature),
                 topP: agentTopP(from: req.topP),
                 repetitionPenalty: max(req.repetitionPenalty, 1.05),
-                maxTokens: structuredTurnMaxTokens(from: req.maxTokens),
+                maxTokens: structuredTurnMaxTokens(from: req.maxTokens, req: req, stepIndex: stepIndex),
                 modelName: "agent-json",
-                relevantMemories: [],
+                relevantMemories: req.relevantMemories,
                 attachments: stepIndex == 0 ? req.attachments : []
             )
 
@@ -1586,11 +1586,6 @@ final class AgentService {
             sys += "Attached files are already included in the user message context. Do not call files.read for attached files unless the user asks for another imported file by name.\n\n"
         }
 
-        if !req.relevantMemories.isEmpty {
-            sys += PromptContextBuilder.renderMemoryBlock(Array(req.relevantMemories.prefix(6)))
-            sys += "\n\n"
-        }
-
         sys += "Routing guidelines:\n"
         sys += "- For nearest/near me/closest questions, call `location.current` first, then `maps.search` once, then emit `final`.\n"
         sys += "- For follow-up map intents like \"show me on map\"/\"open on map\", if prior observations already include `Current location:` coordinates from `location.current`, do not call `location.current` again.\n"
@@ -1657,7 +1652,7 @@ final class AgentService {
     }
 
     private func sanitizedHistoryContext(_ history: [(role: MessageRole, content: String)]) -> String {
-        let recent = history.suffix(8)
+        let recent = history.suffix(6)
         var lines: [String] = []
         for item in recent {
             let role: String
@@ -1697,7 +1692,7 @@ final class AgentService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         text = text.replacingOccurrences(of: "\n", with: " ")
         while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
-        return String(text.prefix(700))
+        return String(text.prefix(480))
     }
 
     func sanitizeHistoryContentForTests(_ content: String) -> String {
@@ -1743,12 +1738,29 @@ final class AgentService {
         min(max(userTopP, 0.1), 0.85)
     }
 
-    private func structuredTurnMaxTokens(from requestedMaxTokens: Int) -> Int {
-        min(max(requestedMaxTokens, Self.structuredTurnMinTokenCap), Self.structuredTurnMaxTokenCap)
+    private func structuredTurnMaxTokens(from requestedMaxTokens: Int, req: AgentRequest, stepIndex: Int) -> Int {
+        _ = req
+        _ = stepIndex
+        return min(max(requestedMaxTokens, Self.structuredTurnMinTokenCap), Self.structuredTurnMaxTokenCap)
     }
 
     func structuredTurnMaxTokensForTests(from requestedMaxTokens: Int) -> Int {
-        structuredTurnMaxTokens(from: requestedMaxTokens)
+        structuredTurnMaxTokens(
+            from: requestedMaxTokens,
+            req: AgentRequest(
+                systemPrompt: "",
+                history: [],
+                userMessage: "test",
+                temperature: 0.1,
+                topP: 0.9,
+                repetitionPenalty: 1.1,
+                maxTokens: requestedMaxTokens,
+                maxSteps: 1,
+                availableTools: [],
+                relevantMemories: []
+            ),
+            stepIndex: 0
+        )
     }
 
     private func diagnosticReflection(for _: AgentTurnParseError, raw: String) -> String {

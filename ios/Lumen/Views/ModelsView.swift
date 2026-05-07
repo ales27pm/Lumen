@@ -266,7 +266,7 @@ struct ModelsView: View {
 
     private func refreshLoaded() async {
         let set = await runtimeController.refreshLoadedPaths()
-        if !set.isEmpty || loadedPaths.isEmpty { loadedPaths = set }
+        loadedPaths = set
     }
 
     private func load(_ sm: StoredModel) {

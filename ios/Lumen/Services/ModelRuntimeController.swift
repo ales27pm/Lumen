@@ -17,6 +17,11 @@ final class ModelRuntimeController {
         refreshRequestID = requestID
 
         var set: Set<String> = []
+        if let sharedPath = await AppLlamaService.shared.loadedChatPath,
+           FileManager.default.fileExists(atPath: sharedPath) {
+            let fileName = URL(fileURLWithPath: sharedPath).lastPathComponent
+            set.insert(ModelStorage.resolvedModelURL(from: sharedPath, fileName: fileName).path)
+        }
         let chatPaths = await AppLlamaService.shared.loadedChatPathsBySlot
         for path in chatPaths.values where FileManager.default.fileExists(atPath: path) {
             let fileName = URL(fileURLWithPath: path).lastPathComponent
@@ -45,6 +50,10 @@ final class ModelRuntimeController {
     func unload(_ sm: StoredModel, adapterSlot: (StoredModel) -> LumenModelSlot?) async {
         if sm.modelRole == .chat {
             let resolvedPath = ModelStorage.resolvedModelURL(from: sm.localPath, fileName: sm.fileName).path
+            if await AppLlamaService.shared.loadedChatPath == resolvedPath {
+                await AppLlamaService.shared.unloadAllChat()
+                return
+            }
             let slots = await AppLlamaService.shared.loadedChatPathsBySlot.filter { $0.value == resolvedPath }.map(\.key)
             for slot in slots { await AppLlamaService.shared.unloadChat(for: slot) }
         } else if sm.modelRole == .roleAdapter {

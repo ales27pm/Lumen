@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 FIND_BIN="find"
 
 bold() { printf "\033[1m%s\033[0m\n" "$1"; }
@@ -80,14 +81,78 @@ ensure_xcodebuild_and_xcrun() {
   install_xcode_cli_tools
 
   if ! command -v xcodebuild >/dev/null 2>&1 || ! command -v xcrun >/dev/null 2>&1; then
-    fail "xcodebuild/xcrun still unavailable after CLI tools check. Install Xcode from the App Store and run xcode-select --switch."
+    fail "xcodebuild/xcrun unavailable. Install Xcode and select it with: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
   fi
 
   xcodebuild -version >/dev/null 2>&1 || fail "xcodebuild is installed but not usable. Open Xcode once and accept licenses."
+}
 
+ensure_upload_tool() {
   if ! xcrun altool --help >/dev/null 2>&1; then
-    warn "xcrun altool is unavailable. This usually means Xcode tools are incomplete or not selected."
-    fail "Install/upgrade Xcode and ensure it is selected: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
+    fail "xcrun altool is unavailable. Install/upgrade Xcode and select it with: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
+  fi
+}
+
+normalize_export_method() {
+  case "$1" in
+    app-store|app-store-connect) printf "app-store-connect" ;;
+    ad-hoc|release-testing) printf "release-testing" ;;
+    development|debugging) printf "debugging" ;;
+    enterprise) printf "enterprise" ;;
+    validation) printf "validation" ;;
+    *) return 1 ;;
+  esac
+}
+
+is_distribution_export() {
+  case "$1" in
+    app-store-connect|release-testing|enterprise|validation) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+write_export_options_plist() {
+  local plist_path="$1"
+  local export_method="$2"
+  local team_id="$3"
+  local signing_certificate="$4"
+
+  cat > "$plist_path" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>${export_method}</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <key>signingCertificate</key>
+  <string>${signing_certificate}</string>
+PLIST
+
+  if [[ -n "$team_id" ]]; then
+    cat >> "$plist_path" <<PLIST
+  <key>teamID</key>
+  <string>${team_id}</string>
+PLIST
+  fi
+
+  cat >> "$plist_path" <<PLIST
+  <key>stripSwiftSymbols</key>
+  <true/>
+  <key>uploadSymbols</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+}
+
+build_project_selector_args() {
+  local project_path="$1"
+  if [[ "$project_path" == *.xcworkspace ]]; then
+    printf '%s\0%s\0' "-workspace" "$project_path"
+  else
+    printf '%s\0%s\0' "-project" "$project_path"
   fi
 }
 
@@ -100,7 +165,8 @@ bold "Lumen iOS build + App Store Connect upload"
 DEFAULT_PROJECT_PATH="ios/Lumen.xcodeproj"
 DEFAULT_SCHEME="Lumen"
 DEFAULT_CONFIGURATION="Release"
-DEFAULT_EXPORT_METHOD="app-store"
+DEFAULT_EXPORT_METHOD="app-store-connect"
+DEFAULT_TEAM_ID="${DEVELOPMENT_TEAM:-52T7P32J34}"
 
 read -r -p "Project/workspace path [$DEFAULT_PROJECT_PATH]: " PROJECT_PATH
 PROJECT_PATH="${PROJECT_PATH:-$DEFAULT_PROJECT_PATH}"
@@ -113,13 +179,12 @@ SCHEME="${SCHEME:-$DEFAULT_SCHEME}"
 read -r -p "Configuration [$DEFAULT_CONFIGURATION]: " CONFIGURATION
 CONFIGURATION="${CONFIGURATION:-$DEFAULT_CONFIGURATION}"
 
-read -r -p "Export method [$DEFAULT_EXPORT_METHOD]: " EXPORT_METHOD
-EXPORT_METHOD="${EXPORT_METHOD:-$DEFAULT_EXPORT_METHOD}"
+read -r -p "Apple Developer Team ID [$DEFAULT_TEAM_ID]: " TEAM_ID
+TEAM_ID="${TEAM_ID:-$DEFAULT_TEAM_ID}"
 
-case "$EXPORT_METHOD" in
-  app-store|ad-hoc|enterprise|development) ;;
-  *) fail "Unsupported export method: $EXPORT_METHOD" ;;
-esac
+read -r -p "Export method [$DEFAULT_EXPORT_METHOD]: " EXPORT_METHOD_INPUT
+EXPORT_METHOD_INPUT="${EXPORT_METHOD_INPUT:-$DEFAULT_EXPORT_METHOD}"
+EXPORT_METHOD="$(normalize_export_method "$EXPORT_METHOD_INPUT")" || fail "Unsupported export method: $EXPORT_METHOD_INPUT"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 SCHEME_SAFE="${SCHEME//[^A-Za-z0-9_.-]/_}"
@@ -137,6 +202,7 @@ AUTH_MODE="$(read_required 'Select [1/2]: ')"
 API_KEY=""
 API_ISSUER=""
 API_KEY_DIR=""
+API_KEY_PATH=""
 APPLE_ID=""
 APP_SPECIFIC_PASSWORD=""
 ASC_PROVIDER=""
@@ -147,45 +213,69 @@ case "$AUTH_MODE" in
     API_ISSUER="$(read_required 'API issuer ID (UUID): ')"
     API_KEY_DIR="$(read_required 'Directory containing AuthKey_<KEYID>.p8: ')"
     [[ -d "$API_KEY_DIR" ]] || fail "API key directory not found: $API_KEY_DIR"
-    [[ -f "$API_KEY_DIR/AuthKey_${API_KEY}.p8" ]] || fail "Missing API key file: $API_KEY_DIR/AuthKey_${API_KEY}.p8"
+    API_KEY_PATH="$API_KEY_DIR/AuthKey_${API_KEY}.p8"
+    [[ -f "$API_KEY_PATH" ]] || fail "Missing API key file: $API_KEY_PATH"
     read -r -p "Optional provider short name (leave blank to skip): " ASC_PROVIDER
     ;;
   2)
     APPLE_ID="$(read_required 'Apple ID (email): ')"
     APP_SPECIFIC_PASSWORD="$(read_secret_required 'App-specific password: ')"
     read -r -p "Optional provider short name (leave blank to skip): " ASC_PROVIDER
+    warn "Apple ID auth can upload the IPA, but automatic profile creation still depends on Xcode being signed into your Apple Developer account."
     ;;
   *)
     fail "Invalid auth mode."
     ;;
 esac
 
-cat > "$EXPORT_OPTIONS_PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key>
-  <string>${EXPORT_METHOD}</string>
-  <key>signingStyle</key>
-  <string>automatic</string>
-  <key>stripSwiftSymbols</key>
-  <true/>
-  <key>compileBitcode</key>
-  <false/>
-</dict>
-</plist>
-PLIST
-
-info "Archive"
-if [[ "$PROJECT_PATH" == *.xcworkspace ]]; then
-  xcodebuild -workspace "$PROJECT_PATH" -scheme "$SCHEME" -configuration "$CONFIGURATION" -archivePath "$ARCHIVE_PATH" clean archive
-else
-  xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -configuration "$CONFIGURATION" -archivePath "$ARCHIVE_PATH" clean archive
+SIGNING_CERTIFICATE="Apple Development"
+if is_distribution_export "$EXPORT_METHOD"; then
+  SIGNING_CERTIFICATE="Apple Distribution"
 fi
 
+write_export_options_plist "$EXPORT_OPTIONS_PLIST" "$EXPORT_METHOD" "$TEAM_ID" "$SIGNING_CERTIFICATE"
+
+PROJECT_SELECTOR=()
+while IFS= read -r -d '' arg; do
+  PROJECT_SELECTOR+=("$arg")
+done < <(build_project_selector_args "$PROJECT_PATH")
+
+XCODE_AUTH_ARGS=()
+if [[ "$AUTH_MODE" == "1" ]]; then
+  XCODE_AUTH_ARGS+=(
+    -authenticationKeyPath "$API_KEY_PATH"
+    -authenticationKeyID "$API_KEY"
+    -authenticationKeyIssuerID "$API_ISSUER"
+  )
+fi
+
+SIGNING_BUILD_SETTINGS=(
+  "CODE_SIGN_STYLE=Automatic"
+  "DEVELOPMENT_TEAM=$TEAM_ID"
+  "CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE"
+  "PROVISIONING_PROFILE_SPECIFIER="
+)
+
+info "Archive"
+xcodebuild \
+  "${PROJECT_SELECTOR[@]}" \
+  -scheme "$SCHEME" \
+  -configuration "$CONFIGURATION" \
+  -destination "generic/platform=iOS" \
+  -archivePath "$ARCHIVE_PATH" \
+  -allowProvisioningUpdates \
+  "${XCODE_AUTH_ARGS[@]}" \
+  "${SIGNING_BUILD_SETTINGS[@]}" \
+  clean archive
+
 info "Export IPA"
-xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportPath "$EXPORT_DIR" -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
+xcodebuild \
+  -exportArchive \
+  -archivePath "$ARCHIVE_PATH" \
+  -exportPath "$EXPORT_DIR" \
+  -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
+  -allowProvisioningUpdates \
+  "${XCODE_AUTH_ARGS[@]}"
 
 IPA_PATH="$("$FIND_BIN" "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
 [[ -n "$IPA_PATH" ]] || fail "No IPA found in $EXPORT_DIR"
@@ -196,6 +286,7 @@ if ! confirm "Upload this IPA to App Store Connect now?"; then
   exit 0
 fi
 
+ensure_upload_tool
 info "Upload via altool"
 UPLOAD_CMD=(xcrun altool --upload-app --type ios --file "$IPA_PATH")
 [[ -n "$ASC_PROVIDER" ]] && UPLOAD_CMD+=(--asc-provider "$ASC_PROVIDER")

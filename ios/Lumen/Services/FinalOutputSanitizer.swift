@@ -20,6 +20,7 @@ nonisolated enum FinalOutputArtifact: String, Codable, Sendable, Equatable {
     case malformedThinkPrefix
     case lumenWebPayload
     case rawToolPayload
+    case injectedFallbackPrefix
     case emptyAfterSanitization
 }
 
@@ -44,8 +45,6 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
     }
 }
 
-
-
 nonisolated struct StreamingFinalOutputSanitizer: Sendable {
     nonisolated enum Finalization: Sendable {
         case append(final: SanitizedFinalOutput, remainingDelta: String)
@@ -54,14 +53,41 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
 
     private var rawBuffer = ""
     private var emittedSanitized = ""
+    private var sawSanitizerGeneratedFallbackDuringStream = false
     private let holdbackCharacters = 192
 
     mutating func ingest(_ chunk: String) -> String {
         guard !chunk.isEmpty else { return "" }
         rawBuffer += chunk
 
-        let safeRawPrefix = String(rawBuffer.prefix(safeRawCutoffIndex(in: rawBuffer)))
-        let sanitizedPrefix = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix).text
+        let cutoff = safeRawCutoffIndex(in: rawBuffer)
+        guard cutoff > 0 else { return "" }
+
+        let safeRawPrefix = String(rawBuffer.prefix(cutoff))
+        guard !safeRawPrefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+
+        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix)
+
+        // A partial stream can have an empty/unsafe safe prefix while the holdback window
+        // waits for split markers such as <think> or <lumen_web_payload>. The global
+        // fallback is valid only after finalization proves the complete output is
+        // unusable; emitting it here leaks a fake error prefix into otherwise valid
+        // answers. Track this provenance so finish() can clean a later fallback prefix
+        // only when the stream itself proved sanitizer-generated fallback ancestry.
+        if sanitized.text == FinalOutputSanitizer.fallback {
+            let rawPrefixWasFallback = safeRawPrefix
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .hasPrefix(FinalOutputSanitizer.fallback.lowercased())
+            if sanitized.hadUnsafeLeakage || !rawPrefixWasFallback {
+                sawSanitizerGeneratedFallbackDuringStream = true
+            }
+            return ""
+        }
+
+        let sanitizedPrefix = sanitized.text
         guard sanitizedPrefix.count > emittedSanitized.count else { return "" }
 
         let delta = String(sanitizedPrefix.dropFirst(emittedSanitized.count))
@@ -70,7 +96,10 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
     }
 
     mutating func finish() -> Finalization {
-        let final = FinalOutputSanitizer.sanitizeUserVisibleText(rawBuffer)
+        let final = FinalOutputSanitizer.sanitizeUserVisibleText(
+            rawBuffer,
+            isInjectedProvenance: sawSanitizerGeneratedFallbackDuringStream
+        )
         if final.text.hasPrefix(emittedSanitized) {
             let remainingDelta = String(final.text.dropFirst(emittedSanitized.count))
             emittedSanitized = final.text
@@ -127,6 +156,7 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         return braceIndex
     }
 }
+
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
@@ -139,7 +169,7 @@ nonisolated enum FinalOutputSanitizer {
         }
     }()
 
-    static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
+    static func sanitizeUserVisibleText(_ raw: String, isInjectedProvenance: Bool = false) -> SanitizedFinalOutput {
         var text = raw
         var removed: [FinalOutputArtifact] = []
 
@@ -181,7 +211,7 @@ nonisolated enum FinalOutputSanitizer {
             text = loosePayloadRemoval.text
             mark(.rawToolPayload)
         }
-        
+
         let markerLineRemoval = removingRawToolPayloadMarkerLines(from: text)
         if markerLineRemoval.removedAny {
             text = markerLineRemoval.text
@@ -197,6 +227,14 @@ nonisolated enum FinalOutputSanitizer {
         }
 
         text = normalizeWhitespace(text)
+
+        if isInjectedProvenance {
+            let fallbackRemoval = removingInjectedFallbackPrefix(from: text)
+            if fallbackRemoval.removedAny {
+                text = fallbackRemoval.text
+                mark(.injectedFallbackPrefix)
+            }
+        }
 
         if text.isEmpty {
             mark(.emptyAfterSanitization)
@@ -253,6 +291,16 @@ nonisolated enum FinalOutputSanitizer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static func removingInjectedFallbackPrefix(from source: String) -> (text: String, removedAny: Bool) {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > fallback.count else { return (source, false) }
+        guard trimmed.lowercased().hasPrefix(fallback.lowercased()) else { return (source, false) }
+        let remainder = trimmed.dropFirst(fallback.count)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".:;-—–*")))
+        guard !remainder.isEmpty else { return (source, false) }
+        return (String(remainder), true)
+    }
+
     private static func containsRawToolPayloadMarker(_ lowercasedText: String) -> Bool {
         lowercasedText.contains("{\"kind\":\"searchresults\"")
             || lowercasedText.contains("\"kind\" : \"searchresults\"")
@@ -260,7 +308,6 @@ nonisolated enum FinalOutputSanitizer {
             || lowercasedText.contains("\"mediakind\" : \"page\"")
             || lowercasedText.contains("\"sourcepageurl\"")
     }
-
 
     private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
         guard case let .success(regex) = cachedRawToolPayloadRegex else {

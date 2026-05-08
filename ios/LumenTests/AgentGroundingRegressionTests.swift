@@ -147,6 +147,79 @@ struct AgentGroundingRegressionTests {
         #expect(package.scenarioResults.count == 1)
     }
 
+    @Test func agentGroundingPackageFlagsSlowRuntimeModelTurns() throws {
+        AgentBehaviorTraceRecorder.clear()
+        AgentBehaviorTraceRecorder.record(AgentBehaviorTrace(
+            id: UUID(),
+            createdAt: Date(),
+            event: .modelTurn,
+            slot: "mouth",
+            stage: "mouth-final",
+            intent: "chat",
+            promptPrefix: "Explain something.",
+            rawOutputPrefix: "Answer",
+            selectedToolID: nil,
+            toolArguments: [:],
+            allowedToolIDs: [],
+            requiresApproval: nil,
+            approvalMode: nil,
+            parseError: "noJSONObject",
+            emittedFinalInActionTurn: false,
+            generationElapsedMs: InAppDatasetPackageExporter.slowModelTurnThresholdMs + 1,
+            firstTokenLatencyMs: 2_000,
+            outputTokenCount: 42
+        ))
+
+        let package = InAppDatasetPackageExporter.makePackage(
+            manifestSource: "test-manifest",
+            usedRuntimeFallback: false,
+            runtimeManifestAudit: nil,
+            behaviorAudit: nil,
+            scenarioResults: [],
+            traceLimit: 10
+        )
+
+        #expect(package.behaviorAudit?.passed == false)
+        #expect(package.behaviorAudit?.violations.contains(where: { $0.code == "model_turn_too_slow" }) == true)
+        #expect(package.traceParseErrorCount == 0)
+    }
+
+    @Test func agentGroundingPackageFlagsSevereRuntimeModelTurns() throws {
+        AgentBehaviorTraceRecorder.clear()
+        AgentBehaviorTraceRecorder.record(AgentBehaviorTrace(
+            id: UUID(),
+            createdAt: Date(),
+            event: .modelTurn,
+            slot: "cortex",
+            stage: "cortex-orchestrator-json",
+            intent: "weather",
+            promptPrefix: "What is the weather here?",
+            rawOutputPrefix: "{}",
+            selectedToolID: nil,
+            toolArguments: [:],
+            allowedToolIDs: ["weather"],
+            requiresApproval: nil,
+            approvalMode: nil,
+            parseError: nil,
+            emittedFinalInActionTurn: false,
+            generationElapsedMs: InAppDatasetPackageExporter.severeModelTurnThresholdMs + 1,
+            firstTokenLatencyMs: 5_000,
+            outputTokenCount: 12
+        ))
+
+        let package = InAppDatasetPackageExporter.makePackage(
+            manifestSource: "test-manifest",
+            usedRuntimeFallback: false,
+            runtimeManifestAudit: nil,
+            behaviorAudit: nil,
+            scenarioResults: [],
+            traceLimit: 10
+        )
+
+        #expect(package.behaviorAudit?.passed == false)
+        #expect(package.behaviorAudit?.violations.contains(where: { $0.code == "model_turn_latency_severe" }) == true)
+    }
+
     private func makeManifest(tools: [RuntimeToolDefinition], intent: String, allowed: [String], extraIntents: [ManifestRoutingEntry] = []) -> AgentBehaviorManifest {
         AgentBehaviorManifest(
             schemaVersion: "1",

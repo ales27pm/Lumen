@@ -34,7 +34,6 @@ struct FinalOutputSanitizerTests {
         #expect(!out.text.contains("mediaKind"))
     }
 
-
     @Test func removesRawSearchResultsMarkerLineWhenJSONIsMalformed() {
         let raw = "Answer line\n{\"kind\":\"searchResults\",\"sourcePageURL\":\"https://example.com\"\nFollow-up"
         let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
@@ -47,6 +46,22 @@ struct FinalOutputSanitizerTests {
         let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
         #expect(out.removedArtifacts.contains(.rawToolPayload))
         #expect(!out.text.lowercased().contains("searchresults"))
+    }
+
+    @Test func defaultSanitizerPreservesLegitimateFallbackPrefixedModelText() {
+        let raw = "\(FinalOutputSanitizer.fallback) This is the actual model answer about error handling."
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        #expect(out.text == raw)
+        #expect(!out.removedArtifacts.contains(.injectedFallbackPrefix))
+        #expect(!out.hadUnsafeLeakage)
+    }
+
+    @Test func explicitInjectedProvenanceStripsFallbackPrefix() {
+        let raw = "\(FinalOutputSanitizer.fallback) This is the actual model answer about error handling."
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw, isInjectedProvenance: true)
+        #expect(out.text == "This is the actual model answer about error handling.")
+        #expect(out.removedArtifacts.contains(.injectedFallbackPrefix))
+        #expect(out.hadUnsafeLeakage)
     }
 
     @Test func recoveredUnsafeOutputCanBeConsumedWithRawOrSanitizedText() {
@@ -81,6 +96,78 @@ struct FinalOutputSanitizerTests {
 }
 
 extension FinalOutputSanitizerTests {
+    @Test func streamingSanitizerWithholdsFallbackWhileHoldbackWindowIsEmpty() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let delta = sanitizer.ingest("Short valid answer")
+        #expect(delta.isEmpty)
+        #expect(!delta.contains(FinalOutputSanitizer.fallback))
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "Short valid answer")
+            #expect(remainingDelta == "Short valid answer")
+            #expect(!remainingDelta.contains(FinalOutputSanitizer.fallback))
+        case .replace:
+            Issue.record("Expected append finalization when no partial text was emitted")
+        }
+    }
+
+    @Test func streamingSanitizerNeverPrependsFallbackToValidDelayedOutput() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let first = sanitizer.ingest("edge allows for more precise cutting and controlled application of force.")
+        #expect(!first.contains(FinalOutputSanitizer.fallback))
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(!final.text.contains(FinalOutputSanitizer.fallback))
+            #expect(!remainingDelta.contains(FinalOutputSanitizer.fallback))
+            #expect(final.text.hasPrefix("edge allows"))
+        case let .replace(final):
+            #expect(!final.text.contains(FinalOutputSanitizer.fallback))
+            #expect(final.text.hasPrefix("edge allows"))
+        }
+    }
+
+    @Test func streamingFinalizationUsesProvenanceToStripSanitizerFallbackPrefix() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let unsafeOnlyPrefix = "<think>secret</think>" + String(repeating: " ", count: 220)
+        let first = sanitizer.ingest(unsafeOnlyPrefix)
+        let second = sanitizer.ingest("\(FinalOutputSanitizer.fallback) Real answer.")
+        #expect(first.isEmpty)
+        #expect(second.isEmpty)
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "Real answer.")
+            #expect(remainingDelta == "Real answer.")
+            #expect(final.removedArtifacts.contains(.injectedFallbackPrefix))
+            #expect(final.removedArtifacts.contains(.thinkBlock))
+        case let .replace(final):
+            #expect(final.text == "Real answer.")
+            #expect(final.removedArtifacts.contains(.injectedFallbackPrefix))
+            #expect(final.removedArtifacts.contains(.thinkBlock))
+        }
+    }
+
+    @Test func streamingFinalizationPreservesLegitimateFallbackPrefixedModelText() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        _ = sanitizer.ingest("\(FinalOutputSanitizer.fallback) Real answer.")
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "\(FinalOutputSanitizer.fallback) Real answer.")
+            #expect(remainingDelta == final.text)
+            #expect(!final.removedArtifacts.contains(.injectedFallbackPrefix))
+        case let .replace(final):
+            #expect(final.text == "\(FinalOutputSanitizer.fallback) Real answer.")
+            #expect(!final.removedArtifacts.contains(.injectedFallbackPrefix))
+        }
+    }
+
     @Test func streamingSanitizerWithholdsSplitThinkMarker() {
         var sanitizer = StreamingFinalOutputSanitizer()
         let first = sanitizer.ingest("Hello <thi")

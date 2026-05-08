@@ -48,7 +48,7 @@ final class AgentModelBehaviorAuditor {
                     return !hasRawThinkLeak
                 case .lumenWebPayload:
                     return !hasRawLumenPayloadLeak
-                case .rawToolPayload, .emptyAfterSanitization:
+                case .rawToolPayload, .injectedFallbackPrefix, .emptyAfterSanitization:
                     return true
                 }
             }
@@ -359,7 +359,7 @@ final class AgentModelBehaviorAuditor {
         case "missing_required_tool_argument":
             return "Emit a tool call with every required manifest argument populated, or ask for clarification before tool execution."
         case "final_sentinel_leak", "agent_step_sentinel_leak", "hidden_reasoning_leak", "final_sanitizer_recovered_unsafe_output":
-            return "Return only clean user-visible final text. Remove hidden reasoning, raw payload markers, internal sentinels, and JSON/debug blobs."
+            return "Return only clean user-visible final text. Remove hidden reasoning, raw payload markers, internal sentinels, fallback prefixes, and JSON/debug blobs."
         case "approval_sensitive_tool_selected":
             return "Stop at the approval boundary and request explicit user confirmation before execution."
         case "missing_required_tool_action":
@@ -382,7 +382,7 @@ final class AgentModelBehaviorAuditor {
         case "final_sentinel_leak", "agent_step_sentinel_leak":
             return "Mouth and persisted steps must suppress forbidden internal sentinels."
         case "hidden_reasoning_leak", "final_sanitizer_recovered_unsafe_output":
-            return "Mouth must emit clean final answers directly; hidden reasoning and raw tool/debug payloads are never user-visible output."
+            return "Mouth must emit clean final answers directly; hidden reasoning, fallback prefixes, and raw tool/debug payloads are never user-visible output."
         case "approval_sensitive_tool_selected":
             return "RequiresApproval tools need an approval boundary before execution unless the request is clearly user-initiated and confirmation has been captured."
         case "missing_required_tool_action":

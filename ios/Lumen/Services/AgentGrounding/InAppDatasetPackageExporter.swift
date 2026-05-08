@@ -42,6 +42,8 @@ nonisolated struct InAppDatasetPackageExportResult: Sendable {
 nonisolated enum InAppDatasetPackageExporter {
     static let schemaVersion = "1.1.0"
     static let defaultIncludesScenarioResults = false
+    static let slowModelTurnThresholdMs = 30_000
+    static let severeModelTurnThresholdMs = 120_000
     private static let directoryName = "LumenDatasetExports"
 
     static func makePackage(
@@ -54,6 +56,7 @@ nonisolated enum InAppDatasetPackageExporter {
         includeScenarioResults: Bool = defaultIncludesScenarioResults
     ) -> LumenInAppDatasetPackage {
         let traces = AgentBehaviorTraceRecorder.recent(limit: traceLimit)
+        let mergedBehaviorAudit = mergedBehaviorAuditWithRuntimeTraceViolations(behaviorAudit, traces: traces)
         return LumenInAppDatasetPackage(
             schemaVersion: schemaVersion,
             generatedAt: Date(),
@@ -66,7 +69,7 @@ nonisolated enum InAppDatasetPackageExporter {
             manifestSource: manifestSource,
             usedRuntimeFallback: usedRuntimeFallback,
             runtimeManifestAudit: runtimeManifestAudit,
-            behaviorAudit: behaviorAudit,
+            behaviorAudit: mergedBehaviorAudit,
             scenarioResults: includeScenarioResults ? scenarioResults : [],
             recentTraces: traces,
             traceSelectedToolAllowedCount: traces.reduce(into: 0) { count, trace in
@@ -76,7 +79,7 @@ nonisolated enum InAppDatasetPackageExporter {
                 }
             },
             traceParseErrorCount: traces.reduce(into: 0) { count, trace in
-                if trace.parseError != nil {
+                if isActionStructuredStage(trace), trace.parseError != nil {
                     count += 1
                 }
             },
@@ -132,6 +135,81 @@ nonisolated enum InAppDatasetPackageExporter {
             .appendingPathComponent(directoryName, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private static func mergedBehaviorAuditWithRuntimeTraceViolations(
+        _ baseAudit: AgentBehaviorAuditReport?,
+        traces: [AgentBehaviorTrace]
+    ) -> AgentBehaviorAuditReport? {
+        let traceViolations = runtimeTraceViolations(from: traces)
+        guard !traceViolations.isEmpty else { return baseAudit }
+
+        let existingViolations = baseAudit?.violations ?? []
+        let violations = (existingViolations + traceViolations).sorted { lhs, rhs in
+            if lhs.severity.weight == rhs.severity.weight { return lhs.createdAt > rhs.createdAt }
+            return lhs.severity.weight > rhs.severity.weight
+        }
+
+        let existingRecommendations = baseAudit?.recommendations ?? []
+        let latencyRecommendation = "Investigate model runtime latency: keep shared base/adapters resident, verify acceleration path, reduce mouth prompt size, and cap per-stage token budgets."
+        let recommendations = Array(Set(existingRecommendations + [latencyRecommendation])).sorted()
+        let baseTraceCount = baseAudit?.traceCount ?? 0
+        let auditedTraceCount = max(baseTraceCount, traces.count)
+        let weightedPenalty = violations.reduce(0.0) { $0 + $1.severity.weight }
+        let denominator = max(1.0, Double(max(1, auditedTraceCount)) * 2.0)
+        let score = max(0.0, min(1.0, 1.0 - weightedPenalty / denominator))
+
+        return AgentBehaviorAuditReport(
+            passed: violations.allSatisfy { $0.severity == .warning },
+            score: score,
+            generatedAt: baseAudit?.generatedAt ?? Date(),
+            traceCount: auditedTraceCount,
+            violationCount: violations.count,
+            sourceCommit: baseAudit?.sourceCommit,
+            violations: violations,
+            recommendations: recommendations,
+            repairSamples: baseAudit?.repairSamples ?? []
+        )
+    }
+
+    private static func runtimeTraceViolations(from traces: [AgentBehaviorTrace]) -> [AgentBehaviorViolation] {
+        traces.compactMap { trace in
+            guard trace.event == .modelTurn, let elapsed = trace.generationElapsedMs else { return nil }
+            let severity: AgentBehaviorViolation.Severity
+            let code: String
+            let problem: String
+            if elapsed > severeModelTurnThresholdMs {
+                severity = .critical
+                code = "model_turn_latency_severe"
+                problem = "A model turn exceeded the severe latency threshold."
+            } else if elapsed > slowModelTurnThresholdMs {
+                severity = .error
+                code = "model_turn_too_slow"
+                problem = "A model turn exceeded the acceptable live-agent latency threshold."
+            } else {
+                return nil
+            }
+
+            return AgentBehaviorViolation(
+                id: UUID(),
+                createdAt: Date(),
+                severity: severity,
+                code: code,
+                agent: trace.slot,
+                expected: "Model turn latency <= \(slowModelTurnThresholdMs) ms; severe latency threshold <= \(severeModelTurnThresholdMs) ms.",
+                actual: "stage=\(trace.stage); elapsedMs=\(elapsed); firstTokenMs=\(trace.firstTokenLatencyMs.map(String.init) ?? "nil"); outputTokens=\(trace.outputTokenCount.map(String.init) ?? "nil")",
+                promptPrefix: trace.promptPrefix,
+                problem: problem
+            )
+        }
+    }
+
+    private static func isActionStructuredStage(_ trace: AgentBehaviorTrace) -> Bool {
+        let stage = trace.stage.lowercased()
+        if stage.contains("mouth") || stage.contains("final") || stage.contains("direct") {
+            return false
+        }
+        return stage.contains("json") || stage.contains("orchestrator") || stage.contains("executor") || trace.slot.lowercased() == "cortex"
     }
 
     private static func safeTimestamp(_ date: Date) -> String {

@@ -303,7 +303,7 @@ struct ChatView: View {
         let request = GenerateRequest(
             sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
-            history: conversation.sortedMessages.dropLast().suffix(8).map { ($0.messageRole, $0.content) },
+            history: safeShortTermContext(maxTurns: 8),
             userMessage: text,
             temperature: appState.temperature,
             topP: appState.topP,
@@ -331,7 +331,6 @@ struct ChatView: View {
         let finalized = FinalOutputSanitizer.sanitizeUserVisibleText(sanitized).text
         let assistantMsg = ChatMessage(role: .assistant, content: finalized)
         conversation.messages.append(assistantMsg)
-        streamingText = finalized
         streamingText = ""
         activeTurnID = nil
         generationController.clearIfCurrent(requestID, for: conversation.id)
@@ -345,10 +344,13 @@ struct ChatView: View {
         appState.isGenerating = false
     }
 
-    private func safeShortTermContext(excludingCurrentUserMessageID currentID: UUID) -> [(role: MessageRole, content: String)] {
+    private func safeShortTermContext(excludingCurrentUserMessageID currentID: UUID? = nil, maxTurns: Int = 4) -> [(role: MessageRole, content: String)] {
         conversation.sortedMessages
-            .filter { $0.id != currentID }
-            .suffix(4)
+            .filter { message in
+                guard let currentID else { return true }
+                return message.id != currentID
+            }
+            .suffix(maxTurns)
             .compactMap { message in
                 guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
                 guard let clean = SlotAgentService.sanitizeHistoryEntryForPromptContext(role: message.messageRole, content: message.content) else { return nil }

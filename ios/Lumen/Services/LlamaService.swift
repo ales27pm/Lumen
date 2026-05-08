@@ -864,12 +864,28 @@ final actor AppLlamaService {
             throw LlamaError.failedToInitializeContext("Context size must be greater than 0")
         }
 
-        let config = LlamaConfig(
+        let preferredConfig = LlamaConfig(
             batchSize: batchSize,
             maxTokenCount: UInt32(max(1, contextSize)),
             useGPU: true
         )
-        let service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
+        let service: SwiftLlama.LlamaService
+        do {
+            service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: preferredConfig)
+        } catch {
+            logger.error(
+                "event=llama.chat.runtime_init_failure path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public) message=\(error.localizedDescription, privacy: .public) fallback=cpu_or_nonoffload"
+            )
+            let fallbackConfig = LlamaConfig(
+                batchSize: batchSize,
+                maxTokenCount: UInt32(max(1, contextSize)),
+                useGPU: false
+            )
+            service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: fallbackConfig)
+            logger.info(
+                "event=llama.chat.runtime_init_cpu_fallback_success path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public)"
+            )
+        }
         chatRuntimes[slot] = ChatRuntime(
             service: service,
             modelPath: path,

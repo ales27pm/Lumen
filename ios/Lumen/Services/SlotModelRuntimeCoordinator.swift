@@ -51,7 +51,7 @@ final class SlotModelRuntimeCoordinator {
                 try await AppLlamaService.shared.unloadAllChat()
                 try await AppLlamaService.shared.loadChatModel(path: path, contextSize: contextSize)
                 appState.activeChatModelID = candidate.id.uuidString
-                logger.info("transition event=fallback_selected role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                logger.info("transition event=\(self.selectionEvent(index: index, candidateID: candidate.id.uuidString, preferredID: preferredID), privacy: .public) role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
                 return true
             } catch {
                 if isContextInitFailed(error) {
@@ -60,12 +60,15 @@ final class SlotModelRuntimeCoordinator {
                         try await AppLlamaService.shared.unloadAllChat()
                         try await AppLlamaService.shared.loadChatModel(path: path, contextSize: 2048)
                         appState.activeChatModelID = candidate.id.uuidString
-                        logger.info("transition event=fallback_selected role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) context=2048")
+                        logger.info("transition event=\(self.selectionEvent(index: index, candidateID: candidate.id.uuidString, preferredID: preferredID), privacy: .public) role=chat model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) context=2048")
                         return true
                     } catch {
+                        logger.error("transition event=retry_context_2048_failed role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                        logger.error("transition event=failed_candidate role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) error=\(String(describing: error), privacy: .public)")
                         continue
                     }
                 }
+                logger.error("transition event=failed_candidate role=chat index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 continue
             }
         }
@@ -91,9 +94,10 @@ final class SlotModelRuntimeCoordinator {
             do {
                 try await AppLlamaService.shared.loadEmbeddingModel(path: path)
                 appState.activeEmbeddingModelID = candidate.id.uuidString
-                logger.info("transition event=fallback_selected role=embedding model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
+                logger.info("transition event=\(self.selectionEvent(index: index, candidateID: candidate.id.uuidString, preferredID: preferredID), privacy: .public) role=embedding model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public)")
                 return true
             } catch {
+                logger.error("transition event=failed_candidate role=embedding index=\(index, privacy: .public) model_id=\(candidate.id.uuidString, privacy: .public) path=\(path, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 continue
             }
         }
@@ -214,5 +218,11 @@ final class SlotModelRuntimeCoordinator {
             return false
         }
         return true
+    }
+
+    func selectionEvent(index: Int, candidateID: String, preferredID: String?) -> String {
+        if index > 0 { return "fallback_selected" }
+        if let preferredID, candidateID != preferredID { return "fallback_selected" }
+        return "selected"
     }
 }

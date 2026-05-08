@@ -346,7 +346,7 @@ enum E2ETestRunner {
         }
 
         event("start", scenario.prompt)
-        let routing = IntentRouter.classify(scenario.prompt)
+        let routing = await IntentClassifierService.shared.route(scenario.prompt)
         event("intent", "actual=\(routing.intent.rawValue), expected=\(scenario.expectedIntent.rawValue)")
         if routing.intent != scenario.expectedIntent {
             failures.append("Intent mismatch: \(routing.intent.rawValue) != \(scenario.expectedIntent.rawValue)")

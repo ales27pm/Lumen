@@ -23,7 +23,7 @@ final class RolePipelineAgentService {
                     currentTurnLedger: ToolLedger.shared.currentTurnEntries(conversationID: req.conversationID, turnID: req.turnID)
                 )
                 let executionPrompt = resolution.rewrittenPrompt
-                let routing = IntentRouter.classify(executionPrompt)
+                let routing = await IntentClassifierService.shared.route(executionPrompt)
                 let scopedTools = req.availableTools.filter { IntentRouter.isToolAllowed($0.id, for: routing) }
                 let availableToolIDs = Set(scopedTools.map { ToolRouteGuard.canonicalToolID($0.id) })
 

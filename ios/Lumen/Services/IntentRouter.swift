@@ -199,6 +199,32 @@ nonisolated enum IntentRouter {
         return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
     }
 
+    static func allowedToolIDs(for intent: UserIntent) -> Set<String> {
+        switch intent {
+        case .weather: return weatherToolIDs
+        case .webSearch: return webSearchToolIDs
+        case .emailDraft: return emailToolIDs
+        case .messageDraft: return messageToolIDs
+        case .phoneCall: return phoneToolIDs
+        case .contactSearch: return contactToolIDs
+        case .calendar: return calendarToolIDs
+        case .reminder: return reminderToolIDs
+        case .maps: return mapsToolIDs
+        case .photos: return photosToolIDs
+        case .camera: return cameraToolIDs
+        case .health: return healthToolIDs
+        case .motion: return motionToolIDs
+        case .files: return filesToolIDs
+        case .memory: return memoryToolIDs
+        case .rag: return ragToolIDs
+        case .trigger: return triggerToolIDs
+        case .alarm: return alarmToolIDs
+        case .outlook: return outlookToolIDs
+        case .note: return noteToolIDs
+        case .chat, .unknown: return []
+        }
+    }
+
     static func isToolAllowed(_ toolID: String, for decision: IntentRoutingDecision) -> Bool {
         if decision.allowedToolIDs.isEmpty { return false }
         let canonical = ToolRouteGuard.canonicalToolID(toolID)

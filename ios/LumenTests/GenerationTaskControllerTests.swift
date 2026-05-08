@@ -35,4 +35,30 @@ final class GenerationTaskControllerTests: XCTestCase {
         XCTAssertFalse(controller.isCurrent(requestID, for: "voice"))
         XCTAssertTrue(task.isCancelled)
     }
+
+    func testSingleActiveGenerationPerConversationInvariant() {
+        let controller = GenerationTaskController<String>()
+        let firstTask = Task<Void, Never> { await Task.yield() }
+        _ = controller.begin(for: "conversation-1", task: firstTask)
+        XCTAssertTrue(controller.hasActiveGeneration(for: "conversation-1"))
+
+        let secondTask = Task<Void, Never> { await Task.yield() }
+        _ = controller.begin(for: "conversation-1", task: secondTask)
+        XCTAssertTrue(firstTask.isCancelled)
+        XCTAssertTrue(controller.hasActiveGeneration(for: "conversation-1"))
+        controller.assertSingleActiveGeneration(for: "conversation-1")
+    }
+
+    func testNoDetachedStateWriteAudit() async {
+        let controller = GenerationTaskController<String>()
+        await Task(priority: .utility) {
+            let task = Task<Void, Never> { await Task.yield() }
+            _ = await MainActor.run {
+                controller.begin(for: "audit", task: task)
+            }
+        }.value
+
+        XCTAssertTrue(controller.hasActiveGeneration(for: "audit"))
+        controller.assertSingleActiveGeneration(for: "audit")
+    }
 }

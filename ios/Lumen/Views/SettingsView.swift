@@ -329,7 +329,7 @@ struct SettingsView: View {
     }
 
     private func refreshParseFailureSummary() async {
-        let summary = await Task(priority: .utility) {
+        let summary = await Task.detached(priority: .utility) {
             (
                 AgentParseFailureSummaryLoader.developerText(topN: 5),
                 AgentParseNoiseSummaryLoader.developerText(topN: 5)

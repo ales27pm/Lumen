@@ -18,10 +18,10 @@ enum RemCycleService {
     static func run(context: ModelContext, appState: AppState, reason: String, createdAt: Date = Date()) async {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
         let fleet = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
-        let parseSummary = await Task(priority: .utility) {
+        let parseSummary = await Task.detached(priority: .utility) {
             AgentParseFailureSummaryLoader.developerText(topN: 5)
         }.value
-        let noiseSummary = await Task(priority: .utility) {
+        let noiseSummary = await Task.detached(priority: .utility) {
             AgentParseNoiseSummaryLoader.developerText(topN: 5)
         }.value
 

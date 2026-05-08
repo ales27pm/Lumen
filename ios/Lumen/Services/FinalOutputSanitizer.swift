@@ -44,8 +44,6 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
     }
 }
 
-
-
 nonisolated struct StreamingFinalOutputSanitizer: Sendable {
     nonisolated enum Finalization: Sendable {
         case append(final: SanitizedFinalOutput, remainingDelta: String)
@@ -60,8 +58,26 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         guard !chunk.isEmpty else { return "" }
         rawBuffer += chunk
 
-        let safeRawPrefix = String(rawBuffer.prefix(safeRawCutoffIndex(in: rawBuffer)))
-        let sanitizedPrefix = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix).text
+        let cutoff = safeRawCutoffIndex(in: rawBuffer)
+        guard cutoff > 0 else { return "" }
+
+        let safeRawPrefix = String(rawBuffer.prefix(cutoff))
+        guard !safeRawPrefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+
+        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix)
+
+        // A partial stream can have an empty safe prefix while the holdback window
+        // waits for split markers such as <think> or <lumen_web_payload>. The global
+        // fallback is valid only after finalization proves the complete output is
+        // unusable; emitting it here leaks a fake error prefix into otherwise valid
+        // answers.
+        guard sanitized.text != FinalOutputSanitizer.fallback else {
+            return ""
+        }
+
+        let sanitizedPrefix = sanitized.text
         guard sanitizedPrefix.count > emittedSanitized.count else { return "" }
 
         let delta = String(sanitizedPrefix.dropFirst(emittedSanitized.count))
@@ -127,6 +143,7 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         return braceIndex
     }
 }
+
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
@@ -181,7 +198,7 @@ nonisolated enum FinalOutputSanitizer {
             text = loosePayloadRemoval.text
             mark(.rawToolPayload)
         }
-        
+
         let markerLineRemoval = removingRawToolPayloadMarkerLines(from: text)
         if markerLineRemoval.removedAny {
             text = markerLineRemoval.text
@@ -260,7 +277,6 @@ nonisolated enum FinalOutputSanitizer {
             || lowercasedText.contains("\"mediakind\" : \"page\"")
             || lowercasedText.contains("\"sourcepageurl\"")
     }
-
 
     private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
         guard case let .success(regex) = cachedRawToolPayloadRegex else {

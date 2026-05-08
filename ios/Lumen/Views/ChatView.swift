@@ -303,7 +303,7 @@ struct ChatView: View {
         let request = GenerateRequest(
             sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
-            history: safeShortTermContext(maxTurns: 8),
+            history: safeShortTermContext(excludingCurrentUserMessageID: conversation.sortedMessages.last?.id, maxTurns: 8),
             userMessage: text,
             temperature: appState.temperature,
             topP: appState.topP,

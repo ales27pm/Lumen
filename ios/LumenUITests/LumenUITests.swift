@@ -176,6 +176,7 @@ final class LumenUITests: XCTestCase {
         let baselineIssueCount = testRun?.totalFailureCount ?? 0
 
         continueAfterFailure = true
+        defer { continueAfterFailure = false }
 
         func recordStep(_ name: String, _ body: () throws -> Void) {
             let stepStart = Date()
@@ -245,25 +246,25 @@ final class LumenUITests: XCTestCase {
 
         recordStep("open_logs") {
             let logs = developerRow("settings.developer.logs")
-            XCTAssertTrue(logs.waitForExistence(timeout: 3))
+            try assertElement(logs.waitForExistence(timeout: 3), "Logs row was not visible.")
             logs.tap()
-            XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 4))
+            try assertElement(app.navigationBars["Logs"].waitForExistence(timeout: 4), "Logs screen did not open.")
             goBackIfNeeded()
         }
 
         recordStep("open_debug") {
             let debug = developerRow("settings.developer.debug")
-            XCTAssertTrue(debug.waitForExistence(timeout: 3))
+            try assertElement(debug.waitForExistence(timeout: 3), "Debug row was not visible.")
             debug.tap()
-            XCTAssertTrue(app.navigationBars["Debug"].waitForExistence(timeout: 4))
+            try assertElement(app.navigationBars["Debug"].waitForExistence(timeout: 4), "Debug screen did not open.")
             goBackIfNeeded()
         }
 
         recordStep("open_diagnostic") {
             let diagnostic = developerRow("settings.developer.diagnostic")
-            XCTAssertTrue(diagnostic.waitForExistence(timeout: 3))
+            try assertElement(diagnostic.waitForExistence(timeout: 3), "Diagnostic row was not visible.")
             diagnostic.tap()
-            XCTAssertTrue(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4))
+            try assertElement(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4), "Diagnostic screen did not open.")
             goBackIfNeeded()
         }
 
@@ -294,7 +295,6 @@ final class LumenUITests: XCTestCase {
         )
 
         attachDashboardReport(summary)
-        continueAfterFailure = false
         XCTAssertEqual(testRun?.totalFailureCount ?? 0, baselineIssueCount, "One or more dashboard steps failed. Inspect dashboard attachments.")
     }
 

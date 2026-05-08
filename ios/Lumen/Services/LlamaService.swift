@@ -357,6 +357,7 @@ final actor AppLlamaService {
 
     func activateRoleAdapter(slot: LumenModelSlot) async throws {
         guard let runtime = sharedChatRuntime else { throw LlamaError.noModelLoaded }
+        if activeAdapterSlot == slot { return }
         guard let loaded = roleAdapters[slot] else {
             await runtime.clearAdapters()
             activeAdapterSlot = nil

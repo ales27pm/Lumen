@@ -33,8 +33,17 @@ enum MemoryStore {
     static func recall(query: String, context: ModelContext, limit: Int = 5) async -> [MemoryItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, limit > 0 else { return [] }
-        let queryVec = await AppLlamaService.shared.embed(text: trimmed)
-        guard !queryVec.isEmpty else { return [] }
+        let queryVec: [Double]
+        do {
+            queryVec = try await AppLlamaService.shared.embed(trimmed)
+        } catch {
+            logger.error("memory_embedding_failed op=recall error=\(String(describing: error), privacy: .public)")
+            return []
+        }
+        guard !queryVec.isEmpty else {
+            logger.error("memory_embedding_empty op=recall")
+            return []
+        }
 
         MemoryVectorIndex.shared.ensureLoaded(context: context)
         var results: [MemoryItem] = []
@@ -74,7 +83,17 @@ enum MemoryStore {
                 return
             }
         }
-        let embedding = await AppLlamaService.shared.embed(text: trimmed)
+        let embedding: [Double]
+        do {
+            embedding = try await AppLlamaService.shared.embed(trimmed)
+        } catch {
+            logger.error("memory_embedding_failed op=remember error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
+        guard !embedding.isEmpty else {
+            logger.error("memory_embedding_empty op=remember")
+            throw LlamaError.embeddingFailed("Memory embedding returned empty vector")
+        }
         let policy = ttlPolicy(kind: kind, source: source)
         let item = MemoryItem(
             content: trimmed,

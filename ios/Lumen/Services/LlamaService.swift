@@ -743,13 +743,10 @@ final actor AppLlamaService {
                             continuation.yield(.text(safeDelta))
                         }
                     }
-                    let finalized = streamingSanitizer.finish()
-                    let sanitized = finalized.text
-                    if sanitized.count > streamedSanitized.count {
-                        let tail = String(sanitized.dropFirst(streamedSanitized.count))
-                        if !tail.isEmpty {
-                            continuation.yield(.text(tail))
-                        }
+                    let finalization = streamingSanitizer.finish()
+                    let sanitized = finalization.final.text
+                    if !finalization.remainingDelta.isEmpty {
+                        continuation.yield(.text(finalization.remainingDelta))
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(

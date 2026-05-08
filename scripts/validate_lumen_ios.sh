@@ -21,13 +21,27 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
 fi
 
 echo "== Conflict marker scan =="
-rg "<<<<<<<|=======|>>>>>>>" ios || true
+if rg "<<<<<<<|=======|>>>>>>>" ios; then
+  echo "Error: conflict markers found in ios sources." >&2
+  exit 1
+fi
 
 echo "== try! scan =="
-rg "try!" ios/Lumen || true
+if rg "try!" ios/Lumen; then
+  echo "Error: try! found in app source." >&2
+  exit 1
+fi
 
 echo "== Task.detached scan =="
-rg "Task\\.detached" ios/Lumen ios/LumenTests || true
+task_detached_hits="$(rg -n "Task\\.detached" ios/Lumen ios/LumenTests || true)"
+if [[ -n "${task_detached_hits}" ]]; then
+  echo "${task_detached_hits}"
+  allowed_task_detached_hits=$'ios/Lumen/Services/RemCycleService.swift:24:        let parseSummary = await Task.detached(priority: .utility) {\nios/Lumen/Services/RemCycleService.swift:27:        let noiseSummary = await Task.detached(priority: .utility) {\nios/Lumen/Views/SettingsView.swift:336:        let summary = await Task.detached(priority: .utility) {'
+  if [[ "${task_detached_hits}" != "${allowed_task_detached_hits}" ]]; then
+    echo "Error: unexpected Task.detached usage found outside allowlist." >&2
+    exit 1
+  fi
+fi
 
 echo "== xcodebuild build-for-testing =="
 xcodebuild build-for-testing -project "$PROJECT" -scheme "$SCHEME" -destination "$DESTINATION"

@@ -85,18 +85,20 @@ extension FinalOutputSanitizerTests {
         var sanitizer = StreamingFinalOutputSanitizer()
         let first = sanitizer.ingest("Hello <thi")
         let second = sanitizer.ingest("nk>secret</think> world")
-        let final = sanitizer.finish()
+        let finalization = sanitizer.finish()
+        let final = finalization.final
 
         #expect(!first.lowercased().contains("<thi"))
         #expect(!second.lowercased().contains("think"))
         #expect(final.text == "Hello world")
+        #expect(finalization.remainingDelta.isEmpty)
     }
 
     @Test func streamingSanitizerWithholdsSplitPayloadMarker() {
         var sanitizer = StreamingFinalOutputSanitizer()
         _ = sanitizer.ingest("Before <lumen_")
         let delta = sanitizer.ingest("web_payload>{\"kind\":\"searchResults\"}</lumen_web_payload> after")
-        let final = sanitizer.finish()
+        let final = sanitizer.finish().final
 
         #expect(!delta.lowercased().contains("lumen_web_payload"))
         #expect(final.text == "Before after")
@@ -106,10 +108,21 @@ extension FinalOutputSanitizerTests {
         var sanitizer = StreamingFinalOutputSanitizer()
         let one = sanitizer.ingest("Result: {\"kind\":\"search")
         let two = sanitizer.ingest("Results\",\"results\":[{\"mediaKind\":\"page\"}]}")
-        let final = sanitizer.finish()
+        let final = sanitizer.finish().final
 
         #expect(!one.lowercased().contains("searchresults"))
         #expect(!two.lowercased().contains("searchresults"))
         #expect(final.text == "Result:")
+    }
+
+    @Test func streamingFinalizationProvidesRemainingDeltaForWhitespaceNormalization() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let streamed = sanitizer.ingest("Hello  <think>x</think>\n\nworld")
+        let finalization = sanitizer.finish()
+
+        #expect(streamed == "Hello")
+        #expect(finalization.remainingDelta == " world")
+        #expect(streamed + finalization.remainingDelta == finalization.final.text)
+        #expect(finalization.final.text == "Hello world")
     }
 }

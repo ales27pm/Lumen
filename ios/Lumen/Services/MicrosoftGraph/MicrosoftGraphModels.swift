@@ -109,12 +109,26 @@ nonisolated struct GraphMailMessage: Codable, Hashable, Identifiable, Sendable {
 
     var senderLine: String {
         if let from {
-            return from.emailAddress.name?.isEmpty == false ? from.emailAddress.name! : from.emailAddress.address
+            let trimmedName = from.emailAddress.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmedName, !trimmedName.isEmpty {
+                return trimmedName
+            }
+            return from.emailAddress.address
         }
         return "Unknown sender"
     }
 
-    var previewLine: String { bodyPreview?.isEmpty == false ? bodyPreview! : "No preview available" }
+    var subjectText: String {
+        let trimmedSubject = subject?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedSubject, !trimmedSubject.isEmpty { return trimmedSubject }
+        return "(No subject)"
+    }
+
+    var previewLine: String {
+        let trimmedPreview = bodyPreview?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedPreview, !trimmedPreview.isEmpty { return trimmedPreview }
+        return "No preview available"
+    }
 }
 
 nonisolated struct GraphMailPage: Codable, Hashable, Sendable {

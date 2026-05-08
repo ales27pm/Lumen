@@ -7,14 +7,29 @@ enum SharedContainer {
 }
 
 nonisolated enum FileStore {
+    enum FileStoreError: Error, Equatable {
+        case documentDirectoryUnavailable
+    }
+
     static var importsDirectory: URL {
         let fm = FileManager.default
-        let base = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let base = (try? documentsDirectoryURL(fileManager: fm)) ?? fm.temporaryDirectory
         let dir = base.appendingPathComponent("Imports", isDirectory: true)
         if !fm.fileExists(atPath: dir.path) {
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir
+    }
+
+    static func documentsDirectoryURL(fileManager: FileManager = .default) throws -> URL {
+        try documentsDirectoryURL(candidateDirectories: fileManager.urls(for: .documentDirectory, in: .userDomainMask))
+    }
+
+    static func documentsDirectoryURL(candidateDirectories: [URL]) throws -> URL {
+        guard let base = candidateDirectories.first else {
+            throw FileStoreError.documentDirectoryUnavailable
+        }
+        return base
     }
 
     static func importedFiles() -> [URL] {

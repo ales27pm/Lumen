@@ -1,11 +1,26 @@
 import Foundation
 
 nonisolated enum ModelStorage {
+    enum StorageError: Error, Equatable {
+        case documentDirectoryUnavailable
+    }
+
     static func modelsDirectoryURL(fileManager: FileManager = .default) -> URL {
-        let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let base = (try? documentsDirectoryURL(fileManager: fileManager)) ?? fileManager.temporaryDirectory
         let directory = base.appendingPathComponent("Models", isDirectory: true)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    static func documentsDirectoryURL(fileManager: FileManager = .default) throws -> URL {
+        try documentsDirectoryURL(candidateDirectories: fileManager.urls(for: .documentDirectory, in: .userDomainMask))
+    }
+
+    static func documentsDirectoryURL(candidateDirectories: [URL]) throws -> URL {
+        guard let base = candidateDirectories.first else {
+            throw StorageError.documentDirectoryUnavailable
+        }
+        return base
     }
 
     static func resumeDirectoryURL(fileManager: FileManager = .default) -> URL {
@@ -25,7 +40,9 @@ nonisolated enum ModelStorage {
             return preferred
         }
 
-        let base = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let base = try? documentsDirectoryURL(fileManager: fileManager) else {
+            return storedURL
+        }
         let previousNested = base
             .appendingPathComponent("Hybrid Coder", isDirectory: true)
             .appendingPathComponent("Models", isDirectory: true)

@@ -19,7 +19,13 @@ struct MemoryView: View {
     var recent: [MemoryItem] { filtered.filter { !$0.isPinned }.prefix(20).map { $0 } }
     var byTopic: [(String, [MemoryItem])] {
         let rest = filtered.filter { !$0.isPinned }
-        let grouped = Dictionary(grouping: rest) { ($0.topic?.isEmpty == false ? $0.topic! : $0.memoryKind.label) }
+        let grouped = Dictionary(grouping: rest) { item in
+            let trimmedTopic = item.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmedTopic, !trimmedTopic.isEmpty {
+                return trimmedTopic
+            }
+            return item.memoryKind.label
+        }
         return grouped.sorted { $0.key < $1.key }
     }
 

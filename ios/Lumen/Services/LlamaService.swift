@@ -283,6 +283,8 @@ private enum LlamaErrorCode: String {
 final actor AppLlamaService {
     static let shared = AppLlamaService()
 
+    private let logger = Logger(subsystem: "com.lumen.runtime", category: "llama.service")
+
     private var chatRuntimes: [LumenModelSlot: ChatRuntime] = [:]
     private var primaryChatSlot: LumenModelSlot = .cortex
     private var sharedChatRuntime: AdapterChatRuntime?
@@ -703,17 +705,17 @@ final actor AppLlamaService {
     }
 
     func stream(_ req: GenerateRequest, slot: LumenModelSlot) -> AsyncStream<GenerationToken> {
-        AsyncStream { continuation in
+        return AsyncStream<GenerationToken>(bufferingPolicy: .unbounded) { (continuation: AsyncStream<GenerationToken>.Continuation) in
             let generationTask = Task { [weak self] in
                 guard let self else {
-                    continuation.yield(.done)
+                    continuation.yield(GenerationToken.done)
                     continuation.finish()
                     return
                 }
 
                 do {
                     guard req.maxTokens > 0 else {
-                        continuation.yield(.done)
+                        continuation.yield(GenerationToken.done)
                         continuation.finish()
                         return
                     }
@@ -740,7 +742,7 @@ final actor AppLlamaService {
                         let safeDelta = streamingSanitizer.ingest(chunk)
                         if !safeDelta.isEmpty {
                             streamedSanitized += safeDelta
-                            continuation.yield(.text(safeDelta))
+                            continuation.yield(GenerationToken.text(safeDelta))
                         }
                     }
                     let finalization = streamingSanitizer.finish()
@@ -749,7 +751,7 @@ final actor AppLlamaService {
                     case let .append(final, remainingDelta):
                         sanitized = final.text
                         if !remainingDelta.isEmpty {
-                            continuation.yield(.text(remainingDelta))
+                            continuation.yield(GenerationToken.text(remainingDelta))
                         }
                     case let .replace(final):
                         sanitized = final.text
@@ -768,10 +770,10 @@ final actor AppLlamaService {
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
                     await self.recordModelTrace(slot: slot, request: req, output: errorText, parseError: "generation_error")
-                    continuation.yield(.text(errorText))
+                    continuation.yield(GenerationToken.text(errorText))
                 }
 
-                continuation.yield(.done)
+                continuation.yield(GenerationToken.done)
                 continuation.finish()
             }
 

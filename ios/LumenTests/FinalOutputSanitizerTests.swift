@@ -34,7 +34,6 @@ struct FinalOutputSanitizerTests {
         #expect(!out.text.contains("mediaKind"))
     }
 
-
     @Test func removesRawSearchResultsMarkerLineWhenJSONIsMalformed() {
         let raw = "Answer line\n{\"kind\":\"searchResults\",\"sourcePageURL\":\"https://example.com\"\nFollow-up"
         let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
@@ -81,6 +80,40 @@ struct FinalOutputSanitizerTests {
 }
 
 extension FinalOutputSanitizerTests {
+    @Test func streamingSanitizerWithholdsFallbackWhileHoldbackWindowIsEmpty() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let delta = sanitizer.ingest("Short valid answer")
+        #expect(delta.isEmpty)
+        #expect(!delta.contains(FinalOutputSanitizer.fallback))
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "Short valid answer")
+            #expect(remainingDelta == "Short valid answer")
+            #expect(!remainingDelta.contains(FinalOutputSanitizer.fallback))
+        case .replace:
+            Issue.record("Expected append finalization when no partial text was emitted")
+        }
+    }
+
+    @Test func streamingSanitizerNeverPrependsFallbackToValidDelayedOutput() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let first = sanitizer.ingest("edge allows for more precise cutting and controlled application of force.")
+        #expect(!first.contains(FinalOutputSanitizer.fallback))
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(!final.text.contains(FinalOutputSanitizer.fallback))
+            #expect(!remainingDelta.contains(FinalOutputSanitizer.fallback))
+            #expect(final.text.hasPrefix("edge allows"))
+        case let .replace(final):
+            #expect(!final.text.contains(FinalOutputSanitizer.fallback))
+            #expect(final.text.hasPrefix("edge allows"))
+        }
+    }
+
     @Test func streamingSanitizerWithholdsSplitThinkMarker() {
         var sanitizer = StreamingFinalOutputSanitizer()
         let first = sanitizer.ingest("Hello <thi")

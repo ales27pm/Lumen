@@ -190,6 +190,7 @@ final class LumenUITests: XCTestCase {
                 } catch {
                     status = "fail"
                     errorMessage = String(describing: error)
+                    XCTFail("Dashboard step '\(name)' failed: \(errorMessage!)")
                 }
             }
 

@@ -31,8 +31,12 @@ enum MemoryTools {
         guard let container = SharedContainer.shared else { return "RAG store unavailable." }
         let ctx = ModelContext(container)
         let expandedQuery = expandRAGQueryIfNeeded(trimmed)
+        let embeddingReady = await RAGStore.embeddingRuntimeAvailable()
         let results = await RAGStore.search(query: expandedQuery, context: ctx, limit: limit)
         if results.isEmpty {
+            if !embeddingReady {
+                return "RAG search unavailable: embedding model is not loaded or failed to run. Load a local embedding model, then try again."
+            }
             let counts = RAGStore.counts(context: ctx)
             let totalIndexed = counts.values.reduce(0, +)
             if totalIndexed == 0 {
@@ -59,15 +63,26 @@ enum MemoryTools {
     static func ragIndexFiles() async -> String {
         guard let container = SharedContainer.shared else { return "Store unavailable." }
         let ctx = ModelContext(container)
+        let embeddingReady = await RAGStore.embeddingRuntimeAvailable()
+        guard embeddingReady else {
+            return "RAG indexing failed: embedding model is unavailable. Load a local embedding model, then run reindex files."
+        }
         let n = await RAGStore.indexImportedFiles(context: ctx)
+        if n == 0 {
+            return "RAG indexing failed: no chunks were indexed. Check embedding model readiness and imported file contents."
+        }
         return "Indexed \(n) chunks from imported files."
     }
 
     static func ragIndexPhotos(months: Int) async -> String {
         guard let container = SharedContainer.shared else { return "Store unavailable." }
         let ctx = ModelContext(container)
+        let embeddingReady = await RAGStore.embeddingRuntimeAvailable()
+        guard embeddingReady else {
+            return "RAG photo indexing failed: embedding model is unavailable. Load a local embedding model, then try again."
+        }
         let n = await RAGStore.indexPhotos(monthsBack: max(1, months), context: ctx)
-        if n == 0 { return "Couldn't index photos (permission denied or empty library)." }
+        if n == 0 { return "Couldn't index photos (permission denied, empty library, or embedding failure)." }
         return "Indexed \(n) monthly photo summaries."
     }
 }

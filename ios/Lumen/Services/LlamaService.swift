@@ -128,8 +128,10 @@ private actor AdapterChatRuntime {
     private var loadedAdapters: [LumenModelSlot: LlamaLoraAdapter] = [:]
 
     init(path: String, contextSize: Int, batchSize: UInt32) throws {
+        let detectedCores = ProcessInfo.processInfo.processorCount
+        let runtimeThreadCount = Int32(max(2, detectedCores - 2))
         var modelParams = llama_model_default_params()
-        modelParams.n_gpu_layers = 0
+        modelParams.n_gpu_layers = 999
         guard let model = LlamaModel(path: path, parameters: modelParams) else {
             throw LlamaError.failedToInitializeContext("Unable to load shared chat base GGUF")
         }
@@ -137,8 +139,8 @@ private actor AdapterChatRuntime {
         contextParams.n_ctx = UInt32(max(1, contextSize))
         contextParams.n_batch = batchSize
         contextParams.n_ubatch = batchSize
-        contextParams.n_threads = 1
-        contextParams.n_threads_batch = 1
+        contextParams.n_threads = runtimeThreadCount
+        contextParams.n_threads_batch = runtimeThreadCount
         contextParams.offload_kqv = true
         guard let context = LlamaContext(model: model, parameters: contextParams) else {
             throw LlamaError.failedToInitializeContext("Unable to create shared chat context")
@@ -325,7 +327,20 @@ final actor AppLlamaService {
     func loadSharedChatModel(path: String, contextSize: Int, batchSize: UInt32 = 256) async throws {
         if sharedChatBasePath == path, sharedChatRuntime != nil { return }
         guard FileManager.default.fileExists(atPath: path) else { throw LlamaError.modelFileNotFound(path) }
-        sharedChatRuntime = try AdapterChatRuntime(path: path, contextSize: contextSize, batchSize: batchSize)
+        logger.info(
+            "event=llama.chat.runtime_init_start path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public) gpu_target_layers=999"
+        )
+        do {
+            sharedChatRuntime = try AdapterChatRuntime(path: path, contextSize: contextSize, batchSize: batchSize)
+            logger.info(
+                "event=llama.chat.runtime_init_success path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public)"
+            )
+        } catch {
+            logger.error(
+                "event=llama.chat.runtime_init_failure path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public) message=\(error.localizedDescription, privacy: .public) fallback=cpu_or_nonoffload"
+            )
+            throw error
+        }
         sharedChatBasePath = path
         activeAdapterSlot = nil
         roleAdapters.removeAll()
@@ -851,7 +866,7 @@ final actor AppLlamaService {
         let config = LlamaConfig(
             batchSize: batchSize,
             maxTokenCount: UInt32(max(1, contextSize)),
-            useGPU: false
+            useGPU: true
         )
         let service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: config)
         chatRuntimes[slot] = ChatRuntime(

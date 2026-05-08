@@ -324,6 +324,15 @@ final actor AppLlamaService {
         sharedChatBasePath ?? chatRuntimes[slot]?.modelPath
     }
 
+    func slotLoaded(withPath path: String) -> LumenModelSlot? {
+        chatRuntimes.first(where: { $0.value.modelPath == path })?.key
+    }
+
+    func aliasChatRuntime(from sourceSlot: LumenModelSlot, to targetSlot: LumenModelSlot) {
+        guard let runtime = chatRuntimes[sourceSlot] else { return }
+        chatRuntimes[targetSlot] = runtime
+    }
+
     func loadSharedChatModel(path: String, contextSize: Int, batchSize: UInt32 = 256) async throws {
         if sharedChatBasePath == path, sharedChatRuntime != nil { return }
         guard FileManager.default.fileExists(atPath: path) else { throw LlamaError.modelFileNotFound(path) }

@@ -107,7 +107,9 @@ final class SlotModelRuntimeCoordinator {
 
     func ensureReady(slot: LumenModelSlot) async throws {
         guard slot != .embedding else { return }
-        guard let assignment = assignments[slot] else {
+
+        let assignment = resolvedAssignment(for: slot)
+        guard let assignment else {
             throw LlamaError.slotModelNotLoaded("\(slot.rawValue): no assigned model")
         }
         guard FileManager.default.fileExists(atPath: assignment.localPath) else {
@@ -120,6 +122,24 @@ final class SlotModelRuntimeCoordinator {
         }
 
         try await ensureLegacyRuntimeReady(slot: slot, assignment: assignment)
+    }
+
+
+    private func resolvedAssignment(for slot: LumenModelSlot) -> LumenModelAssignment? {
+        if let direct = assignments[slot] {
+            return direct
+        }
+
+        // Speech mode and simple chat can route through Mouth even when only a
+        // Cortex/base chat artifact is installed. Fall back to Cortex to avoid
+        // hard failures when the Mouth slot has no explicit assignment. At load
+        // time we alias the Mouth slot to any already-loaded runtime for this
+        // same model path so we do not force an unnecessary unload/reload cycle.
+        if slot == .mouth {
+            return assignments[.cortex]
+        }
+
+        return nil
     }
 
     private func ensureAdapterRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {
@@ -159,6 +179,10 @@ final class SlotModelRuntimeCoordinator {
         if await AppLlamaService.shared.loadedChatPath(for: slot) == assignment.localPath {
             return
         }
+        if let loadedSlot = await AppLlamaService.shared.slotLoaded(withPath: assignment.localPath) {
+            await AppLlamaService.shared.aliasChatRuntime(from: loadedSlot, to: slot)
+            return
+        }
 
         if preferExclusiveChatRuntime {
             await AppLlamaService.shared.unloadAllChat()
@@ -189,7 +213,7 @@ final class SlotModelRuntimeCoordinator {
 
     func ensurePrimaryReady(preferredSlots: [LumenModelSlot] = [.mouth, .cortex]) async -> Bool {
         for slot in preferredSlots {
-            guard assignments[slot] != nil else { continue }
+            guard resolvedAssignment(for: slot) != nil else { continue }
             do {
                 try await ensureReady(slot: slot)
                 return true

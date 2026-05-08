@@ -733,10 +733,24 @@ final actor AppLlamaService {
                         seed: groundedRequest.seed
                     )
                     var rawOutput = ""
+                    var streamingSanitizer = StreamingFinalOutputSanitizer()
+                    var streamedSanitized = ""
                     for try await chunk in stream {
                         rawOutput += chunk
+                        let safeDelta = streamingSanitizer.ingest(chunk)
+                        if !safeDelta.isEmpty {
+                            streamedSanitized += safeDelta
+                            continuation.yield(.text(safeDelta))
+                        }
                     }
-                    let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(rawOutput).text
+                    let finalized = streamingSanitizer.finish()
+                    let sanitized = finalized.text
+                    if sanitized.count > streamedSanitized.count {
+                        let tail = String(sanitized.dropFirst(streamedSanitized.count))
+                        if !tail.isEmpty {
+                            continuation.yield(.text(tail))
+                        }
+                    }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(
                         slot: slot,
@@ -747,9 +761,6 @@ final actor AppLlamaService {
                         // Do not report a word count as token count; leave nil until exact runtime token counts are threaded through both runtime paths.
                         outputTokenCount: nil
                     )
-                    if !sanitized.isEmpty {
-                        continuation.yield(.text(sanitized))
-                    }
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
                     await self.recordModelTrace(slot: slot, request: req, output: errorText, parseError: "generation_error")

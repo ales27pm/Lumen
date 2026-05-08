@@ -157,6 +157,39 @@ ensure_upload_tool() {
   fi
 }
 
+print_xcode_log_diagnostics() {
+  local log_path="$1"
+  [[ -f "$log_path" ]] || return 0
+
+  warn "xcodebuild failed. Full log: $log_path"
+
+  info "Most relevant diagnostics from xcodebuild log"
+  grep -nEi \
+    '(^|[^A-Za-z])(error:|fatal error:|warning:|failed|failure|Command SwiftCompile failed|Command CompileSwift failed|Command CodeSign failed|no such module|cannot find|cannot convert|ambiguous|missing|undefined|duplicate|provisioning|codesign|SwiftDriver|CompileSwift)' \
+    "$log_path" | tail -n 120 || true
+
+  info "Last 220 lines of xcodebuild log"
+  tail -n 220 "$log_path" || true
+}
+
+run_logged() {
+  local log_path="$1"
+  shift
+  mkdir -p "$(dirname "$log_path")"
+
+  set +e
+  "$@" 2>&1 | tee "$log_path"
+  local status=${PIPESTATUS[0]}
+  set -e
+
+  if [[ $status -ne 0 ]]; then
+    print_xcode_log_diagnostics "$log_path"
+    return "$status"
+  fi
+
+  return 0
+}
+
 normalize_export_method() {
   case "$1" in
     app-store|app-store-connect) printf "app-store-connect" ;;
@@ -251,8 +284,11 @@ SCHEME_SAFE="${SCHEME//[^A-Za-z0-9_.-]/_}"
 ARCHIVE_PATH="build/${SCHEME_SAFE}-${TIMESTAMP}.xcarchive"
 EXPORT_DIR="build/export-${SCHEME_SAFE}-${TIMESTAMP}"
 EXPORT_OPTIONS_PLIST="build/export-options-${SCHEME_SAFE}-${TIMESTAMP}.plist"
+LOG_DIR="build/logs"
+ARCHIVE_LOG="$LOG_DIR/archive-${SCHEME_SAFE}-${TIMESTAMP}.log"
+EXPORT_LOG="$LOG_DIR/export-${SCHEME_SAFE}-${TIMESTAMP}.log"
 
-mkdir -p build
+mkdir -p build "$LOG_DIR"
 
 bold "Choose auth mode"
 echo "1) App Store Connect API key (recommended)"
@@ -319,26 +355,36 @@ SIGNING_BUILD_SETTINGS=(
   "PROVISIONING_PROFILE_SPECIFIER="
 )
 
+ARCHIVE_STABILITY_BUILD_SETTINGS=(
+  "COMPILER_INDEX_STORE_ENABLE=NO"
+  "SWIFT_COMPILATION_MODE=singlefile"
+  "SWIFT_WHOLE_MODULE_OPTIMIZATION=NO"
+  "SWIFT_OPTIMIZATION_LEVEL=-Osize"
+)
+
 info "Archive"
-xcodebuild \
-  "${PROJECT_SELECTOR[@]}" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -destination "generic/platform=iOS" \
-  -archivePath "$ARCHIVE_PATH" \
-  -allowProvisioningUpdates \
-  "${XCODE_AUTH_ARGS[@]}" \
-  "${SIGNING_BUILD_SETTINGS[@]}" \
-  clean archive
+run_logged "$ARCHIVE_LOG" \
+  xcodebuild \
+    "${PROJECT_SELECTOR[@]}" \
+    -scheme "$SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination "generic/platform=iOS" \
+    -archivePath "$ARCHIVE_PATH" \
+    -allowProvisioningUpdates \
+    "${XCODE_AUTH_ARGS[@]}" \
+    "${SIGNING_BUILD_SETTINGS[@]}" \
+    "${ARCHIVE_STABILITY_BUILD_SETTINGS[@]}" \
+    clean archive
 
 info "Export IPA"
-xcodebuild \
-  -exportArchive \
-  -archivePath "$ARCHIVE_PATH" \
-  -exportPath "$EXPORT_DIR" \
-  -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
-  -allowProvisioningUpdates \
-  "${XCODE_AUTH_ARGS[@]}"
+run_logged "$EXPORT_LOG" \
+  xcodebuild \
+    -exportArchive \
+    -archivePath "$ARCHIVE_PATH" \
+    -exportPath "$EXPORT_DIR" \
+    -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
+    -allowProvisioningUpdates \
+    "${XCODE_AUTH_ARGS[@]}"
 
 IPA_PATH="$("$FIND_BIN" "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
 [[ -n "$IPA_PATH" ]] || fail "No IPA found in $EXPORT_DIR"

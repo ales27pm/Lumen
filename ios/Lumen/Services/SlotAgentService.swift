@@ -64,7 +64,51 @@ final class SlotAgentService {
                     allowedToolIDs: Array(availableToolIDs)
                 )
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
-                for stepIndex in 0..<maxSteps {
+                var loopStartIndex = 0
+                if maxSteps > 0,
+                   let deterministicPrimaryAction = Self.deterministicPrimaryAction(
+                    routing: routing,
+                    prompt: executionPrompt,
+                    scopedTools: scopedTools,
+                    availableToolIDs: availableToolIDs
+                ) {
+                    recordTrace(
+                        slot: .executor,
+                        stage: "deterministic-primary-plan",
+                        stepIndex: 0,
+                        error: "intent=\(routing.intent.rawValue);selected_tool=\(ToolRouteGuard.canonicalToolID(deterministicPrimaryAction.tool));cortex_bypassed=true",
+                        raw: deterministicPrimaryAction.displayContent,
+                        prompt: executionPrompt
+                    )
+                    let result = await executeAction(
+                        deterministicPrimaryAction,
+                        req: req,
+                        routing: routing,
+                        steps: &steps,
+                        observations: &observations,
+                        executedActionFingerprints: &executedActionFingerprints,
+                        continuation: continuation,
+                        stepIndex: 0
+                    )
+
+                    switch result {
+                    case .continueLoop:
+                        loopStartIndex = 1
+                    case .finalizeImmediate(let text):
+                        finalText = text
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .finalizeNow(let draft):
+                        finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
+                    case .blocked(let text):
+                        yieldFinal(text, steps: steps, continuation: continuation)
+                        return
+                    }
+                }
+
+                for stepIndex in loopStartIndex..<maxSteps {
                     let structuredMode: StructuredTurnMode = observations.isEmpty ? .actionOnly : .actionOrFinal
                     let slot: LumenModelSlot = .cortex
                     let turnPrompt = makeStructuredTurnPrompt(
@@ -117,6 +161,10 @@ final class SlotAgentService {
                             switch fallbackResult {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -183,6 +231,10 @@ final class SlotAgentService {
                             switch result {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -211,6 +263,10 @@ final class SlotAgentService {
                             switch result {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -240,6 +296,10 @@ final class SlotAgentService {
                     switch result {
                     case .continueLoop:
                         continue
+                    case .finalizeImmediate(let text):
+                        finalText = text
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
                     case .finalizeNow(let draft):
                         finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -263,6 +323,7 @@ final class SlotAgentService {
     private enum ActionExecutionResult {
         case continueLoop
         case finalizeNow(String?)
+        case finalizeImmediate(String)
         case blocked(String)
     }
 
@@ -326,6 +387,22 @@ final class SlotAgentService {
                 continuation: continuation,
                 stepIndex: stepIndex + 1
             )
+        }
+        if let immediate = ToolObservationFinalizer.immediateFinalIfSafe(
+            intent: routing.intent,
+            toolID: canonicalTool,
+            observation: observation,
+            originalPrompt: req.userMessage
+        ) {
+            recordTrace(
+                slot: .executor,
+                stage: "deterministic-immediate-final",
+                stepIndex: stepIndex,
+                error: "skippedMouthFinal=true;intent=\(routing.intent.rawValue);toolID=\(canonicalTool)",
+                raw: immediate,
+                prompt: req.userMessage
+            )
+            return .finalizeImmediate(immediate)
         }
 
         if shouldFinalizeAfterObservation(observation, routing: routing, toolID: canonicalTool) {
@@ -1038,6 +1115,29 @@ final class SlotAgentService {
         default:
             return []
         }
+    }
+
+    nonisolated static func deterministicPrimaryAction(
+        routing: IntentRoutingDecision,
+        prompt: String,
+        scopedTools: [ToolDefinition],
+        availableToolIDs: Set<String>
+    ) -> AgentAction? {
+        guard IntentRouter.intentRequiresTool(routing) else { return nil }
+        guard let planned = DeterministicToolPlanner.plan(
+            routing: routing,
+            prompt: prompt,
+            availableToolIDs: availableToolIDs
+        ) else {
+            return nil
+        }
+        let canonicalTool = ToolRouteGuard.canonicalToolID(planned.tool)
+        guard scopedTools.contains(where: { ToolRouteGuard.canonicalToolID($0.id) == canonicalTool }) else { return nil }
+        guard Self.isActionAllowed(canonicalTool, routing: routing) else { return nil }
+        let normalizedArgs = ToolRouteGuard.normalizedArguments(for: canonicalTool, rawToolID: planned.tool, arguments: planned.args.stringCoerced)
+        let normalizationPassed = normalizedArgs.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } || normalizedArgs.isEmpty
+        guard normalizationPassed else { return nil }
+        return AgentAction(tool: canonicalTool, args: AgentJSONArguments(stringDictionary: normalizedArgs))
     }
 
     private func recordPolicyDiagnostics(selectedTool: String?, allowedForIntent: Set<String>, policyViolation: Bool, replanned: Bool, prompt: String) {

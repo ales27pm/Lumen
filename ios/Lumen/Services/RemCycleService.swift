@@ -18,6 +18,9 @@ enum RemCycleService {
     static func run(context: ModelContext, appState: AppState, reason: String, createdAt: Date = Date()) async {
         let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
         let fleet = LumenModelFleetResolver.resolveV1(appState: appState, storedModels: stored)
+        // Detached tasks are intentional here so parse-summary file IO does not inherit
+        // the @MainActor isolation of this service. The loaders read immutable snapshots
+        // and return Sendable Strings without touching SwiftData/AppState/UI state.
         let parseSummary = await Task.detached(priority: .utility) {
             AgentParseFailureSummaryLoader.developerText(topN: 5)
         }.value

@@ -949,7 +949,17 @@ final class SlotAgentService {
         }
 
         let lower = clean.lowercased()
-        let blockedMarkers = ["<think", "</think>", "<lumen_web_payload", "searchresults", "emptyaftersanitization", "{"kind":"searchresults""]
+        let blockedMarkers = [
+            "<think",
+            "</think>",
+            "<lumen_web_payload",
+            "searchresults",
+            "emptyaftersanitization",
+            "\"kind\":\"searchresults\"",
+            "\"kind\" : \"searchresults\"",
+            "\"sourcepageurl\"",
+            "\"mediakind\":\"page\""
+        ]
         if blockedMarkers.contains(where: { lower.contains($0) }) {
             return nil
         }

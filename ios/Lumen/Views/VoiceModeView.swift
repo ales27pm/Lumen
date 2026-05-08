@@ -269,10 +269,9 @@ struct VoiceModeView: View {
             finishedStreaming = true
             finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
             finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
-            responseText = finalText
-            speakPending()
-
             let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
+            responseText = persistedFinal
+            speakPending()
             let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: stepsBuffer)
             convo.messages.append(assistantMsg)
             convo.updatedAt = Date()

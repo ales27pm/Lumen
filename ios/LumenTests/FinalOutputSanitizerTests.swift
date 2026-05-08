@@ -79,3 +79,37 @@ struct FinalOutputSanitizerTests {
         #expect(FinalOutputSanitizer.sanitizeUserVisibleText(raw) == FinalOutputSanitizer.sanitizeUserVisibleText(raw))
     }
 }
+
+extension FinalOutputSanitizerTests {
+    @Test func streamingSanitizerWithholdsSplitThinkMarker() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let first = sanitizer.ingest("Hello <thi")
+        let second = sanitizer.ingest("nk>secret</think> world")
+        let final = sanitizer.finish()
+
+        #expect(!first.lowercased().contains("<thi"))
+        #expect(!second.lowercased().contains("think"))
+        #expect(final.text == "Hello world")
+    }
+
+    @Test func streamingSanitizerWithholdsSplitPayloadMarker() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        _ = sanitizer.ingest("Before <lumen_")
+        let delta = sanitizer.ingest("web_payload>{\"kind\":\"searchResults\"}</lumen_web_payload> after")
+        let final = sanitizer.finish()
+
+        #expect(!delta.lowercased().contains("lumen_web_payload"))
+        #expect(final.text == "Before after")
+    }
+
+    @Test func streamingSanitizerWithholdsSplitRawJSONPayload() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let one = sanitizer.ingest("Result: {\"kind\":\"search")
+        let two = sanitizer.ingest("Results\",\"results\":[{\"mediaKind\":\"page\"}]}")
+        let final = sanitizer.finish()
+
+        #expect(!one.lowercased().contains("searchresults"))
+        #expect(!two.lowercased().contains("searchresults"))
+        #expect(final.text == "Result:")
+    }
+}

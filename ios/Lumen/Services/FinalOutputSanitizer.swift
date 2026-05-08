@@ -44,6 +44,81 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
     }
 }
 
+
+
+nonisolated struct StreamingFinalOutputSanitizer: Sendable {
+    private var rawBuffer = ""
+    private var emittedSanitized = ""
+    private let holdbackCharacters = 192
+
+    mutating func ingest(_ chunk: String) -> String {
+        guard !chunk.isEmpty else { return "" }
+        rawBuffer += chunk
+
+        let safeRawPrefix = String(rawBuffer.prefix(safeRawCutoffIndex(in: rawBuffer)))
+        let sanitizedPrefix = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix).text
+        guard sanitizedPrefix.count > emittedSanitized.count else { return "" }
+
+        let delta = String(sanitizedPrefix.dropFirst(emittedSanitized.count))
+        emittedSanitized = sanitizedPrefix
+        return delta
+    }
+
+    mutating func finish() -> SanitizedFinalOutput {
+        let final = FinalOutputSanitizer.sanitizeUserVisibleText(rawBuffer)
+        if final.text.count > emittedSanitized.count {
+            emittedSanitized = final.text
+        }
+        return final
+    }
+
+    private func safeRawCutoffIndex(in raw: String) -> Int {
+        let lower = raw.lowercased()
+        let holdbackStart = max(0, raw.count - holdbackCharacters)
+        var unsafeStart = raw.count
+
+        if let thinkOpen = lower.range(of: "<think")?.lowerBound,
+           lower.range(of: "</think>", range: thinkOpen..<lower.endIndex) == nil {
+            unsafeStart = min(unsafeStart, lower.distance(from: lower.startIndex, to: thinkOpen))
+        }
+
+        if let payloadOpen = lower.range(of: "<lumen_web_payload")?.lowerBound,
+           lower.range(of: "</lumen_web_payload>", range: payloadOpen..<lower.endIndex) == nil {
+            unsafeStart = min(unsafeStart, lower.distance(from: lower.startIndex, to: payloadOpen))
+        }
+
+        if let rawJSONStart = rawToolPayloadUnclosedObjectStart(lower: lower) {
+            unsafeStart = min(unsafeStart, rawJSONStart)
+        }
+
+        return max(0, min(unsafeStart, holdbackStart))
+    }
+
+    private func rawToolPayloadUnclosedObjectStart(lower: String) -> Int? {
+        let markers = ["\"kind\":\"searchresults\"", "\"kind\" : \"searchresults\"", "\"mediakind\":\"page\"", "\"mediakind\" : \"page\"", "\"sourcepageurl\""]
+        guard let markerRange = markers.compactMap({ lower.range(of: $0) }).min(by: { $0.lowerBound < $1.lowerBound }) else { return nil }
+        let markerIndex = lower.distance(from: lower.startIndex, to: markerRange.lowerBound)
+        let prefix = lower.prefix(markerIndex)
+        guard let bracePos = prefix.lastIndex(of: "{") else { return nil }
+        let braceIndex = lower.distance(from: lower.startIndex, to: bracePos)
+        let suffix = String(lower[lower.index(lower.startIndex, offsetBy: braceIndex)...])
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for ch in suffix {
+            if inString {
+                if escaped { escaped = false; continue }
+                if ch == "\\" { escaped = true; continue }
+                if ch == "\"" { inString = false }
+                continue
+            }
+            if ch == "\"" { inString = true; continue }
+            if ch == "{" { depth += 1 }
+            else if ch == "}" { depth -= 1; if depth == 0 { return nil } }
+        }
+        return braceIndex
+    }
+}
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()

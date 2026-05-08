@@ -8,6 +8,29 @@
 import XCTest
 
 final class LumenUITests: XCTestCase {
+    private struct DashboardStep: Codable {
+        let name: String
+        let status: String
+        let startedAt: String
+        let endedAt: String
+        let durationMs: Int
+        let indicators: [String: Double]
+        let errorMessage: String?
+    }
+
+    private struct DashboardSummary: Codable {
+        let scenario: String
+        let runStartedAt: String
+        let runEndedAt: String
+        let totalDurationMs: Int
+        let throughputStepsPerSecond: Double
+        let performanceIndicators: [String: Double]
+        let stepCount: Int
+        let passCount: Int
+        let failCount: Int
+        let steps: [DashboardStep]
+    }
+
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
@@ -146,37 +169,134 @@ final class LumenUITests: XCTestCase {
     }
 
     @MainActor
-    func testDeveloperFeaturesEndToEndFlow() throws {
-        openSettings()
+    func testDeveloperFeaturesRealTimeDashboard() throws {
+        let formatter = ISO8601DateFormatter()
+        let runStart = Date()
+        var steps: [DashboardStep] = []
+        let baselineIssueCount = testRun?.totalFailureCount ?? 0
 
-        let runTests = developerRow("settings.developer.runTests")
-        XCTAssertTrue(runTests.waitForExistence(timeout: 3))
-        runTests.tap()
+        continueAfterFailure = true
+        defer { continueAfterFailure = false }
 
-        let runTestsAlert = app.alerts["Run tests"]
-        XCTAssertTrue(runTestsAlert.waitForExistence(timeout: 4))
-        XCTAssertTrue(runTestsAlert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "checks passed")).firstMatch.exists)
-        runTestsAlert.buttons["OK"].tap()
+        func recordStep(_ name: String, _ body: () throws -> Void) {
+            let stepStart = Date()
+            let issuesBefore = self.testRun?.totalFailureCount ?? 0
+            var status = "pass"
+            var errorMessage: String?
 
-        let logs = developerRow("settings.developer.logs")
-        XCTAssertTrue(logs.waitForExistence(timeout: 3))
-        logs.tap()
-        XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 4))
-        goBackIfNeeded()
+            XCTContext.runActivity(named: "Dashboard Step: \(name)") { _ in
+                do {
+                    try body()
+                } catch {
+                    status = "fail"
+                    errorMessage = String(describing: error)
+                    XCTFail("Dashboard step '\(name)' failed: \(errorMessage!)")
+                }
+            }
 
-        let debug = developerRow("settings.developer.debug")
-        XCTAssertTrue(debug.waitForExistence(timeout: 3))
-        debug.tap()
-        XCTAssertTrue(app.navigationBars["Debug"].waitForExistence(timeout: 4))
-        goBackIfNeeded()
+            let issuesAfter = self.testRun?.totalFailureCount ?? 0
+            if issuesAfter > issuesBefore {
+                status = "fail"
+                if errorMessage == nil {
+                    errorMessage = "One or more XCT assertions failed during this step."
+                }
+            }
 
-        let diagnostic = developerRow("settings.developer.diagnostic")
-        XCTAssertTrue(diagnostic.waitForExistence(timeout: 3))
-        diagnostic.tap()
-        XCTAssertTrue(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4))
-        goBackIfNeeded()
+            let stepEnd = Date()
+            let durationMs = Int(stepEnd.timeIntervalSince(stepStart) * 1_000)
+            let durationSeconds = max(stepEnd.timeIntervalSince(stepStart), 0.000_1)
+            steps.append(
+                DashboardStep(
+                    name: name,
+                    status: status,
+                    startedAt: formatter.string(from: stepStart),
+                    endedAt: formatter.string(from: stepEnd),
+                    durationMs: durationMs,
+                    indicators: [
+                        "durationSeconds": durationSeconds,
+                        "eventsPerSecond": 1.0 / durationSeconds
+                    ],
+                    errorMessage: errorMessage
+                )
+            )
 
-        assertDeveloperRowsExist()
+            attachStepSnapshot(stepName: name, status: status, durationMs: durationMs, errorMessage: errorMessage)
+        }
+
+        func assertElement(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+            if !condition() {
+                throw NSError(domain: "LumenUITests", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+            }
+        }
+
+        recordStep("open_settings") { openSettings() }
+
+        recordStep("run_tests_alert") {
+            let runTests = developerRow("settings.developer.runTests")
+            try assertElement(runTests.waitForExistence(timeout: 3), "Run Tests row was not visible.")
+            runTests.tap()
+
+            let runTestsAlert = app.alerts["Run tests"]
+            try assertElement(runTestsAlert.waitForExistence(timeout: 4), "Run tests alert did not appear.")
+            try assertElement(
+                runTestsAlert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "checks passed")).firstMatch.exists,
+                "Run tests alert did not include a passing checks message."
+            )
+            runTestsAlert.buttons["OK"].tap()
+        }
+
+        recordStep("open_logs") {
+            let logs = developerRow("settings.developer.logs")
+            try assertElement(logs.waitForExistence(timeout: 3), "Logs row was not visible.")
+            logs.tap()
+            try assertElement(app.navigationBars["Logs"].waitForExistence(timeout: 4), "Logs screen did not open.")
+            goBackIfNeeded()
+        }
+
+        recordStep("open_debug") {
+            let debug = developerRow("settings.developer.debug")
+            try assertElement(debug.waitForExistence(timeout: 3), "Debug row was not visible.")
+            debug.tap()
+            try assertElement(app.navigationBars["Debug"].waitForExistence(timeout: 4), "Debug screen did not open.")
+            goBackIfNeeded()
+        }
+
+        recordStep("open_diagnostic") {
+            let diagnostic = developerRow("settings.developer.diagnostic")
+            try assertElement(diagnostic.waitForExistence(timeout: 3), "Diagnostic row was not visible.")
+            diagnostic.tap()
+            try assertElement(app.navigationBars["Diagnostic"].waitForExistence(timeout: 4), "Diagnostic screen did not open.")
+            goBackIfNeeded()
+        }
+
+        recordStep("rows_still_visible") { assertDeveloperRowsExist() }
+
+        let runEnd = Date()
+        let totalMs = Int(runEnd.timeIntervalSince(runStart) * 1_000)
+        let passCount = steps.filter { $0.status == "pass" }.count
+        let failCount = steps.count - passCount
+        let passRate = steps.isEmpty ? 0.0 : Double(passCount) / Double(steps.count)
+
+        let summary = DashboardSummary(
+            scenario: "developer_features_realtime_dashboard",
+            runStartedAt: formatter.string(from: runStart),
+            runEndedAt: formatter.string(from: runEnd),
+            totalDurationMs: totalMs,
+            throughputStepsPerSecond: Double(steps.count) / max(runEnd.timeIntervalSince(runStart), 0.001),
+            performanceIndicators: [
+                "p50StepDurationMs": percentileDuration(from: steps, percentile: 0.50),
+                "p95StepDurationMs": percentileDuration(from: steps, percentile: 0.95),
+                "maxStepDurationMs": maxDuration(from: steps),
+                "passRate": passRate
+            ],
+            stepCount: steps.count,
+            passCount: passCount,
+            failCount: failCount,
+            steps: steps
+        )
+
+        attachDashboardReport(summary)
+        XCTAssertEqual(testRun?.totalFailureCount ?? 0, baselineIssueCount, "One or more dashboard steps failed. Inspect dashboard attachments.")
     }
 
     @MainActor
@@ -265,5 +385,47 @@ final class LumenUITests: XCTestCase {
         if skip.waitForExistence(timeout: 2) {
             skip.tap()
         }
+    }
+
+    private func attachDashboardReport(_ report: DashboardSummary) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(report),
+              let reportText = String(data: data, encoding: .utf8) else {
+            XCTFail("Failed to serialize dashboard report")
+            return
+        }
+
+        let attachment = XCTAttachment(string: reportText)
+        attachment.name = "Live E2E Dashboard Metrics"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func attachStepSnapshot(stepName: String, status: String, durationMs: Int, errorMessage: String?) {
+        let payload = [
+            "step": stepName,
+            "status": status,
+            "durationMs": String(durationMs),
+            "error": errorMessage ?? ""
+        ]
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "\n")
+
+        let attachment = XCTAttachment(string: payload)
+        attachment.name = "Live Step \(stepName)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func percentileDuration(from steps: [DashboardStep], percentile: Double) -> Double {
+        let sorted = steps.map(\.durationMs).sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let index = min(max(Int(Double(sorted.count - 1) * percentile), 0), sorted.count - 1)
+        return Double(sorted[index])
+    }
+
+    private func maxDuration(from steps: [DashboardStep]) -> Double {
+        Double(steps.map(\.durationMs).max() ?? 0)
     }
 }

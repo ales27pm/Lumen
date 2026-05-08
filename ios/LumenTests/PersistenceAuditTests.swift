@@ -5,6 +5,7 @@ import SwiftData
 final class PersistenceAuditTests: XCTestCase {
     private struct SaveError: Error {}
 
+    @MainActor
     func testMemoryStoreFailedSaveSurfacesFailure() {
         let ok = MemoryStore.auditPersistence(operation: "test", scope: "MemoryItem") {}
         XCTAssertTrue(ok)
@@ -15,6 +16,7 @@ final class PersistenceAuditTests: XCTestCase {
         XCTAssertFalse(failed)
     }
 
+    @MainActor
     func testRAGStoreFailedSaveSurfacesFailure() {
         let failed = RAGStore.auditPersistence(operation: "test", scope: "RAGChunk") {
             throw SaveError()
@@ -60,6 +62,7 @@ final class PersistenceAuditTests: XCTestCase {
         XCTAssertTrue(ok)
     }
 
+    @MainActor
     func testModelLaunchBootstrapFailedSaveSurfacesFailure() {
         let failed = ModelLaunchBootstrap.auditPersistence(operation: "test", scope: "StoredModel") {
             throw SaveError()

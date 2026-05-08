@@ -366,12 +366,25 @@ private struct E2ETestRunnerView: View {
     @State private var isRunning = false
     @State private var runMode: RunMode = .standard
     @State private var reportText = E2ETestLogStore.latestText()
-    @State private var latestReport: E2ETestReport?
+    @State private var latestReport: E2ETestReport? = E2ETestLogStore.latestReport()
+    @State private var liveResults: [E2ETestResult] = []
+    @State private var runStartedAt: Date?
     @State private var lastExportURL: URL?
     @State private var exportError: String?
 
     var body: some View {
         List {
+            Section("Dashboard") {
+                E2ETestDashboardView(
+                    totalScenarioCount: runMode.scenarios.count,
+                    results: dashboardResults,
+                    report: latestReport,
+                    isRunning: isRunning,
+                    runStartedAt: runStartedAt
+                )
+                .accessibilityIdentifier("e2e.dashboard")
+            }
+
             Section {
                 Picker("Mode", selection: $runMode) {
                     ForEach(RunMode.allCases, id: \.self) { mode in
@@ -391,7 +404,7 @@ private struct E2ETestRunnerView: View {
                 .disabled(isRunning)
 
                 Button {
-                    reportText = E2ETestLogStore.latestText()
+                    reloadLatestReport()
                 } label: {
                     Label("Reload latest report", systemImage: "arrow.clockwise")
                 }
@@ -417,6 +430,22 @@ private struct E2ETestRunnerView: View {
             if let exportError {
                 Section("Export Error") {
                     Text(exportError).foregroundStyle(.red)
+                }
+            }
+
+            if !failureBuckets.isEmpty {
+                Section("Failure Breakdown") {
+                    ForEach(failureBuckets) { bucket in
+                        LabeledContent(bucket.name, value: "\(bucket.count)")
+                    }
+                }
+            }
+
+            if !dashboardResults.isEmpty {
+                Section("Latest Results") {
+                    ForEach(dashboardResults) { result in
+                        E2ETestResultRow(result: result)
+                    }
                 }
             }
 
@@ -446,28 +475,66 @@ private struct E2ETestRunnerView: View {
         .onChange(of: runMode) { _, _ in
             reportText = E2ETestLogStore.latestText()
             latestReport = nil
+            liveResults = []
+            runStartedAt = nil
             lastExportURL = nil
             exportError = nil
         }
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            reloadLatestReport()
+        }
+    }
+
+    private var dashboardResults: [E2ETestResult] {
+        if isRunning || !liveResults.isEmpty { return liveResults }
+        return latestReport?.results ?? []
+    }
+
+    private var failureBuckets: [E2EFailureBucket] {
+        let buckets = Dictionary(grouping: dashboardResults.flatMap(\.failures)) { failure in
+            failureCategory(for: failure)
+        }
+        return ["intent", "tool-boundary", "response-quality", "runtime", "hygiene", "other"]
+            .compactMap { key in
+                guard let count = buckets[key]?.count else { return nil }
+                return E2EFailureBucket(name: displayName(forFailureCategory: key), count: count)
+            }
+    }
+
+    private func reloadLatestReport() {
+        reportText = E2ETestLogStore.latestText()
+        latestReport = E2ETestLogStore.latestReport()
+        liveResults = []
+        runStartedAt = nil
     }
 
     private func run() {
         guard !isRunning else { return }
         isRunning = true
         exportError = nil
+        latestReport = nil
+        liveResults = []
+        runStartedAt = Date()
         reportText = runMode.runningLabel
         Task { @MainActor in
             let report: E2ETestReport
             switch runMode {
             case .standard:
-                report = await E2ETestRunner.runStandard(appState: appState, context: modelContext)
+                report = await E2ETestRunner.runStandard(appState: appState, context: modelContext) { result in
+                    liveResults.append(result)
+                    reportText = inProgressReportText(results: liveResults, total: runMode.scenarios.count)
+                }
             case .trainingValidation:
-                report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext)
+                report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext) { result in
+                    liveResults.append(result)
+                    reportText = inProgressReportText(results: liveResults, total: runMode.scenarios.count)
+                }
             }
             latestReport = report
             reportText = report.summaryText
             isRunning = false
+            runStartedAt = nil
         }
     }
 
@@ -494,6 +561,220 @@ private struct E2ETestRunnerView: View {
             exportError = "Live E2E report export failed: \(error.localizedDescription)"
         }
     }
+
+    private func inProgressReportText(results: [E2ETestResult], total: Int) -> String {
+        let passed = results.filter(\.passed).count
+        let failed = results.count - passed
+        return """
+        Running \(runMode.title) E2E suite
+        Completed: \(results.count)/\(total)
+        Passed: \(passed)
+        Failed: \(failed)
+        """
+    }
+
+    private func failureCategory(for failure: String) -> String {
+        if failure.contains("Intent mismatch") { return "intent" }
+        if failure.contains("Forbidden tool") || failure.contains("Required tool not allowed") || failure.contains("Forbidden tool selected by agent") { return "tool-boundary" }
+        if failure.contains("Required final hint") || failure.contains("Forbidden final hint") || failure.contains("RAG") { return "response-quality" }
+        if failure.contains("Agent error") || failure.contains("No model loaded") { return "runtime" }
+        if failure.contains("Raw output") || failure.contains("Sanitized output") || failure.contains("Sanitizer") || failure.contains("Final output empty") { return "hygiene" }
+        return "other"
+    }
+
+    private func displayName(forFailureCategory category: String) -> String {
+        switch category {
+        case "intent": return "Intent"
+        case "tool-boundary": return "Tool boundary"
+        case "response-quality": return "Response quality"
+        case "runtime": return "Runtime"
+        case "hygiene": return "Output hygiene"
+        default: return "Other"
+        }
+    }
+}
+
+private struct E2ETestDashboardView: View {
+    let totalScenarioCount: Int
+    let results: [E2ETestResult]
+    let report: E2ETestReport?
+    let isRunning: Bool
+    let runStartedAt: Date?
+
+    private var completedCount: Int { results.count }
+    private var passedCount: Int { results.filter(\.passed).count }
+    private var failedCount: Int { completedCount - passedCount }
+    private var passRate: Double {
+        guard completedCount > 0 else { return 0 }
+        return Double(passedCount) / Double(completedCount)
+    }
+    private var progressFraction: Double {
+        guard totalScenarioCount > 0 else { return 0 }
+        return min(Double(completedCount) / Double(totalScenarioCount), 1)
+    }
+    private var elapsedSeconds: Double {
+        if let report {
+            return max(report.finishedAt.timeIntervalSince(report.startedAt), 0)
+        }
+        if let runStartedAt {
+            return max(Date().timeIntervalSince(runStartedAt), 0)
+        }
+        return results.map { max($0.finishedAt.timeIntervalSince($0.startedAt), 0) }.reduce(0, +)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 8)], spacing: 8) {
+                E2ETestMetricTile(title: "Status", value: statusText, systemImage: statusIcon, tint: statusTint)
+                E2ETestMetricTile(title: "Pass rate", value: percentText(passRate), systemImage: "gauge.with.dots.needle.bottom.50percent", tint: .blue)
+                E2ETestMetricTile(title: "Passed", value: "\(passedCount)", systemImage: "checkmark.circle", tint: .green)
+                E2ETestMetricTile(title: "Failed", value: "\(failedCount)", systemImage: "xmark.circle", tint: failedCount > 0 ? .red : .secondary)
+                E2ETestMetricTile(title: "Elapsed", value: durationText(elapsedSeconds), systemImage: "timer", tint: .orange)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Progress")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Text("\(completedCount)/\(totalScenarioCount)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                ProgressView(value: progressFraction)
+                    .tint(statusTint)
+            }
+
+            if let latest = results.last {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(isRunning ? "Current signal" : "Last signal")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                    HStack(spacing: 8) {
+                        StatusDot(color: latest.passed ? .green : .red, size: 9)
+                        Text(latest.title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(2)
+                    }
+                    if let firstFailure = latest.failures.first {
+                        Text(firstFailure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .lineLimit(3)
+                    }
+                }
+            } else {
+                Text("No E2E report has been loaded yet.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var statusText: String {
+        if isRunning { return "Running" }
+        if completedCount == 0 { return "Idle" }
+        return failedCount == 0 ? "Passing" : "Failing"
+    }
+
+    private var statusIcon: String {
+        if isRunning { return "play.circle" }
+        if completedCount == 0 { return "circle.dashed" }
+        return failedCount == 0 ? "checkmark.seal" : "exclamationmark.triangle"
+    }
+
+    private var statusTint: Color {
+        if isRunning { return .blue }
+        if completedCount == 0 { return .secondary }
+        return failedCount == 0 ? .green : .red
+    }
+}
+
+private struct E2ETestMetricTile: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: systemImage)
+                    .foregroundStyle(tint)
+                Spacer()
+            }
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+        .padding(10)
+        .background(Theme.surface)
+        .clipShape(.rect(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.border, lineWidth: 1)
+        }
+    }
+}
+
+private struct E2ETestResultRow: View {
+    let result: E2ETestResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                StatusDot(color: result.passed ? .green : .red, size: 9)
+                Text(result.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Text(durationText(max(result.finishedAt.timeIntervalSince(result.startedAt), 0)))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            Text("Intent: \(result.actualIntent) / \(result.expectedIntent)")
+                .font(.caption2.monospaced())
+                .foregroundStyle(Theme.textTertiary)
+
+            if let firstFailure = result.failures.first {
+                Text(firstFailure)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
+            } else if !result.finalText.isEmpty {
+                Text(result.finalText)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+private struct E2EFailureBucket: Identifiable {
+    let name: String
+    let count: Int
+    var id: String { name }
+}
+
+private func percentText(_ value: Double) -> String {
+    String(format: "%.0f%%", value * 100)
+}
+
+private func durationText(_ seconds: Double) -> String {
+    if seconds >= 60 {
+        return String(format: "%.1fm", seconds / 60)
+    }
+    return String(format: "%.1fs", seconds)
 }
 
 

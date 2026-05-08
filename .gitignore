@@ -20,4 +20,4 @@ generated/fine_tuning/checkpoints/
 models/
 .rork
 build/
-ios/Lumen/Assets.xcassets/AppIcon.appiconset/icon.PNG
+ios/Lumen/Assets.xcassets/

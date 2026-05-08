@@ -276,21 +276,22 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
 
 @MainActor
 enum E2ETestRunner {
-    static func runStandard(appState: AppState, context: ModelContext) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context)
+    static func runStandard(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context, onResult: onResult)
     }
 
-    static func runTrainingValidation(appState: AppState, context: ModelContext) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context)
+    static func runTrainingValidation(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context, onResult: onResult)
     }
 
-    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext) async -> E2ETestReport {
+    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
         let started = Date()
         var results: [E2ETestResult] = []
         for scenario in scenarios {
             let result = await runScenario(scenario, appState: appState, context: context)
             results.append(result)
             E2ETestLogStore.append(result)
+            onResult?(result)
         }
         let passed = results.filter(\.passed).count
         let report = E2ETestReport(id: UUID(), startedAt: started, finishedAt: Date(), passed: passed, failed: results.count - passed, results: results)
@@ -760,6 +761,14 @@ nonisolated enum E2ETestLogStore {
         let url = (try? reportsDirectory().appendingPathComponent("latest-e2e-report.txt"))
         guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return "No E2E report yet." }
         return text
+    }
+
+    static func latestReport() -> E2ETestReport? {
+        guard let url = try? reportsDirectory().appendingPathComponent("latest-e2e-report.json"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(E2ETestReport.self, from: data)
     }
 
     static func reportsDirectory() throws -> URL {

@@ -278,7 +278,7 @@ struct VoiceModeView: View {
             try? modelContext.save()
 
             if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
-                await MemoryStore.remember(
+                try? await MemoryStore.remember(
                     "User asked: \(text). Assistant: \(String(finalText.prefix(160)))",
                     kind: .conversation, source: "voice", context: modelContext
                 )

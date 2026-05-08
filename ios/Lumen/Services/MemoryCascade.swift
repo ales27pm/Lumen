@@ -136,7 +136,7 @@ enum MemoryCascade {
             }.joined(separator: " ")
             let summary = "Background (low-authority) condensed \(groupKey): \(summaryBody)"
 
-            await MemoryStore.remember(
+            try await MemoryStore.remember(
                 summary,
                 kind: .conversation,
                 source: "rem-condensed",

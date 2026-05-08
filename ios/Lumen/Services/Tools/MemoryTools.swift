@@ -9,8 +9,12 @@ enum MemoryTools {
         let k = MemoryKind(rawValue: kind) ?? .fact
         guard let container = SharedContainer.shared else { return "Memory unavailable." }
         let ctx = ModelContext(container)
-        await MemoryStore.remember(trimmed, kind: k, source: "agent", context: ctx)
-        return "Saved: \(trimmed)"
+        do {
+            try await MemoryStore.remember(trimmed, kind: k, source: "agent", context: ctx)
+            return "Saved: \(trimmed)"
+        } catch {
+            return "Failed to save memory: \(error.localizedDescription)"
+        }
     }
 
     static func recall(query: String) async -> String {

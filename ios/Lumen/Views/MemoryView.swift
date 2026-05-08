@@ -278,7 +278,7 @@ struct AddMemorySheet: View {
                 Section {
                     Button("Save") {
                         Task {
-                            await MemoryStore.remember(
+                            try? await MemoryStore.remember(
                                 content,
                                 kind: kind,
                                 source: "manual",

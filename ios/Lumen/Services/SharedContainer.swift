@@ -9,11 +9,14 @@ enum SharedContainer {
 nonisolated enum FileStore {
     enum FileStoreError: Error, Equatable {
         case documentDirectoryUnavailable
+        case persistentDirectoryUnavailable
     }
 
     static var importsDirectory: URL {
         let fm = FileManager.default
-        let base = (try? documentsDirectoryURL(fileManager: fm)) ?? fm.temporaryDirectory
+        guard let base = try? persistentBaseDirectoryURL(fileManager: fm) else {
+            preconditionFailure("FileStore requires a persistent app data directory")
+        }
         let dir = base.appendingPathComponent("Imports", isDirectory: true)
         if !fm.fileExists(atPath: dir.path) {
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -30,6 +33,19 @@ nonisolated enum FileStore {
             throw FileStoreError.documentDirectoryUnavailable
         }
         return base
+    }
+
+    static func persistentBaseDirectoryURL(fileManager: FileManager = .default) throws -> URL {
+        try persistentBaseDirectoryURL(
+            documentDirectories: fileManager.urls(for: .documentDirectory, in: .userDomainMask),
+            applicationSupportDirectories: fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        )
+    }
+
+    static func persistentBaseDirectoryURL(documentDirectories: [URL], applicationSupportDirectories: [URL]) throws -> URL {
+        if let documents = documentDirectories.first { return documents }
+        if let appSupport = applicationSupportDirectories.first { return appSupport }
+        throw FileStoreError.persistentDirectoryUnavailable
     }
 
     static func importedFiles() -> [URL] {

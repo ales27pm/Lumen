@@ -3,13 +3,29 @@ import Foundation
 nonisolated enum ModelStorage {
     enum StorageError: Error, Equatable {
         case documentDirectoryUnavailable
+        case persistentDirectoryUnavailable
     }
 
     static func modelsDirectoryURL(fileManager: FileManager = .default) -> URL {
-        let base = (try? documentsDirectoryURL(fileManager: fileManager)) ?? fileManager.temporaryDirectory
+        guard let base = try? persistentBaseDirectoryURL(fileManager: fileManager) else {
+            preconditionFailure("ModelStorage requires a persistent app data directory")
+        }
         let directory = base.appendingPathComponent("Models", isDirectory: true)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    static func persistentBaseDirectoryURL(fileManager: FileManager = .default) throws -> URL {
+        try persistentBaseDirectoryURL(
+            documentDirectories: fileManager.urls(for: .documentDirectory, in: .userDomainMask),
+            applicationSupportDirectories: fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        )
+    }
+
+    static func persistentBaseDirectoryURL(documentDirectories: [URL], applicationSupportDirectories: [URL]) throws -> URL {
+        if let documents = documentDirectories.first { return documents }
+        if let appSupport = applicationSupportDirectories.first { return appSupport }
+        throw StorageError.persistentDirectoryUnavailable
     }
 
     static func documentsDirectoryURL(fileManager: FileManager = .default) throws -> URL {

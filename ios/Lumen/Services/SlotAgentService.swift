@@ -65,7 +65,8 @@ final class SlotAgentService {
                 )
                 let maxSteps = boundedMaxSteps(for: routing, requested: req.maxSteps)
                 var loopStartIndex = 0
-                if let deterministicPrimaryAction = deterministicPrimaryAction(
+                if maxSteps > 0,
+                   let deterministicPrimaryAction = Self.deterministicPrimaryAction(
                     routing: routing,
                     prompt: executionPrompt,
                     scopedTools: scopedTools,
@@ -1079,7 +1080,7 @@ final class SlotAgentService {
         }
     }
 
-    func deterministicPrimaryAction(
+    nonisolated static func deterministicPrimaryAction(
         routing: IntentRoutingDecision,
         prompt: String,
         scopedTools: [ToolDefinition],

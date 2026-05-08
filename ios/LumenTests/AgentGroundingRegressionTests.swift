@@ -80,7 +80,7 @@ struct AgentGroundingRegressionTests {
         let weatherRouting = IntentRouter.classify("What is the weather here?")
         let weatherTools = ToolRegistry.all.filter { IntentRouter.isToolAllowed($0.id, for: weatherRouting) }
         let weatherIDs = Set(weatherTools.map { ToolRouteGuard.canonicalToolID($0.id) })
-        let weatherAction = SlotAgentService.shared.deterministicPrimaryAction(
+        let weatherAction = SlotAgentService.deterministicPrimaryAction(
             routing: weatherRouting,
             prompt: "What is the weather here?",
             scopedTools: weatherTools,
@@ -91,7 +91,7 @@ struct AgentGroundingRegressionTests {
         let webRouting = IntentRouter.classify("Search web for diy underground shelter")
         let webTools = ToolRegistry.all.filter { IntentRouter.isToolAllowed($0.id, for: webRouting) }
         let webIDs = Set(webTools.map { ToolRouteGuard.canonicalToolID($0.id) })
-        let webAction = SlotAgentService.shared.deterministicPrimaryAction(
+        let webAction = SlotAgentService.deterministicPrimaryAction(
             routing: webRouting,
             prompt: "Search web for diy underground shelter",
             scopedTools: webTools,
@@ -102,7 +102,7 @@ struct AgentGroundingRegressionTests {
         let outlookRouting = IntentRouter.classify("Read last outlook email")
         let outlookTools = ToolRegistry.all.filter { IntentRouter.isToolAllowed($0.id, for: outlookRouting) }
         let outlookIDs = Set(outlookTools.map { ToolRouteGuard.canonicalToolID($0.id) })
-        let outlookAction = SlotAgentService.shared.deterministicPrimaryAction(
+        let outlookAction = SlotAgentService.deterministicPrimaryAction(
             routing: outlookRouting,
             prompt: "Read last outlook email",
             scopedTools: outlookTools,

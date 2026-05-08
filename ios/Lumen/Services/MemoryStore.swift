@@ -1,8 +1,30 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @MainActor
 enum MemoryStore {
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "persistence")
+
+    private static func persist(_ context: ModelContext, operation: String, scope: String) throws {
+        do {
+            try context.save()
+        } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    static func auditPersistence(operation: String, scope: String, save: () throws -> Void) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     nonisolated struct TTLPolicy: Sendable {
         let freshness: MemoryFreshnessClass
         let ttl: TimeInterval?
@@ -40,11 +62,11 @@ enum MemoryStore {
             }
             topK = min(topK * 2, maxTopK)
         }
-        try? context.save()
+        do { try persist(context, operation: "recall.migrateExpiry", scope: "MemoryItem") } catch {}
         return results
     }
 
-    static func remember(_ content: String, kind: MemoryKind = .fact, source: String = "manual", topic: String? = nil, context: ModelContext) async {
+    static func remember(_ content: String, kind: MemoryKind = .fact, source: String = "manual", topic: String? = nil, context: ModelContext) async throws {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if let existing = try? context.fetch(FetchDescriptor<MemoryItem>()) {
@@ -64,7 +86,7 @@ enum MemoryStore {
             freshnessClass: policy.freshness
         )
         context.insert(item)
-        try? context.save()
+        try persist(context, operation: "remember.insert", scope: "MemoryItem")
         MemoryVectorIndex.shared.ensureLoaded(context: context)
         MemoryVectorIndex.shared.append(id: item.persistentModelID, isPinned: item.isPinned, vector: embedding)
     }
@@ -73,23 +95,23 @@ enum MemoryStore {
         let durableAssistant = durableAssistantText(assistantText, transientTexts: transientTexts)
         let combined = userText + "\n" + durableAssistant
         for extracted in extractFacts(from: combined) {
-            await remember(extracted.content, kind: extracted.kind, source: "auto", topic: extracted.topic, context: context)
+            try? await remember(extracted.content, kind: extracted.kind, source: "auto", topic: extracted.topic, context: context)
         }
     }
 
-    static func wipeAll(context: ModelContext) {
+    static func wipeAll(context: ModelContext) throws {
         guard let all = try? context.fetch(FetchDescriptor<MemoryItem>()) else { return }
         for item in all where !item.isPinned {
             context.delete(item)
         }
-        try? context.save()
+        try persist(context, operation: "wipeAll", scope: "MemoryItem")
         MemoryVectorIndex.shared.invalidate()
     }
 
-    static func wipeEverything(context: ModelContext) {
+    static func wipeEverything(context: ModelContext) throws {
         guard let all = try? context.fetch(FetchDescriptor<MemoryItem>()) else { return }
         for item in all { context.delete(item) }
-        try? context.save()
+        try persist(context, operation: "wipeEverything", scope: "MemoryItem")
         MemoryVectorIndex.shared.invalidate()
     }
 

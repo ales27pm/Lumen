@@ -91,7 +91,7 @@ struct MemoryView: View {
             }
             .alert("Wipe all memory?", isPresented: $showWipeAlert) {
                 Button("Wipe", role: .destructive) {
-                    MemoryStore.wipeEverything(context: modelContext)
+                    try? MemoryStore.wipeEverything(context: modelContext)
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {

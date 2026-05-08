@@ -1,8 +1,28 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @MainActor
 enum ModelLaunchBootstrap {
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "persistence")
+
+    private static func persist(_ context: ModelContext, operation: String, scope: String) throws {
+        do { try context.save() } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    static func auditPersistence(operation: String, scope: String, save: () throws -> Void) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     private static let storageSafetyBufferBytes: Int64 = 500_000_000
 
     static func ensureFleetDownloaded(appState: AppState, context: ModelContext) async {
@@ -108,7 +128,9 @@ enum ModelLaunchBootstrap {
 
         if FileManager.default.fileExists(atPath: localURL.path) {
             if existingStored == nil {
-                let stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                guard let stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context) else {
+                    return .alreadyStored
+                }
                 Task { @MainActor in
                     await loadIfSelected(stored, appState: appState, context: context)
                     updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
@@ -144,7 +166,10 @@ enum ModelLaunchBootstrap {
                     activateIfNeeded(existing, appState: appState)
                     stored = existing
                 } else {
-                    stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                    guard let inserted = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context) else {
+                        return
+                    }
+                    stored = inserted
                 }
 
                 await loadIfSelected(stored, appState: appState, context: context)
@@ -214,7 +239,7 @@ enum ModelLaunchBootstrap {
     }
 
     @discardableResult
-    private static func insertStoredModel(for catalog: CatalogModel, localURL: URL, appState: AppState, context: ModelContext) -> StoredModel {
+    private static func insertStoredModel(for catalog: CatalogModel, localURL: URL, appState: AppState, context: ModelContext) -> StoredModel? {
         let stored = StoredModel(
             name: catalog.name,
             repoId: catalog.repoId,
@@ -226,7 +251,13 @@ enum ModelLaunchBootstrap {
             localPath: localURL.path
         )
         context.insert(stored)
-        try? context.save()
+        do {
+            try persist(context, operation: "insertStoredModel", scope: "StoredModel")
+        } catch {
+            logger.error("persist_blocked op=insertStoredModel scope=StoredModel error=\(String(describing: error), privacy: .public)")
+            context.delete(stored)
+            return nil
+        }
         activateIfNeeded(stored, appState: appState)
         return stored
     }

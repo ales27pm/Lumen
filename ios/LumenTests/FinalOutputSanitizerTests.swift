@@ -48,6 +48,22 @@ struct FinalOutputSanitizerTests {
         #expect(!out.text.lowercased().contains("searchresults"))
     }
 
+    @Test func defaultSanitizerPreservesLegitimateFallbackPrefixedModelText() {
+        let raw = "\(FinalOutputSanitizer.fallback) This is the actual model answer about error handling."
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        #expect(out.text == raw)
+        #expect(!out.removedArtifacts.contains(.injectedFallbackPrefix))
+        #expect(!out.hadUnsafeLeakage)
+    }
+
+    @Test func explicitInjectedProvenanceStripsFallbackPrefix() {
+        let raw = "\(FinalOutputSanitizer.fallback) This is the actual model answer about error handling."
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw, isInjectedProvenance: true)
+        #expect(out.text == "This is the actual model answer about error handling.")
+        #expect(out.removedArtifacts.contains(.injectedFallbackPrefix))
+        #expect(out.hadUnsafeLeakage)
+    }
+
     @Test func recoveredUnsafeOutputCanBeConsumedWithRawOrSanitizedText() {
         let raw = "<think>x</think>safe"
         let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(raw)

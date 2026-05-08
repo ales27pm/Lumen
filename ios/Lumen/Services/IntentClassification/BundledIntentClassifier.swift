@@ -17,7 +17,11 @@ final class BundledIntentClassifier {
            let label = nlModel.predictedLabel(for: trimmed),
            let intent = normalizeIntentLabel(label) {
             let probs = nlModel.predictedLabelHypotheses(for: trimmed, maximumCount: 5)
-            let alternatives = probs.compactMap { normalizeIntentLabel($0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
+            let alternatives = probs.compactMap { pair -> IntentAlternative? in
+                guard let intent = normalizeIntentLabel(pair.key) else { return nil }
+                return IntentAlternative(intent: intent, confidence: pair.value)
+            }
+            .sorted { $0.confidence > $1.confidence }
             return IntentClassificationResult(intent: intent, confidence: probs[label] ?? 0.0, alternatives: alternatives, requiresClarification: false, clarificationPrompt: nil, source: .bundledModel, diagnostics: "nlmodel")
         }
 
@@ -67,7 +71,11 @@ final class BundledIntentClassifier {
                 break
             }
         }
-        let alternatives = probs.compactMap { normalizeIntentLabel($0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
+        let alternatives = probs.compactMap { pair -> IntentAlternative? in
+            guard let intent = normalizeIntentLabel(pair.key) else { return nil }
+            return IntentAlternative(intent: intent, confidence: pair.value)
+        }
+        .sorted { $0.confidence > $1.confidence }
         let confidence = probs[label] ?? alternatives.first(where: { $0.intent == intent })?.confidence ?? 0.0
         return IntentClassificationResult(intent: intent, confidence: confidence, alternatives: alternatives, requiresClarification: false, clarificationPrompt: nil, source: .bundledModel, diagnostics: "coreml")
     }

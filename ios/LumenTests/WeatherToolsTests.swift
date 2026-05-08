@@ -7,6 +7,9 @@ struct WeatherToolsTests {
         #expect(WeatherTools.isCurrentLocationRequest("Current Location"))
         #expect(WeatherTools.isCurrentLocationRequest("current-location"))
         #expect(WeatherTools.isCurrentLocationRequest("current_location"))
+        #expect(WeatherTools.isCurrentLocationRequest("this location"))
+        #expect(WeatherTools.isCurrentLocationRequest("This Location"))
+        #expect(WeatherTools.isCurrentLocationRequest("this-location"))
     }
 
     @Test func nearbyAndUserLocationAliasesUseDeviceLocation() {

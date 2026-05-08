@@ -53,6 +53,7 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
 
     private var rawBuffer = ""
     private var emittedSanitized = ""
+    private var sawSanitizerGeneratedFallbackDuringStream = false
     private let holdbackCharacters = 192
 
     mutating func ingest(_ chunk: String) -> String {
@@ -69,12 +70,20 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
 
         let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(safeRawPrefix)
 
-        // A partial stream can have an empty safe prefix while the holdback window
+        // A partial stream can have an empty/unsafe safe prefix while the holdback window
         // waits for split markers such as <think> or <lumen_web_payload>. The global
         // fallback is valid only after finalization proves the complete output is
         // unusable; emitting it here leaks a fake error prefix into otherwise valid
-        // answers.
-        guard sanitized.text != FinalOutputSanitizer.fallback else {
+        // answers. Track this provenance so finish() can clean a later fallback prefix
+        // only when the stream itself proved sanitizer-generated fallback ancestry.
+        if sanitized.text == FinalOutputSanitizer.fallback {
+            let rawPrefixWasFallback = safeRawPrefix
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .hasPrefix(FinalOutputSanitizer.fallback.lowercased())
+            if sanitized.hadUnsafeLeakage || !rawPrefixWasFallback {
+                sawSanitizerGeneratedFallbackDuringStream = true
+            }
             return ""
         }
 
@@ -87,7 +96,10 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
     }
 
     mutating func finish() -> Finalization {
-        let final = FinalOutputSanitizer.sanitizeUserVisibleText(rawBuffer)
+        let final = FinalOutputSanitizer.sanitizeUserVisibleText(
+            rawBuffer,
+            isInjectedProvenance: sawSanitizerGeneratedFallbackDuringStream
+        )
         if final.text.hasPrefix(emittedSanitized) {
             let remainingDelta = String(final.text.dropFirst(emittedSanitized.count))
             emittedSanitized = final.text

@@ -213,7 +213,7 @@ struct ChatView: View {
                 appState.isGenerating = false
                 return
             }
-            let routing = IntentRouter.classify(text)
+            let routing = await IntentClassifierService.shared.route(text)
             let memories = await safeRecalledMemories(query: text, routing: routing)
             let recentContext = safeShortTermContext(excludingCurrentUserMessageID: userMsg.id)
             if appState.agentModeEnabled {

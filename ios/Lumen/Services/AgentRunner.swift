@@ -40,7 +40,7 @@ enum AgentRunner {
         let cascade = await MemoryCascade.recall(query: prompt, history: [], context: context)
         let resolution = ReferenceResolver.resolve(prompt: prompt, history: [], relevantMemories: cascade.promptFragments)
         let executionPrompt = resolution.rewrittenPrompt
-        let routing = IntentRouter.classify(executionPrompt)
+        let routing = await IntentClassifierService.shared.route(executionPrompt)
         let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: executionPrompt)
         let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
         let mimicry = MimicryProfiler.profile(userMessage: executionPrompt, settings: settings)

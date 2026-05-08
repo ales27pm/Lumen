@@ -107,7 +107,9 @@ final class SlotModelRuntimeCoordinator {
 
     func ensureReady(slot: LumenModelSlot) async throws {
         guard slot != .embedding else { return }
-        guard let assignment = assignments[slot] else {
+
+        let assignment = resolvedAssignment(for: slot)
+        guard let assignment else {
             throw LlamaError.slotModelNotLoaded("\(slot.rawValue): no assigned model")
         }
         guard FileManager.default.fileExists(atPath: assignment.localPath) else {
@@ -120,6 +122,22 @@ final class SlotModelRuntimeCoordinator {
         }
 
         try await ensureLegacyRuntimeReady(slot: slot, assignment: assignment)
+    }
+
+
+    private func resolvedAssignment(for slot: LumenModelSlot) -> LumenModelAssignment? {
+        if let direct = assignments[slot] {
+            return direct
+        }
+
+        // Speech mode and simple chat can route through Mouth even when only a
+        // Cortex/base chat artifact is installed. Fall back to Cortex to avoid
+        // hard failures when the Mouth slot has no explicit assignment.
+        if slot == .mouth {
+            return assignments[.cortex]
+        }
+
+        return nil
     }
 
     private func ensureAdapterRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {

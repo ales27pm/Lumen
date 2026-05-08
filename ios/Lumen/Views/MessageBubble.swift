@@ -213,7 +213,7 @@ struct MessageBubble: View {
         let snippet = String(cleaned.prefix(400))
         let ctx = modelContext
         Task { @MainActor in
-            await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)
+            try? await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)
         }
     }
 }

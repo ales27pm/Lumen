@@ -288,7 +288,7 @@ struct ChatView: View {
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
         if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
-            await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
+            try? await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
             let transient = sanitizedSteps.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
             await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
         }
@@ -334,7 +334,7 @@ struct ChatView: View {
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
         if appState.autoMemory, sanitized.count > 60 {
-            await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
+            try? await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
         }
 
         conversation.updatedAt = Date()

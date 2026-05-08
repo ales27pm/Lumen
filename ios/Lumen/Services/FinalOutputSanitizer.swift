@@ -157,7 +157,7 @@ nonisolated enum FinalOutputSanitizer {
         }
     }()
 
-    static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
+    static func sanitizeUserVisibleText(_ raw: String, isInjectedProvenance: Bool = false) -> SanitizedFinalOutput {
         var text = raw
         var removed: [FinalOutputArtifact] = []
 
@@ -216,10 +216,12 @@ nonisolated enum FinalOutputSanitizer {
 
         text = normalizeWhitespace(text)
 
-        let fallbackRemoval = removingInjectedFallbackPrefix(from: text)
-        if fallbackRemoval.removedAny {
-            text = fallbackRemoval.text
-            mark(.injectedFallbackPrefix)
+        if isInjectedProvenance {
+            let fallbackRemoval = removingInjectedFallbackPrefix(from: text)
+            if fallbackRemoval.removedAny {
+                text = fallbackRemoval.text
+                mark(.injectedFallbackPrefix)
+            }
         }
 
         if text.isEmpty {
@@ -266,7 +268,6 @@ nonisolated enum FinalOutputSanitizer {
         text = text.replacingOccurrences(of: "(?is)</lumen_web_payload>", with: " ", options: .regularExpression)
         text = removingRawToolPayloadObjects(from: text).text
         text = normalizeWhitespace(text)
-        text = removingInjectedFallbackPrefix(from: text).text
         return text.isEmpty ? fallback : text
     }
 

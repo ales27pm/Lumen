@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import Lumen
 
 final class PersistenceAuditTests: XCTestCase {
@@ -21,6 +22,32 @@ final class PersistenceAuditTests: XCTestCase {
         XCTAssertFalse(failed)
         let ok = RAGStore.auditPersistence(operation: "test", scope: "RAGChunk") {}
         XCTAssertTrue(ok)
+    }
+
+    @MainActor
+    func testRAGStorePersistAndAppendVectorsDoesNotAppendOnFailedSave() {
+        struct TestSaveError: Error {}
+        let container = try! ModelContainer(for: RAGChunk.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = ModelContext(container)
+        RAGVectorIndex.shared.invalidate()
+        RAGVectorIndex.shared.ensureLoaded(context: context)
+
+        let chunk = RAGChunk(content: "test", sourceType: .note, sourceName: "n", sourceRef: nil, chunkIndex: 0, embedding: [0.1, 0.2])
+        context.insert(chunk)
+        var pending: [(id: PersistentIdentifier, bucket: String, vector: [Double])] = [
+            (id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: [0.1, 0.2])
+        ]
+
+        let failed = RAGStore.persistAndAppendVectors(
+            context: context,
+            operation: "test",
+            pending: &pending
+        ) { _, _, _ in
+            throw TestSaveError()
+        }
+        XCTAssertNil(failed)
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(RAGVectorIndex.shared.count, 0)
     }
 
     @MainActor

@@ -19,3 +19,4 @@ generated/fine_tuning/checkpoints/
 **/__pycache__/
 models/
 .rork
+build/

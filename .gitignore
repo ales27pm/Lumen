@@ -21,3 +21,16 @@ models/
 .rork
 build/
 ios/Lumen/Assets.xcassets/
+!ios/Lumen/Assets.xcassets/
+!ios/Lumen/Assets.xcassets/AppIcon.appiconset/
+!ios/Lumen/Assets.xcassets/AppIcon.appiconset/Contents.json
+!ios/Lumen/Assets.xcassets/AppIcon.appiconset/*.png
+!ios/Lumen/Assets.xcassets/LumenAssistantMark.imageset/
+!ios/Lumen/Assets.xcassets/LumenAssistantMark.imageset/Contents.json
+!ios/Lumen/Assets.xcassets/LumenAssistantMark.imageset/*.png
+!ios/Lumen/Assets.xcassets/LumenVerticalLogo.imageset/
+!ios/Lumen/Assets.xcassets/LumenVerticalLogo.imageset/Contents.json
+!ios/Lumen/Assets.xcassets/LumenVerticalLogo.imageset/*.png
+!ios/Lumen/Assets.xcassets/LumenWordmarkLockup.imageset/
+!ios/Lumen/Assets.xcassets/LumenWordmarkLockup.imageset/Contents.json
+!ios/Lumen/Assets.xcassets/LumenWordmarkLockup.imageset/*.png

@@ -1,17 +1,17 @@
 {
   "images": [
     {
-      "filename": "lumen-assistant-mark@1x.png",
+      "filename": "lumen-vertical-logo@1x.png",
       "idiom": "universal",
       "scale": "1x"
     },
     {
-      "filename": "lumen-assistant-mark@2x.png",
+      "filename": "lumen-vertical-logo@2x.png",
       "idiom": "universal",
       "scale": "2x"
     },
     {
-      "filename": "lumen-assistant-mark@3x.png",
+      "filename": "lumen-vertical-logo@3x.png",
       "idiom": "universal",
       "scale": "3x"
     }

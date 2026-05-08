@@ -416,6 +416,9 @@ else
   UPLOAD_CMD+=(--username "$APPLE_ID" --password @env:APP_SPECIFIC_PASSWORD)
 fi
 
-"${UPLOAD_CMD[@]}"
+if ! "${UPLOAD_CMD[@]}"; then
+  unset APP_SPECIFIC_PASSWORD || true
+  fail "Upload failed. Fix the App Store Connect validation errors above, then rerun the upload."
+fi
 unset APP_SPECIFIC_PASSWORD || true
 bold "✅ Upload complete. Check App Store Connect for processing status."

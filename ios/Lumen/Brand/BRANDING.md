@@ -28,8 +28,9 @@ Lumen is the light source. The assistant appears as a compact intelligent orb th
 
 ## Included assets
 
-- `lumen-assistant-mark.svg` — square app-mark source.
-- `lumen-wordmark-lockup.svg` — horizontal brand lockup source.
+- `lumen-assistant-mark.png` — square app-mark source.
+- `lumen-vertical-logo.png` — vertical logo lockup source.
+- `lumen-wordmark-lockup.png` — horizontal logo lockup source.
 - `LumenBrand.swift` — native SwiftUI brand components.
 
 ## SwiftUI components

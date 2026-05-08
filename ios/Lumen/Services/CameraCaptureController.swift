@@ -16,7 +16,7 @@ final class CameraCaptureController: NSObject {
         #else
         return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
             self.continuation = cont
-            Task.detached { [weak self] in
+            Task { [weak self] in
                 await self?.performCapture()
             }
         }

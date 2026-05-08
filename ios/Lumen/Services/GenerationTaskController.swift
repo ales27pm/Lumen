@@ -16,6 +16,7 @@ final class GenerationTaskController<Key: Hashable> {
         tasks[key]?.cancel()
         activeRequestIDs[key] = requestID
         tasks[key] = task
+        assertSingleActiveGeneration(for: key)
         return requestID
     }
 
@@ -33,5 +34,17 @@ final class GenerationTaskController<Key: Hashable> {
         guard activeRequestIDs[key] == requestID else { return }
         tasks[key] = nil
         activeRequestIDs[key] = nil
+    }
+
+    func hasActiveGeneration(for key: Key) -> Bool {
+        tasks[key] != nil && activeRequestIDs[key] != nil
+    }
+
+    /// Audit assertion: every conversation key must map to at most one active
+    /// generation task and request ID at any time.
+    func assertSingleActiveGeneration(for key: Key) {
+        let taskExists = tasks[key] != nil
+        let requestExists = activeRequestIDs[key] != nil
+        assert(taskExists == requestExists, "GenerationTaskController invariant violation: task/request mismatch for key \(String(describing: key)).")
     }
 }

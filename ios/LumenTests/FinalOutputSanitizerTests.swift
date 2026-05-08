@@ -34,6 +34,14 @@ struct FinalOutputSanitizerTests {
         #expect(!out.text.contains("mediaKind"))
     }
 
+
+    @Test func removesRawSearchResultsMarkerLineWhenJSONIsMalformed() {
+        let raw = "Answer line\n{\"kind\":\"searchResults\",\"sourcePageURL\":\"https://example.com\"\nFollow-up"
+        let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)
+        #expect(out.text == "Answer line\nFollow-up")
+        #expect(out.removedArtifacts.contains(.rawToolPayload))
+    }
+
     @Test func removesBareSearchResultsJSONObject() {
         let raw = "{\"kind\":\"searchResults\",\"results\":[{\"mediaKind\":\"page\"}]}"
         let out = FinalOutputSanitizer.sanitizeUserVisibleText(raw)

@@ -47,9 +47,13 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
 nonisolated enum FinalOutputSanitizer {
     static let fallback = "I hit an internal response-format issue. Please try again."
     private static let recoveryCache = FinalOutputSanitizerRecoveryCache()
-    private static let cachedRawToolPayloadRegex: NSRegularExpression = {
-        let pattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
-        return try! NSRegularExpression(pattern: pattern, options: [])
+    private static let rawToolPayloadPattern = #"(?is)\{[^{}]{0,24000}(?:"kind"\s*:\s*"searchresults"|"mediakind"\s*:\s*"page"|"sourcepageurl"|"kind":"searchresults")[^{}]{0,24000}\}"#
+    private static let cachedRawToolPayloadRegex: Result<NSRegularExpression, Error> = {
+        do {
+            return .success(try NSRegularExpression(pattern: rawToolPayloadPattern, options: []))
+        } catch {
+            return .failure(error)
+        }
     }()
 
     static func sanitizeUserVisibleText(_ raw: String) -> SanitizedFinalOutput {
@@ -176,11 +180,15 @@ nonisolated enum FinalOutputSanitizer {
 
 
     private static func removingRawToolPayloadFragments(from source: String) -> (text: String, removedAny: Bool) {
-        let range = NSRange(source.startIndex..<source.endIndex, in: source)
-        if cachedRawToolPayloadRegex.firstMatch(in: source, options: [], range: range) == nil {
+        guard case let .success(regex) = cachedRawToolPayloadRegex else {
             return (source, false)
         }
-        let redacted = cachedRawToolPayloadRegex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
+
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        if regex.firstMatch(in: source, options: [], range: range) == nil {
+            return (source, false)
+        }
+        let redacted = regex.stringByReplacingMatches(in: source, options: [], range: range, withTemplate: " ")
         return (redacted, redacted != source)
     }
 

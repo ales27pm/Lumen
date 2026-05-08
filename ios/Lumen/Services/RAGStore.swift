@@ -39,8 +39,17 @@ enum RAGStore {
     ) async -> [(chunk: RAGChunk, score: Double)] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, limit > 0 else { return [] }
-        let queryVec = await AppLlamaService.shared.embed(text: trimmed)
-        guard !queryVec.isEmpty else { return [] }
+        let queryVec: [Double]
+        do {
+            queryVec = try await AppLlamaService.shared.embed(trimmed)
+        } catch {
+            logger.error("rag_embedding_failed op=search error=\(String(describing: error), privacy: .public)")
+            return []
+        }
+        guard !queryVec.isEmpty else {
+            logger.error("rag_embedding_empty op=search")
+            return []
+        }
 
         RAGVectorIndex.shared.ensureLoaded(context: context)
 
@@ -188,7 +197,17 @@ enum RAGStore {
         let pieces = chunkText(text)
         var count = 0
         for (i, piece) in pieces.enumerated() {
-            let emb = await AppLlamaService.shared.embed(text: piece)
+            let emb: [Double]
+            do {
+                emb = try await AppLlamaService.shared.embed(piece)
+            } catch {
+                logger.error("rag_embedding_failed op=indexFile source=\(name, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                return 0
+            }
+            guard !emb.isEmpty else {
+                logger.error("rag_embedding_empty op=indexFile source=\(name, privacy: .public)")
+                return 0
+            }
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
             if i % 8 == 7 { try? persist(context, operation: "indexFile.batch", scope: "RAGChunk") }
@@ -258,7 +277,17 @@ enum RAGStore {
             \(favorites) favorites, \(videos) videos, \(screenshots) screenshots, \(selfies) selfies, \(livePhotos) live photos, \(portraits) portraits, \(geo) with location.
             """
 
-            let emb = await AppLlamaService.shared.embed(text: summary)
+            let emb: [Double]
+            do {
+                emb = try await AppLlamaService.shared.embed(summary)
+            } catch {
+                logger.error("rag_embedding_failed op=indexPhotos source=\(month, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                return 0
+            }
+            guard !emb.isEmpty else {
+                logger.error("rag_embedding_empty op=indexPhotos source=\(month, privacy: .public)")
+                return 0
+            }
             let chunk = RAGChunk(content: summary, sourceType: .photo, sourceName: "Photos \(month)", sourceRef: month, chunkIndex: 0, embedding: emb)
             context.insert(chunk)
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
@@ -275,7 +304,17 @@ enum RAGStore {
         let pieces = chunkText(body)
         var count = 0
         for (i, piece) in pieces.enumerated() {
-            let emb = await AppLlamaService.shared.embed(text: piece)
+            let emb: [Double]
+            do {
+                emb = try await AppLlamaService.shared.embed(piece)
+            } catch {
+                logger.error("rag_embedding_failed op=indexNote source=\(title, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                return 0
+            }
+            guard !emb.isEmpty else {
+                logger.error("rag_embedding_empty op=indexNote source=\(title, privacy: .public)")
+                return 0
+            }
             let chunk = RAGChunk(content: piece, sourceType: .note, sourceName: title, sourceRef: nil, chunkIndex: i, embedding: emb)
             context.insert(chunk)
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)
@@ -283,6 +322,20 @@ enum RAGStore {
         }
         do { try persist(context, operation: "indexNote.complete", scope: "RAGChunk") } catch { return 0 }
         return count
+    }
+
+    static func embeddingRuntimeAvailable() async -> Bool {
+        do {
+            let probe = try await AppLlamaService.shared.embed("embedding_readiness_probe")
+            if probe.isEmpty {
+                logger.error("rag_embedding_empty op=readiness")
+                return false
+            }
+            return true
+        } catch {
+            logger.error("rag_embedding_failed op=readiness error=\(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 
     // MARK: - Helpers

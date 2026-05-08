@@ -12,7 +12,7 @@ final class ModelRuntimeController {
         Task { await refresh() }
     }
 
-    func refreshLoadedPaths() async -> Set<String> {
+    func refreshLoadedPaths() async -> Set<String>? {
         let requestID = UUID()
         refreshRequestID = requestID
 
@@ -34,7 +34,7 @@ final class ModelRuntimeController {
             set.insert(ModelStorage.resolvedModelURL(from: p, fileName: fileName).path)
         }
 
-        guard refreshRequestID == requestID else { return [] }
+        guard refreshRequestID == requestID else { return nil }
         return set
     }
 

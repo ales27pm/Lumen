@@ -265,7 +265,7 @@ struct ModelsView: View {
     }
 
     private func refreshLoaded() async {
-        let set = await runtimeController.refreshLoadedPaths()
+        guard let set = await runtimeController.refreshLoadedPaths() else { return }
         loadedPaths = set
     }
 

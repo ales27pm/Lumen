@@ -130,6 +130,44 @@ extension FinalOutputSanitizerTests {
         }
     }
 
+    @Test func streamingFinalizationUsesProvenanceToStripSanitizerFallbackPrefix() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        let unsafeOnlyPrefix = "<think>secret</think>" + String(repeating: " ", count: 220)
+        let first = sanitizer.ingest(unsafeOnlyPrefix)
+        let second = sanitizer.ingest("\(FinalOutputSanitizer.fallback) Real answer.")
+        #expect(first.isEmpty)
+        #expect(second.isEmpty)
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "Real answer.")
+            #expect(remainingDelta == "Real answer.")
+            #expect(final.removedArtifacts.contains(.injectedFallbackPrefix))
+            #expect(final.removedArtifacts.contains(.thinkBlock))
+        case let .replace(final):
+            #expect(final.text == "Real answer.")
+            #expect(final.removedArtifacts.contains(.injectedFallbackPrefix))
+            #expect(final.removedArtifacts.contains(.thinkBlock))
+        }
+    }
+
+    @Test func streamingFinalizationPreservesLegitimateFallbackPrefixedModelText() {
+        var sanitizer = StreamingFinalOutputSanitizer()
+        _ = sanitizer.ingest("\(FinalOutputSanitizer.fallback) Real answer.")
+
+        let finalization = sanitizer.finish()
+        switch finalization {
+        case let .append(final, remainingDelta):
+            #expect(final.text == "\(FinalOutputSanitizer.fallback) Real answer.")
+            #expect(remainingDelta == final.text)
+            #expect(!final.removedArtifacts.contains(.injectedFallbackPrefix))
+        case let .replace(final):
+            #expect(final.text == "\(FinalOutputSanitizer.fallback) Real answer.")
+            #expect(!final.removedArtifacts.contains(.injectedFallbackPrefix))
+        }
+    }
+
     @Test func streamingSanitizerWithholdsSplitThinkMarker() {
         var sanitizer = StreamingFinalOutputSanitizer()
         let first = sanitizer.ingest("Hello <thi")

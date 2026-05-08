@@ -15,6 +15,27 @@ enum RAGStore {
         }
     }
 
+    static func persistAndAppendVectors(
+        context: ModelContext,
+        operation: String,
+        scope: String = "RAGChunk",
+        pending: inout [(id: PersistentIdentifier, bucket: String, vector: [Double])],
+        save: ((ModelContext, String, String) throws -> Void)? = nil
+    ) -> Int? {
+        let appendedCount = pending.count
+        let saveAction = save ?? persist
+        do {
+            try saveAction(context, operation, scope)
+        } catch {
+            return nil
+        }
+        for item in pending {
+            RAGVectorIndex.shared.append(id: item.id, bucket: item.bucket, vector: item.vector)
+        }
+        pending.removeAll(keepingCapacity: true)
+        return appendedCount
+    }
+
     static func auditPersistence(operation: String, scope: String, save: () throws -> Void) -> Bool {
         do {
             try save()
@@ -196,6 +217,8 @@ enum RAGStore {
         RAGVectorIndex.shared.ensureLoaded(context: context)
         let pieces = chunkText(text)
         var count = 0
+        var persistedCount = 0
+        var pendingVectors: [(id: PersistentIdentifier, bucket: String, vector: [Double])] = []
         for (i, piece) in pieces.enumerated() {
             let emb: [Double]
             do {
@@ -210,12 +233,22 @@ enum RAGStore {
             }
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
-            if i % 8 == 7 { try? persist(context, operation: "indexFile.batch", scope: "RAGChunk") }
-            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: type.rawValue, vector: emb)
+            pendingVectors.append((id: chunk.persistentModelID, bucket: type.rawValue, vector: emb))
+            if i % 8 == 7 {
+                guard let appendedCount = persistAndAppendVectors(context: context, operation: "indexFile.batch", pending: &pendingVectors) else {
+                    logger.error("rag_index_partial_failure op=indexFile source=\(name, privacy: .public) persisted=\(persistedCount, privacy: .public) attempted=\(count + 1, privacy: .public)")
+                    return persistedCount
+                }
+                persistedCount += appendedCount
+            }
             count += 1
         }
-        do { try persist(context, operation: "indexFile.complete", scope: "RAGChunk") } catch { return 0 }
-        return count
+        guard let appendedCount = persistAndAppendVectors(context: context, operation: "indexFile.complete", pending: &pendingVectors) else {
+            logger.error("rag_index_partial_failure op=indexFile source=\(name, privacy: .public) persisted=\(persistedCount, privacy: .public) attempted=\(count, privacy: .public)")
+            return persistedCount
+        }
+        persistedCount += appendedCount
+        return persistedCount
     }
 
     // MARK: - Photos metadata
@@ -258,6 +291,7 @@ enum RAGStore {
         }
 
         var count = 0
+        var pendingVectors: [(id: PersistentIdentifier, bucket: String, vector: [Double])] = []
         for (month, items) in buckets {
             let favorites = items.filter(\.isFavorite).count
             let videos = items.filter { $0.mediaType == .video }.count
@@ -290,11 +324,14 @@ enum RAGStore {
             }
             let chunk = RAGChunk(content: summary, sourceType: .photo, sourceName: "Photos \(month)", sourceRef: month, chunkIndex: 0, embedding: emb)
             context.insert(chunk)
-            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
+            pendingVectors.append((id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb))
             count += 1
         }
-        do { try persist(context, operation: "indexPhotos.complete", scope: "RAGChunk") } catch { return 0 }
-        return count
+        guard let persistedCount = persistAndAppendVectors(context: context, operation: "indexPhotos.complete", pending: &pendingVectors) else {
+            logger.error("rag_index_partial_failure op=indexPhotos persisted=0 attempted=\(count, privacy: .public)")
+            return 0
+        }
+        return persistedCount
     }
 
     // MARK: - Notes (plain text import via share)
@@ -303,6 +340,7 @@ enum RAGStore {
         RAGVectorIndex.shared.ensureLoaded(context: context)
         let pieces = chunkText(body)
         var count = 0
+        var pendingVectors: [(id: PersistentIdentifier, bucket: String, vector: [Double])] = []
         for (i, piece) in pieces.enumerated() {
             let emb: [Double]
             do {
@@ -317,11 +355,14 @@ enum RAGStore {
             }
             let chunk = RAGChunk(content: piece, sourceType: .note, sourceName: title, sourceRef: nil, chunkIndex: i, embedding: emb)
             context.insert(chunk)
-            RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)
+            pendingVectors.append((id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb))
             count += 1
         }
-        do { try persist(context, operation: "indexNote.complete", scope: "RAGChunk") } catch { return 0 }
-        return count
+        guard let persistedCount = persistAndAppendVectors(context: context, operation: "indexNote.complete", pending: &pendingVectors) else {
+            logger.error("rag_index_partial_failure op=indexNote source=\(title, privacy: .public) persisted=0 attempted=\(count, privacy: .public)")
+            return 0
+        }
+        return persistedCount
     }
 
     static func embeddingRuntimeAvailable() async -> Bool {

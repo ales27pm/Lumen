@@ -212,7 +212,7 @@ struct OutlookMailView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(alignment: .firstTextBaseline) {
-                                Text(message.subject?.isEmpty == false ? message.subject! : "(No subject)")
+                                Text(message.subjectText)
                                     .font(.headline)
                                     .lineLimit(1)
                                 Spacer()
@@ -339,7 +339,7 @@ private struct MailMessageDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text((loadedMessage ?? message).subject?.isEmpty == false ? (loadedMessage ?? message).subject! : "(No subject)")
+                    Text((loadedMessage ?? message).subjectText)
                         .font(.title2.weight(.semibold))
                     VStack(alignment: .leading, spacing: 4) {
                         Text("From: \((loadedMessage ?? message).senderLine)")

@@ -1,9 +1,29 @@
 import Foundation
 
 nonisolated enum LocationReferenceExtractor {
-    private static let coordinateRegex = try! NSRegularExpression(pattern: #"(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)"#)
+    enum RegexError: Error, Equatable {
+        case invalidPattern(String)
+    }
+
+    private static let coordinateRegexPattern = #"(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)"#
+    private static let coordinateRegexResult: Result<NSRegularExpression, RegexError> = {
+        do {
+            return .success(try NSRegularExpression(pattern: coordinateRegexPattern))
+        } catch {
+            return .failure(.invalidPattern(coordinateRegexPattern))
+        }
+    }()
+
+    static func makeCoordinateRegex(pattern: String = coordinateRegexPattern) -> Result<NSRegularExpression, RegexError> {
+        do {
+            return .success(try NSRegularExpression(pattern: pattern))
+        } catch {
+            return .failure(.invalidPattern(pattern))
+        }
+    }
 
     static func coordinates(from text: String) -> (latitude: Double, longitude: Double)? {
+        guard case let .success(coordinateRegex) = coordinateRegexResult else { return nil }
         let ns = text as NSString
         let range = NSRange(location: 0, length: ns.length)
         guard let match = coordinateRegex.firstMatch(in: text, range: range), match.numberOfRanges >= 3 else { return nil }

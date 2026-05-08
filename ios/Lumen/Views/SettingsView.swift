@@ -328,8 +328,12 @@ struct SettingsView: View {
         showDeveloperAlert = true
     }
 
+    @MainActor
     private func refreshParseFailureSummary() async {
-        let summary = await Task(priority: .utility) {
+        // Detached is intentional so diagnostics file parsing does not inherit
+        // the caller's actor (SettingsView `.task` is main-actor bound).
+        // The closure only reads snapshot files and returns Sendable Strings.
+        let summary = await Task.detached(priority: .utility) {
             (
                 AgentParseFailureSummaryLoader.developerText(topN: 5),
                 AgentParseNoiseSummaryLoader.developerText(topN: 5)

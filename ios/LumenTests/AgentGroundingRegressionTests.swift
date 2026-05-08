@@ -111,6 +111,32 @@ struct AgentGroundingRegressionTests {
         #expect(outlookAction?.tool == "outlook.message.read" || outlookAction?.tool == "outlook.messages.list")
     }
 
+    @Test func deterministicImmediateFinalizerSupportsWeatherWebAndOutlook() {
+        let weather = ToolObservationFinalizer.immediateFinalIfSafe(
+            intent: .weather,
+            toolID: "weather",
+            observation: "72°F, clear skies, humidity 40%",
+            originalPrompt: "What is the weather here?"
+        )
+        #expect(weather?.lowercased().contains("weather") == true)
+
+        let web = ToolObservationFinalizer.immediateFinalIfSafe(
+            intent: .webSearch,
+            toolID: "web.search",
+            observation: "Found 5 results for diy underground shelter <lumen_web_payload>{\"kind\":\"searchResults\",\"results\":[]}</lumen_web_payload>",
+            originalPrompt: "Search web for diy underground shelter"
+        )
+        #expect(web?.contains("<lumen_web_payload>") == true)
+
+        let outlook = ToolObservationFinalizer.immediateFinalIfSafe(
+            intent: .outlook,
+            toolID: "outlook.message.read",
+            observation: "From: Alex\nSubject: Status\nBody: All good.",
+            originalPrompt: "Read last outlook email"
+        )
+        #expect(outlook?.lowercased().contains("outlook message") == true)
+    }
+
     @Test func agentGroundingPackageDoesNotExportStaticScenarioResultsByDefault() throws {
         AgentBehaviorTraceRecorder.clear()
         let scenario = RuntimeScenario(

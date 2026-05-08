@@ -94,6 +94,10 @@ final class SlotAgentService {
                     switch result {
                     case .continueLoop:
                         loopStartIndex = 1
+                    case .finalizeImmediate(let text):
+                        finalText = text
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
                     case .finalizeNow(let draft):
                         finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -157,6 +161,10 @@ final class SlotAgentService {
                             switch fallbackResult {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -223,6 +231,10 @@ final class SlotAgentService {
                             switch result {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -251,6 +263,10 @@ final class SlotAgentService {
                             switch result {
                             case .continueLoop:
                                 continue
+                            case .finalizeImmediate(let text):
+                                finalText = text
+                                yieldFinal(finalText, steps: steps, continuation: continuation)
+                                return
                             case .finalizeNow(let draft):
                                 finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                                 yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -280,6 +296,10 @@ final class SlotAgentService {
                     switch result {
                     case .continueLoop:
                         continue
+                    case .finalizeImmediate(let text):
+                        finalText = text
+                        yieldFinal(finalText, steps: steps, continuation: continuation)
+                        return
                     case .finalizeNow(let draft):
                         finalText = await generateFinal(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft)
                         yieldFinal(finalText, steps: steps, continuation: continuation)
@@ -303,6 +323,7 @@ final class SlotAgentService {
     private enum ActionExecutionResult {
         case continueLoop
         case finalizeNow(String?)
+        case finalizeImmediate(String)
         case blocked(String)
     }
 
@@ -366,6 +387,22 @@ final class SlotAgentService {
                 continuation: continuation,
                 stepIndex: stepIndex + 1
             )
+        }
+        if let immediate = ToolObservationFinalizer.immediateFinalIfSafe(
+            intent: routing.intent,
+            toolID: canonicalTool,
+            observation: observation,
+            originalPrompt: req.userMessage
+        ) {
+            recordTrace(
+                slot: .executor,
+                stage: "deterministic-immediate-final",
+                stepIndex: stepIndex,
+                error: "skippedMouthFinal=true;intent=\(routing.intent.rawValue);toolID=\(canonicalTool)",
+                raw: immediate,
+                prompt: req.userMessage
+            )
+            return .finalizeImmediate(immediate)
         }
 
         if shouldFinalizeAfterObservation(observation, routing: routing, toolID: canonicalTool) {

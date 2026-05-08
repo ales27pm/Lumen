@@ -38,8 +38,9 @@ if [[ -n "${task_detached_hits}" ]]; then
   echo "${task_detached_hits}"
   unexpected="$(
     printf "%s\n" "${task_detached_hits}" \
-      | grep -v "ios/Lumen/Services/RemCycleService.swift:.*Task.detached(priority: .utility)" \
-      | grep -v "ios/Lumen/Views/SettingsView.swift:.*Task.detached(priority: .utility)" \
+      | grep -v "^ios/Lumen/Services/RemCycleService.swift:24:.*Task\.detached(priority: \.utility)" \
+      | grep -v "^ios/Lumen/Services/RemCycleService.swift:27:.*Task\.detached(priority: \.utility)" \
+      | grep -v "^ios/Lumen/Views/SettingsView.swift:336:.*Task\.detached(priority: \.utility)" \
       || true
   )"
   if [[ -n "${unexpected}" ]]; then

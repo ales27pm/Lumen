@@ -8,8 +8,9 @@ enum WeatherTools {
     static func currentWeather(location: String? = nil) async -> String {
         let coordinate: CLLocationCoordinate2D?
         let requestedLocation = (location ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let usesDeviceLocation = isCurrentLocationRequest(requestedLocation)
 
-        if requestedLocation.isEmpty || requestedLocation.lowercased() == "current" || requestedLocation.lowercased() == "here" {
+        if usesDeviceLocation {
             coordinate = await LocationProbe.currentCoordinate()
         } else {
             coordinate = await geocode(requestedLocation)
@@ -55,7 +56,7 @@ enum WeatherTools {
             let time = current["time"] as? String ?? "now"
 
             var parts: [String] = []
-            parts.append("Weather \(requestedLocation.isEmpty ? "at your location" : "for \(requestedLocation)"):")
+            parts.append("Weather \(usesDeviceLocation ? "at your location" : "for \(requestedLocation)"):")
             if code >= 0 { parts.append(weatherDescription(code)) }
             if let temp { parts.append(String(format: "%.0f°C", temp)) }
             if let apparent { parts.append(String(format: "feels like %.0f°C", apparent)) }
@@ -68,6 +69,21 @@ enum WeatherTools {
 
             return parts.joined(separator: " · ")
         }
+    }
+
+    nonisolated static func isCurrentLocationRequest(_ text: String) -> Bool {
+        let normalized = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: #"[\s_\-]+"#, with: " ", options: .regularExpression)
+        return normalized.isEmpty
+            || normalized == "current"
+            || normalized == "here"
+            || normalized == "current location"
+            || normalized == "my location"
+            || normalized == "this location"
+            || normalized == "device location"
+            || normalized == "near me"
     }
 
     private static func executeRequest(endpoint: String, request: URLRequest, timeout: TimeInterval, retryPolicy: ToolRetryPolicy, context: String) async -> Result<(Data, HTTPURLResponse?), any Error> {

@@ -744,9 +744,16 @@ final actor AppLlamaService {
                         }
                     }
                     let finalization = streamingSanitizer.finish()
-                    let sanitized = finalization.final.text
-                    if !finalization.remainingDelta.isEmpty {
-                        continuation.yield(.text(finalization.remainingDelta))
+                    let sanitized: String
+                    switch finalization {
+                    case let .append(final, remainingDelta):
+                        sanitized = final.text
+                        if !remainingDelta.isEmpty {
+                            continuation.yield(.text(remainingDelta))
+                        }
+                    case let .replace(final):
+                        sanitized = final.text
+                        logger.error("stream_finalization_mismatch slot=\(slot.rawValue, privacy: .public)")
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     await self.recordModelTrace(

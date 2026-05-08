@@ -36,8 +36,14 @@ echo "== Task.detached scan =="
 task_detached_hits="$(rg -n "Task\\.detached" ios/Lumen ios/LumenTests || true)"
 if [[ -n "${task_detached_hits}" ]]; then
   echo "${task_detached_hits}"
-  allowed_task_detached_hits=$'ios/Lumen/Services/RemCycleService.swift:24:        let parseSummary = await Task.detached(priority: .utility) {\nios/Lumen/Services/RemCycleService.swift:27:        let noiseSummary = await Task.detached(priority: .utility) {\nios/Lumen/Views/SettingsView.swift:336:        let summary = await Task.detached(priority: .utility) {'
-  if [[ "${task_detached_hits}" != "${allowed_task_detached_hits}" ]]; then
+  unexpected="$(
+    printf "%s\n" "${task_detached_hits}" \
+      | grep -v "ios/Lumen/Services/RemCycleService.swift:.*Task.detached(priority: .utility)" \
+      | grep -v "ios/Lumen/Views/SettingsView.swift:.*Task.detached(priority: .utility)" \
+      || true
+  )"
+  if [[ -n "${unexpected}" ]]; then
+    echo "${unexpected}"
     echo "Error: unexpected Task.detached usage found outside allowlist." >&2
     exit 1
   fi

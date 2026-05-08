@@ -20,6 +20,7 @@ nonisolated enum FinalOutputArtifact: String, Codable, Sendable, Equatable {
     case malformedThinkPrefix
     case lumenWebPayload
     case rawToolPayload
+    case injectedFallbackPrefix
     case emptyAfterSanitization
 }
 
@@ -215,6 +216,12 @@ nonisolated enum FinalOutputSanitizer {
 
         text = normalizeWhitespace(text)
 
+        let fallbackRemoval = removingInjectedFallbackPrefix(from: text)
+        if fallbackRemoval.removedAny {
+            text = fallbackRemoval.text
+            mark(.injectedFallbackPrefix)
+        }
+
         if text.isEmpty {
             mark(.emptyAfterSanitization)
             text = fallback
@@ -259,6 +266,7 @@ nonisolated enum FinalOutputSanitizer {
         text = text.replacingOccurrences(of: "(?is)</lumen_web_payload>", with: " ", options: .regularExpression)
         text = removingRawToolPayloadObjects(from: text).text
         text = normalizeWhitespace(text)
+        text = removingInjectedFallbackPrefix(from: text).text
         return text.isEmpty ? fallback : text
     }
 
@@ -268,6 +276,16 @@ nonisolated enum FinalOutputSanitizer {
             .replacingOccurrences(of: " *\\n *", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func removingInjectedFallbackPrefix(from source: String) -> (text: String, removedAny: Bool) {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > fallback.count else { return (source, false) }
+        guard trimmed.lowercased().hasPrefix(fallback.lowercased()) else { return (source, false) }
+        let remainder = trimmed.dropFirst(fallback.count)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".:;-—–*")))
+        guard !remainder.isEmpty else { return (source, false) }
+        return (String(remainder), true)
     }
 
     private static func containsRawToolPayloadMarker(_ lowercasedText: String) -> Bool {

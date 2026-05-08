@@ -328,14 +328,16 @@ struct ChatView: View {
 
         guard !Task.isCancelled, activeTurnID == turnID, generationController.isCurrent(requestID, for: conversation.id) else { return }
         let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
-        let assistantMsg = ChatMessage(role: .assistant, content: sanitized)
+        let finalized = FinalOutputSanitizer.sanitizeUserVisibleText(sanitized).text
+        let assistantMsg = ChatMessage(role: .assistant, content: finalized)
         conversation.messages.append(assistantMsg)
+        streamingText = finalized
         streamingText = ""
         activeTurnID = nil
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
-        if appState.autoMemory, sanitized.count > 60 {
-            try? await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
+        if appState.autoMemory, finalized.count > 60 {
+            try? await MemoryStore.remember("User asked: \(text). Assistant said: \(finalized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
         }
 
         conversation.updatedAt = Date()
@@ -408,6 +410,7 @@ struct ChatView: View {
         generationController.cancel(for: conversation.id)
         task?.cancel()
         let captured = AssistantOutputSanitizer.sanitize(streamingText)
+        let finalizedCaptured = FinalOutputSanitizer.sanitizeUserVisibleText(captured).text
         let capturedSteps = AgentVisibleContentSanitizer.sanitizedSteps(streamingSteps)
         streamingText = ""
         streamingSteps = []
@@ -415,8 +418,8 @@ struct ChatView: View {
             _ = await task?.value
             await MainActor.run {
                 appState.isGenerating = false
-                if stoppedTurnID != nil, !captured.isEmpty {
-                    let msg = ChatMessage(role: .assistant, content: captured, agentSteps: capturedSteps, wasStopped: true)
+                if stoppedTurnID != nil, !finalizedCaptured.isEmpty {
+                    let msg = ChatMessage(role: .assistant, content: finalizedCaptured, agentSteps: capturedSteps, wasStopped: true)
                     conversation.messages.append(msg)
                     conversation.updatedAt = Date()
                     try? modelContext.save()

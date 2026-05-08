@@ -21,6 +21,26 @@ nonisolated struct IntentClassificationResult: Sendable, Codable {
     let source: Source
     let diagnostics: String?
 
+    func withAllowedAlternatives(maxCount: Int = 5) -> IntentClassificationResult {
+        let normalized = alternatives
+            .filter { $0.confidence.isFinite && $0.confidence >= 0 }
+            .sorted { $0.confidence > $1.confidence }
+        let deduped = normalized.reduce(into: [IntentAlternative]()) { acc, item in
+            if !acc.contains(where: { $0.intent == item.intent }) {
+                acc.append(item)
+            }
+        }
+        return IntentClassificationResult(
+            intent: intent,
+            confidence: confidence,
+            alternatives: Array(deduped.prefix(maxCount)),
+            requiresClarification: requiresClarification,
+            clarificationPrompt: clarificationPrompt,
+            source: source,
+            diagnostics: diagnostics
+        )
+    }
+
     func asRoutingDecision() -> IntentRoutingDecision {
         IntentRoutingDecision(
             intent: intent,

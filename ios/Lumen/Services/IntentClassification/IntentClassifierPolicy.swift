@@ -26,7 +26,26 @@ nonisolated enum IntentClassifierPolicy {
     }
 
     private static func sanitized(_ result: IntentClassificationResult, source: IntentClassificationResult.Source) -> IntentClassificationResult {
-        IntentClassificationResult(intent: result.intent, confidence: result.confidence, alternatives: result.alternatives.filter { $0.intent == result.intent || IntentToolMapping.allowedToolIDs(for: $0.intent) == [] || !IntentToolMapping.allowedToolIDs(for: $0.intent).isEmpty }, requiresClarification: result.requiresClarification, clarificationPrompt: result.clarificationPrompt, source: source, diagnostics: result.diagnostics)
+        let boundedConfidence = min(max(result.confidence, 0.0), 1.0)
+        let primary = IntentAlternative(intent: result.intent, confidence: boundedConfidence)
+        let candidates = result.withAllowedAlternatives().alternatives + [primary]
+        let alternatives = candidates
+            .filter { $0.confidence.isFinite }
+            .sorted { $0.confidence > $1.confidence }
+            .reduce(into: [IntentAlternative]()) { acc, item in
+                if !acc.contains(where: { $0.intent == item.intent }) {
+                    acc.append(item)
+                }
+            }
+        return IntentClassificationResult(
+            intent: result.intent,
+            confidence: boundedConfidence,
+            alternatives: Array(alternatives.prefix(5)),
+            requiresClarification: result.requiresClarification,
+            clarificationPrompt: result.clarificationPrompt,
+            source: source,
+            diagnostics: result.diagnostics
+        )
     }
 
     private static func isApprovalSensitive(_ intent: UserIntent) -> Bool {

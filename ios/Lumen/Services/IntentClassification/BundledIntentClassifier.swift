@@ -11,9 +11,11 @@ final class BundledIntentClassifier {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let nlModel = loadNLModel(), let label = nlModel.predictedLabel(for: trimmed), let intent = UserIntent(rawValue: label) {
+        if let nlModel = loadNLModel(),
+           let label = nlModel.predictedLabel(for: trimmed),
+           let intent = normalizeIntentLabel(label) {
             let probs = nlModel.predictedLabelHypotheses(for: trimmed, maximumCount: 5)
-            let alternatives = probs.compactMap { UserIntent(rawValue: $0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
+            let alternatives = probs.compactMap { normalizeIntentLabel($0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
             return IntentClassificationResult(intent: intent, confidence: probs[label] ?? 0.0, alternatives: alternatives, requiresClarification: false, clarificationPrompt: nil, source: .bundledModel, diagnostics: "nlmodel")
         }
 
@@ -45,7 +47,7 @@ final class BundledIntentClassifier {
         guard let provider, let output = try? model.prediction(from: provider) else { return nil }
 
         let label = (output.featureValue(for: "classLabel")?.stringValue) ?? (output.featureValue(for: "label")?.stringValue)
-        guard let label, let intent = UserIntent(rawValue: label) else { return nil }
+        guard let label, let intent = normalizeIntentLabel(label) else { return nil }
 
         let candidates = ["classProbability", "labelProbabilities", "probabilities"]
         var probs: [String: Double] = [:]
@@ -55,8 +57,18 @@ final class BundledIntentClassifier {
                 break
             }
         }
-        let alternatives = probs.compactMap { UserIntent(rawValue: $0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
+        let alternatives = probs.compactMap { normalizeIntentLabel($0.key).map { IntentAlternative(intent: $0, confidence: $1) } }.sorted { $0.confidence > $1.confidence }
         let confidence = probs[label] ?? alternatives.first(where: { $0.intent == intent })?.confidence ?? 0.0
         return IntentClassificationResult(intent: intent, confidence: confidence, alternatives: alternatives, requiresClarification: false, clarificationPrompt: nil, source: .bundledModel, diagnostics: "coreml")
+    }
+
+    private func normalizeIntentLabel(_ raw: String) -> UserIntent? {
+        let canonical = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
+            .lowercased()
+        if let exact = UserIntent(rawValue: raw) { return exact }
+        return UserIntent.allCases.first { $0.rawValue.lowercased() == canonical }
     }
 }

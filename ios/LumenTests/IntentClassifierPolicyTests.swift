@@ -51,6 +51,26 @@ struct IntentClassifierPolicyTests {
         #expect(!routing.allowedToolIDs.contains("calendar.create"))
     }
 
+    @Test func policySanitizesConfidenceAndDeduplicatesAlternatives() {
+        let model = IntentClassificationResult(
+            intent: .weather,
+            confidence: 1.7,
+            alternatives: [
+                IntentAlternative(intent: .weather, confidence: 0.8),
+                IntentAlternative(intent: .weather, confidence: 0.6),
+                IntentAlternative(intent: .maps, confidence: 0.2)
+            ],
+            requiresClarification: false,
+            clarificationPrompt: nil,
+            source: .bundledModel,
+            diagnostics: nil
+        )
+        let resolved = IntentClassifierPolicy.resolve(modelResult: model, deterministic: DeterministicIntentFallback.classify("hi"))
+        #expect(resolved.confidence == 1.0)
+        let weatherCount = resolved.alternatives.filter { $0.intent == .weather }.count
+        #expect(weatherCount == 1)
+    }
+
     @Test func umbrellaPromptCanBeWeatherFromModel() {
         let model = IntentClassificationResult(intent: .weather, confidence: 0.82, alternatives: [], requiresClarification: false, clarificationPrompt: nil, source: .bundledModel, diagnostics: nil)
         let fallback = DeterministicIntentFallback.classify("should I bring an umbrella")

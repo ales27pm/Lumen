@@ -280,17 +280,18 @@ struct ChatView: View {
         finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
         let sanitizedSteps = AgentVisibleContentSanitizer.sanitizedSteps(steps)
 
-        let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: sanitizedSteps)
+        let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
+        let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
         streamingText = ""
         streamingSteps = []
         activeTurnID = nil
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
-        if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
-            try? await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
+        if appState.autoMemory, persistedFinal.count > 60, isSafeToStoreMemory(userText: text, assistantText: persistedFinal, routing: routing) {
+            try? await MemoryStore.remember("User asked: \(text). Assistant: \(String(persistedFinal.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
             let transient = sanitizedSteps.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
-            await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
+            await MemoryStore.extractAndStore(userText: text, assistantText: persistedFinal, transientTexts: transient, context: modelContext)
         }
 
         conversation.updatedAt = Date()
@@ -327,14 +328,16 @@ struct ChatView: View {
 
         guard !Task.isCancelled, activeTurnID == turnID, generationController.isCurrent(requestID, for: conversation.id) else { return }
         let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
-        let assistantMsg = ChatMessage(role: .assistant, content: sanitized)
+        let finalized = FinalOutputSanitizer.sanitizeUserVisibleText(sanitized).text
+        let assistantMsg = ChatMessage(role: .assistant, content: finalized)
         conversation.messages.append(assistantMsg)
+        streamingText = finalized
         streamingText = ""
         activeTurnID = nil
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
-        if appState.autoMemory, sanitized.count > 60 {
-            try? await MemoryStore.remember("User asked: \(text). Assistant said: \(sanitized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
+        if appState.autoMemory, finalized.count > 60 {
+            try? await MemoryStore.remember("User asked: \(text). Assistant said: \(finalized.prefix(140))", kind: .conversation, source: "chat", context: modelContext)
         }
 
         conversation.updatedAt = Date()
@@ -348,11 +351,8 @@ struct ChatView: View {
             .suffix(4)
             .compactMap { message in
                 guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
-                let clean = message.content
-                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !clean.isEmpty else { return nil }
-                return (message.messageRole, String(clean.prefix(500)))
+                guard let clean = SlotAgentService.sanitizeHistoryEntryForPromptContext(role: message.messageRole, content: message.content) else { return nil }
+                return (message.messageRole, clean)
             }
     }
 
@@ -410,6 +410,7 @@ struct ChatView: View {
         generationController.cancel(for: conversation.id)
         task?.cancel()
         let captured = AssistantOutputSanitizer.sanitize(streamingText)
+        let finalizedCaptured = FinalOutputSanitizer.sanitizeUserVisibleText(captured).text
         let capturedSteps = AgentVisibleContentSanitizer.sanitizedSteps(streamingSteps)
         streamingText = ""
         streamingSteps = []
@@ -417,8 +418,8 @@ struct ChatView: View {
             _ = await task?.value
             await MainActor.run {
                 appState.isGenerating = false
-                if stoppedTurnID != nil, !captured.isEmpty {
-                    let msg = ChatMessage(role: .assistant, content: captured, agentSteps: capturedSteps, wasStopped: true)
+                if stoppedTurnID != nil, !finalizedCaptured.isEmpty {
+                    let msg = ChatMessage(role: .assistant, content: finalizedCaptured, agentSteps: capturedSteps, wasStopped: true)
                     conversation.messages.append(msg)
                     conversation.updatedAt = Date()
                     try? modelContext.save()

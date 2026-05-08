@@ -269,21 +269,21 @@ struct VoiceModeView: View {
             finishedStreaming = true
             finalText = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
             finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
-            responseText = finalText
+            let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
+            responseText = persistedFinal
             speakPending()
-
-            let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: stepsBuffer)
+            let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: stepsBuffer)
             convo.messages.append(assistantMsg)
             convo.updatedAt = Date()
             try? modelContext.save()
 
-            if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
+            if appState.autoMemory, persistedFinal.count > 60, isSafeToStoreMemory(userText: text, assistantText: persistedFinal, routing: routing) {
                 try? await MemoryStore.remember(
-                    "User asked: \(text). Assistant: \(String(finalText.prefix(160)))",
+                    "User asked: \(text). Assistant: \(String(persistedFinal.prefix(160)))",
                     kind: .conversation, source: "voice", context: modelContext
                 )
                 let transient = stepsBuffer.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
-                await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
+                await MemoryStore.extractAndStore(userText: text, assistantText: persistedFinal, transientTexts: transient, context: modelContext)
             }
 
             activeVoiceTurnID = nil
@@ -299,11 +299,8 @@ struct VoiceModeView: View {
             .suffix(4)
             .compactMap { message in
                 guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
-                let clean = message.content
-                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !clean.isEmpty else { return nil }
-                return (message.messageRole, String(clean.prefix(500)))
+                guard let clean = SlotAgentService.sanitizeHistoryEntryForPromptContext(role: message.messageRole, content: message.content) else { return nil }
+                return (message.messageRole, clean)
             }
     }
 

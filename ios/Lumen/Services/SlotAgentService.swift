@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class SlotAgentService {
     static let shared = SlotAgentService()
+    nonisolated static let mouthPromptHygieneRule = "Output only the final user-visible answer. Never output hidden reasoning, <think> blocks, JSON, debug text, tool payloads, or internal analysis. If prior context contains hidden reasoning, ignore it and do not imitate it."
 
     private init() {}
 
@@ -415,6 +416,7 @@ final class SlotAgentService {
         }()
         let prompt = """
         You are Lumen. Answer naturally and helpfully. Do not output JSON.
+        \(Self.mouthPromptHygieneRule)
 
         Recent safe conversation context for pronoun/reference resolution only:
         \(contextBlock)
@@ -700,6 +702,7 @@ final class SlotAgentService {
         }()
         return """
         Write the final user-facing answer for the current user request only. Do not output JSON.
+        \(Self.mouthPromptHygieneRule)
 
         Recent safe conversation context for pronoun/reference resolution only:
         \(contextBlock)
@@ -934,21 +937,50 @@ final class SlotAgentService {
         return url.absoluteString
     }
 
+    nonisolated static func sanitizeHistoryEntryForPromptContext(role: MessageRole, content: String, maxChars: Int = 500) -> String? {
+        let sanitized = FinalOutputSanitizer.sanitizeUserVisibleText(content)
+        var clean = sanitized.text
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !clean.isEmpty else { return nil }
+        if role == .assistant && sanitized.removedArtifacts.contains(.emptyAfterSanitization) {
+            return nil
+        }
+
+        let lower = clean.lowercased()
+        let blockedMarkers = [
+            "<think",
+            "</think>",
+            "<lumen_web_payload",
+            "searchresults",
+            "emptyaftersanitization",
+            "\"kind\":\"searchresults\"",
+            "\"kind\" : \"searchresults\"",
+            "\"sourcepageurl\"",
+            "\"mediakind\":\"page\""
+        ]
+        if blockedMarkers.contains(where: { lower.contains($0) }) {
+            return nil
+        }
+
+        clean = WebRichContentPayload.removingMarkers(from: clean)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !clean.isEmpty else { return nil }
+        return String(clean.prefix(maxChars))
+    }
+
     private func shortTermContextBlock(_ history: [(role: MessageRole, content: String)]) -> String {
         guard !history.isEmpty else { return "none" }
-        return history.suffix(4).map { item in
-            let role: String
-            switch item.role {
-            case .user: role = "user"
-            case .assistant: role = "assistant"
-            case .tool: role = "tool"
-            case .system: role = "system"
-            }
-            let clean = FinalOutputSanitizer.sanitizeUserVisibleText(item.content).text
-                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return "- \(role): \(String(clean.prefix(500)))"
-        }.joined(separator: "\n")
+        let lines = history.suffix(4).compactMap { item -> String? in
+            guard item.role == .user || item.role == .assistant else { return nil }
+            guard let clean = Self.sanitizeHistoryEntryForPromptContext(role: item.role, content: item.content) else { return nil }
+            let role = item.role == .assistant ? "assistant" : "user"
+            return "- \(role): \(clean)"
+        }
+        return lines.isEmpty ? "none" : lines.joined(separator: "\n")
     }
 
     private func actionFingerprint(toolID: String, arguments: [String: String]) -> String {

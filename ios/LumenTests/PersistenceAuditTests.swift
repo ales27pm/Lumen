@@ -19,6 +19,8 @@ final class PersistenceAuditTests: XCTestCase {
             throw SaveError()
         }
         XCTAssertFalse(failed)
+        let ok = RAGStore.auditPersistence(operation: "test", scope: "RAGChunk") {}
+        XCTAssertTrue(ok)
     }
 
     @MainActor
@@ -27,6 +29,8 @@ final class PersistenceAuditTests: XCTestCase {
             throw SaveError()
         }
         XCTAssertFalse(failed)
+        let ok = TriggerScheduler.shared.auditPersistence(operation: "test", scope: "Trigger") {}
+        XCTAssertTrue(ok)
     }
 
     func testModelLaunchBootstrapFailedSaveSurfacesFailure() {
@@ -34,5 +38,7 @@ final class PersistenceAuditTests: XCTestCase {
             throw SaveError()
         }
         XCTAssertFalse(failed)
+        let ok = ModelLaunchBootstrap.auditPersistence(operation: "test", scope: "StoredModel") {}
+        XCTAssertTrue(ok)
     }
 }

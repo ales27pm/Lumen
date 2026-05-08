@@ -128,7 +128,9 @@ enum ModelLaunchBootstrap {
 
         if FileManager.default.fileExists(atPath: localURL.path) {
             if existingStored == nil {
-                let stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                guard let stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context) else {
+                    return .alreadyStored
+                }
                 Task { @MainActor in
                     await loadIfSelected(stored, appState: appState, context: context)
                     updateFleetBootProgress(expectedCount: expectedFleetCount, appState: appState, context: context)
@@ -164,7 +166,10 @@ enum ModelLaunchBootstrap {
                     activateIfNeeded(existing, appState: appState)
                     stored = existing
                 } else {
-                    stored = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context)
+                    guard let inserted = insertStoredModel(for: model, localURL: localURL, appState: appState, context: context) else {
+                        return
+                    }
+                    stored = inserted
                 }
 
                 await loadIfSelected(stored, appState: appState, context: context)
@@ -234,7 +239,7 @@ enum ModelLaunchBootstrap {
     }
 
     @discardableResult
-    private static func insertStoredModel(for catalog: CatalogModel, localURL: URL, appState: AppState, context: ModelContext) -> StoredModel {
+    private static func insertStoredModel(for catalog: CatalogModel, localURL: URL, appState: AppState, context: ModelContext) -> StoredModel? {
         let stored = StoredModel(
             name: catalog.name,
             repoId: catalog.repoId,
@@ -246,7 +251,13 @@ enum ModelLaunchBootstrap {
             localPath: localURL.path
         )
         context.insert(stored)
-        do { try persist(context, operation: "insertStoredModel", scope: "StoredModel") } catch { logger.error("persist_blocked op=insertStoredModel scope=StoredModel") }
+        do {
+            try persist(context, operation: "insertStoredModel", scope: "StoredModel")
+        } catch {
+            logger.error("persist_blocked op=insertStoredModel scope=StoredModel error=\(String(describing: error), privacy: .public)")
+            context.delete(stored)
+            return nil
+        }
         activateIfNeeded(stored, appState: appState)
         return stored
     }

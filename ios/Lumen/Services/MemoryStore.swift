@@ -62,7 +62,7 @@ enum MemoryStore {
             }
             topK = min(topK * 2, maxTopK)
         }
-        do { try persist(context, operation: "recall.migrateExpiry", scope: "MemoryItem") } catch { return [] }
+        do { try persist(context, operation: "recall.migrateExpiry", scope: "MemoryItem") } catch {}
         return results
     }
 
@@ -99,19 +99,19 @@ enum MemoryStore {
         }
     }
 
-    static func wipeAll(context: ModelContext) {
+    static func wipeAll(context: ModelContext) throws {
         guard let all = try? context.fetch(FetchDescriptor<MemoryItem>()) else { return }
         for item in all where !item.isPinned {
             context.delete(item)
         }
-        do { try persist(context, operation: "wipeAll", scope: "MemoryItem") } catch { return }
+        try persist(context, operation: "wipeAll", scope: "MemoryItem")
         MemoryVectorIndex.shared.invalidate()
     }
 
-    static func wipeEverything(context: ModelContext) {
+    static func wipeEverything(context: ModelContext) throws {
         guard let all = try? context.fetch(FetchDescriptor<MemoryItem>()) else { return }
         for item in all { context.delete(item) }
-        do { try persist(context, operation: "wipeEverything", scope: "MemoryItem") } catch { return }
+        try persist(context, operation: "wipeEverything", scope: "MemoryItem")
         MemoryVectorIndex.shared.invalidate()
     }
 

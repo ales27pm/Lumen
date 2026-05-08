@@ -113,7 +113,7 @@ enum RAGStore {
     }
 
     static func wipe(_ type: RAGSourceType?, context: ModelContext) throws {
-        guard let all = try? context.fetch(FetchDescriptor<RAGChunk>()) else { return }
+        let all = try context.fetch(FetchDescriptor<RAGChunk>())
         for c in all {
             if type == nil || c.kind == type { context.delete(c) }
         }
@@ -133,8 +133,13 @@ enum RAGStore {
     // MARK: - File / PDF indexing
 
     static func indexImportedFiles(context: ModelContext, progress: ((Double) -> Void)? = nil) async -> Int {
-        try? wipe(.file, context: context)
-        try? wipe(.pdf, context: context)
+        do {
+            try wipe(.file, context: context)
+            try wipe(.pdf, context: context)
+        } catch {
+            logger.error("persist_failed op=indexImportedFiles.cleanup scope=RAGChunk error=\(String(describing: error), privacy: .public)")
+            return 0
+        }
         let files = FileStore.importedFiles()
         var total = 0
         for (idx, url) in files.enumerated() {
@@ -201,7 +206,12 @@ enum RAGStore {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
         }
         guard status == .authorized || status == .limited else { return 0 }
-        try? wipe(.photo, context: context)
+        do {
+            try wipe(.photo, context: context)
+        } catch {
+            logger.error("persist_failed op=indexPhotos.cleanup scope=RAGChunk error=\(String(describing: error), privacy: .public)")
+            return 0
+        }
         RAGVectorIndex.shared.ensureLoaded(context: context)
 
         let start = Calendar.current.date(byAdding: .month, value: -monthsBack, to: Date()) ?? Date()

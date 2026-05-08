@@ -2,9 +2,29 @@ import Foundation
 import SwiftData
 import PDFKit
 import Photos
+import OSLog
 
 @MainActor
 enum RAGStore {
+    private static let logger = Logger(subsystem: "ai.lumen.app", category: "persistence")
+
+    private static func persist(_ context: ModelContext, operation: String, scope: String) throws {
+        do { try context.save() } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    static func auditPersistence(operation: String, scope: String, save: () throws -> Void) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     static let chunkSize = 600
     static let chunkOverlap = 80
     static let candidatePoolMultiplier = 8
@@ -92,12 +112,12 @@ enum RAGStore {
         return out
     }
 
-    static func wipe(_ type: RAGSourceType?, context: ModelContext) {
+    static func wipe(_ type: RAGSourceType?, context: ModelContext) throws {
         guard let all = try? context.fetch(FetchDescriptor<RAGChunk>()) else { return }
         for c in all {
             if type == nil || c.kind == type { context.delete(c) }
         }
-        try? context.save()
+        try persist(context, operation: "wipe", scope: "RAGChunk")
         if let type {
             RAGVectorIndex.shared.removeBucket(type.rawValue)
         } else {
@@ -113,8 +133,8 @@ enum RAGStore {
     // MARK: - File / PDF indexing
 
     static func indexImportedFiles(context: ModelContext, progress: ((Double) -> Void)? = nil) async -> Int {
-        wipe(.file, context: context)
-        wipe(.pdf, context: context)
+        try? wipe(.file, context: context)
+        try? wipe(.pdf, context: context)
         let files = FileStore.importedFiles()
         var total = 0
         for (idx, url) in files.enumerated() {
@@ -166,11 +186,11 @@ enum RAGStore {
             let emb = await AppLlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
-            if i % 8 == 7 { try? context.save() }
+            if i % 8 == 7 { try? persist(context, operation: "indexFile.batch", scope: "RAGChunk") }
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: type.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        do { try persist(context, operation: "indexFile.complete", scope: "RAGChunk") } catch { return 0 }
         return count
     }
 
@@ -181,7 +201,7 @@ enum RAGStore {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
         }
         guard status == .authorized || status == .limited else { return 0 }
-        wipe(.photo, context: context)
+        try? wipe(.photo, context: context)
         RAGVectorIndex.shared.ensureLoaded(context: context)
 
         let start = Calendar.current.date(byAdding: .month, value: -monthsBack, to: Date()) ?? Date()
@@ -234,7 +254,7 @@ enum RAGStore {
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        do { try persist(context, operation: "indexPhotos.complete", scope: "RAGChunk") } catch { return 0 }
         return count
     }
 
@@ -251,7 +271,7 @@ enum RAGStore {
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        do { try persist(context, operation: "indexNote.complete", scope: "RAGChunk") } catch { return 0 }
         return count
     }
 

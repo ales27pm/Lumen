@@ -4,6 +4,7 @@ import BackgroundTasks
 import UserNotifications
 import EventKit
 import UIKit
+import OSLog
 
 @MainActor
 final class TriggerScheduler {
@@ -20,6 +21,25 @@ final class TriggerScheduler {
     /// Optional hook so UI can observe permission changes when `requestPermission`
     /// is called from background entry points.
     var onPermissionResult: (@MainActor (Bool) -> Void)?
+
+    private let logger = Logger(subsystem: "ai.lumen.app", category: "persistence")
+
+    private func persist(_ context: ModelContext, operation: String, scope: String) throws {
+        do { try context.save() } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    func auditPersistence(operation: String, scope: String, save: () throws -> Void) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            logger.error("persist_failed op=\(operation, privacy: .public) scope=\(scope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
 
     func registerTasks() {
         guard !registered else { return }
@@ -84,21 +104,21 @@ final class TriggerScheduler {
         guard let all = try? context.fetch(FetchDescriptor<Trigger>()) else { return }
         for t in all where !t.isPaused {
             if let next = t.nextFireAt ?? t.computeNextFire(from: now), next <= now.addingTimeInterval(30) {
-                await runTrigger(t, context: context, settings: settings, notify: true)
+                _ = await runTrigger(t, context: context, settings: settings, notify: true)
             } else if t.nextFireAt == nil {
                 t.nextFireAt = t.computeNextFire(from: now)
             }
         }
-        try? context.save()
+        do { try persist(context, operation: "fireDueTriggers", scope: "Trigger") } catch { return }
     }
 
     @discardableResult
-    func runTrigger(_ trigger: Trigger, context: ModelContext, appState: AppState, notify: Bool) async -> String {
+    func runTrigger(_ trigger: Trigger, context: ModelContext, appState: AppState, notify: Bool) async -> String? {
         await runTrigger(trigger, context: context, settings: appState.snapshot, notify: notify)
     }
 
     @discardableResult
-    func runTrigger(_ trigger: Trigger, context: ModelContext, settings: SettingsSnapshot, notify: Bool) async -> String {
+    func runTrigger(_ trigger: Trigger, context: ModelContext, settings: SettingsSnapshot, notify: Bool) async -> String? {
         let result = await AgentRunner.runHeadless(prompt: trigger.prompt, settings: settings, context: context, maxSteps: min(settings.maxAgentSteps, 3))
         trigger.lastRunAt = Date()
         trigger.lastResult = result.text
@@ -109,7 +129,7 @@ final class TriggerScheduler {
         default:
             trigger.nextFireAt = trigger.computeNextFire(from: Date())
         }
-        try? context.save()
+        do { try persist(context, operation: "runTrigger", scope: "Trigger") } catch { return nil }
 
         if notify {
             await postNotification(trigger: trigger, body: result.text)
@@ -136,7 +156,7 @@ final class TriggerScheduler {
         for t in all {
             t.nextFireAt = t.isPaused ? nil : t.computeNextFire(from: now)
         }
-        try? context.save()
+do { try persist(context, operation: "refreshNextFireTimes", scope: "Trigger") } catch { return }
     }
 
     // MARK: - Calendar helpers

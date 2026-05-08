@@ -55,7 +55,7 @@ struct SourcesView: View {
                         Button { reindexPhotos() } label: { Label("Reindex photos (6mo)", systemImage: "photo.stack") }
                         Divider()
                         Button(role: .destructive) {
-                            RAGStore.wipe(nil, context: modelContext)
+                            wipeIndex()
                         } label: {
                             Label("Wipe index", systemImage: "trash")
                         }
@@ -135,6 +135,15 @@ struct SourcesView: View {
         }
     }
 
+    private func wipeIndex() {
+        do {
+            try RAGStore.wipe(nil, context: modelContext)
+            status = "Wiped the full local index."
+        } catch {
+            status = "Could not wipe index: \(error.localizedDescription)"
+        }
+    }
+
     private func importFiles(urls: [URL]) {
         Task {
             busy = true; defer { busy = false }
@@ -168,6 +177,7 @@ struct SourceDetailView: View {
     let type: RAGSourceType
     @Environment(\.modelContext) private var modelContext
     @State private var items: [RAGChunk] = []
+    @State private var status: String?
 
     var body: some View {
         ZStack {
@@ -193,6 +203,13 @@ struct SourceDetailView: View {
                                 .strokeBorder(Theme.border, lineWidth: 1)
                         }
                     }
+                    if let status {
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8)
+                    }
                     if items.isEmpty {
                         Text("No \(type.label.lowercased()) indexed yet.")
                             .font(.footnote)
@@ -210,14 +227,23 @@ struct SourceDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive) {
-                    RAGStore.wipe(type, context: modelContext)
-                    reload()
+                    wipeCurrentSourceType()
                 } label: {
                     Image(systemName: "trash")
                 }
             }
         }
         .onAppear(perform: reload)
+    }
+
+    private func wipeCurrentSourceType() {
+        do {
+            try RAGStore.wipe(type, context: modelContext)
+            reload()
+            status = "Wiped \(type.label.lowercased()) chunks."
+        } catch {
+            status = "Could not wipe \(type.label.lowercased()): \(error.localizedDescription)"
+        }
     }
 
     private func reload() {

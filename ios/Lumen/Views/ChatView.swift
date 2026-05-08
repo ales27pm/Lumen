@@ -280,17 +280,18 @@ struct ChatView: View {
         finalText = FinalIntentValidator.validate(finalText, routing: routing, fallback: nil)
         let sanitizedSteps = AgentVisibleContentSanitizer.sanitizedSteps(steps)
 
-        let assistantMsg = ChatMessage(role: .assistant, content: finalText, agentSteps: sanitizedSteps)
+        let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
+        let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
         streamingText = ""
         streamingSteps = []
         activeTurnID = nil
         generationController.clearIfCurrent(requestID, for: conversation.id)
 
-        if appState.autoMemory, finalText.count > 60, isSafeToStoreMemory(userText: text, assistantText: finalText, routing: routing) {
-            try? await MemoryStore.remember("User asked: \(text). Assistant: \(String(finalText.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
+        if appState.autoMemory, persistedFinal.count > 60, isSafeToStoreMemory(userText: text, assistantText: persistedFinal, routing: routing) {
+            try? await MemoryStore.remember("User asked: \(text). Assistant: \(String(persistedFinal.prefix(160)))", kind: .conversation, source: "chat", context: modelContext)
             let transient = sanitizedSteps.filter { $0.kind == .observation || $0.kind == .action }.map(\.content)
-            await MemoryStore.extractAndStore(userText: text, assistantText: finalText, transientTexts: transient, context: modelContext)
+            await MemoryStore.extractAndStore(userText: text, assistantText: persistedFinal, transientTexts: transient, context: modelContext)
         }
 
         conversation.updatedAt = Date()
@@ -348,11 +349,8 @@ struct ChatView: View {
             .suffix(4)
             .compactMap { message in
                 guard message.messageRole == .user || message.messageRole == .assistant else { return nil }
-                let clean = message.content
-                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !clean.isEmpty else { return nil }
-                return (message.messageRole, String(clean.prefix(500)))
+                guard let clean = SlotAgentService.sanitizeHistoryEntryForPromptContext(role: message.messageRole, content: message.content) else { return nil }
+                return (message.messageRole, clean)
             }
     }
 

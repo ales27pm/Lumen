@@ -755,6 +755,80 @@ def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineS
                 outputs=[resolve(root, args.lora_dir) / agent],
             )
         )
+    if args.train_intent_classifier:
+        dataset_path = resolve(root, args.intent_dataset_output)
+        model_path = resolve(root, args.intent_model_output)
+        coreml_path = resolve(root, args.intent_coreml_output)
+        dataset_path.parent.mkdir(parents=True, exist_ok=True)
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        coreml_path.parent.mkdir(parents=True, exist_ok=True)
+        results.append(
+            run(
+                term,
+                root,
+                "generate intent-classifier dataset",
+                [
+                    train_py,
+                    "tools/intent_classifier/generate_intent_dataset.py",
+                    "--out",
+                    str(dataset_path),
+                    "--repeat",
+                    str(int(args.intent_dataset_repeat)),
+                ],
+                args=args,
+                state=state,
+                inputs=[
+                    root / "tools/intent_classifier/generate_intent_dataset.py",
+                    root / "tools/intent_classifier/intents.schema.json",
+                ],
+                outputs=[dataset_path],
+            )
+        )
+        results.append(
+            run(
+                term,
+                root,
+                "train intent-classifier model",
+                [
+                    train_py,
+                    "tools/intent_classifier/train_intent_classifier.py",
+                    "--dataset",
+                    str(dataset_path),
+                    "--model-out",
+                    str(model_path),
+                ],
+                args=args,
+                state=state,
+                inputs=[
+                    dataset_path,
+                    root / "tools/intent_classifier/train_intent_classifier.py",
+                ],
+                outputs=[model_path],
+            )
+        )
+        if not args.skip_intent_coreml_export:
+            results.append(
+                run(
+                    term,
+                    root,
+                    "export intent-classifier CoreML model",
+                    [
+                        train_py,
+                        "tools/intent_classifier/export_coreml_intent_classifier.py",
+                        "--model",
+                        str(model_path),
+                        "--out",
+                        str(coreml_path),
+                    ],
+                    args=args,
+                    state=state,
+                    inputs=[
+                        model_path,
+                        root / "tools/intent_classifier/export_coreml_intent_classifier.py",
+                    ],
+                    outputs=[coreml_path],
+                )
+            )
     return results
 
 
@@ -1036,6 +1110,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true", help="Skip stages whose recorded inputs are unchanged and previous run succeeded. Also passes --resume-from-checkpoint to train_sft.py.")
     parser.add_argument("--seed", type=int, default=None, help="Deterministic seed forwarded to train_sft.py (PYTHONHASHSEED, torch, numpy, transformers).")
     parser.add_argument("--assistant-only-loss", action="store_true", help="Train only on assistant turns (TRL assistant_only_loss).")
+    parser.add_argument("--train-intent-classifier", action=argparse.BooleanOptionalAction, default=False, help="Also run lightweight intent-classifier dataset generation and sklearn training/export.")
+    parser.add_argument("--intent-dataset-output", type=Path, default=Path("generated/intent_classifier/intent_dataset.jsonl"))
+    parser.add_argument("--intent-model-output", type=Path, default=Path("generated/intent_classifier/intent_model.pkl"))
+    parser.add_argument("--intent-coreml-output", type=Path, default=Path("generated/intent_classifier/IntentClassifier.mlmodel"))
+    parser.add_argument("--intent-dataset-repeat", type=int, default=20, help="How many times to replicate curated seed prompts per intent.")
+    parser.add_argument("--skip-intent-coreml-export", action="store_true", help="Skip CoreML export for intent classifier when training is enabled.")
     return parser.parse_args(argv)
 
 

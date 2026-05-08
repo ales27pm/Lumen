@@ -222,7 +222,7 @@ struct VoiceModeView: View {
 
             _ = await ModelLoader.ensureChatLoaded(appState: appState, stored: [])
 
-            let routing = IntentRouter.classify(text)
+            let routing = await IntentClassifierService.shared.route(text)
             let memories = await safeRecalledMemories(query: text, routing: routing)
             let tools = ToolRegistry.all
                 .filter { appState.enabledToolIDs.contains($0.id) }

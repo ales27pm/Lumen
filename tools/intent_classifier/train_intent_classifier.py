@@ -1,21 +1,69 @@
 #!/usr/bin/env python3
-"""Train a lightweight intent classifier.
-Dependencies: scikit-learn>=1.3
-Usage: python train_intent_classifier.py --dataset intent_dataset.jsonl --model-out intent_model.pkl
-"""
-import argparse, json, pickle
+"""Train a lightweight intent classifier."""
+import argparse
+import json
+import pickle
+from pathlib import Path
+
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
-except Exception as exc:
-    raise SystemExit(f"Missing dependency scikit-learn: {exc}")
+except Exception:
+    raise SystemExit(
+        "Missing optional dependency scikit-learn.\n"
+        "Install with:\n"
+        "python -m pip install scikit-learn"
+    )
 
-p=argparse.ArgumentParser();p.add_argument('--dataset',required=True);p.add_argument('--model-out',required=True);a=p.parse_args()
-X=[];y=[]
-for line in open(a.dataset):
-    row=json.loads(line);X.append(row['text']);y.append(row['intent'])
-model=Pipeline([('tfidf',TfidfVectorizer(ngram_range=(1,2))),('clf',LogisticRegression(max_iter=1200))])
-model.fit(X,y)
-with open(a.model_out,'wb') as f: pickle.dump(model,f)
-print(f"saved {a.model_out}")
+
+def load_dataset(path: Path) -> tuple[list[str], list[str]]:
+    if not path.exists():
+        raise SystemExit(f"Dataset file not found: {path}")
+    X: list[str] = []
+    y: list[str] = []
+    with path.open("r", encoding="utf-8") as f:
+        for idx, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            text = str(row.get("text", "")).strip()
+            intent = str(row.get("intent", "")).strip()
+            if not text or not intent:
+                raise SystemExit(f"Invalid row {idx}: expected non-empty 'text' and 'intent'.")
+            X.append(text)
+            y.append(intent)
+    if not X:
+        raise SystemExit("Dataset has no usable rows.")
+    if len(set(y)) < 2:
+        raise SystemExit("Dataset must contain at least 2 unique intent labels.")
+    return X, y
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--model-out", required=True)
+    parser.add_argument("--seed", type=int, default=27)
+    args = parser.parse_args()
+
+    X, y = load_dataset(Path(args.dataset))
+    model = Pipeline(
+        [
+            ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
+            ("clf", LogisticRegression(max_iter=1200, random_state=int(args.seed))),
+        ]
+    )
+    model.fit(X, y)
+
+    model_out = Path(args.model_out)
+    model_out.parent.mkdir(parents=True, exist_ok=True)
+    with model_out.open("wb") as f:
+        pickle.dump(model, f)
+
+    print(f"saved {model_out}")
+    print(f"rows={len(X)} labels={len(set(y))}")
+
+
+if __name__ == "__main__":
+    main()

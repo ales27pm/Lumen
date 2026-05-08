@@ -47,6 +47,11 @@ private final class FinalOutputSanitizerRecoveryCache: @unchecked Sendable {
 
 
 nonisolated struct StreamingFinalOutputSanitizer: Sendable {
+    nonisolated enum Finalization: Sendable {
+        case append(final: SanitizedFinalOutput, remainingDelta: String)
+        case replace(final: SanitizedFinalOutput)
+    }
+
     private var rawBuffer = ""
     private var emittedSanitized = ""
     private let holdbackCharacters = 192
@@ -64,12 +69,15 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         return delta
     }
 
-    mutating func finish() -> SanitizedFinalOutput {
+    mutating func finish() -> Finalization {
         let final = FinalOutputSanitizer.sanitizeUserVisibleText(rawBuffer)
-        if final.text.count > emittedSanitized.count {
+        if final.text.hasPrefix(emittedSanitized) {
+            let remainingDelta = String(final.text.dropFirst(emittedSanitized.count))
             emittedSanitized = final.text
+            return .append(final: final, remainingDelta: remainingDelta)
         }
-        return final
+        emittedSanitized = final.text
+        return .replace(final: final)
     }
 
     private func safeRawCutoffIndex(in raw: String) -> Int {

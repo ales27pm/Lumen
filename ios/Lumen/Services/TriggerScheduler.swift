@@ -4,6 +4,7 @@ import BackgroundTasks
 import UserNotifications
 import EventKit
 import UIKit
+import OSLog
 
 @MainActor
 final class TriggerScheduler {
@@ -15,6 +16,7 @@ final class TriggerScheduler {
 
     private var registered = false
     private var isRunning = false
+    private let logger = Logger(subsystem: "ai.lumen.app", category: "trigger-scheduler")
     var lastPermissionGranted: Bool?
 
     /// Optional hook so UI can observe permission changes when `requestPermission`
@@ -89,7 +91,7 @@ final class TriggerScheduler {
                 t.nextFireAt = t.computeNextFire(from: now)
             }
         }
-        try? context.save()
+        _ = persist(context: context, operation: "fireDueTriggers.schedule", entityScope: "Trigger")
     }
 
     @discardableResult
@@ -109,7 +111,9 @@ final class TriggerScheduler {
         default:
             trigger.nextFireAt = trigger.computeNextFire(from: Date())
         }
-        try? context.save()
+        guard persist(context: context, operation: "runTrigger.update", entityScope: "Trigger") else {
+            return "Persistence failure: trigger run was not committed."
+        }
 
         if notify {
             await postNotification(trigger: trigger, body: result.text)
@@ -136,7 +140,7 @@ final class TriggerScheduler {
         for t in all {
             t.nextFireAt = t.isPaused ? nil : t.computeNextFire(from: now)
         }
-        try? context.save()
+        _ = persist(context: context, operation: "refreshNextFireTimes.update", entityScope: "Trigger")
     }
 
     // MARK: - Calendar helpers
@@ -151,5 +155,16 @@ final class TriggerScheduler {
         let events = store.events(matching: pred).filter { $0.startDate > now }.sorted { $0.startDate < $1.startDate }
         guard let next = events.first else { return nil }
         return Int(next.startDate.timeIntervalSince(now) / 60)
+    }
+
+    @discardableResult
+    func persist(context: ModelContext, operation: String, entityScope: String, save: (() throws -> Void)? = nil) -> Bool {
+        do {
+            if let save { try save() } else { try context.save() }
+            return true
+        } catch {
+            logger.error("persistence_failed op=\(operation, privacy: .public) scope=\(entityScope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 }

@@ -2,9 +2,11 @@ import Foundation
 import SwiftData
 import PDFKit
 import Photos
+import OSLog
 
 @MainActor
 enum RAGStore {
+    private nonisolated static let logger = Logger(subsystem: "ai.lumen.app", category: "rag-store")
     static let chunkSize = 600
     static let chunkOverlap = 80
     static let candidatePoolMultiplier = 8
@@ -97,7 +99,7 @@ enum RAGStore {
         for c in all {
             if type == nil || c.kind == type { context.delete(c) }
         }
-        try? context.save()
+        _ = persist(context: context, operation: "wipe.delete", entityScope: "RAGChunk")
         if let type {
             RAGVectorIndex.shared.removeBucket(type.rawValue)
         } else {
@@ -166,11 +168,11 @@ enum RAGStore {
             let emb = await AppLlamaService.shared.embed(text: piece)
             let chunk = RAGChunk(content: piece, sourceType: type, sourceName: name, sourceRef: url.path, chunkIndex: i, embedding: emb)
             context.insert(chunk)
-            if i % 8 == 7 { try? context.save() }
+            if i % 8 == 7, !persist(context: context, operation: "indexFile.batchSave", entityScope: "RAGChunk") { return count }
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: type.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        guard persist(context: context, operation: "indexFile.finalSave", entityScope: "RAGChunk") else { return count }
         return count
     }
 
@@ -234,7 +236,7 @@ enum RAGStore {
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.photo.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        guard persist(context: context, operation: "indexPhotos.finalSave", entityScope: "RAGChunk") else { return 0 }
         return count
     }
 
@@ -251,7 +253,7 @@ enum RAGStore {
             RAGVectorIndex.shared.append(id: chunk.persistentModelID, bucket: RAGSourceType.note.rawValue, vector: emb)
             count += 1
         }
-        try? context.save()
+        guard persist(context: context, operation: "indexNote.finalSave", entityScope: "RAGChunk") else { return count }
         return count
     }
 
@@ -284,5 +286,16 @@ enum RAGStore {
         }
         if !current.isEmpty { chunks.append(current) }
         return chunks
+    }
+
+    @discardableResult
+    static func persist(context: ModelContext, operation: String, entityScope: String, save: (() throws -> Void)? = nil) -> Bool {
+        do {
+            if let save { try save() } else { try context.save() }
+            return true
+        } catch {
+            logger.error("persistence_failed op=\(operation, privacy: .public) scope=\(entityScope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 }

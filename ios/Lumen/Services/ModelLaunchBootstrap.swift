@@ -1,9 +1,11 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @MainActor
 enum ModelLaunchBootstrap {
     private static let storageSafetyBufferBytes: Int64 = 500_000_000
+    private nonisolated static let logger = Logger(subsystem: "ai.lumen.app", category: "model-launch-bootstrap")
 
     static func ensureFleetDownloaded(appState: AppState, context: ModelContext) async {
         guard appState.autoDownloadFleetModels else {
@@ -226,7 +228,7 @@ enum ModelLaunchBootstrap {
             localPath: localURL.path
         )
         context.insert(stored)
-        try? context.save()
+        _ = persist(context: context, operation: "insertStoredModel.insert", entityScope: "StoredModel")
         activateIfNeeded(stored, appState: appState)
         return stored
     }
@@ -258,6 +260,17 @@ enum ModelLaunchBootstrap {
         }
 
         return unique
+    }
+
+    @discardableResult
+    static func persist(context: ModelContext, operation: String, entityScope: String, save: (() throws -> Void)? = nil) -> Bool {
+        do {
+            if let save { try save() } else { try context.save() }
+            return true
+        } catch {
+            logger.error("persistence_failed op=\(operation, privacy: .public) scope=\(entityScope, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 
     private static func availableStorageBytes(fileManager: FileManager = .default) -> Int64 {

@@ -47,6 +47,57 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
     let promptCharCount: Int?
     let accelerationDiagnostic: String?
 
+
+
+    enum CodingKeys: String, CodingKey {
+        case id, createdAt, event, slot, stage, intent, promptPrefix, rawOutputPrefix, selectedToolID, toolArguments, allowedToolIDs, requiresApproval, approvalMode, parseError, emittedFinalInActionTurn, modelFamily, baseModelPath, adapterID, adapterSlot, adapterPath, adapterApplied, adapterScale, adapterFailureReason, generationElapsedMs, firstTokenLatencyMs, outputTokenCount, estimatedPromptTokenCount, preFirstTokenMs, messageBuildMs, decodeMs, tokensPerSecond, ensureReadyMs, adapterActivationMs, runtimePath, activeAdapterSlot, maxTokensRequested, maxTokensEffective, promptCharCount, accelerationDiagnostic
+        case promptTokenCount
+        case promptEvalMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        event = try container.decode(Event.self, forKey: .event)
+        slot = try container.decode(String.self, forKey: .slot)
+        stage = try container.decode(String.self, forKey: .stage)
+        intent = try container.decodeIfPresent(String.self, forKey: .intent)
+        promptPrefix = try container.decode(String.self, forKey: .promptPrefix)
+        rawOutputPrefix = try container.decode(String.self, forKey: .rawOutputPrefix)
+        selectedToolID = try container.decodeIfPresent(String.self, forKey: .selectedToolID)
+        toolArguments = try container.decode([String: String].self, forKey: .toolArguments)
+        allowedToolIDs = try container.decode([String].self, forKey: .allowedToolIDs)
+        requiresApproval = try container.decodeIfPresent(Bool.self, forKey: .requiresApproval)
+        approvalMode = try container.decodeIfPresent(String.self, forKey: .approvalMode)
+        parseError = try container.decodeIfPresent(String.self, forKey: .parseError)
+        emittedFinalInActionTurn = try container.decode(Bool.self, forKey: .emittedFinalInActionTurn)
+        modelFamily = try container.decodeIfPresent(String.self, forKey: .modelFamily)
+        baseModelPath = try container.decodeIfPresent(String.self, forKey: .baseModelPath)
+        adapterID = try container.decodeIfPresent(String.self, forKey: .adapterID)
+        adapterSlot = try container.decodeIfPresent(String.self, forKey: .adapterSlot)
+        adapterPath = try container.decodeIfPresent(String.self, forKey: .adapterPath)
+        adapterApplied = try container.decodeIfPresent(Bool.self, forKey: .adapterApplied)
+        adapterScale = try container.decodeIfPresent(Float.self, forKey: .adapterScale)
+        adapterFailureReason = try container.decodeIfPresent(String.self, forKey: .adapterFailureReason)
+        generationElapsedMs = try container.decodeIfPresent(Int.self, forKey: .generationElapsedMs)
+        firstTokenLatencyMs = try container.decodeIfPresent(Int.self, forKey: .firstTokenLatencyMs)
+        outputTokenCount = try container.decodeIfPresent(Int.self, forKey: .outputTokenCount)
+        estimatedPromptTokenCount = try container.decodeIfPresent(Int.self, forKey: .estimatedPromptTokenCount) ?? container.decodeIfPresent(Int.self, forKey: .promptTokenCount)
+        preFirstTokenMs = try container.decodeIfPresent(Int.self, forKey: .preFirstTokenMs) ?? container.decodeIfPresent(Int.self, forKey: .promptEvalMs)
+        messageBuildMs = try container.decodeIfPresent(Int.self, forKey: .messageBuildMs)
+        decodeMs = try container.decodeIfPresent(Int.self, forKey: .decodeMs)
+        tokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .tokensPerSecond)
+        ensureReadyMs = try container.decodeIfPresent(Int.self, forKey: .ensureReadyMs)
+        adapterActivationMs = try container.decodeIfPresent(Int.self, forKey: .adapterActivationMs)
+        runtimePath = try container.decodeIfPresent(String.self, forKey: .runtimePath)
+        activeAdapterSlot = try container.decodeIfPresent(String.self, forKey: .activeAdapterSlot)
+        maxTokensRequested = try container.decodeIfPresent(Int.self, forKey: .maxTokensRequested)
+        maxTokensEffective = try container.decodeIfPresent(Int.self, forKey: .maxTokensEffective)
+        promptCharCount = try container.decodeIfPresent(Int.self, forKey: .promptCharCount)
+        accelerationDiagnostic = try container.decodeIfPresent(String.self, forKey: .accelerationDiagnostic)
+    }
+
     init(
         id: UUID,
         createdAt: Date,

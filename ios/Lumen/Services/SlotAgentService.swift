@@ -5,28 +5,42 @@ final class SlotAgentService {
     static let shared = SlotAgentService()
     nonisolated static let mouthPromptHygieneRule = "Output only the final user-visible answer. Never output hidden reasoning, <think> blocks, JSON, debug text, tool payloads, or internal analysis. If prior context contains hidden reasoning, ignore it and do not imitate it."
 
+    private enum GenerationStage: String {
+        case mouthDirect = "mouth-direct"
+        case mouthFinal = "mouth-final"
+    }
+
     private enum StageTokenBudget {
         static let directLow = 200
         static let directHigh = 320
         static let finalLow = 260
         static let finalHigh = 420
         static let retryBump = 80
+        static let retryCeiling = 640
+    }
+
+    private enum RetryHeuristic {
+        static let minWordCount = 28
+        static let intentsNeedingDepth: Set<UserIntent> = [.chat, .webSearch, .rag, .files, .outlook, .unknown]
     }
 
     private static func cappedMaxTokens(_ requested: Int, stageCap: Int) -> Int {
+        // Enforce a minimum allocation so very low caller caps still allow a coherent response.
         max(64, min(requested, stageCap))
     }
 
-    private static func adaptiveTokenCap(for intent: UserIntent, stage: String) -> Int {
+    private static func adaptiveTokenCap(for intent: UserIntent, stage: GenerationStage) -> Int {
         switch (intent, stage) {
-        case (.chat, "mouth-direct"), (.unknown, "mouth-direct"):
+        case (.chat, .mouthDirect), (.unknown, .mouthDirect):
             return StageTokenBudget.directHigh
-        case (.webSearch, "mouth-final"), (.rag, "mouth-final"), (.files, "mouth-final"), (.outlook, "mouth-final"):
+        case (.chat, .mouthFinal), (.unknown, .mouthFinal):
+            return StageTokenBudget.finalHigh
+        case (.webSearch, .mouthFinal), (.rag, .mouthFinal), (.files, .mouthFinal), (.outlook, .mouthFinal):
             return StageTokenBudget.finalHigh
         case (.emailDraft, _), (.messageDraft, _), (.phoneCall, _), (.calendar, _), (.reminder, _), (.trigger, _), (.alarm, _), (.camera, _):
-            return stage == "mouth-final" ? StageTokenBudget.finalLow : StageTokenBudget.directLow
+            return stage == .mouthFinal ? StageTokenBudget.finalLow : StageTokenBudget.directLow
         default:
-            return stage == "mouth-final" ? 340 : 260
+            return stage == .mouthFinal ? 340 : 260
         }
     }
 
@@ -469,7 +483,7 @@ final class SlotAgentService {
 
     private func generateFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
         let prompt = makeMouthPrompt(req: req, resolution: resolution, observations: observations, draft: draft)
-        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: "mouth-final")
+        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: .mouthFinal)
         let text = await generateText(
             slot: .mouth,
             req: req,
@@ -493,7 +507,7 @@ final class SlotAgentService {
             req: req,
             prompt: prompt,
             routing: routing,
-            stage: "mouth-final",
+            stage: .mouthFinal,
             baseCap: adaptiveCap
         )
         let validated = FinalIntentValidator.validate(maybeRetried, routing: routing, fallback: observations.last ?? draft)
@@ -534,8 +548,8 @@ final class SlotAgentService {
         Additional grounding rules:
         \(ragGroundingRules)
         """
-        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: "mouth-direct")
-        let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: Self.cappedMaxTokens(req.maxTokens, stageCap: adaptiveCap), modelName: "mouth-direct")
+        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: .mouthDirect)
+        let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: Self.cappedMaxTokens(req.maxTokens, stageCap: adaptiveCap), modelName: GenerationStage.mouthDirect.rawValue)
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate = trimmed.isEmpty ? "I’m here." : trimmed
         let maybeRetried = await retryIfOutputLooksThin(
@@ -544,7 +558,7 @@ final class SlotAgentService {
             req: req,
             prompt: prompt,
             routing: routing,
-            stage: "mouth-direct",
+            stage: .mouthDirect,
             baseCap: adaptiveCap
         )
         let validated = FinalIntentValidator.validate(maybeRetried, routing: routing, fallback: nil)
@@ -562,22 +576,25 @@ final class SlotAgentService {
         req: AgentRequest,
         prompt: String,
         routing: IntentRoutingDecision,
-        stage: String,
+        stage: GenerationStage,
         baseCap: Int
     ) async -> String {
         let text = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = text.lowercased()
+        let wordCount = text.split(whereSeparator: \.isWhitespace).count
+        let needsMoreDepth = wordCount < RetryHeuristic.minWordCount && RetryHeuristic.intentsNeedingDepth.contains(routing.intent)
         let looksInvalid = text.isEmpty || lower == "none" || lower == "null" || lower == "undefined" || lower == "i’m here." || lower == "i'm here."
-        guard looksInvalid else { return candidate }
-        let retryCap = min(req.maxTokens, baseCap + StageTokenBudget.retryBump)
+        guard looksInvalid || needsMoreDepth else { return candidate }
+        let retryTargetCap = max(baseCap, baseCap + StageTokenBudget.retryBump)
+        let retryCap = Self.cappedMaxTokens(retryTargetCap, stageCap: StageTokenBudget.retryCeiling)
         let retried = await generateText(
             slot: slot,
             req: req,
             userMessage: prompt,
-            temperature: min(req.temperature, 0.30),
-            topP: min(req.topP, 0.75),
-            maxTokens: max(64, retryCap),
-            modelName: "\(stage)-retry"
+            temperature: min(req.temperature, 0.35),
+            topP: min(req.topP, 0.8),
+            maxTokens: retryCap,
+            modelName: "\(stage.rawValue)-retry"
         ).trimmingCharacters(in: .whitespacesAndNewlines)
         return retried.isEmpty ? candidate : retried
     }
@@ -833,7 +850,6 @@ final class SlotAgentService {
 
     private func compactPromptText(_ text: String, maxChars: Int) -> String {
         let flattened = text
-            .replacingOccurrences(of: #"https?://\S+"#, with: "[url]", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard flattened.count > maxChars else { return flattened }
@@ -848,8 +864,15 @@ final class SlotAgentService {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !normalized.isEmpty else { return "none" }
-        let sorted = normalized.sorted { observationPriority($0) > observationPriority($1) }
-        return sorted.prefix(maxItems).joined(separator: "\n")
+        let indexed = normalized.enumerated().map { (index: $0.offset, text: $0.element) }
+        let sorted = indexed.sorted {
+            let leftPriority = observationPriority($0.text)
+            let rightPriority = observationPriority($1.text)
+            if leftPriority != rightPriority { return leftPriority > rightPriority }
+            return $0.index > $1.index
+        }
+        let selected = sorted.prefix(maxItems).map(\.text)
+        return selected.joined(separator: "\n")
     }
 
     private func observationPriority(_ text: String) -> Int {

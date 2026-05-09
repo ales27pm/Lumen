@@ -3,41 +3,41 @@
   "stages": {
     "adapter runtime drift guard": {
       "argv": [
-        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
+        "/Users/ales27pm/.cache/uv/builds-v0/.tmpX598M8/bin/python",
         "tools/check_adapter_runtime_invariants.py"
       ],
-      "elapsed_s": 0.023,
-      "finished_at": "2026-05-09T21:41:33.585634+00:00",
-      "input_hash": "bbde9212d970e139c5a514406dce65a6c3553e913e13a2bbe9edf08abf013461",
+      "elapsed_s": 0.057,
+      "finished_at": "2026-05-09T18:43:26.753550+00:00",
+      "input_hash": "a7bf846586c9b1ff9ebbdc174bd8a5c22189072922670a2f1e917681782e7945",
       "inputs": [
         "tools/check_adapter_runtime_invariants.py",
         "tools/lumen_terminal_improve_loop.py"
       ],
       "note": "",
       "outputs": [],
-      "returncode": 1,
-      "started_at": "2026-05-09T21:41:33.562946+00:00",
-      "status": "fail"
+      "returncode": 0,
+      "started_at": "2026-05-09T18:43:26.696333+00:00",
+      "status": "ok"
     },
     "adapter-first manifest / optional release bake": {
       "argv": [
-        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
+        "/Users/ales27pm/.cache/uv/builds-v0/.tmpX598M8/bin/python",
         "tools/fine_tuning/unsloth/export_gguf.py",
         "--config-dir",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap",
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap",
         "--agents",
         "cortex,executor,mouth,mimicry,rem,fleet",
         "--quantization",
         "q4_k_m",
         "--output-root",
-        "/home/ales27pm/Lumen/models/gguf_release_bake_qwen3_bootstrap",
+        "/Users/ales27pm/Desktop/Lumen/models/gguf_release_bake_qwen3_bootstrap",
         "--manifest-output",
-        "/home/ales27pm/Lumen/generated/fine_tuning/qwen3_bootstrap_release_bake_gguf_manifest.json",
+        "/Users/ales27pm/Desktop/Lumen/generated/fine_tuning/qwen3_bootstrap_release_bake_gguf_manifest.json",
         "--skip-upload"
       ],
-      "elapsed_s": 0.031,
-      "finished_at": "2026-05-09T21:42:07.284960+00:00",
-      "input_hash": "0c92cd6a15d3c419b0addfb120bba0652d4680c2e5505c35906b05b4227fd343",
+      "elapsed_s": 0.051,
+      "finished_at": "2026-05-09T18:44:09.668483+00:00",
+      "input_hash": "775de0db8ef2150d11fd7b46e9d7144a55a8cff5de00d15c68ce74cb1adafece",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap"
       ],
@@ -46,22 +46,22 @@
         "generated/fine_tuning/qwen3_bootstrap_release_bake_gguf_manifest.json"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:42:07.253780+00:00",
+      "started_at": "2026-05-09T18:44:09.617319+00:00",
       "status": "ok"
     },
     "augment loop summary with embedding state": {
       "argv": [
-        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
+        "/Users/ales27pm/.cache/uv/builds-v0/.tmpX598M8/bin/python",
         "tools/augment_loop_state_embedding.py",
         "--loop-state",
-        "/home/ales27pm/Lumen/generated/agent_improvement_loop/loop_state.json",
+        "/Users/ales27pm/Desktop/Lumen/generated/agent_improvement_loop/loop_state.json",
         "--embedding-dir",
-        "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
+        "/Users/ales27pm/Desktop/Lumen/generated/agent_manifest/embedding",
         "--print-summary"
       ],
-      "elapsed_s": 0.031,
-      "finished_at": "2026-05-09T21:42:07.252882+00:00",
-      "input_hash": "61d969b1a4ea6582f646a6b4ed49eb52d0a9a9752f8c3b5d246ff43c47e1ebed",
+      "elapsed_s": 0.05,
+      "finished_at": "2026-05-09T18:44:09.615907+00:00",
+      "input_hash": "a737e371e83514fc93e535d725c715dc1140720b28ac6e7edc9eda5d8a8f68e1",
       "inputs": [
         "generated/agent_improvement_loop/loop_state.json",
         "generated/agent_manifest/embedding"
@@ -69,12 +69,12 @@
       "note": "",
       "outputs": [],
       "returncode": 0,
-      "started_at": "2026-05-09T21:42:07.221951+00:00",
+      "started_at": "2026-05-09T18:44:09.565652+00:00",
       "status": "ok"
     },
     "convert cortex adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/cortex",
         "--outfile",
@@ -82,8 +82,8 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 5.063,
-      "finished_at": "2026-05-09T21:52:40.344963+00:00",
+      "elapsed_s": 6.193,
+      "finished_at": "2026-05-09T18:25:44.001483+00:00",
       "input_hash": "7b82afe18a1df9d338499283d843a2e759bac9d674978f9b5b6952008c7bd32b",
       "inputs": [
         "models/lora_qwen3_bootstrap/cortex"
@@ -93,12 +93,12 @@
         "models/lora_qwen3_gguf/lumen-cortex-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:35.281764+00:00",
+      "started_at": "2026-05-09T18:25:37.808802+00:00",
       "status": "ok"
     },
     "convert executor adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/executor",
         "--outfile",
@@ -106,8 +106,8 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 4.789,
-      "finished_at": "2026-05-09T21:52:45.134727+00:00",
+      "elapsed_s": 4.79,
+      "finished_at": "2026-05-09T18:25:48.792470+00:00",
       "input_hash": "922da717a410d7190921b123adbc87cfdc2d75fbfff8977357f5268e16bb6b50",
       "inputs": [
         "models/lora_qwen3_bootstrap/executor"
@@ -117,12 +117,12 @@
         "models/lora_qwen3_gguf/lumen-executor-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:40.345888+00:00",
+      "started_at": "2026-05-09T18:25:44.002904+00:00",
       "status": "ok"
     },
     "convert fleet adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/fleet",
         "--outfile",
@@ -130,8 +130,8 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 4.796,
-      "finished_at": "2026-05-09T21:53:04.255107+00:00",
+      "elapsed_s": 4.467,
+      "finished_at": "2026-05-09T18:26:08.036321+00:00",
       "input_hash": "c396b4f775b7d2be6a6381638d21880350bcdc5d3a553d5c19b2480139cae999",
       "inputs": [
         "models/lora_qwen3_bootstrap/fleet"
@@ -141,12 +141,12 @@
         "models/lora_qwen3_gguf/lumen-fleet-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:59.458989+00:00",
+      "started_at": "2026-05-09T18:26:03.569790+00:00",
       "status": "ok"
     },
     "convert mimicry adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/mimicry",
         "--outfile",
@@ -154,8 +154,8 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 4.733,
-      "finished_at": "2026-05-09T21:52:54.522991+00:00",
+      "elapsed_s": 4.966,
+      "finished_at": "2026-05-09T18:25:58.969694+00:00",
       "input_hash": "4b3f9379d2c0b87ba4f4cf7de6db748a37a0653f076e452be028963caed58758",
       "inputs": [
         "models/lora_qwen3_bootstrap/mimicry"
@@ -165,12 +165,12 @@
         "models/lora_qwen3_gguf/lumen-mimicry-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:49.790196+00:00",
+      "started_at": "2026-05-09T18:25:54.003700+00:00",
       "status": "ok"
     },
     "convert mouth adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/mouth",
         "--outfile",
@@ -178,9 +178,9 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 4.654,
-      "finished_at": "2026-05-09T21:52:49.789075+00:00",
-      "input_hash": "b46dc62b2fcb9ee2d41bb4c261c1c0442330eed6dcd8d96d3a034a477b7c05e7",
+      "elapsed_s": 5.201,
+      "finished_at": "2026-05-09T18:25:53.994052+00:00",
+      "input_hash": "666d3e91d4c6f21d92279850e4b7fdf18966f9339f1b3cf38f203ffff8c747ad",
       "inputs": [
         "models/lora_qwen3_bootstrap/mouth"
       ],
@@ -189,12 +189,12 @@
         "models/lora_qwen3_gguf/lumen-mouth-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:45.135572+00:00",
+      "started_at": "2026-05-09T18:25:48.793427+00:00",
       "status": "ok"
     },
     "convert rem adapter to GGUF": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
         "/home/ales27pm/.unsloth/llama.cpp/convert_lora_to_gguf.py",
         "/home/ales27pm/Lumen/models/lora_qwen3_bootstrap/rem",
         "--outfile",
@@ -202,9 +202,9 @@
         "--base-model-id",
         "Qwen/Qwen3-1.7B"
       ],
-      "elapsed_s": 4.934,
-      "finished_at": "2026-05-09T21:52:59.457911+00:00",
-      "input_hash": "096e995a8737c99c3c9fb839adba6800402bd9ef007b7f5918bc6b572b11f444",
+      "elapsed_s": 4.598,
+      "finished_at": "2026-05-09T18:26:03.568829+00:00",
+      "input_hash": "93441b12b423259b8e1526a134e4f8f9e907a77ed652670100ff25b4f515a539",
       "inputs": [
         "models/lora_qwen3_bootstrap/rem"
       ],
@@ -213,23 +213,23 @@
         "models/lora_qwen3_gguf/lumen-rem-lora.gguf"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:52:54.523922+00:00",
+      "started_at": "2026-05-09T18:25:58.970745+00:00",
       "status": "ok"
     },
     "crawl code + ingest JSON + generate datasets": {
       "argv": [
-        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
+        "/Users/ales27pm/.cache/uv/builds-v0/.tmpX598M8/bin/python",
         "-m",
         "lumen_manifest_crawler",
         "improve-loop",
         "--root",
-        "/home/ales27pm/Lumen",
+        "/Users/ales27pm/Desktop/Lumen",
         "--output",
-        "/home/ales27pm/Lumen/generated/agent_manifest",
+        "/Users/ales27pm/Desktop/Lumen/generated/agent_manifest",
         "--loop-output",
-        "/home/ales27pm/Lumen/generated/agent_improvement_loop",
+        "/Users/ales27pm/Desktop/Lumen/generated/agent_improvement_loop",
         "--fine-tuning-output",
-        "/home/ales27pm/Lumen/generated/fine_tuning",
+        "/Users/ales27pm/Desktop/Lumen/generated/fine_tuning",
         "--testflight-scenario-limit",
         "120",
         "--app-run-mode",
@@ -240,17 +240,20 @@
         "--generate-system-prompts",
         "--generate-agent-fine-tuning",
         "--runtime-audit",
-        "/home/ales27pm/Lumen/exports/lumen-agent-grounding-audit-2026-05-09T19-16-04Z-edf67849-4911-45e3-bf18-00f4af251488.json",
+        "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-24-37Z-c9116604-a999-4317-b4f5-4c5a92fe201f.json",
         "--runtime-audit",
-        "/home/ales27pm/Lumen/exports/lumen-agent-grounding-audit-2026-05-09T19-40-57Z-b6b16997-41aa-42b7-b52f-00c5bd5bafe3.json"
+        "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-41-33Z-68cb8124-6047-41d7-8c97-f078470ef203.json",
+        "--runtime-audit",
+        "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-45-56Z-59e705bd-9887-4cd4-9638-5a98c0b95d96.json"
       ],
-      "elapsed_s": 3.063,
-      "finished_at": "2026-05-09T21:42:07.220788+00:00",
-      "input_hash": "8cc08150358897b0a34a87640f08aa74b28af06e69f21273cbcb0a4636189efd",
+      "elapsed_s": 3.093,
+      "finished_at": "2026-05-09T18:44:09.564194+00:00",
+      "input_hash": "e856a9a0c6629044b310d15c037cebc46a762e63af66dea84719180bda4e9bce",
       "inputs": [
         "ios/Lumen",
-        "exports/lumen-agent-grounding-audit-2026-05-09T19-16-04Z-edf67849-4911-45e3-bf18-00f4af251488.json",
-        "exports/lumen-agent-grounding-audit-2026-05-09T19-40-57Z-b6b16997-41aa-42b7-b52f-00c5bd5bafe3.json"
+        "exports/lumen-agent-grounding-audit-2026-05-08T23-24-37Z-c9116604-a999-4317-b4f5-4c5a92fe201f.json",
+        "exports/lumen-agent-grounding-audit-2026-05-08T23-41-33Z-68cb8124-6047-41d7-8c97-f078470ef203.json",
+        "exports/lumen-agent-grounding-audit-2026-05-08T23-45-56Z-59e705bd-9887-4cd4-9638-5a98c0b95d96.json"
       ],
       "note": "",
       "outputs": [
@@ -258,7 +261,7 @@
         "generated/agent_improvement_loop/loop_state.json"
       ],
       "returncode": 0,
-      "started_at": "2026-05-09T21:42:04.157802+00:00",
+      "started_at": "2026-05-09T18:44:06.470600+00:00",
       "status": "ok"
     },
     "ensure adapter HF repo": {
@@ -271,45 +274,45 @@
         "model",
         "--exist-ok"
       ],
-      "elapsed_s": 0.547,
-      "finished_at": "2026-05-09T21:53:04.811942+00:00",
+      "elapsed_s": 0.462,
+      "finished_at": "2026-05-09T18:26:08.499647+00:00",
       "input_hash": "",
       "inputs": [],
       "note": "",
       "outputs": [],
       "returncode": 0,
-      "started_at": "2026-05-09T21:53:04.264943+00:00",
+      "started_at": "2026-05-09T18:26:08.037773+00:00",
       "status": "ok"
     },
     "manifest crawler tests": {
       "argv": [
-        "/home/ales27pm/.pyenv/versions/3.10.19/bin/python",
+        "/Users/ales27pm/.cache/uv/builds-v0/.tmpX598M8/bin/python",
         "-m",
         "pytest",
         "tools/lumen_manifest_crawler/tests"
       ],
-      "elapsed_s": 30.568,
-      "finished_at": "2026-05-09T21:42:04.154400+00:00",
-      "input_hash": "9ad01e8f73f126f9eecdaaa0b0e41e489de4a8835fa7660510ed1745ae1aac48",
+      "elapsed_s": 39.696,
+      "finished_at": "2026-05-09T18:44:06.452981+00:00",
+      "input_hash": "38f520fa182405fd9764e5406fedd0c3cbd57775338eebb06bfb8c2835db9a3a",
       "inputs": [
         "tools/lumen_manifest_crawler"
       ],
       "note": "",
       "outputs": [],
       "returncode": 0,
-      "started_at": "2026-05-09T21:41:33.586406+00:00",
+      "started_at": "2026-05-09T18:43:26.755274+00:00",
       "status": "ok"
     },
     "train cortex adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/cortex.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/cortex.json"
       ],
-      "elapsed_s": 105.6,
-      "finished_at": "2026-05-09T21:43:52.886742+00:00",
-      "input_hash": "1943068914aa5d59888331699f62717ec28822cf143b18115489cec5ecf692bd",
+      "elapsed_s": 2.396,
+      "finished_at": "2026-05-09T18:44:12.066411+00:00",
+      "input_hash": "4f9afa91f44325f1b4aa6bcad7ff1c67bc2d5c708ff58a9584092fb09c40b61f",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/cortex.json",
         "generated/fine_tuning/cortex"
@@ -318,20 +321,20 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/cortex"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:42:07.286332+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:09.670461+00:00",
+      "status": "fail"
     },
     "train executor adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/executor.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/executor.json"
       ],
-      "elapsed_s": 219.146,
-      "finished_at": "2026-05-09T21:47:32.038111+00:00",
-      "input_hash": "7ccd68afd375b9947b7a74d689418c3cbe2b43a53434db01e69928aadbabd6f9",
+      "elapsed_s": 1.41,
+      "finished_at": "2026-05-09T18:44:13.478594+00:00",
+      "input_hash": "d7609e19b91f7108dfb9be7926c990ef1836cc6be851a5e8bfe8cd49b8094743",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/executor.json",
         "generated/fine_tuning/executor"
@@ -340,20 +343,20 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/executor"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:43:52.891925+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:12.068104+00:00",
+      "status": "fail"
     },
     "train fleet adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/fleet.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/fleet.json"
       ],
-      "elapsed_s": 135.403,
-      "finished_at": "2026-05-09T21:52:35.270183+00:00",
-      "input_hash": "61fcef3ad6e5059bb6f46235f05e66a0b130b976d36bb914fea6212bafd10246",
+      "elapsed_s": 1.899,
+      "finished_at": "2026-05-09T18:44:19.678003+00:00",
+      "input_hash": "6afcb1ba4f1c327397064cad8452a64b2193b9545e5aecd2cec8f8e6a7e23a62",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/fleet.json",
         "generated/fine_tuning/fleet"
@@ -362,20 +365,20 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/fleet"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:50:19.867495+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:17.779213+00:00",
+      "status": "fail"
     },
     "train mimicry adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mimicry.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mimicry.json"
       ],
-      "elapsed_s": 52.501,
-      "finished_at": "2026-05-09T21:49:26.031252+00:00",
-      "input_hash": "e54e6dcddbca1cca59e4344f4e26f444cf4ca1102f469b322a20f3d6cd873dce",
+      "elapsed_s": 1.525,
+      "finished_at": "2026-05-09T18:44:16.378063+00:00",
+      "input_hash": "1cc41190d8d4f21a2842cd20c5662755d7b51bcb8be156a7c6a18ddeccd424b1",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mimicry.json",
         "generated/fine_tuning/mimicry"
@@ -384,20 +387,20 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/mimicry"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:48:33.529863+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:14.853494+00:00",
+      "status": "fail"
     },
     "train mouth adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mouth.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mouth.json"
       ],
-      "elapsed_s": 61.486,
-      "finished_at": "2026-05-09T21:48:33.527843+00:00",
-      "input_hash": "e16a410aaa506b54b7e2411a8fcc655b525d456b854a3d9727619baea43a3ec9",
+      "elapsed_s": 1.372,
+      "finished_at": "2026-05-09T18:44:14.852021+00:00",
+      "input_hash": "64fadbe043eb1e2a0cc2f8e5997a7ae24a1e9a554f4b1ddf2efcb7d2fd07824b",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/mouth.json",
         "generated/fine_tuning/mouth"
@@ -406,20 +409,20 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/mouth"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:47:32.041629+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:13.480304+00:00",
+      "status": "fail"
     },
     "train rem adapter": {
       "argv": [
-        "/home/ales27pm/Lumen/.venv-unsloth/bin/python",
+        "/Users/ales27pm/Desktop/Lumen/.venv-unsloth/bin/python",
         "tools/fine_tuning/unsloth/train_sft.py",
         "--config",
-        "/home/ales27pm/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/rem.json"
+        "/Users/ales27pm/Desktop/Lumen/tools/fine_tuning/unsloth/configs_qwen3_bootstrap/rem.json"
       ],
-      "elapsed_s": 53.833,
-      "finished_at": "2026-05-09T21:50:19.866290+00:00",
-      "input_hash": "0f4c14c7f927ed1e7affd9df3e7c5be8310a4bbf5263e6bde3ef87bd8615b747",
+      "elapsed_s": 1.398,
+      "finished_at": "2026-05-09T18:44:17.777857+00:00",
+      "input_hash": "f7c1b77884a31c9b1eb905d089a925d28c3aa402c2e56d65d1d38fc5a9689476",
       "inputs": [
         "tools/fine_tuning/unsloth/configs_qwen3_bootstrap/rem.json",
         "generated/fine_tuning/rem"
@@ -428,9 +431,9 @@
       "outputs": [
         "models/lora_qwen3_bootstrap/rem"
       ],
-      "returncode": 0,
-      "started_at": "2026-05-09T21:49:26.032798+00:00",
-      "status": "ok"
+      "returncode": 1,
+      "started_at": "2026-05-09T18:44:16.379545+00:00",
+      "status": "fail"
     },
     "upload adapter GGUFs": {
       "argv": [
@@ -442,8 +445,8 @@
         "--repo-type",
         "model"
       ],
-      "elapsed_s": 78.157,
-      "finished_at": "2026-05-09T18:57:01.195886+00:00",
+      "elapsed_s": 76.53,
+      "finished_at": "2026-05-09T18:27:25.031051+00:00",
       "input_hash": "f31764a325667bb69a90e19d794bc7200c68a39469199f55824c1148ba543434",
       "inputs": [
         "models/lora_qwen3_gguf"
@@ -451,9 +454,9 @@
       "note": "",
       "outputs": [],
       "returncode": 0,
-      "started_at": "2026-05-09T18:55:43.038995+00:00",
+      "started_at": "2026-05-09T18:26:08.500652+00:00",
       "status": "ok"
     }
   },
-  "updated_at": "2026-05-09T21:53:04.812006+00:00"
+  "updated_at": "2026-05-09T18:44:19.678178+00:00"
 }

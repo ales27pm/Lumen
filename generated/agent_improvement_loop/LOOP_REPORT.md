@@ -1,16 +1,16 @@
 # Lumen Agent Improvement Loop Report
 
-- Passed: `False`
+- Passed: `True`
 - Tools: `53`
 - Intents: `22`
 - Model slots: `6`
-- Dataset records: `4496`
-- Runtime audit reports: `2`
-- Runtime failures: `2`
+- Dataset records: `4502`
+- Runtime audit reports: `3`
+- Runtime failures: `0`
 - TestFlight status: `runtime-audit-ingested`
 - TestFlight scenarios: `120`
-- Gaps: `2`
-- Next action prompts: `2`
+- Gaps: `0`
+- Next action prompts: `1`
 
 ## TestFlight handoff
 
@@ -18,12 +18,4 @@ Run `TESTFLIGHT_RUNBOOK.md` in the real TestFlight app, export the Runtime Audit
 
 ## Top gaps
 
-### ERROR — trace_parse_error
-
-- Category: `runtime_drift`
-- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
-
-### ERROR — trace_parse_error
-
-- Category: `runtime_drift`
-- Recommendation: Convert this failure into a REM repair sample and add a regression eval.
+No blocking gaps detected. The next loop should expand TestFlight runtime coverage.

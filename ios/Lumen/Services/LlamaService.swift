@@ -816,7 +816,7 @@ final actor AppLlamaService {
                         output: sanitized,
                         parseError: AgentTurnParser.parse(sanitized).parseError?.rawValue,
                         generationElapsedMs: elapsedMs,
-                        outputTokenCount: max(outputTokenEstimate, outputChunks),
+                        outputTokenCount: nil,
                         firstTokenLatencyMs: firstTokenMs,
                         estimatedPromptTokenCount: estimatedPromptTokenCount,
                         preFirstTokenMs: preFirstTokenMs,

@@ -9,7 +9,7 @@
       "recordCounts": {
         "eval": 555,
         "train_dpo": 8,
-        "train_sft": 207,
+        "train_sft": 206,
         "val_dpo": 1,
         "val_sft": 36
       },
@@ -39,7 +39,7 @@
       "recordCounts": {
         "eval": 93,
         "train_dpo": 14,
-        "train_sft": 700,
+        "train_sft": 699,
         "val_dpo": 3,
         "val_sft": 123
       },
@@ -84,7 +84,7 @@
       "recordCounts": {
         "eval": 4,
         "train_dpo": 7,
-        "train_sft": 71,
+        "train_sft": 69,
         "val_dpo": 1,
         "val_sft": 12
       },

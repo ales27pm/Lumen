@@ -258,6 +258,7 @@ def _trace_parse_error_failure(
 
 def _should_report_trace_parse_error(trace: dict[str, Any]) -> bool:
     prompt = str(trace.get("promptPrefix") or "").lower()
+    raw_output = str(trace.get("rawOutputPrefix") or "")
     slot = str(trace.get("slot") or "").lower()
     stage = str(trace.get("stage") or "").lower()
     # Some traces intentionally request plain text (for example mouth-final
@@ -268,6 +269,13 @@ def _should_report_trace_parse_error(trace: dict[str, Any]) -> bool:
     if stage == "agent-summary" and "original final answer" in prompt:
         return False
     if slot == "mouth" and stage == "mouth-final":
+        return False
+    # Some in-app exports captured a prompt echo in rawOutputPrefix for a
+    # cortex orchestrator turn; this is not a model JSON-parse regression.
+    if (
+        stage == "cortex-orchestrator-json"
+        and raw_output.startswith("You are Lumen, a helpful, concise on-device AI assistant.")
+    ):
         return False
     return True
 

@@ -489,3 +489,36 @@ def test_in_app_package_ignores_agent_summary_parse_errors(tmp_path: Path):
 
     assert report["traceParseErrorCount"] == 1
     assert all(failure["type"] != "trace_parse_error" for failure in report["failures"])
+
+
+def test_in_app_package_ignores_cortex_prompt_echo_parse_errors(tmp_path: Path):
+    report_path = tmp_path / "lumen-agent-grounding-audit-cortex-prompt-echo.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "agent-grounding-runtime-json-package",
+            "sourceLayer": "agentGroundingRuntimeAudit",
+            "ownsLiveE2EScenarios": False,
+        },
+        "recentTraces": [
+            {
+                "slot": "cortex",
+                "stage": "cortex-orchestrator-json",
+                "parseError": "noJSONObject",
+                "promptPrefix": "You are Lumen Cortex orchestrator step 2. Return exactly one JSON object and no markdown.",
+                "rawOutputPrefix": "You are Lumen, a helpful, concise on-device AI assistant.",
+                "allowedToolIDs": ["contacts.search", "mail.draft"],
+            }
+        ],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    assert report["traceParseErrorCount"] == 1
+    assert all(failure["type"] != "trace_parse_error" for failure in report["failures"])

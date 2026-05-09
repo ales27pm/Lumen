@@ -5,11 +5,11 @@
   "agent": "cortex",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "1b0138b4305076b086c8e7d71a741b32b46b5329",
+    "manifestCommit": "2e0b0e6cecca3337b0a16b61208acf5dede98198",
     "recordCounts": {
       "eval": 555,
       "train_dpo": 8,
-      "train_sft": 206,
+      "train_sft": 207,
       "val_dpo": 1,
       "val_sft": 36
     },
@@ -26,6 +26,7 @@
       "embedding_val_triplets",
       "fleet_system_prompts",
       "manifest_grounding_cards",
+      "runtime_audit_repairs",
       "train_sft"
     ],
     "taskTypes": [
@@ -47,6 +48,7 @@
       "intent_routing",
       "manifest_grounding_cards",
       "role_directory",
+      "runtime_manifest_drift_repair",
       "source_code_self_knowledge",
       "source_routing_knowledge",
       "tool_id_repair"

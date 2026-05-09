@@ -2,12 +2,12 @@ family,recordCount,splits,roles,taskTypes
 approval_boundary_samples,115,,,
 cortex_routing,69,,,
 dpo_preference_pairs,53,train,,
-embedding_corpus,492,,,
+embedding_corpus,491,,,
 embedding_dataset_card,1,,,
-embedding_eval_retrieval,661,,,
-embedding_hard_negatives,661,,,
-embedding_train_pairs,591,train,,
-embedding_train_triplets,589,train,,
+embedding_eval_retrieval,660,,,
+embedding_hard_negatives,660,,,
+embedding_train_pairs,590,train,,
+embedding_train_triplets,588,train,,
 embedding_val_pairs,70,validation,,
 embedding_val_triplets,72,validation,,
 eval_scenarios,550,eval,,hallucinated_tool_rejection;routing_matrix_adherence;tool_runtime_scenario_selection;tool_schema_adherence;user_output_safety
@@ -17,7 +17,7 @@ mimicry_style,3,,,
 mouth_responses,53,,,
 negative_samples,53,,,
 rem_reflection,5,,,
-runtime_audit_repairs,3,train,rem,runtime_manifest_drift_repair
+runtime_audit_repairs,2,train,cortex,runtime_manifest_drift_repair
 tool_schema_cards,53,train,,
 train_sft,298,train,cortex;executor;mimicry;mouth;rem;tool_executor,ambiguous_request;approval_granted;approval_rejected;approval_required_tool;intent_routing;permission_unavailable;reflection_and_memory_policy;style_profile_detection;tool_call_generation;tool_id_repair;user_response_generation
 validation_sft,53,validation,tool_executor,ambiguous_request;approval_granted;approval_rejected;approval_required_tool;permission_unavailable

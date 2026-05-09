@@ -1,3 +1,40 @@
 {
-  "gaps": []
+  "gaps": [
+    {
+      "category": "runtime_drift",
+      "evidence": {
+        "actual": "noJSONObject",
+        "agent": "cortex",
+        "expected": [
+          "strict manifest-valid structured output"
+        ],
+        "problem": "A recorded in-app model trace contained a parse error.",
+        "scenario": "You are Lumen Cortex orchestrator step 2. Return exactly one JSON object and no markdown.\n\nRecent safe conversation context for pronoun/reference resolution only:\nnone\n\nOriginal user request:\nDraft an email to Alex with a professional update and ask one clarifying question.\n\nRewritten execution request (source of truth):\nDraft an email to Alex with a professional update and ask one clarifying question.\n\nPrevious observations for this current request only:\ncontacts.search: • Alexandre Tremblay — (514) 779-9054\n• Alexis Boulet — 14504943059\n• Alexis Boulet — no phone\n• Alexandre Thivierge — 1 (418) 559-7084\n• Alexandra Boulet — +14505614086\n\nAvailable tools:\n- contacts.search: Find a contact by name. Args: query. Only use for the user's address book, not web people search.\n- mail.draft: Compose an email draft using the system mail composer. Args: to or recipient or email, subject, body or message or text.\n\nRequired output schema (choose one):\n{\"thought\":\"short routing note\",\"action\":{\"tool\":\"tool.id\",\"args\":{\"key\":\"value\"}}}\n{\"thought\":\"short completion note\",\"final\":\"final answer draft grounded in observations\"}\n\nHard rules:\n- You are the planner/orchestrator for this request.\n- If ",
+        "sourceLayer": "agentBehaviorTraceRecorder",
+        "type": "trace_parse_error"
+      },
+      "id": "8c1e8921baf5ad40035acbb1",
+      "recommendedAction": "Convert this failure into a REM repair sample and add a regression eval.",
+      "severity": "error",
+      "title": "trace_parse_error"
+    },
+    {
+      "category": "runtime_drift",
+      "evidence": {
+        "actual": "noJSONObject",
+        "agent": "cortex",
+        "expected": [
+          "strict manifest-valid structured output"
+        ],
+        "problem": "A recorded in-app model trace contained a parse error.",
+        "scenario": "You are Lumen Cortex orchestrator step 2. Return exactly one JSON object and no markdown.\n\nRecent safe conversation context for pronoun/reference resolution only:\nnone\n\nOriginal user request:\nDraft an email to Alex with a professional update and ask one clarifying question.\n\nRewritten execution request (source of truth):\nDraft an email to Alex with a professional update and ask one clarifying question.\n\nPrevious observations for this current request only:\ncontacts.search: • Alexandre Tremblay — (514) 779-9054\n• Alexis Boulet — 14504943059\n• Alexis Boulet — no phone\n• Alexandre Thivierge — 1 (418) 559-7084\n• Alexandra Boulet — +14505614086\n\nAvailable tools:\n- contacts.search: Find a contact by name. Args: query. Only use for the user's address book, not web people search.\n- mail.draft: Compose an email draft using the system mail composer. Args: to or recipient or email, subject, body or message or text.\n\nRequired output schema (choose one):\n{\"thought\":\"short routing note\",\"action\":{\"tool\":\"tool.id\",\"args\":{\"key\":\"value\"}}}\n{\"thought\":\"short completion note\",\"final\":\"final answer draft grounded in observations\"}\n\nHard rules:\n- You are the planner/orchestrator for this request.\n- If ",
+        "sourceLayer": "agentBehaviorTraceRecorder",
+        "type": "trace_parse_error"
+      },
+      "id": "8c1e8921baf5ad40035acbb1",
+      "recommendedAction": "Convert this failure into a REM repair sample and add a regression eval.",
+      "severity": "error",
+      "title": "trace_parse_error"
+    }
+  ]
 }

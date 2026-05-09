@@ -283,6 +283,17 @@ struct ChatView: View {
         let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
         let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
+        if let approvalStep = sanitizedSteps.first(where: { $0.kind == .approvalBoundary }),
+           let toolID = approvalStep.toolID {
+            let pendingToolMessage = ChatMessage(
+                role: .tool,
+                content: approvalStep.toolArgs?.description ?? approvalStep.content,
+                toolName: toolID,
+                toolStatus: .pendingApproval,
+                toolResult: nil
+            )
+            conversation.messages.append(pendingToolMessage)
+        }
         streamingText = ""
         streamingSteps = []
         activeTurnID = nil

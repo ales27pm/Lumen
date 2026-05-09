@@ -21,6 +21,8 @@ hashes, command argv, status, output paths, timestamps, and a wall clock. With
 ``--resume`` the script will skip stages whose input hashes have not changed
 and whose previous run succeeded.
 """
+# pylint: disable=too-many-lines,missing-class-docstring,missing-function-docstring,line-too-long
+# cspell:words Qwen qwen QWEN GGUF GGUFs gguf coreml mlmodel toolcalls scenarioresults adapterapplied jsons PYTHONUNBUFFERED PYTHONHASHSEED
 
 from __future__ import annotations
 
@@ -296,7 +298,7 @@ def _record_stage(
     *,
     root: Path,
     name: str,
-    status: str,
+    stage_status: str,
     argv: Sequence[str],
     input_paths: Sequence[Path],
     input_hash: str,
@@ -311,7 +313,7 @@ def _record_stage(
         return
     state.records[name] = StageRecord(
         name=name,
-        status=status,
+        status=stage_status,
         returncode=returncode,
         elapsed_s=elapsed_s,
         started_at=started_at,
@@ -364,7 +366,7 @@ def run(
             state,
             root=root,
             name=name,
-            status="skipped",
+            stage_status="skipped",
             argv=printable,
             input_paths=input_paths,
             input_hash=input_hash,
@@ -398,7 +400,7 @@ def run(
         state,
         root=root,
         name=name,
-        status="ok" if code == 0 else "fail",
+        stage_status="ok" if code == 0 else "fail",
         returncode=code,
         elapsed_s=elapsed,
         started_at=started_iso,
@@ -714,7 +716,96 @@ def crawl_ingest_generate(term: Terminal, root: Path, args: argparse.Namespace, 
     return results
 
 
-def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineState | None = None) -> list[RunResult]:
+def _train_intent_classifier(
+    term: Terminal,
+    root: Path,
+    args: argparse.Namespace,
+    train_py: Path,
+    state: PipelineState | None,
+) -> list[RunResult]:
+    dataset_path = resolve(root, args.intent_dataset_output)
+    model_path = resolve(root, args.intent_model_output)
+    coreml_path = resolve(root, args.intent_coreml_output)
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    coreml_path.parent.mkdir(parents=True, exist_ok=True)
+
+    results = [
+        run(
+            term,
+            root,
+            "generate intent-classifier dataset",
+            [
+                train_py,
+                "tools/intent_classifier/generate_intent_dataset.py",
+                "--out",
+                str(dataset_path),
+                "--repeat",
+                str(int(args.intent_dataset_repeat)),
+            ],
+            args=args,
+            state=state,
+            inputs=[
+                root / "tools/intent_classifier/generate_intent_dataset.py",
+                root / "tools/intent_classifier/intents.schema.json",
+            ],
+            outputs=[dataset_path],
+        ),
+        run(
+            term,
+            root,
+            "train intent-classifier model",
+            [
+                train_py,
+                "tools/intent_classifier/train_intent_classifier.py",
+                "--dataset",
+                str(dataset_path),
+                "--model-out",
+                str(model_path),
+            ],
+            args=args,
+            state=state,
+            inputs=[
+                dataset_path,
+                root / "tools/intent_classifier/train_intent_classifier.py",
+            ],
+            outputs=[model_path],
+        ),
+    ]
+    if args.skip_intent_coreml_export:
+        return results
+
+    results.append(
+        run(
+            term,
+            root,
+            "export intent-classifier CoreML model",
+            [
+                train_py,
+                "tools/intent_classifier/export_coreml_intent_classifier.py",
+                "--model",
+                str(model_path),
+                "--out",
+                str(coreml_path),
+            ],
+            args=args,
+            state=state,
+            inputs=[
+                model_path,
+                root / "tools/intent_classifier/export_coreml_intent_classifier.py",
+            ],
+            outputs=[coreml_path],
+        )
+    )
+    return results
+
+
+def train(
+    term: Terminal,
+    root: Path,
+    args: argparse.Namespace,
+    state: PipelineState | None = None,
+) -> list[RunResult]:
     cfg_dir = resolve(root, args.config_dir)
     if not cfg_dir.exists():
         raise SystemExit(f"Missing config dir: {cfg_dir}")
@@ -756,79 +847,7 @@ def train(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineS
             )
         )
     if args.train_intent_classifier:
-        dataset_path = resolve(root, args.intent_dataset_output)
-        model_path = resolve(root, args.intent_model_output)
-        coreml_path = resolve(root, args.intent_coreml_output)
-        dataset_path.parent.mkdir(parents=True, exist_ok=True)
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-        coreml_path.parent.mkdir(parents=True, exist_ok=True)
-        results.append(
-            run(
-                term,
-                root,
-                "generate intent-classifier dataset",
-                [
-                    train_py,
-                    "tools/intent_classifier/generate_intent_dataset.py",
-                    "--out",
-                    str(dataset_path),
-                    "--repeat",
-                    str(int(args.intent_dataset_repeat)),
-                ],
-                args=args,
-                state=state,
-                inputs=[
-                    root / "tools/intent_classifier/generate_intent_dataset.py",
-                    root / "tools/intent_classifier/intents.schema.json",
-                ],
-                outputs=[dataset_path],
-            )
-        )
-        results.append(
-            run(
-                term,
-                root,
-                "train intent-classifier model",
-                [
-                    train_py,
-                    "tools/intent_classifier/train_intent_classifier.py",
-                    "--dataset",
-                    str(dataset_path),
-                    "--model-out",
-                    str(model_path),
-                ],
-                args=args,
-                state=state,
-                inputs=[
-                    dataset_path,
-                    root / "tools/intent_classifier/train_intent_classifier.py",
-                ],
-                outputs=[model_path],
-            )
-        )
-        if not args.skip_intent_coreml_export:
-            results.append(
-                run(
-                    term,
-                    root,
-                    "export intent-classifier CoreML model",
-                    [
-                        train_py,
-                        "tools/intent_classifier/export_coreml_intent_classifier.py",
-                        "--model",
-                        str(model_path),
-                        "--out",
-                        str(coreml_path),
-                    ],
-                    args=args,
-                    state=state,
-                    inputs=[
-                        model_path,
-                        root / "tools/intent_classifier/export_coreml_intent_classifier.py",
-                    ],
-                    outputs=[coreml_path],
-                )
-            )
+        results.extend(_train_intent_classifier(term, root, args, train_py, state))
     return results
 
 
@@ -1040,6 +1059,7 @@ def menu(term: Terminal) -> str:
 
 
 def interactive(term: Terminal, root: Path, args: argparse.Namespace, state: PipelineState | None) -> int:
+    recoverable_menu_errors = (OSError, RuntimeError, ValueError, subprocess.SubprocessError)
     actions: dict[str, Callable[[], object]] = {
         "1": lambda: preflight(term, root, args, state),
         "2": lambda: crawl_ingest_generate(term, root, args, state),
@@ -1063,7 +1083,7 @@ def interactive(term: Terminal, root: Path, args: argparse.Namespace, state: Pip
             action()
         except KeyboardInterrupt:
             term.warn("interrupted")
-        except Exception as exc:  # noqa: BLE001 - terminal menu should survive one failed step
+        except recoverable_menu_errors as exc:
             term.fail(str(exc))
             if args.stop_on_error:
                 return 1

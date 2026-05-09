@@ -358,7 +358,9 @@ final class SlotAgentService {
         if let tool = ToolRegistry.find(id: canonicalTool), tool.requiresApproval {
             let pending = ToolApprovalQueue.shared.enqueue(toolID: canonicalTool, toolName: tool.name, arguments: normalizedArgs)
             let approvalMessage = ApprovalBoundaryFormatter.approvalMessage(for: pending)
-            let approvalStep = AgentStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: normalizedArgs)
+            var boundaryArgs = normalizedArgs
+            boundaryArgs["pendingActionID"] = pending.pendingActionID.uuidString
+            let approvalStep = AgentStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: boundaryArgs)
             steps.append(approvalStep)
             continuation.yield(.step(approvalStep))
             return .finalizeImmediate(approvalMessage)

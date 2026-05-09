@@ -24,6 +24,9 @@ final class AgentModelBehaviorAuditor {
             let expectedManifestTools = manifestAllowedByIntent[expectedIntent] ?? []
             let runtimeAllowedTools = routing.allowedToolIDs
             let actionSteps = message.agentSteps.filter { $0.kind == .action || $0.kind == .approvalBoundary }
+            let reflectionApprovalBoundary = message.agentSteps.contains { step in
+                step.kind == .reflection && isApprovalBoundaryStep(step)
+            }
             let visibleFinal = AssistantOutputSanitizer.sanitize(message.content)
             let sanitizedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(message.content)
             auditedTraceCount += 1
@@ -89,7 +92,7 @@ final class AgentModelBehaviorAuditor {
             }
 
             let manifestSaysToolExpected = !expectedManifestTools.isEmpty && routing.intent != .chat && routing.intent != .unknown
-            if manifestSaysToolExpected && actionSteps.isEmpty && !routing.requiresClarification {
+            if manifestSaysToolExpected && actionSteps.isEmpty && !reflectionApprovalBoundary && !routing.requiresClarification {
                 violations.append(violation(
                     severity: .error,
                     code: "missing_required_tool_action",
@@ -183,7 +186,7 @@ final class AgentModelBehaviorAuditor {
 
                 if tool.requiresApproval {
                     let hasUiApproval = hasTrustedUIApproval(prompt: prompt)
-                    let isApprovalBoundary = action.kind == .approvalBoundary
+                    let isApprovalBoundary = isApprovalBoundaryStep(action) || reflectionApprovalBoundary
                     if !hasUiApproval && !isApprovalBoundary {
                     violations.append(violation(
                         severity: .warning,
@@ -248,47 +251,12 @@ final class AgentModelBehaviorAuditor {
 
     private func hasTrustedUIApproval(prompt: String) -> Bool {
         let lower = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let actionVerbs = ["send", "create", "draft", "call", "save", "schedule", "cancel", "set", "remind"]
+        return lower.contains("[trusted_ui_confirmed]")
+    }
 
-        guard actionVerbs.contains(where: { lower.contains($0) }) else { return false }
-
-        let explicitRequestMarkers = [
-            "please ",
-            "can you ",
-            "could you ",
-            "i want you to ",
-            "i need you to ",
-            "help me ",
-            "for me"
-        ]
-
-        let imperativePatterns = [
-            "please send", "please create", "please draft", "please call", "please save", "please schedule", "please cancel", "please set", "please remind",
-            "send this", "create this", "draft this", "call ", "save this", "schedule this", "cancel this", "set this", "remind me",
-            "i want you to send", "i want you to create", "i want you to draft", "i want you to call", "i need you to call", "i need you to create"
-        ]
-
-        let informationalMarkers = [
-            "how to", "what is", "what's", "why", "when", "example", "examples", "should i", "can i", "could i", "tell me about"
-        ]
-
-        if informationalMarkers.contains(where: { lower.contains($0) }) {
-            return false
-        }
-
-        let hasFirstPerson = lower.contains(" i ") || lower.hasPrefix("i ") || lower.contains(" my ") || lower.hasPrefix("my ")
-        let hasRequestMarker = explicitRequestMarkers.contains(where: { lower.contains($0) })
-        let hasImperativePattern = imperativePatterns.contains(where: { lower.contains($0) })
-
-        if hasImperativePattern {
-            return true
-        }
-
-        if hasFirstPerson && hasRequestMarker {
-            return true
-        }
-
-        return false
+    private func isApprovalBoundaryStep(_ step: AgentStep) -> Bool {
+        if step.kind == .approvalBoundary { return true }
+        return step.toolArgs?["pendingActionID"]?.isEmpty == false
     }
 
     private func violation(

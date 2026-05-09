@@ -196,7 +196,9 @@ final class RolePipelineAgentService {
         if let tool = ToolRegistry.find(id: canonicalTool), tool.requiresApproval {
             let pending = ToolApprovalQueue.shared.enqueue(toolID: canonicalTool, toolName: tool.name, arguments: normalizedArgs)
             let approvalMessage = ApprovalBoundaryFormatter.approvalMessage(for: pending)
-            yieldStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
+            var boundaryArgs = normalizedArgs
+            boundaryArgs["pendingActionID"] = pending.pendingActionID.uuidString
+            yieldStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: boundaryArgs, steps: &steps, continuation: continuation)
             return .blocked(approvalMessage)
         }
 

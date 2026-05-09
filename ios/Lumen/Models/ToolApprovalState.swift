@@ -12,8 +12,8 @@ nonisolated struct ToolApprovalState: Sendable, Codable, Hashable {
     let source: ApprovalSource
 
     var executionApproval: ToolExecutionApproval {
-        guard source == .uiConfirmation, approvedAt != nil else { return .autonomous }
-        return .userApproved
+        guard source == .uiConfirmation else { return .autonomous }
+        return approvedAt == nil ? .pending : .userApproved
     }
 }
 

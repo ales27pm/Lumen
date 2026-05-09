@@ -256,6 +256,22 @@ def _trace_parse_error_failure(
     }
 
 
+def _should_report_trace_parse_error(trace: dict[str, Any]) -> bool:
+    prompt = str(trace.get("promptPrefix") or "").lower()
+    slot = str(trace.get("slot") or "").lower()
+    stage = str(trace.get("stage") or "").lower()
+    # Some traces intentionally request plain text (for example mouth-final
+    # user-facing replies or replay summaries). Those should not be counted as
+    # structured-output runtime drift failures.
+    if "do not output json" in prompt:
+        return False
+    if stage == "agent-summary" and "original final answer" in prompt:
+        return False
+    if slot == "mouth" and stage == "mouth-final":
+        return False
+    return True
+
+
 def _trace_tool_failure(
     trace: dict[str, Any], selected_tool_id: str, allowed_tool_ids: list[str]
 ) -> dict[str, Any] | None:
@@ -324,7 +340,8 @@ def _collect_trace_failures(
 
         if parse_error:
             parse_error_count += 1
-            failures.append(_trace_parse_error_failure(trace, parse_error))
+            if _should_report_trace_parse_error(trace):
+                failures.append(_trace_parse_error_failure(trace, parse_error))
         if not selected_tool_id:
             continue
         if selected_tool_id in allowed_tool_ids:

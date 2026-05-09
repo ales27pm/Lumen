@@ -7,7 +7,7 @@
     "generatedAt": "1970-01-01T00:00:00+00:00"
   },
   "sourceIntegrity": {
-    "commit": "61b1fe021c20441e0ba66496b442a70c4629b97d",
+    "commit": "26c7bd9b5d265b044d55bb66cbd17144fa75b871",
     "files": [
       {
         "path": "ios/Lumen/Models/AgentJSONValue.swift",
@@ -59,7 +59,7 @@
       },
       {
         "path": "ios/Lumen/Views/ChatView.swift",
-        "sha256": "fe1e26a745b8412eed374f560557faf7c8c307fae9856695da73f1e81ef47d30"
+        "sha256": "237b59f284b585f66011680287791d213d7f65d26a39d896c478feb4eecb5315"
       }
     ]
   },

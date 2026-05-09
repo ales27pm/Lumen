@@ -5,7 +5,7 @@
   "agent": "mimicry",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "61b1fe021c20441e0ba66496b442a70c4629b97d",
+    "manifestCommit": "26c7bd9b5d265b044d55bb66cbd17144fa75b871",
     "recordCounts": {
       "eval": 3,
       "train_dpo": 9,

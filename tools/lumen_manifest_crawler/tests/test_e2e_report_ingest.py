@@ -425,3 +425,67 @@ def test_e2e_owned_package_can_ingest_live_scenario_results(tmp_path: Path):
     assert report["ignoredScenarioResultCount"] == 0
     assert len(report["failures"]) == 1
     assert report["failures"][0]["sourceLayer"] == "e2eTestReport.scenarioResults"
+
+
+def test_in_app_package_ignores_plaintext_mouth_final_parse_errors(tmp_path: Path):
+    report_path = tmp_path / "lumen-agent-grounding-audit-mouth-plaintext.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "agent-grounding-runtime-json-package",
+            "sourceLayer": "agentGroundingRuntimeAudit",
+            "ownsLiveE2EScenarios": False,
+        },
+        "recentTraces": [
+            {
+                "slot": "mouth",
+                "stage": "mouth-final",
+                "parseError": "noJSONObject",
+                "promptPrefix": "Write the final user-facing answer. Do not output JSON.",
+                "allowedToolIDs": [],
+            }
+        ],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    assert report["traceParseErrorCount"] == 1
+    assert all(failure["type"] != "trace_parse_error" for failure in report["failures"])
+
+
+def test_in_app_package_ignores_agent_summary_parse_errors(tmp_path: Path):
+    report_path = tmp_path / "lumen-agent-grounding-audit-agent-summary.json"
+    import json
+
+    package = {
+        "schemaVersion": "1.1.0",
+        "generatedAt": "2026-05-03T00:00:00Z",
+        "manifestSource": "AgentGrounding/agent_manifest/AgentBehaviorManifest.json",
+        "usedRuntimeFallback": False,
+        "exportPolicy": {
+            "format": "agent-grounding-runtime-json-package",
+            "sourceLayer": "agentGroundingRuntimeAudit",
+            "ownsLiveE2EScenarios": False,
+        },
+        "recentTraces": [
+            {
+                "slot": "cortex",
+                "stage": "agent-summary",
+                "parseError": "missingActionOrFinal",
+                "promptPrefix": "User prompt: ... Original final answer: ...",
+                "allowedToolIDs": [],
+            }
+        ],
+    }
+    report_path.write_text(json.dumps(package), encoding="utf-8")
+
+    report = load_runtime_audit_reports([report_path])[0]
+
+    assert report["traceParseErrorCount"] == 1
+    assert all(failure["type"] != "trace_parse_error" for failure in report["failures"])

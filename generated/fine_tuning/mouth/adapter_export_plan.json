@@ -5,13 +5,13 @@
   "agent": "mouth",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "61b1fe021c20441e0ba66496b442a70c4629b97d",
+    "manifestCommit": "26c7bd9b5d265b044d55bb66cbd17144fa75b871",
     "recordCounts": {
       "eval": 5,
       "train_dpo": 10,
-      "train_sft": 161,
+      "train_sft": 128,
       "val_dpo": 2,
-      "val_sft": 28
+      "val_sft": 23
     },
     "sourceFamilies": [
       "cross_model_training",
@@ -19,7 +19,6 @@
       "fleet_system_prompts",
       "manifest_grounding_cards",
       "mouth_responses",
-      "runtime_audit_repairs",
       "train_sft"
     ],
     "taskTypes": [
@@ -34,7 +33,6 @@
       "manifest_grounding_cards",
       "mouth_responses",
       "role_directory",
-      "runtime_manifest_drift_repair",
       "source_code_self_knowledge",
       "source_routing_knowledge",
       "source_tool_registry_knowledge",

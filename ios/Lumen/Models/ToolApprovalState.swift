@@ -36,7 +36,9 @@ nonisolated struct ExecutorPendingApproval: Sendable, Codable, Hashable {
 @MainActor
 final class ToolApprovalQueue {
     static let shared = ToolApprovalQueue()
+    private static let maxPending = 256
     private var pendingByID: [UUID: ExecutorPendingApproval] = [:]
+    private var insertionOrder: [UUID] = []
     private init() {}
 
     func enqueue(toolID: String, toolName: String, arguments: [String: String]) -> ExecutorPendingApproval {
@@ -47,12 +49,31 @@ final class ToolApprovalQueue {
             confirmationMessage: "Approve \(toolName) with arguments: \(arguments)",
             reason: "requiresApproval"
         )
+        if pendingByID[pending.pendingActionID] == nil {
+            insertionOrder.append(pending.pendingActionID)
+        }
         pendingByID[pending.pendingActionID] = pending
+        pruneIfNeeded()
         return pending
     }
 
     func resolve(_ pendingActionID: UUID) -> ExecutorPendingApproval? { pendingByID[pendingActionID] }
-    func clear(_ pendingActionID: UUID) { pendingByID.removeValue(forKey: pendingActionID) }
+    func clear(_ pendingActionID: UUID) {
+        pendingByID.removeValue(forKey: pendingActionID)
+        insertionOrder.removeAll { $0 == pendingActionID }
+    }
+    func consume(_ pendingActionID: UUID) -> ExecutorPendingApproval? {
+        let resolved = pendingByID.removeValue(forKey: pendingActionID)
+        insertionOrder.removeAll { $0 == pendingActionID }
+        return resolved
+    }
+
+    private func pruneIfNeeded() {
+        while pendingByID.count > Self.maxPending, let oldest = insertionOrder.first {
+            insertionOrder.removeFirst()
+            pendingByID.removeValue(forKey: oldest)
+        }
+    }
 }
 
 nonisolated enum ApprovalBoundaryFormatter {

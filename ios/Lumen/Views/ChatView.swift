@@ -287,7 +287,7 @@ struct ChatView: View {
            let toolID = approvalStep.toolID {
             let pendingToolMessage = ChatMessage(
                 role: .tool,
-                content: approvalStep.toolArgs?.description ?? approvalStep.content,
+                content: serializedToolArgs(approvalStep.toolArgs ?? [:]),
                 toolName: toolID,
                 toolStatus: .pendingApproval,
                 toolResult: nil
@@ -308,6 +308,10 @@ struct ChatView: View {
         conversation.updatedAt = Date()
         try? modelContext.save()
         appState.isGenerating = false
+    }
+
+    private func serializedToolArgs(_ args: [String: String]) -> String {
+        args.keys.sorted().map { key in "\(key): \(args[key] ?? "")" }.joined(separator: ", ")
     }
 
     private func runPlain(turnID: UUID, requestID: UUID, text: String, memories: [MemoryContextItem], attachments: [ChatAttachment]) async {

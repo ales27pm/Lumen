@@ -10,6 +10,7 @@ nonisolated struct AgentStep: Codable, Sendable, Identifiable, Hashable {
     nonisolated enum Kind: String, Codable, Sendable {
         case thought
         case action
+        case approvalBoundary
         case observation
         case reflection
     }
@@ -18,6 +19,7 @@ nonisolated struct AgentStep: Codable, Sendable, Identifiable, Hashable {
         switch kind {
         case .thought: "brain"
         case .action: "wrench.and.screwdriver.fill"
+        case .approvalBoundary: "checkmark.shield"
         case .observation: "eye.fill"
         case .reflection: "sparkle"
         }
@@ -27,6 +29,7 @@ nonisolated struct AgentStep: Codable, Sendable, Identifiable, Hashable {
         switch kind {
         case .thought: "Thought"
         case .action: "Action"
+        case .approvalBoundary: "Approval"
         case .observation: "Observation"
         case .reflection: "Reflection"
         }

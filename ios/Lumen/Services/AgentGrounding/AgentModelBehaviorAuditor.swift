@@ -23,7 +23,7 @@ final class AgentModelBehaviorAuditor {
             let expectedIntent = routing.intent.rawValue
             let expectedManifestTools = manifestAllowedByIntent[expectedIntent] ?? []
             let runtimeAllowedTools = routing.allowedToolIDs
-            let actionSteps = message.agentSteps.filter { $0.kind == .action }
+            let actionSteps = message.agentSteps.filter { $0.kind == .action || $0.kind == .approvalBoundary }
             let visibleFinal = AssistantOutputSanitizer.sanitize(message.content)
             let sanitizedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(message.content)
             auditedTraceCount += 1
@@ -183,7 +183,7 @@ final class AgentModelBehaviorAuditor {
 
                 if tool.requiresApproval {
                     let hasUiApproval = hasTrustedUIApproval(prompt: prompt)
-                    let isApprovalBoundary = action.content.lowercased().contains("approval required") || action.content.lowercased().contains("requestapproval")
+                    let isApprovalBoundary = action.kind == .approvalBoundary
                     if !hasUiApproval && !isApprovalBoundary {
                     violations.append(violation(
                         severity: .warning,
@@ -192,7 +192,7 @@ final class AgentModelBehaviorAuditor {
                         expected: "Tool \(tool.id) requires an approval boundary unless the request is explicitly user-initiated.",
                         actual: action.content,
                         prompt: prompt,
-                        problem: "A requiresApproval tool was selected without trusted UI approval or explicit approval-boundary action."
+                        problem: "A requiresApproval tool was selected without trusted UI approval or an explicit approval-boundary step."
                     ))
                     }
                 }

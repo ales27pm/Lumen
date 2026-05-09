@@ -194,15 +194,9 @@ final class RolePipelineAgentService {
         }
 
         if let tool = ToolRegistry.find(id: canonicalTool), tool.requiresApproval {
-            let pending = ExecutorPendingApproval(
-                pendingActionID: UUID(),
-                toolID: canonicalTool,
-                arguments: AgentJSONArguments(stringDictionary: normalizedArgs),
-                confirmationMessage: "Approve \(tool.name) with arguments: \(normalizedArgs)",
-                reason: "requiresApproval"
-            )
-            let approvalMessage = "Approval required before running \(canonicalTool). Pending action id: \(pending.pendingActionID.uuidString)."
-            yieldStep(kind: .reflection, content: approvalMessage, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
+            let pending = ToolApprovalQueue.shared.enqueue(toolID: canonicalTool, toolName: tool.name, arguments: normalizedArgs)
+            let approvalMessage = ApprovalBoundaryFormatter.approvalMessage(for: pending)
+            yieldStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
             return .blocked(approvalMessage)
         }
 

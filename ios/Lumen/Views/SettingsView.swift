@@ -449,6 +449,14 @@ private struct E2ETestRunnerView: View {
                 }
             }
 
+            if !eventLogEntries.isEmpty {
+                Section("Real-time Logs") {
+                    E2ERealtimeLogView(entries: eventLogEntries, isRunning: isRunning)
+                } footer: {
+                    Text("Streaming event feed for each scenario run (intent, model readiness, tool steps, final hints, and final output).")
+                }
+            }
+
             Section("Scenarios") {
                 ForEach(runMode.scenarios) { scenario in
                     VStack(alignment: .leading, spacing: 4) {
@@ -591,6 +599,23 @@ private struct E2ETestRunnerView: View {
         case "hygiene": return "Output hygiene"
         default: return "Other"
         }
+    }
+
+    private var eventLogEntries: [E2ERealtimeLogEntry] {
+        let scenariosByID = Dictionary(uniqueKeysWithValues: runMode.scenarios.map { ($0.id, $0.title) })
+        let activeResults = isRunning || !liveResults.isEmpty ? liveResults : (latestReport?.results ?? [])
+        return activeResults.flatMap { result in
+            result.events.map { event in
+                E2ERealtimeLogEntry(
+                    id: event.id,
+                    createdAt: event.createdAt,
+                    scenarioTitle: scenariosByID[event.scenarioID] ?? result.title,
+                    phase: event.phase,
+                    message: event.message
+                )
+            }
+        }
+        .sorted { $0.createdAt < $1.createdAt }
     }
 }
 
@@ -758,6 +783,73 @@ private struct E2ETestResultRow: View {
         }
         .padding(.vertical, 3)
     }
+}
+
+private struct E2ERealtimeLogEntry: Identifiable {
+    let id: UUID
+    let createdAt: Date
+    let scenarioTitle: String
+    let phase: String
+    let message: String
+}
+
+private struct E2ERealtimeLogView: View {
+    let entries: [E2ERealtimeLogEntry]
+    let isRunning: Bool
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(entries) { entry in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Text(timeText(entry.createdAt))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Text(entry.phase.uppercased())
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(phaseColor(entry.phase))
+                            Text(entry.scenarioTitle)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                        }
+                        Text(entry.message)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(Theme.textSecondary)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                    .overlay(alignment: .bottom) {
+                        Divider().opacity(0.35)
+                    }
+                }
+            }
+        }
+        .frame(minHeight: isRunning ? 240 : 180, maxHeight: 320)
+    }
+
+    private func timeText(_ date: Date) -> String {
+        Self.logTimeFormatter.string(from: date)
+    }
+
+    private func phaseColor(_ phase: String) -> Color {
+        switch phase {
+        case "error": return .red
+        case "intent": return .blue
+        case "models": return .orange
+        case "step": return .purple
+        case "final": return .green
+        default: return Theme.textTertiary
+        }
+    }
+
+    private static let logTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
 }
 
 private struct E2EFailureBucket: Identifiable {

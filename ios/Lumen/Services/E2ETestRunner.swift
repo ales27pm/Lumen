@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+#if canImport(Darwin)
+import Darwin
+#endif
 
 nonisolated enum E2ETestKind: String, Codable, Sendable, CaseIterable {
     case routing
@@ -64,7 +67,7 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         E2ETestScenario(id: "normal-chat-no-forced-tool", title: "Normal chat does not force tools", kind: .chat, prompt: "Explain why a sharp chisel is safer than a dull one.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
     ]
 
-    static let allToolCoverage: [E2ETestScenario] = [
+    private static let allToolCoverageBase: [E2ETestScenario] = [
         // Calendar
         E2ETestScenario(id: "tool-calendar-create", title: "calendar.create scoped", kind: .toolGuard, prompt: "Create an event tomorrow at 5 called test appointment", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "mail.draft", "maps.search"], requiredTextHints: [], forbiddenTextHints: ["weather for", "web search"], requiresAgentRun: false),
         E2ETestScenario(id: "tool-calendar-list", title: "calendar.list scoped", kind: .toolGuard, prompt: "List my upcoming calendar events", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "reminders.create", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["weather for"], requiresAgentRun: false),
@@ -121,10 +124,46 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         E2ETestScenario(id: "tool-alarm-cancel", title: "alarm.cancel scoped", kind: .toolGuard, prompt: "Cancel alarm named morning wakeup", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false)
     ]
 
+    static let allToolCoverage: [E2ETestScenario] = multiScenarioCoverage(from: allToolCoverageBase)
+
     static let chatCoverage: [E2ETestScenario] = [
         E2ETestScenario(id: "chat-carpentry-advice", title: "Carpentry chat stays direct", kind: .chat, prompt: "Give me three tips for fitting a door hinge cleanly.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true),
         E2ETestScenario(id: "chat-code-explanation", title: "Code explanation stays chat", kind: .chat, prompt: "Explain actor isolation in Swift in simple terms.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
     ]
+
+    private static func multiScenarioCoverage(from scenarios: [E2ETestScenario]) -> [E2ETestScenario] {
+        scenarios.flatMap { scenario in
+            let variant = E2ETestScenario(
+                id: "\(scenario.id)-variant-b",
+                title: "\(scenario.title) (variant B)",
+                kind: scenario.kind,
+                prompt: "\(scenario.prompt). Keep the response concise and confirm the action boundaries.",
+                expectedIntent: scenario.expectedIntent,
+                requiredAllowedToolIDs: scenario.requiredAllowedToolIDs,
+                forbiddenToolIDs: scenario.forbiddenToolIDs,
+                requiredTextHints: scenario.requiredTextHints,
+                forbiddenTextHints: scenario.forbiddenTextHints,
+                requiresAgentRun: scenario.requiresAgentRun
+            )
+            return [scenario, variant]
+        }
+    }
+}
+
+nonisolated struct E2EPerformanceSample: Codable, Sendable {
+    let timestamp: Date
+    let residentMemoryMB: Double?
+    let totalMemoryMB: Double
+}
+
+nonisolated struct E2EPerformanceMatrix: Codable, Sendable {
+    let aneUtilizationPercent: Double?
+    let cpuUtilizationPercentEstimate: Double?
+    let gpuUtilizationPercent: Double?
+    let peakRAMMB: Double
+    let averageRAMMB: Double
+    let sampleCount: Int
+    let notes: [String]
 }
 
 nonisolated struct E2ETestEvent: Codable, Sendable, Identifiable {
@@ -156,6 +195,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
     let rawFinalHadUnsafeLeakage: Bool
     let sanitizedFinalRemovedArtifacts: [String]
     let outputHygieneFailures: [String]
+    let performanceMatrix: E2EPerformanceMatrix?
 
     init(
         id: UUID,
@@ -177,7 +217,8 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         sanitizedFinalPrefix: String,
         rawFinalHadUnsafeLeakage: Bool,
         sanitizedFinalRemovedArtifacts: [String],
-        outputHygieneFailures: [String]
+        outputHygieneFailures: [String],
+        performanceMatrix: E2EPerformanceMatrix? = nil
     ) {
         self.id = id
         self.scenarioID = scenarioID
@@ -199,6 +240,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         self.rawFinalHadUnsafeLeakage = rawFinalHadUnsafeLeakage
         self.sanitizedFinalRemovedArtifacts = sanitizedFinalRemovedArtifacts
         self.outputHygieneFailures = outputHygieneFailures
+        self.performanceMatrix = performanceMatrix
     }
 
     init(from decoder: Decoder) throws {
@@ -223,6 +265,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         rawFinalHadUnsafeLeakage = try c.decodeIfPresent(Bool.self, forKey: .rawFinalHadUnsafeLeakage) ?? false
         sanitizedFinalRemovedArtifacts = try c.decodeIfPresent([String].self, forKey: .sanitizedFinalRemovedArtifacts) ?? []
         outputHygieneFailures = try c.decodeIfPresent([String].self, forKey: .outputHygieneFailures) ?? []
+        performanceMatrix = try c.decodeIfPresent(E2EPerformanceMatrix.self, forKey: .performanceMatrix)
     }
 }
 
@@ -268,9 +311,17 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
             if !result.finalText.isEmpty {
                 lines.append("Final: \(result.finalText)")
             }
+            if let matrix = result.performanceMatrix {
+                lines.append("Performance: ANE \(displayPercent(matrix.aneUtilizationPercent)), CPU \(displayPercent(matrix.cpuUtilizationPercentEstimate)), GPU \(displayPercent(matrix.gpuUtilizationPercent)), RAM avg \(Int(matrix.averageRAMMB))MB / peak \(Int(matrix.peakRAMMB))MB")
+            }
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private func displayPercent(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return "\(Int(value.rounded()))%"
     }
 }
 
@@ -341,11 +392,22 @@ enum E2ETestRunner {
             recoveredBeforeRewrite: nil,
             recoveredAfterRewrite: nil
         )
+        var performanceSamples: [E2EPerformanceSample] = []
 
         func event(_ phase: String, _ message: String) {
             events.append(E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message))
         }
+        func collectPerformanceSample() {
+            performanceSamples.append(
+                E2EPerformanceSample(
+                    timestamp: Date(),
+                    residentMemoryMB: residentMemoryUsageMB(),
+                    totalMemoryMB: Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
+                )
+            )
+        }
 
+        collectPerformanceSample()
         event("start", scenario.prompt)
         let routing = await IntentClassifierService.shared.route(scenario.prompt)
         event("intent", "actual=\(routing.intent.rawValue), expected=\(scenario.expectedIntent.rawValue)")
@@ -380,6 +442,7 @@ enum E2ETestRunner {
                 )
                 var steps: [AgentStep] = []
                 for await agentEvent in SlotAgentService.shared.run(req) {
+                    collectPerformanceSample()
                     switch agentEvent {
                     case .step(let step):
                         steps.append(step)
@@ -480,7 +543,49 @@ enum E2ETestRunner {
             ? hygieneState.rawSanitized.artifactAudit.rawPrefix
             : hygieneState.postRewriteSanitized.artifactAudit.rawPrefix
         let sanitizedPrefix = hygieneState.postRewriteSanitized.artifactAudit.sanitizedPrefix
-        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+        let endedAt = Date()
+        let matrix = performanceMatrix(from: performanceSamples, startedAt: started, finishedAt: endedAt)
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: endedAt, rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures, performanceMatrix: matrix)
+    }
+
+    private static func performanceMatrix(from samples: [E2EPerformanceSample], startedAt: Date, finishedAt: Date) -> E2EPerformanceMatrix {
+        let residentSamples = samples.compactMap(\.residentMemoryMB)
+        let averageRAM = residentSamples.isEmpty ? 0 : residentSamples.reduce(0, +) / Double(residentSamples.count)
+        let peakRAM = residentSamples.max() ?? 0
+        let duration = finishedAt.timeIntervalSince(startedAt)
+        let cpuEstimate = duration > 0 ? min(100, (Double(samples.count) / max(duration, 0.001)) * 2.5) : nil
+        var notes = [
+            "CPU is an event-density estimate for test comparison only.",
+            "ANE and GPU counters are unavailable in this runtime and exported as null.",
+        ]
+        if residentSamples.isEmpty {
+            notes.append("Resident-memory sampling unavailable; RAM fields defaulted to 0MB.")
+        }
+        return E2EPerformanceMatrix(
+            aneUtilizationPercent: nil,
+            cpuUtilizationPercentEstimate: cpuEstimate,
+            gpuUtilizationPercent: nil,
+            peakRAMMB: peakRAM,
+            averageRAMMB: averageRAM,
+            sampleCount: samples.count,
+            notes: notes
+        )
+    }
+
+    private static func residentMemoryUsageMB() -> Double? {
+#if canImport(Darwin)
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPointer in
+            infoPointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPointer, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return Double(info.resident_size) / (1024 * 1024)
+#else
+        return nil
+#endif
     }
 
     static func mergeSanitizerOutputs(_ primary: SanitizedFinalOutput, recovered: SanitizedFinalOutput?) -> SanitizedFinalOutput {

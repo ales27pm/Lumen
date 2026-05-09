@@ -761,9 +761,11 @@ final actor AppLlamaService {
                     let readyMetrics = try await SlotModelRuntimeCoordinator.shared.ensureReadyWithMetrics(slot: slot)
                     let contextSize = await self.contextSizeForGeneration(slot: slot)
                     let groundedRequest = req.groundingSystemPrompt(for: slot)
+                    let messageBuildStarted = Date()
                     let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize)
+                    let messageBuildMs = Int(Date().timeIntervalSince(messageBuildStarted) * 1000)
                     let promptChars = messages.reduce(0) { $0 + $1.content.count }
-                    let promptTokenCount = max(1, promptChars / 4)
+                    let estimatedPromptTokenCount = max(1, promptChars / 4)
                     let stream = try await self.streamResponse(
                         slot: slot,
                         messages: messages,
@@ -804,7 +806,7 @@ final actor AppLlamaService {
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                     let decodeMs = firstTokenMs.map { max(0, elapsedMs - $0) }
-                    let promptEvalMs = firstTokenMs
+                    let preFirstTokenMs = firstTokenMs
                     let outputTokenEstimate = max(0, streamedSanitized.split(whereSeparator: \.isWhitespace).count)
                     let tps = decodeMs.flatMap { $0 > 0 ? Double(outputTokenEstimate) / (Double($0) / 1000.0) : nil }
                     await self.recordModelTrace(
@@ -815,8 +817,9 @@ final actor AppLlamaService {
                         generationElapsedMs: elapsedMs,
                         outputTokenCount: max(outputTokenEstimate, outputChunks),
                         firstTokenLatencyMs: firstTokenMs,
-                        promptTokenCount: promptTokenCount,
-                        promptEvalMs: promptEvalMs,
+                        estimatedPromptTokenCount: estimatedPromptTokenCount,
+                        preFirstTokenMs: preFirstTokenMs,
+                        messageBuildMs: messageBuildMs,
                         decodeMs: decodeMs,
                         tokensPerSecond: tps,
                         ensureReadyMs: readyMetrics.ensureReadyMs,
@@ -971,8 +974,9 @@ final actor AppLlamaService {
         generationElapsedMs: Int? = nil,
         outputTokenCount: Int? = nil,
         firstTokenLatencyMs: Int? = nil,
-        promptTokenCount: Int? = nil,
-        promptEvalMs: Int? = nil,
+        estimatedPromptTokenCount: Int? = nil,
+        preFirstTokenMs: Int? = nil,
+        messageBuildMs: Int? = nil,
         decodeMs: Int? = nil,
         tokensPerSecond: Double? = nil,
         ensureReadyMs: Int? = nil,
@@ -1013,8 +1017,9 @@ final actor AppLlamaService {
                 generationElapsedMs: generationElapsedMs,
                 firstTokenLatencyMs: firstTokenLatencyMs,
                 outputTokenCount: outputTokenCount,
-                promptTokenCount: promptTokenCount,
-                promptEvalMs: promptEvalMs,
+                estimatedPromptTokenCount: estimatedPromptTokenCount,
+                preFirstTokenMs: preFirstTokenMs,
+                messageBuildMs: messageBuildMs,
                 decodeMs: decodeMs,
                 tokensPerSecond: tokensPerSecond,
                 ensureReadyMs: ensureReadyMs,

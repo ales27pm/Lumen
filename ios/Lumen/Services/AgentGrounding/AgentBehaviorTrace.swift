@@ -33,8 +33,9 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
     let generationElapsedMs: Int?
     let firstTokenLatencyMs: Int?
     let outputTokenCount: Int?
-    let promptTokenCount: Int?
-    let promptEvalMs: Int?
+    let estimatedPromptTokenCount: Int?
+    let preFirstTokenMs: Int?
+    let messageBuildMs: Int?
     let decodeMs: Int?
     let tokensPerSecond: Double?
     let ensureReadyMs: Int?
@@ -73,8 +74,9 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         generationElapsedMs: Int? = nil,
         firstTokenLatencyMs: Int? = nil,
         outputTokenCount: Int? = nil,
-        promptTokenCount: Int? = nil,
-        promptEvalMs: Int? = nil,
+        estimatedPromptTokenCount: Int? = nil,
+        preFirstTokenMs: Int? = nil,
+        messageBuildMs: Int? = nil,
         decodeMs: Int? = nil,
         tokensPerSecond: Double? = nil,
         ensureReadyMs: Int? = nil,
@@ -112,8 +114,9 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         self.generationElapsedMs = generationElapsedMs
         self.firstTokenLatencyMs = firstTokenLatencyMs
         self.outputTokenCount = outputTokenCount
-        self.promptTokenCount = promptTokenCount
-        self.promptEvalMs = promptEvalMs
+        self.estimatedPromptTokenCount = estimatedPromptTokenCount
+        self.preFirstTokenMs = preFirstTokenMs
+        self.messageBuildMs = messageBuildMs
         self.decodeMs = decodeMs
         self.tokensPerSecond = tokensPerSecond
         self.ensureReadyMs = ensureReadyMs

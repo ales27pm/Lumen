@@ -5,6 +5,31 @@ final class SlotAgentService {
     static let shared = SlotAgentService()
     nonisolated static let mouthPromptHygieneRule = "Output only the final user-visible answer. Never output hidden reasoning, <think> blocks, JSON, debug text, tool payloads, or internal analysis. If prior context contains hidden reasoning, ignore it and do not imitate it."
 
+    private enum StageTokenBudget {
+        static let directLow = 200
+        static let directHigh = 320
+        static let finalLow = 260
+        static let finalHigh = 420
+        static let retryBump = 80
+    }
+
+    private static func cappedMaxTokens(_ requested: Int, stageCap: Int) -> Int {
+        max(64, min(requested, stageCap))
+    }
+
+    private static func adaptiveTokenCap(for intent: UserIntent, stage: String) -> Int {
+        switch (intent, stage) {
+        case (.chat, "mouth-direct"), (.unknown, "mouth-direct"):
+            return StageTokenBudget.directHigh
+        case (.webSearch, "mouth-final"), (.rag, "mouth-final"), (.files, "mouth-final"), (.outlook, "mouth-final"):
+            return StageTokenBudget.finalHigh
+        case (.emailDraft, _), (.messageDraft, _), (.phoneCall, _), (.calendar, _), (.reminder, _), (.trigger, _), (.alarm, _), (.camera, _):
+            return stage == "mouth-final" ? StageTokenBudget.finalLow : StageTokenBudget.directLow
+        default:
+            return stage == "mouth-final" ? 340 : 260
+        }
+    }
+
     private init() {}
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
@@ -444,13 +469,14 @@ final class SlotAgentService {
 
     private func generateFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
         let prompt = makeMouthPrompt(req: req, resolution: resolution, observations: observations, draft: draft)
+        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: "mouth-final")
         let text = await generateText(
             slot: .mouth,
             req: req,
             userMessage: prompt,
             temperature: min(req.temperature, 0.35),
             topP: min(req.topP, 0.8),
-            maxTokens: req.maxTokens,
+            maxTokens: Self.cappedMaxTokens(req.maxTokens, stageCap: adaptiveCap),
             modelName: "mouth-final"
         )
 
@@ -461,7 +487,16 @@ final class SlotAgentService {
         } else {
             candidate = trimmed
         }
-        let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: observations.last ?? draft)
+        let maybeRetried = await retryIfOutputLooksThin(
+            candidate: candidate,
+            slot: .mouth,
+            req: req,
+            prompt: prompt,
+            routing: routing,
+            stage: "mouth-final",
+            baseCap: adaptiveCap
+        )
+        let validated = FinalIntentValidator.validate(maybeRetried, routing: routing, fallback: observations.last ?? draft)
         let enforced = enforceIntentSpecificFinalQuality(
             validated,
             routing: routing,
@@ -472,7 +507,7 @@ final class SlotAgentService {
     }
 
     private func generateDirectFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) async -> String {
-        let contextBlock = shortTermContextBlock(req.history)
+        let contextBlock = compactPromptText(shortTermContextBlock(req.history), maxChars: PromptCharBudget.context)
         let ragGroundingRules: String = {
             let lower = resolution.rewrittenPrompt.lowercased()
             let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
@@ -499,16 +534,52 @@ final class SlotAgentService {
         Additional grounding rules:
         \(ragGroundingRules)
         """
-        let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: req.maxTokens, modelName: "mouth-direct")
+        let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: "mouth-direct")
+        let text = await generateText(slot: .mouth, req: req, userMessage: prompt, temperature: min(req.temperature, 0.35), topP: min(req.topP, 0.8), maxTokens: Self.cappedMaxTokens(req.maxTokens, stageCap: adaptiveCap), modelName: "mouth-direct")
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate = trimmed.isEmpty ? "I’m here." : trimmed
-        let validated = FinalIntentValidator.validate(candidate, routing: routing, fallback: nil)
+        let maybeRetried = await retryIfOutputLooksThin(
+            candidate: candidate,
+            slot: .mouth,
+            req: req,
+            prompt: prompt,
+            routing: routing,
+            stage: "mouth-direct",
+            baseCap: adaptiveCap
+        )
+        let validated = FinalIntentValidator.validate(maybeRetried, routing: routing, fallback: nil)
         return enforceIntentSpecificFinalQuality(
             validated,
             routing: routing,
             resolution: resolution,
             observations: []
         )
+    }
+
+    private func retryIfOutputLooksThin(
+        candidate: String,
+        slot: LumenModelSlot,
+        req: AgentRequest,
+        prompt: String,
+        routing: IntentRoutingDecision,
+        stage: String,
+        baseCap: Int
+    ) async -> String {
+        let text = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wordCount = text.split(whereSeparator: \.isWhitespace).count
+        let needsMoreDepth = wordCount < 28 && [.chat, .webSearch, .rag, .files, .outlook, .unknown].contains(routing.intent)
+        guard needsMoreDepth else { return candidate }
+        let retryCap = min(req.maxTokens, baseCap + StageTokenBudget.retryBump)
+        let retried = await generateText(
+            slot: slot,
+            req: req,
+            userMessage: prompt,
+            temperature: min(req.temperature, 0.30),
+            topP: min(req.topP, 0.75),
+            maxTokens: max(64, retryCap),
+            modelName: "\(stage)-retry"
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        return retried.isEmpty ? candidate : retried
     }
 
     private func enforceIntentSpecificFinalQuality(
@@ -644,8 +715,9 @@ final class SlotAgentService {
 
     private func makeStructuredTurnPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], stepIndex: Int, scopedTools: [ToolDefinition], mode: StructuredTurnMode) -> String {
         let tools = scopedTools.map { tool in "- \(tool.id): \(tool.description)" }.joined(separator: "\n")
-        let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
-        let contextBlock = shortTermContextBlock(req.history)
+        let observationRaw = prioritizedObservationBlock(from: observations, maxItems: 3)
+        let observationBlock = compactPromptText(observationRaw, maxChars: PromptCharBudget.observations)
+        let contextBlock = compactPromptText(shortTermContextBlock(req.history), maxChars: PromptCharBudget.context)
         let ragGroundingRules: String = {
             let lower = resolution.rewrittenPrompt.lowercased()
             let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")
@@ -754,11 +826,48 @@ final class SlotAgentService {
         return "Before I finalize, could you clarify the \(intentHint)\(requestSnippet)?"
     }
 
+
+    private enum PromptCharBudget {
+        static let context = 420
+        static let observations = 1400
+        static let draft = 500
+    }
+
+    private func compactPromptText(_ text: String, maxChars: Int) -> String {
+        let flattened = text
+            .replacingOccurrences(of: #"https?://\S+"#, with: "[url]", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard flattened.count > maxChars else { return flattened }
+        let prefix = flattened.prefix(max(0, maxChars - 14))
+        return "\(prefix)… [truncated]"
+    }
+
+    private func prioritizedObservationBlock(from observations: [String], maxItems: Int) -> String {
+        guard !observations.isEmpty else { return "none" }
+        let normalized = observations
+            .map(WebRichContentPayload.removingMarkers)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !normalized.isEmpty else { return "none" }
+        let sorted = normalized.sorted { observationPriority($0) > observationPriority($1) }
+        return sorted.prefix(maxItems).joined(separator: "\n")
+    }
+
+    private func observationPriority(_ text: String) -> Int {
+        let lower = text.lowercased()
+        if lower.contains("error") || lower.contains("denied") || lower.contains("unavailable") { return 4 }
+        if lower.contains("search results") || lower.contains("result") || lower.contains("http") { return 3 }
+        if lower.contains("saved") || lower.contains("remember") || lower.contains("contact") { return 2 }
+        return 1
+    }
+
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
-        let observationBlock = observations.isEmpty ? "none" : observations.map(WebRichContentPayload.removingMarkers).joined(separator: "\n")
+        let observationRaw = prioritizedObservationBlock(from: observations, maxItems: 4)
+        let observationBlock = compactPromptText(observationRaw, maxChars: PromptCharBudget.observations)
         let draftBlockRaw = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
-        let draftBlock = WebRichContentPayload.removingMarkers(from: draftBlockRaw)
-        let contextBlock = shortTermContextBlock(req.history)
+        let draftBlock = compactPromptText(WebRichContentPayload.removingMarkers(from: draftBlockRaw), maxChars: PromptCharBudget.draft)
+        let contextBlock = compactPromptText(shortTermContextBlock(req.history), maxChars: PromptCharBudget.context)
         let ragGroundingRules: String = {
             let lower = resolution.rewrittenPrompt.lowercased()
             let isRAGLike = lower.contains("search my files") || lower.contains("architecture") || lower.contains("local files") || lower.contains("notes") || lower.contains("pdf")

@@ -24,6 +24,13 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
     static func forCurrentRuntime(requestedBackend: String, requestedGpuLayers: Int?, requestedKQVOffload: Bool?, actualBackend: String? = nil, notes extra: [String] = []) -> RuntimeAccelerationDiagnostics {
         let device = MTLCreateSystemDefaultDevice()
         let deviceAvailable = device != nil
+        #if os(iOS)
+        let metalLowPower: Bool? = nil
+        let metalHeadless: Bool? = nil
+        #else
+        let metalLowPower = device?.isLowPower
+        let metalHeadless = device?.isHeadless
+        #endif
         var notes = extra
         notes.append("ANE is not used by the GGUF/llama.cpp runtime. ANE requires a Core ML / ANE-compatible runtime path.")
         if actualBackend == nil && requestedBackend == "metal" {
@@ -43,8 +50,8 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
             backendRequested: requestedBackend,
             metalDeviceAvailable: deviceAvailable,
             metalDeviceName: device?.name,
-            metalLowPower: device?.isLowPower,
-            metalHeadless: device?.isHeadless,
+            metalLowPower: metalLowPower,
+            metalHeadless: metalHeadless,
             metalUnifiedMemory: device?.hasUnifiedMemory,
             recommendedMaxWorkingSetSizeMB: device.map { Double($0.recommendedMaxWorkingSetSize) / (1024 * 1024) },
             requestedGpuLayers: requestedGpuLayers,

@@ -703,15 +703,15 @@ enum E2ETestRunner {
 
     private static func residentMemoryUsageMB() -> Double? {
 #if canImport(Darwin)
-        var info = mach_task_basic_info_data_t()
-        var count = mach_msg_type_number_t(MACH_TASK_BASIC_INFO_COUNT)
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.stride)
         let result: kern_return_t = withUnsafeMutablePointer(to: &info) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPointer, &count)
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), intPointer, &count)
             }
         }
         guard result == KERN_SUCCESS else { return nil }
-        return Double(info.resident_size) / (1024 * 1024)
+        return Double(info.phys_footprint) / (1024 * 1024)
 #else
         return nil
 #endif

@@ -451,8 +451,10 @@ private struct E2ETestRunnerView: View {
             }
 
             if !eventLogEntries.isEmpty {
-                Section("Real-time Logs") {
+                Section {
                     E2ERealtimeLogView(entries: eventLogEntries, isRunning: isRunning)
+                } header: {
+                    Text("Real-time Logs")
                 } footer: {
                     Text("Streaming event feed for each scenario run (intent, model readiness, tool steps, final hints, and final output).")
                 }

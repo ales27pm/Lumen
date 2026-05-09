@@ -33,6 +33,18 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
     let generationElapsedMs: Int?
     let firstTokenLatencyMs: Int?
     let outputTokenCount: Int?
+    let promptTokenCount: Int?
+    let promptEvalMs: Int?
+    let decodeMs: Int?
+    let tokensPerSecond: Double?
+    let ensureReadyMs: Int?
+    let adapterActivationMs: Int?
+    let runtimePath: String?
+    let activeAdapterSlot: String?
+    let maxTokensRequested: Int?
+    let maxTokensEffective: Int?
+    let promptCharCount: Int?
+    let accelerationDiagnostic: String?
 
     init(
         id: UUID,
@@ -60,7 +72,19 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         adapterFailureReason: String? = nil,
         generationElapsedMs: Int? = nil,
         firstTokenLatencyMs: Int? = nil,
-        outputTokenCount: Int? = nil
+        outputTokenCount: Int? = nil,
+        promptTokenCount: Int? = nil,
+        promptEvalMs: Int? = nil,
+        decodeMs: Int? = nil,
+        tokensPerSecond: Double? = nil,
+        ensureReadyMs: Int? = nil,
+        adapterActivationMs: Int? = nil,
+        runtimePath: String? = nil,
+        activeAdapterSlot: String? = nil,
+        maxTokensRequested: Int? = nil,
+        maxTokensEffective: Int? = nil,
+        promptCharCount: Int? = nil,
+        accelerationDiagnostic: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -88,6 +112,18 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         self.generationElapsedMs = generationElapsedMs
         self.firstTokenLatencyMs = firstTokenLatencyMs
         self.outputTokenCount = outputTokenCount
+        self.promptTokenCount = promptTokenCount
+        self.promptEvalMs = promptEvalMs
+        self.decodeMs = decodeMs
+        self.tokensPerSecond = tokensPerSecond
+        self.ensureReadyMs = ensureReadyMs
+        self.adapterActivationMs = adapterActivationMs
+        self.runtimePath = runtimePath
+        self.activeAdapterSlot = activeAdapterSlot
+        self.maxTokensRequested = maxTokensRequested
+        self.maxTokensEffective = maxTokensEffective
+        self.promptCharCount = promptCharCount
+        self.accelerationDiagnostic = accelerationDiagnostic
     }
 }
 

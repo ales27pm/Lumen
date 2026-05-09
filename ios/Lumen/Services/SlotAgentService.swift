@@ -566,9 +566,9 @@ final class SlotAgentService {
         baseCap: Int
     ) async -> String {
         let text = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-        let wordCount = text.split(whereSeparator: \.isWhitespace).count
-        let needsMoreDepth = wordCount < 28 && [.chat, .webSearch, .rag, .files, .outlook, .unknown].contains(routing.intent)
-        guard needsMoreDepth else { return candidate }
+        let lower = text.lowercased()
+        let looksInvalid = text.isEmpty || lower == "none" || lower == "null" || lower == "undefined" || lower == "i’m here." || lower == "i'm here."
+        guard looksInvalid else { return candidate }
         let retryCap = min(req.maxTokens, baseCap + StageTokenBudget.retryBump)
         let retried = await generateText(
             slot: slot,
@@ -682,8 +682,6 @@ final class SlotAgentService {
         maxTokens: Int,
         modelName: String
     ) async -> String {
-        await AppLlamaService.shared.resetKVCache(for: slot)
-
         let generation = GenerateRequest(
             systemPrompt: req.systemPrompt,
             history: [],

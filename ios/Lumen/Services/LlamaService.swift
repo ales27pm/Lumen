@@ -364,6 +364,12 @@ final actor AppLlamaService {
         roleAdapters[slot] = LoadedRoleAdapter(slot: slot, path: path, scale: scale, loadedAt: Date())
     }
 
+    func loadRoleAdapterIfNeeded(slot: LumenModelSlot, path: String, scale: Float = 1.0) async throws -> Bool {
+        if roleAdapters[slot]?.path == path { return false }
+        try await loadRoleAdapter(slot: slot, path: path, scale: scale)
+        return true
+    }
+
     func activateRoleAdapter(slot: LumenModelSlot) async throws {
         guard let runtime = sharedChatRuntime else { throw LlamaError.noModelLoaded }
         if activeAdapterSlot == slot { return }
@@ -382,6 +388,12 @@ final actor AppLlamaService {
             lastAdapterFailureReason = error.localizedDescription
             throw error
         }
+    }
+
+    func activateRoleAdapterIfNeeded(slot: LumenModelSlot) async throws -> Bool {
+        if activeAdapterSlot == slot { return false }
+        try await activateRoleAdapter(slot: slot)
+        return true
     }
 
     func clearActiveRoleAdapter() async {
@@ -746,10 +758,12 @@ final actor AppLlamaService {
                     }
 
                     let startedAt = Date()
-                    try await SlotModelRuntimeCoordinator.shared.ensureReady(slot: slot)
+                    let readyMetrics = try await SlotModelRuntimeCoordinator.shared.ensureReadyWithMetrics(slot: slot)
                     let contextSize = await self.contextSizeForGeneration(slot: slot)
                     let groundedRequest = req.groundingSystemPrompt(for: slot)
                     let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize)
+                    let promptChars = messages.reduce(0) { $0 + $1.content.count }
+                    let promptTokenCount = max(1, promptChars / 4)
                     let stream = try await self.streamResponse(
                         slot: slot,
                         messages: messages,
@@ -762,7 +776,13 @@ final actor AppLlamaService {
                     var rawOutput = ""
                     var streamingSanitizer = StreamingFinalOutputSanitizer()
                     var streamedSanitized = ""
+                    var firstTokenMs: Int?
+                    var outputChunks = 0
                     for try await chunk in stream {
+                        if firstTokenMs == nil {
+                            firstTokenMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                        }
+                        outputChunks += 1
                         rawOutput += chunk
                         let safeDelta = streamingSanitizer.ingest(chunk)
                         if !safeDelta.isEmpty {
@@ -783,14 +803,30 @@ final actor AppLlamaService {
                         logger.error("stream_finalization_mismatch slot=\(slot.rawValue, privacy: .public)")
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    let decodeMs = firstTokenMs.map { max(0, elapsedMs - $0) }
+                    let promptEvalMs = firstTokenMs
+                    let outputTokenEstimate = max(0, streamedSanitized.split(whereSeparator: \.isWhitespace).count)
+                    let tps = decodeMs.flatMap { $0 > 0 ? Double(outputTokenEstimate) / (Double($0) / 1000.0) : nil }
                     await self.recordModelTrace(
                         slot: slot,
                         request: groundedRequest,
                         output: sanitized,
                         parseError: AgentTurnParser.parse(sanitized).parseError?.rawValue,
                         generationElapsedMs: elapsedMs,
-                        // Do not report a word count as token count; leave nil until exact runtime token counts are threaded through both runtime paths.
-                        outputTokenCount: nil
+                        outputTokenCount: max(outputTokenEstimate, outputChunks),
+                        firstTokenLatencyMs: firstTokenMs,
+                        promptTokenCount: promptTokenCount,
+                        promptEvalMs: promptEvalMs,
+                        decodeMs: decodeMs,
+                        tokensPerSecond: tps,
+                        ensureReadyMs: readyMetrics.ensureReadyMs,
+                        adapterActivationMs: readyMetrics.adapterActivationMs,
+                        runtimePath: readyMetrics.runtimePath,
+                        activeAdapterSlot: readyMetrics.activeAdapterSlot,
+                        maxTokensRequested: req.maxTokens,
+                        maxTokensEffective: groundedRequest.maxTokens,
+                        promptCharCount: promptChars,
+                        accelerationDiagnostic: readyMetrics.accelerationDiagnostic
                     )
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
@@ -927,7 +963,27 @@ final actor AppLlamaService {
         await chatRuntimes[slot]?.service.stopCompletion()
     }
 
-    private func recordModelTrace(slot: LumenModelSlot, request: GenerateRequest, output: String, parseError: String?, generationElapsedMs: Int? = nil, outputTokenCount: Int? = nil) async {
+    private func recordModelTrace(
+        slot: LumenModelSlot,
+        request: GenerateRequest,
+        output: String,
+        parseError: String?,
+        generationElapsedMs: Int? = nil,
+        outputTokenCount: Int? = nil,
+        firstTokenLatencyMs: Int? = nil,
+        promptTokenCount: Int? = nil,
+        promptEvalMs: Int? = nil,
+        decodeMs: Int? = nil,
+        tokensPerSecond: Double? = nil,
+        ensureReadyMs: Int? = nil,
+        adapterActivationMs: Int? = nil,
+        runtimePath: String? = nil,
+        activeAdapterSlot: String? = nil,
+        maxTokensRequested: Int? = nil,
+        maxTokensEffective: Int? = nil,
+        promptCharCount: Int? = nil,
+        accelerationDiagnostic: String? = nil
+    ) async {
         let adapterMetadata = currentAdapterTraceMetadata(slot: slot)
         AgentBehaviorTraceRecorder.record(
             AgentBehaviorTrace(
@@ -955,8 +1011,20 @@ final actor AppLlamaService {
                 adapterScale: adapterMetadata.adapterScale,
                 adapterFailureReason: adapterMetadata.adapterFailureReason,
                 generationElapsedMs: generationElapsedMs,
-                firstTokenLatencyMs: nil,
-                outputTokenCount: outputTokenCount
+                firstTokenLatencyMs: firstTokenLatencyMs,
+                outputTokenCount: outputTokenCount,
+                promptTokenCount: promptTokenCount,
+                promptEvalMs: promptEvalMs,
+                decodeMs: decodeMs,
+                tokensPerSecond: tokensPerSecond,
+                ensureReadyMs: ensureReadyMs,
+                adapterActivationMs: adapterActivationMs,
+                runtimePath: runtimePath,
+                activeAdapterSlot: activeAdapterSlot,
+                maxTokensRequested: maxTokensRequested,
+                maxTokensEffective: maxTokensEffective,
+                promptCharCount: promptCharCount,
+                accelerationDiagnostic: accelerationDiagnostic
             )
         )
     }

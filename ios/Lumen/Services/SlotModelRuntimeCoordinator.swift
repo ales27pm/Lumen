@@ -1,6 +1,14 @@
 import Foundation
 import OSLog
 
+nonisolated struct RuntimeReadinessMetrics: Sendable {
+    let ensureReadyMs: Int
+    let adapterActivationMs: Int
+    let runtimePath: String
+    let activeAdapterSlot: String?
+    let accelerationDiagnostic: String
+}
+
 @MainActor
 final class SlotModelRuntimeCoordinator {
     static let shared = SlotModelRuntimeCoordinator()
@@ -106,7 +114,20 @@ final class SlotModelRuntimeCoordinator {
     }
 
     func ensureReady(slot: LumenModelSlot) async throws {
-        guard slot != .embedding else { return }
+        _ = try await ensureReadyWithMetrics(slot: slot)
+    }
+
+    func ensureReadyWithMetrics(slot: LumenModelSlot) async throws -> RuntimeReadinessMetrics {
+        guard slot != .embedding else {
+            return RuntimeReadinessMetrics(
+                ensureReadyMs: 0,
+                adapterActivationMs: 0,
+                runtimePath: "embedding",
+                activeAdapterSlot: nil,
+                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+            )
+        }
+        let started = Date()
 
         let assignment = resolvedAssignment(for: slot)
         guard let assignment else {
@@ -117,11 +138,26 @@ final class SlotModelRuntimeCoordinator {
         }
 
         if assignment.usesRoleAdapter || assignment.modelFamily == .qwen3 {
-            try await ensureAdapterRuntimeReady(slot: slot, assignment: assignment)
-            return
+            let activationMs = try await ensureAdapterRuntimeReady(slot: slot, assignment: assignment)
+            let elapsed = Int(Date().timeIntervalSince(started) * 1000)
+            return RuntimeReadinessMetrics(
+                ensureReadyMs: elapsed,
+                adapterActivationMs: activationMs,
+                runtimePath: "sharedAdapter",
+                activeAdapterSlot: slot.rawValue,
+                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+            )
         }
 
         try await ensureLegacyRuntimeReady(slot: slot, assignment: assignment)
+        let elapsed = Int(Date().timeIntervalSince(started) * 1000)
+        return RuntimeReadinessMetrics(
+            ensureReadyMs: elapsed,
+            adapterActivationMs: 0,
+            runtimePath: "legacySlot",
+            activeAdapterSlot: nil,
+            accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+        )
     }
 
 
@@ -142,7 +178,8 @@ final class SlotModelRuntimeCoordinator {
         return nil
     }
 
-    private func ensureAdapterRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {
+    private func ensureAdapterRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws -> Int {
+        let activationStart = Date()
         if await AppLlamaService.shared.loadedChatPath != assignment.localPath {
             do {
                 try await AppLlamaService.shared.loadSharedChatModel(path: assignment.localPath, contextSize: contextSize)
@@ -158,21 +195,25 @@ final class SlotModelRuntimeCoordinator {
 
         guard let adapterPath = assignment.adapterPath else {
             await AppLlamaService.shared.clearActiveRoleAdapter()
-            return
+            return Int(Date().timeIntervalSince(activationStart) * 1000)
         }
         guard FileManager.default.fileExists(atPath: adapterPath) else {
             logger.error("role_adapter_missing slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public)")
             await AppLlamaService.shared.clearActiveRoleAdapter()
-            return
+            return Int(Date().timeIntervalSince(activationStart) * 1000)
         }
 
         do {
-            try await AppLlamaService.shared.loadRoleAdapter(slot: slot, path: adapterPath, scale: assignment.adapterScale)
-            try await AppLlamaService.shared.activateRoleAdapter(slot: slot)
+            let loadedNow = try await AppLlamaService.shared.loadRoleAdapterIfNeeded(slot: slot, path: adapterPath, scale: assignment.adapterScale)
+            let activatedNow = try await AppLlamaService.shared.activateRoleAdapterIfNeeded(slot: slot)
+            if loadedNow || activatedNow {
+                logger.info("role_adapter_activation_performed slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public)")
+            }
         } catch {
             logger.error("role_adapter_activation_failed slot=\(slot.rawValue, privacy: .public) path=\(adapterPath, privacy: .public) error=\(String(describing: error), privacy: .public)")
             await AppLlamaService.shared.unloadRoleAdapter(slot: slot)
         }
+        return Int(Date().timeIntervalSince(activationStart) * 1000)
     }
 
     private func ensureLegacyRuntimeReady(slot: LumenModelSlot, assignment: LumenModelAssignment) async throws {

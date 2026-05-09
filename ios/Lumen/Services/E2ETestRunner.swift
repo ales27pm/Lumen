@@ -243,6 +243,7 @@ nonisolated struct E2EPerformanceMatrix: Codable, Sendable {
     let averageRAMMB: Double
     let sampleCount: Int
     let notes: [String]
+    let accelerationDiagnostics: RuntimeAccelerationDiagnostics?
 }
 
 nonisolated struct E2ETestEvent: Codable, Sendable, Identifiable {
@@ -625,11 +626,11 @@ enum E2ETestRunner {
             : hygieneState.postRewriteSanitized.artifactAudit.rawPrefix
         let sanitizedPrefix = hygieneState.postRewriteSanitized.artifactAudit.sanitizedPrefix
         let endedAt = Date()
-        let matrix = performanceMatrix(from: performanceSamples, startedAt: started, finishedAt: endedAt)
+        let matrix = await performanceMatrix(from: performanceSamples, startedAt: started, finishedAt: endedAt)
         return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: endedAt, rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures, performanceMatrix: matrix)
     }
 
-    private static func performanceMatrix(from samples: [E2EPerformanceSample], startedAt: Date, finishedAt: Date) -> E2EPerformanceMatrix {
+    private static func performanceMatrix(from samples: [E2EPerformanceSample], startedAt: Date, finishedAt: Date) async -> E2EPerformanceMatrix {
         let residentSamples = samples.compactMap(\.residentMemoryMB)
         let averageRAM = residentSamples.isEmpty ? 0 : residentSamples.reduce(0, +) / Double(residentSamples.count)
         let peakRAM = residentSamples.max() ?? 0
@@ -649,7 +650,8 @@ enum E2ETestRunner {
             peakRAMMB: peakRAM,
             averageRAMMB: averageRAM,
             sampleCount: samples.count,
-            notes: notes
+            notes: notes,
+            accelerationDiagnostics: await AppLlamaService.shared.currentAccelerationDiagnostics()
         )
     }
 

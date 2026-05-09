@@ -46,11 +46,12 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
     let maxTokensEffective: Int?
     let promptCharCount: Int?
     let accelerationDiagnostic: String?
+    let accelerationDiagnostics: RuntimeAccelerationDiagnostics?
 
 
 
     enum CodingKeys: String, CodingKey {
-        case id, createdAt, event, slot, stage, intent, promptPrefix, rawOutputPrefix, selectedToolID, toolArguments, allowedToolIDs, requiresApproval, approvalMode, parseError, emittedFinalInActionTurn, modelFamily, baseModelPath, adapterID, adapterSlot, adapterPath, adapterApplied, adapterScale, adapterFailureReason, generationElapsedMs, firstTokenLatencyMs, outputTokenCount, estimatedPromptTokenCount, preFirstTokenMs, messageBuildMs, decodeMs, tokensPerSecond, ensureReadyMs, adapterActivationMs, runtimePath, activeAdapterSlot, maxTokensRequested, maxTokensEffective, promptCharCount, accelerationDiagnostic
+        case id, createdAt, event, slot, stage, intent, promptPrefix, rawOutputPrefix, selectedToolID, toolArguments, allowedToolIDs, requiresApproval, approvalMode, parseError, emittedFinalInActionTurn, modelFamily, baseModelPath, adapterID, adapterSlot, adapterPath, adapterApplied, adapterScale, adapterFailureReason, generationElapsedMs, firstTokenLatencyMs, outputTokenCount, estimatedPromptTokenCount, preFirstTokenMs, messageBuildMs, decodeMs, tokensPerSecond, ensureReadyMs, adapterActivationMs, runtimePath, activeAdapterSlot, maxTokensRequested, maxTokensEffective, promptCharCount, accelerationDiagnostic, accelerationDiagnostics
         case promptTokenCount
         case promptEvalMs
     }
@@ -96,6 +97,7 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         maxTokensEffective = try container.decodeIfPresent(Int.self, forKey: .maxTokensEffective)
         promptCharCount = try container.decodeIfPresent(Int.self, forKey: .promptCharCount)
         accelerationDiagnostic = try container.decodeIfPresent(String.self, forKey: .accelerationDiagnostic)
+        accelerationDiagnostics = try container.decodeIfPresent(RuntimeAccelerationDiagnostics.self, forKey: .accelerationDiagnostics)
     }
 
     init(
@@ -137,7 +139,8 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         maxTokensRequested: Int? = nil,
         maxTokensEffective: Int? = nil,
         promptCharCount: Int? = nil,
-        accelerationDiagnostic: String? = nil
+        accelerationDiagnostic: String? = nil,
+        accelerationDiagnostics: RuntimeAccelerationDiagnostics? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -178,6 +181,7 @@ nonisolated struct AgentBehaviorTrace: Codable, Sendable, Identifiable, Hashable
         self.maxTokensEffective = maxTokensEffective
         self.promptCharCount = promptCharCount
         self.accelerationDiagnostic = accelerationDiagnostic
+        self.accelerationDiagnostics = accelerationDiagnostics
     }
 }
 

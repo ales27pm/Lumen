@@ -458,6 +458,24 @@ private struct E2ETestRunnerView: View {
                 }
             }
 
+            if let accel = dashboardResults.last?.performanceMatrix?.accelerationDiagnostics {
+                Section("Acceleration Diagnostics") {
+                    LabeledContent("Metal device available", value: accel.metalDeviceAvailable ? "yes" : "no")
+                    LabeledContent("Metal device", value: accel.metalDeviceName ?? "unknown")
+                    LabeledContent("Backend requested", value: accel.backendRequested)
+                    LabeledContent("Requested GPU layers", value: accel.requestedGpuLayers.map(String.init) ?? "nil")
+                    LabeledContent("KQV offload requested", value: accel.requestedKQVOffload == true ? "true" : "false")
+                    LabeledContent("Actual backend", value: accel.actualBackend ?? "unknown")
+                    LabeledContent("Verification", value: accel.verificationLevel)
+                    LabeledContent("ANE used by runtime", value: accel.aneUsedByCurrentRuntime ? "yes" : "no")
+                    ForEach(accel.notes, id: \.self) { note in
+                        Text("• \(note)")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+
             Section("Scenarios") {
                 ForEach(runMode.scenarios) { scenario in
                     VStack(alignment: .leading, spacing: 4) {

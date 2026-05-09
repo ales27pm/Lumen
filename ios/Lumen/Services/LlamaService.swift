@@ -286,6 +286,7 @@ final actor AppLlamaService {
     static let shared = AppLlamaService()
 
     private let logger = Logger(subsystem: "com.lumen.runtime", category: "llama.service")
+    private var lastAccelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "unknown", requestedGpuLayers: nil, requestedKQVOffload: nil)
 
     private var chatRuntimes: [LumenModelSlot: ChatRuntime] = [:]
     private var primaryChatSlot: LumenModelSlot = .cortex
@@ -829,7 +830,8 @@ final actor AppLlamaService {
                         maxTokensRequested: req.maxTokens,
                         maxTokensEffective: groundedRequest.maxTokens,
                         promptCharCount: promptChars,
-                        accelerationDiagnostic: readyMetrics.accelerationDiagnostic
+                        accelerationDiagnostic: readyMetrics.accelerationDiagnostic,
+                        accelerationDiagnostics: readyMetrics.accelerationDiagnostics
                     )
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
@@ -920,6 +922,7 @@ final actor AppLlamaService {
         let service: SwiftLlama.LlamaService
         do {
             service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: preferredConfig)
+            lastAccelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
         } catch {
             logger.error(
                 "event=llama.chat.runtime_init_failure path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public) message=\(error.localizedDescription, privacy: .public) fallback=cpu_or_nonoffload"
@@ -930,6 +933,7 @@ final actor AppLlamaService {
                 useGPU: false
             )
             service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: fallbackConfig)
+            lastAccelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "cpu", requestedGpuLayers: 0, requestedKQVOffload: false, actualBackend: "cpu")
             logger.info(
                 "event=llama.chat.runtime_init_cpu_fallback_success path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public)"
             )
@@ -941,6 +945,10 @@ final actor AppLlamaService {
             batchSize: batchSize
         )
         primaryChatSlot = slot
+    }
+
+    func currentAccelerationDiagnostics() -> RuntimeAccelerationDiagnostics {
+        lastAccelerationDiagnostics
     }
 
     private func makeEmbeddingContext(for model: LlamaModel) -> LlamaContext? {
@@ -986,7 +994,8 @@ final actor AppLlamaService {
         maxTokensRequested: Int? = nil,
         maxTokensEffective: Int? = nil,
         promptCharCount: Int? = nil,
-        accelerationDiagnostic: String? = nil
+        accelerationDiagnostic: String? = nil,
+        accelerationDiagnostics: RuntimeAccelerationDiagnostics? = nil
     ) async {
         let adapterMetadata = currentAdapterTraceMetadata(slot: slot)
         AgentBehaviorTraceRecorder.record(
@@ -1029,7 +1038,8 @@ final actor AppLlamaService {
                 maxTokensRequested: maxTokensRequested,
                 maxTokensEffective: maxTokensEffective,
                 promptCharCount: promptCharCount,
-                accelerationDiagnostic: accelerationDiagnostic
+                accelerationDiagnostic: accelerationDiagnostic,
+                accelerationDiagnostics: accelerationDiagnostics
             )
         )
     }

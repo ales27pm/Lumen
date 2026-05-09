@@ -340,7 +340,13 @@ struct ToolCallCard: View {
     private func approve() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let toolID = message.toolName ?? ""
-        let args = parseArgs(message.content)
+        var args = parseArgs(message.content)
+        if let pendingIDRaw = args["pendingActionID"],
+           let pendingID = UUID(uuidString: pendingIDRaw),
+           let pending = ToolApprovalQueue.shared.consume(pendingID) {
+            args = pending.arguments.stringCoerced
+        }
+        args.removeValue(forKey: "pendingActionID")
         let routing = IntentRouter.classify(inferredUserPrompt())
         guard IntentRouter.isToolAllowed(toolID, for: routing) else {
             message.toolStatus = ToolStatus.denied.rawValue

@@ -283,6 +283,17 @@ struct ChatView: View {
         let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
         let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps)
         conversation.messages.append(assistantMsg)
+        if let approvalStep = sanitizedSteps.first(where: { $0.kind == .approvalBoundary }),
+           let toolID = approvalStep.toolID {
+            let pendingToolMessage = ChatMessage(
+                role: .tool,
+                content: serializedToolArgs(approvalStep.toolArgs ?? [:]),
+                toolName: toolID,
+                toolStatus: .pendingApproval,
+                toolResult: nil
+            )
+            conversation.messages.append(pendingToolMessage)
+        }
         streamingText = ""
         streamingSteps = []
         activeTurnID = nil
@@ -297,6 +308,10 @@ struct ChatView: View {
         conversation.updatedAt = Date()
         try? modelContext.save()
         appState.isGenerating = false
+    }
+
+    private func serializedToolArgs(_ args: [String: String]) -> String {
+        args.keys.sorted().map { key in "\(key): \(args[key] ?? "")" }.joined(separator: ", ")
     }
 
     private func runPlain(turnID: UUID, requestID: UUID, text: String, memories: [MemoryContextItem], attachments: [ChatAttachment]) async {

@@ -100,6 +100,7 @@ struct AgentStepRow: View {
         switch step.kind {
         case .thought: Theme.accent
         case .action: Color(red: 0.95, green: 0.7, blue: 0.4)
+        case .approvalBoundary: Color(red: 0.98, green: 0.55, blue: 0.3)
         case .observation: Color(red: 0.5, green: 0.85, blue: 0.6)
         case .reflection: Color(red: 0.75, green: 0.6, blue: 0.95)
         }

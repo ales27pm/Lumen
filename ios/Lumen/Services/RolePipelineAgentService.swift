@@ -193,13 +193,22 @@ final class RolePipelineAgentService {
             return .blocked("I stopped because the planner attempted to repeat the same tool call without adding new information.")
         }
 
+        if let tool = ToolRegistry.find(id: canonicalTool), tool.requiresApproval {
+            let pending = ToolApprovalQueue.shared.enqueue(toolID: canonicalTool, toolName: tool.name, arguments: normalizedArgs)
+            let approvalMessage = ApprovalBoundaryFormatter.approvalMessage(for: pending)
+            var boundaryArgs = normalizedArgs
+            boundaryArgs["pendingActionID"] = pending.pendingActionID.uuidString
+            yieldStep(kind: .approvalBoundary, content: approvalMessage, toolID: canonicalTool, toolArgs: boundaryArgs, steps: &steps, continuation: continuation)
+            return .blocked(approvalMessage)
+        }
+
         executedActionFingerprints.insert(fingerprint)
         yieldStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
 
         let observation = await ToolExecutor.shared.execute(
             canonicalTool,
             arguments: normalizedArgs,
-            approval: approvalForExplicitUserIntent(toolID: canonicalTool, routing: routing)
+            approval: .autonomous
         )
         let scopedObservation = "\(canonicalTool): \(observation)"
         observations.append(scopedObservation)
@@ -539,17 +548,6 @@ final class RolePipelineAgentService {
 
     private func isActionAllowed(_ toolID: String, routing: IntentRoutingDecision) -> Bool {
         IntentRouter.isToolAllowed(toolID, for: routing)
-    }
-
-    private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
-        switch (routing.intent, toolID) {
-        case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
-            return .userApproved
-        case (.outlook, "outlook.draft.create"), (.outlook, "outlook.mail.send"), (.outlook, "outlook.message.mark_read"), (.outlook, "outlook.message.mark_unread"), (.outlook, "outlook.message.move"), (.outlook, "outlook.message.archive"), (.outlook, "outlook.message.delete"), (.outlook, "outlook.message.reply"), (.outlook, "outlook.message.reply_all"), (.outlook, "outlook.message.forward"):
-            return .userApproved
-        default:
-            return .autonomous
-        }
     }
 
     private func maxLoopSteps(for intent: UserIntent) -> Int {

@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated enum ToolExecutionApproval: Sendable {
     case autonomous
+    case pending
     case userApproved
 }
 

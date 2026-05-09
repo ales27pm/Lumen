@@ -158,15 +158,71 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
     }
 
     private static func variantPrompts(for scenario: E2ETestScenario) -> [String] {
+        let required = Set(scenario.requiredAllowedToolIDs)
+        let forbidden = Set(scenario.forbiddenToolIDs)
+        func allows(_ toolID: String) -> Bool { required.contains(toolID) && !forbidden.contains(toolID) }
+        func allowsAll(_ toolIDs: [String]) -> Bool { toolIDs.allSatisfy(allows) }
+
+        if allows("calendar.create") && !allows("calendar.list") {
+            return [
+                "Create a calendar event for tomorrow at 4 PM called Project sync.",
+                "Schedule a calendar event next Tuesday at 9 AM named Team check-in."
+            ]
+        }
+        if allows("calendar.list") && !allows("calendar.create") {
+            return [
+                "List my upcoming calendar events for this week.",
+                "Show the next items on my calendar."
+            ]
+        }
+        if allowsAll(["calendar.create", "calendar.list"]) {
+            return [
+                "List my upcoming calendar items and then create one for Friday at 3 PM called Design review.",
+                "Show my next calendar events, then add a new one for tomorrow at 11 AM named Budget follow-up."
+            ]
+        }
+
+        if allows("alarm.cancel") && !allows("alarm.list") {
+            return [
+                "Cancel the alarm named morning wakeup.",
+                "Delete the alarm called gym reminder."
+            ]
+        }
+        if allows("alarm.list") && !allows("alarm.schedule") && !allows("alarm.countdown") {
+            return [
+                "List my active alarms.",
+                "Show all alarms currently set."
+            ]
+        }
+        if allows("alarm.schedule") && !allows("alarm.list") {
+            return [
+                "Set an alarm for tomorrow at 6:30 AM.",
+                "Create an alarm for next Monday at 7:00 AM."
+            ]
+        }
+
+        if allows("reminders.create") && !allows("reminders.list") {
+            return [
+                "Create a reminder for tomorrow to submit the timesheet.",
+                "Remind me next week to review quarterly invoices."
+            ]
+        }
+        if allows("reminders.list") && !allows("reminders.create") {
+            return [
+                "List my current reminders.",
+                "Show all pending reminders."
+            ]
+        }
+
         switch scenario.expectedIntent {
-        case .calendar: return ["Set something for tomorrow afternoon on my calendar, or ask me to clarify the exact time.", "Can you list next week's calendar items and then create one for Friday?"]
+        case .calendar: return ["Create a calendar event for tomorrow afternoon called Planning block.", "Schedule a calendar appointment for next week named Follow-up."]
         case .weather: return ["What is the weather at my current location right now?", "Should I bring an umbrella here today based on today's forecast?"]
         case .webSearch: return ["Look up recent SwiftData performance tips on the web.", "Find recent web sources about actor isolation best practices."]
         case .emailDraft: return ["Draft a quick email update to Taylor about the delay and ask one question.", "Draft an email: subject release prep, body with concise status and one clarifying question."]
         case .messageDraft: return ["Draft a text to Alex that I will be late.", "Help me message Jordan with a complete ETA and apology."]
-        case .camera: return ["Open the camera so I can capture a receipt photo.", "I need to take a photo now; use camera capture only."]
-        case .alarm: return ["Create an alarm for tomorrow 6:30 AM and confirm it is active.", "Start a 10-minute countdown timer and show active alarms."]
-        case .reminder: return ["Remind me next week to review invoices.", "Create a reminder for tomorrow morning to call the clinic."]
+        case .camera: return ["Open the camera and prepare for a receipt photo when I confirm.", "Prepare camera capture so I can approve taking a photo."]
+        case .alarm: return ["Set an alarm for tomorrow at 6:30 AM.", "Create an alarm for next weekday morning at 7 AM."]
+        case .reminder: return ["Create a reminder for tomorrow morning to call the clinic.", "Remind me next week to review invoices."]
         case .chat: return ["Explain in plain English why immutable data can reduce bugs.", "Give a normal explanation of how DNS works, no tools needed."]
         default: return ["\(scenario.prompt)"]
         }

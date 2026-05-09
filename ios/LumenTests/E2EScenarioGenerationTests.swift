@@ -18,12 +18,70 @@ struct E2EScenarioGenerationTests {
             #expect(variantC != nil)
             #expect(variantB?.expectedIntent == base.expectedIntent)
             #expect(variantC?.expectedIntent == base.expectedIntent)
+            #expect(variantB?.requiredAllowedToolIDs == base.requiredAllowedToolIDs)
+            #expect(variantC?.requiredAllowedToolIDs == base.requiredAllowedToolIDs)
+            #expect(variantB?.forbiddenToolIDs == base.forbiddenToolIDs)
+            #expect(variantC?.forbiddenToolIDs == base.forbiddenToolIDs)
         }
     }
 
     @Test func toolCoverageCountMatchesThreeVariantsPerBaseScenario() {
         let baseCount = E2ETestScenario.allToolCoverage.filter { !$0.id.contains("-variant-") }.count
         #expect(E2ETestScenario.allToolCoverage.count == baseCount * 3)
+    }
+
+    @Test func calendarVariantsStayActionSpecific() {
+        let all = E2ETestScenario.allToolCoverage
+        let listVariants = all.filter { $0.id.hasPrefix("tool-calendar-list-variant-") }
+        let createVariants = all.filter { $0.id.hasPrefix("tool-calendar-create-variant-") }
+        for scenario in listVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("create"))
+            #expect(!p.contains("schedule"))
+            #expect(!p.contains("set"))
+        }
+        for scenario in createVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("list"))
+            #expect(!p.contains("show"))
+            #expect(!p.contains("upcoming"))
+        }
+    }
+
+    @Test func alarmVariantsStayActionSpecific() {
+        let all = E2ETestScenario.allToolCoverage
+        let cancelVariants = all.filter { $0.id.hasPrefix("tool-alarm-cancel-variant-") }
+        let listVariants = all.filter { $0.id.hasPrefix("tool-alarm-list-variant-") }
+        for scenario in cancelVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("create"))
+            #expect(!p.contains("set"))
+            #expect(!p.contains("list"))
+        }
+        for scenario in listVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("create"))
+            #expect(!p.contains("set"))
+            #expect(!p.contains("cancel"))
+        }
+    }
+
+    @Test func reminderAndChatVariantsRespectContracts() {
+        let all = E2ETestScenario.allToolCoverage
+        for scenario in all.filter({ $0.id.hasPrefix("tool-reminders-create-variant-") }) {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("list"))
+            #expect(!p.contains("show"))
+        }
+        for scenario in all.filter({ $0.id.hasPrefix("tool-reminders-list-variant-") }) {
+            let p = scenario.prompt.lowercased()
+            #expect(!p.contains("create"))
+            #expect(!p.contains("remind me to"))
+        }
+        for scenario in E2ETestScenario.chatCoverage.filter({ $0.id.contains("-variant-") }) {
+            #expect(scenario.requiredAllowedToolIDs.isEmpty)
+            #expect(!scenario.forbiddenToolIDs.isEmpty)
+        }
     }
 }
 

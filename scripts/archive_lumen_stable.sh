@@ -49,9 +49,13 @@ run_logged() {
   shift
   mkdir -p "$(dirname "$log_path")"
 
+  # Temporarily disable `set -e` so we can capture the exit code of the
+  # first command in the pipeline (`$@`) while still streaming logs via `tee`.
+  # If more pipes are added here, update the PIPESTATUS index intentionally.
   set +e
   "$@" 2>&1 | tee "$log_path"
-  local status=${PIPESTATUS[0]}
+  local -a cmd_status=("${PIPESTATUS[@]}")
+  local status=${cmd_status[0]}
   set -e
 
   if [[ $status -ne 0 ]]; then
@@ -67,6 +71,35 @@ build_project_selector_args() {
   else
     printf '%s\0%s\0' "-project" "$project_path"
   fi
+}
+
+clean_lumen_derived_data() {
+  [[ -n "$HOME" && "$HOME" != "/" ]] || fail "Invalid HOME for cleanup: $HOME"
+  [[ -n "$DERIVED_DATA_ROOT" ]] || fail "DERIVED_DATA_ROOT is empty; refusing cleanup."
+  [[ "$DERIVED_DATA_ROOT" == "$HOME/Library/Developer/Xcode/DerivedData" ]] \
+    || fail "Refusing to clean unexpected DERIVED_DATA_ROOT: $DERIVED_DATA_ROOT"
+
+  shopt -s nullglob
+  local targets=("$DERIVED_DATA_ROOT"/Lumen-*)
+  shopt -u nullglob
+  if (( ${#targets[@]} == 0 )); then
+    info "No Lumen DerivedData directories found."
+    return 0
+  fi
+  rm -rf "${targets[@]}"
+}
+
+reset_swiftpm_cache() {
+  [[ -n "$HOME" && "$HOME" != "/" ]] || fail "Invalid HOME for SwiftPM cleanup: $HOME"
+  [[ -n "$REPO_ROOT" && "$REPO_ROOT" != "/" ]] || fail "Invalid REPO_ROOT for cleanup: $REPO_ROOT"
+
+  local swiftpm_cache="$HOME/Library/Caches/org.swift.swiftpm"
+  if [[ -d "$swiftpm_cache" ]]; then
+    rm -rf "$swiftpm_cache"
+  else
+    info "No SwiftPM cache directory found at $swiftpm_cache."
+  fi
+  rm -rf "$REPO_ROOT/.build"
 }
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "This script must run on macOS."
@@ -121,13 +154,12 @@ python3 "$REPO_ROOT/scripts/apply_ios_archive_linker_fix.py" "$PROJECT_FILE" --n
 
 if [[ "${LUMEN_CLEAN_DERIVED_DATA:-1}" == "1" ]]; then
   info "Cleaning Lumen DerivedData"
-  rm -rf "$DERIVED_DATA_ROOT"/Lumen-*
+  clean_lumen_derived_data
 fi
 
 if [[ "${LUMEN_RESET_SWIFTPM_CACHE:-0}" == "1" ]]; then
   info "Cleaning SwiftPM cache"
-  rm -rf "$HOME/Library/Caches/org.swift.swiftpm"
-  rm -rf "$REPO_ROOT/.build"
+  reset_swiftpm_cache
 fi
 
 info "Resolving Swift package dependencies"

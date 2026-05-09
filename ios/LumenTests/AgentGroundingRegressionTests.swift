@@ -296,3 +296,20 @@ struct AgentGroundingRegressionTests {
         )
     }
 }
+
+extension AgentGroundingRegressionTests {
+    @MainActor
+    @Test func behaviorAuditorFlagsUnapprovedCameraExecution() async throws {
+        let tools = [RuntimeToolDefinition(id: "camera.capture", requiresApproval: true)]
+        let manifest = makeManifest(tools: tools, intent: "camera", allowed: ["camera.capture"])
+        let now = Date()
+        let messages: [ChatMessage] = [
+            ChatMessage(role: .user, content: "Open camera"),
+            ChatMessage(role: .assistant, content: "Done", agentSteps: [AgentStep(kind: .action, content: "camera.capture()", toolID: "camera.capture")])
+        ].enumerated().map { idx, msg in
+            msg.createdAt = now.addingTimeInterval(TimeInterval(idx)); return msg
+        }
+        let audit = AgentModelBehaviorAuditor().audit(manifest: manifest, messages: messages)
+        #expect(audit.violations.contains(where: { $0.code == "approval_sensitive_tool_selected" }))
+    }
+}

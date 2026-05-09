@@ -353,6 +353,22 @@ final class SlotAgentService {
             return .blocked(IntentRouter.blockedToolMessage(for: routing))
         }
 
+
+
+        if let tool = ToolRegistry.find(id: canonicalTool), tool.requiresApproval {
+            let pending = ExecutorPendingApproval(
+                pendingActionID: UUID(),
+                toolID: canonicalTool,
+                arguments: AgentJSONArguments(stringDictionary: normalizedArgs),
+                confirmationMessage: "Approve \(tool.name) with arguments: \(normalizedArgs)",
+                reason: "requiresApproval"
+            )
+            let approvalMessage = "Approval required before running \(canonicalTool). Pending action id: \(pending.pendingActionID.uuidString)."
+            let approvalStep = AgentStep(kind: .reflection, content: approvalMessage, toolID: canonicalTool, toolArgs: normalizedArgs)
+            steps.append(approvalStep)
+            continuation.yield(.step(approvalStep))
+            return .finalizeImmediate(approvalMessage)
+        }
         let actionStep = AgentStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs)
         steps.append(actionStep)
         continuation.yield(.step(actionStep))
@@ -361,7 +377,7 @@ final class SlotAgentService {
         let observation = await ToolExecutor.shared.execute(
             canonicalTool,
             arguments: normalizedArgs,
-            approval: approvalForExplicitUserIntent(toolID: canonicalTool, routing: routing)
+            approval: .autonomous
         )
         observations.append("\(canonicalTool): \(observation)")
         ToolLedger.shared.record(
@@ -429,26 +445,6 @@ final class SlotAgentService {
 
     
 
-
-    private func approvalForExplicitUserIntent(toolID: String, routing: IntentRoutingDecision) -> ToolExecutionApproval {
-        switch (routing.intent, toolID) {
-        case (.phoneCall, "phone.call"), (.messageDraft, "messages.draft"), (.emailDraft, "mail.draft"):
-            return .userApproved
-        case (.outlook, "outlook.draft.create"),
-             (.outlook, "outlook.mail.send"),
-             (.outlook, "outlook.message.mark_read"),
-             (.outlook, "outlook.message.mark_unread"),
-             (.outlook, "outlook.message.move"),
-             (.outlook, "outlook.message.archive"),
-             (.outlook, "outlook.message.delete"),
-             (.outlook, "outlook.message.reply"),
-             (.outlook, "outlook.message.reply_all"),
-             (.outlook, "outlook.message.forward"):
-            return .userApproved
-        default:
-            return .autonomous
-        }
-    }
 
     private func generateFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
         let prompt = makeMouthPrompt(req: req, resolution: resolution, observations: observations, draft: draft)

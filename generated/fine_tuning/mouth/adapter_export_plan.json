@@ -5,7 +5,7 @@
   "agent": "mouth",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "26c7bd9b5d265b044d55bb66cbd17144fa75b871",
+    "manifestCommit": "1b0138b4305076b086c8e7d71a741b32b46b5329",
     "recordCounts": {
       "eval": 5,
       "train_dpo": 10,

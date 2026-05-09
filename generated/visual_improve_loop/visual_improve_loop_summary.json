@@ -56,7 +56,7 @@
     },
     "embedding": {
       "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-      "corpusCount": 490,
+      "corpusCount": 492,
       "datasetCard": {
         "families": [
           "agent_role_question_to_fleet_slot",
@@ -91,10 +91,10 @@
         "schemaVersion": "1.0.0",
         "task": "retrieval_similarity_ranking"
       },
-      "evalCount": 659,
+      "evalCount": 661,
       "fallbackModel": "current-baseline-embedding-model",
       "generated": true,
-      "hardNegativeCount": 659,
+      "hardNegativeCount": 661,
       "metrics": {
         "hardNegativeAccuracy": 0.0,
         "mrr": 0.0,
@@ -106,11 +106,11 @@
         "toolRetrievalAccuracy": 0.0
       },
       "model": "Qwen/Qwen3-Embedding-0.6B",
-      "pairCount": 659,
+      "pairCount": 661,
       "teacherModel": "Qwen/Qwen3-Embedding-4B",
-      "trainPairCount": 589,
-      "trainTripletCount": 587,
-      "tripletCount": 659,
+      "trainPairCount": 591,
+      "trainTripletCount": 589,
+      "tripletCount": 661,
       "usedFallback": false,
       "valPairCount": 70,
       "valTripletCount": 72
@@ -144,7 +144,7 @@
   },
   "embedding": {
     "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-    "corpusCount": 490,
+    "corpusCount": 492,
     "datasetCard": {
       "families": [
         "agent_role_question_to_fleet_slot",
@@ -179,10 +179,10 @@
       "schemaVersion": "1.0.0",
       "task": "retrieval_similarity_ranking"
     },
-    "evalCount": 659,
+    "evalCount": 661,
     "fallbackModel": "current-baseline-embedding-model",
     "generated": true,
-    "hardNegativeCount": 659,
+    "hardNegativeCount": 661,
     "metrics": {
       "hardNegativeAccuracy": 0.0,
       "mrr": 0.0,
@@ -194,11 +194,11 @@
       "toolRetrievalAccuracy": 0.0
     },
     "model": "Qwen/Qwen3-Embedding-0.6B",
-    "pairCount": 659,
+    "pairCount": 661,
     "teacherModel": "Qwen/Qwen3-Embedding-4B",
-    "trainPairCount": 589,
-    "trainTripletCount": 587,
-    "tripletCount": 659,
+    "trainPairCount": 591,
+    "trainTripletCount": 589,
+    "tripletCount": 661,
     "usedFallback": false,
     "valPairCount": 70,
     "valTripletCount": 72

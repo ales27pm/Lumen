@@ -1,10 +1,10 @@
 {
   "counts": {
-    "corpus": 490,
-    "evalRetrieval": 659,
-    "hardNegatives": 659,
-    "trainPairs": 589,
-    "trainTriplets": 587,
+    "corpus": 492,
+    "evalRetrieval": 661,
+    "hardNegatives": 661,
+    "trainPairs": 591,
+    "trainTriplets": 589,
     "valPairs": 70,
     "valTriplets": 72
   },

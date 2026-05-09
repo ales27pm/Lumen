@@ -53,7 +53,12 @@ DEBUG_SETTINGS: dict[str, str] = {
     "ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES": "YES",
 }
 
-RUNPATH_BLOCK = """LD_RUNPATH_SEARCH_PATHS = (\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t\"@executable_path/Frameworks\",\n\t\t\t\t);"""
+# Keep XCTest bundle loading intact while normalizing app archive runpaths.
+RUNPATH_BLOCK = """LD_RUNPATH_SEARCH_PATHS = (
+	"$(inherited)",
+	"@executable_path/Frameworks",
+	"@loader_path/Frameworks",
+);"""
 
 
 @dataclass(frozen=True)
@@ -139,35 +144,63 @@ def find_build_settings_block(configuration_body: str) -> tuple[int, int, str]:
     return open_brace, close_brace, configuration_body[open_brace + 1 : close_brace]
 
 
-def remove_scalar_setting(settings_body: str, key: str) -> str:
-    # Matches common scalar build setting format:
-    #     KEY = VALUE;
-    return re.sub(rf"\n\t{{4}}{re.escape(key)} = [^;]+;", "", settings_body)
+def _is_overridden_setting_start(line: str, keys_to_override: set[str]) -> bool:
+    stripped = line.lstrip()
+    return any(stripped.startswith(f"{key} =") for key in keys_to_override)
 
 
-def remove_parenthesized_setting(settings_body: str, key: str) -> str:
-    pattern = re.compile(
-        rf"\n\t{{4}}{re.escape(key)} = \(.*?\n\t{{4}}\);",
-        re.DOTALL,
-    )
-    return pattern.sub("", settings_body)
+def _setting_line_opens_parenthesized_value(line: str) -> bool:
+    stripped = line.lstrip()
+    return "= (" in stripped and not stripped.rstrip().endswith(");")
+
+
+def _setting_line_closes_parenthesized_value(line: str) -> bool:
+    return line.lstrip().strip() == ");"
+
+
+def _remove_overridden_settings(settings_body: str, keys_to_override: set[str]) -> str:
+    lines = settings_body.splitlines(keepends=True)
+    filtered: list[str] = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+        if not _is_overridden_setting_start(line, keys_to_override):
+            filtered.append(line)
+            index += 1
+            continue
+
+        skip_parenthesized_value = _setting_line_opens_parenthesized_value(line)
+        index += 1
+        if skip_parenthesized_value:
+            while index < len(lines):
+                if _setting_line_closes_parenthesized_value(lines[index]):
+                    index += 1
+                    break
+                index += 1
+
+    return "".join(filtered)
 
 
 def insert_sorted_settings(settings_body: str, scalar_settings: dict[str, str], include_runpath: bool) -> str:
-    for key in scalar_settings:
-        settings_body = remove_scalar_setting(settings_body, key)
-
+    keys_to_override = set(scalar_settings.keys())
     if include_runpath:
-        settings_body = remove_parenthesized_setting(settings_body, "LD_RUNPATH_SEARCH_PATHS")
+        keys_to_override.add("LD_RUNPATH_SEARCH_PATHS")
+
+    body_without_overrides = _remove_overridden_settings(settings_body, keys_to_override)
+    trailing_indent_match = re.search(r"(\n\t{3})$", body_without_overrides)
+    trailing_indent = trailing_indent_match.group(1) if trailing_indent_match else "\n\t\t\t"
+    body_core = (
+        body_without_overrides[: -len(trailing_indent)]
+        if body_without_overrides.endswith(trailing_indent)
+        else body_without_overrides.rstrip()
+    )
 
     additions = [f"\n\t\t\t\t{key} = {value};" for key, value in sorted(scalar_settings.items())]
     if include_runpath:
-        additions.append("\n\t\t\t\t" + RUNPATH_BLOCK.replace("\n", "\n"))
+        additions.extend(f"\n\t\t\t\t{line}" for line in RUNPATH_BLOCK.splitlines())
 
-    # Insert before the buildSettings closing brace. We keep the rest of the block untouched.
-    if settings_body.endswith("\n\t\t\t"):
-        return settings_body[: -len("\n\t\t\t")] + "".join(additions) + "\n\t\t\t"
-    return settings_body.rstrip() + "".join(additions) + "\n\t\t\t"
+    return body_core.rstrip() + "".join(additions) + trailing_indent
 
 
 def patch_configuration_body(configuration: BuildConfiguration) -> str:

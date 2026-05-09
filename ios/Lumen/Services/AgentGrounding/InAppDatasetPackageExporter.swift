@@ -197,7 +197,7 @@ nonisolated enum InAppDatasetPackageExporter {
                 code: code,
                 agent: trace.slot,
                 expected: "Model turn latency <= \(slowModelTurnThresholdMs) ms; severe latency threshold <= \(severeModelTurnThresholdMs) ms.",
-                actual: "stage=\(trace.stage); elapsedMs=\(elapsed); firstTokenMs=\(trace.firstTokenLatencyMs.map(String.init) ?? "nil"); outputTokens=\(trace.outputTokenCount.map(String.init) ?? "nil")",
+                actual: "stage=\(trace.stage); elapsedMs=\(elapsed); firstTokenMs=\(trace.firstTokenLatencyMs.map(String.init) ?? "nil"); estimatedPromptTokens=\(trace.estimatedPromptTokenCount.map(String.init) ?? "nil"); outputTokens=\(trace.outputTokenCount.map(String.init) ?? "nil"); tps=\(trace.tokensPerSecond.map { String(format: "%.2f", $0) } ?? "nil"); promptChars=\(trace.promptCharCount.map(String.init) ?? "nil"); modelPath=\(trace.baseModelPath ?? "nil"); adapterPath=\(trace.adapterPath ?? "nil"); accel=\(trace.accelerationDiagnostic ?? "unknown")",
                 promptPrefix: trace.promptPrefix,
                 problem: problem
             )

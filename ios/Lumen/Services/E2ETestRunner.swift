@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+#if canImport(Darwin)
+import Darwin
+#endif
 
 nonisolated enum E2ETestKind: String, Codable, Sendable, CaseIterable {
     case routing
@@ -64,7 +67,7 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         E2ETestScenario(id: "normal-chat-no-forced-tool", title: "Normal chat does not force tools", kind: .chat, prompt: "Explain why a sharp chisel is safer than a dull one.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
     ]
 
-    static let allToolCoverage: [E2ETestScenario] = [
+    private static let allToolCoverageBase: [E2ETestScenario] = [
         // Calendar
         E2ETestScenario(id: "tool-calendar-create", title: "calendar.create scoped", kind: .toolGuard, prompt: "Create an event tomorrow at 5 called test appointment", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "mail.draft", "maps.search"], requiredTextHints: [], forbiddenTextHints: ["weather for", "web search"], requiresAgentRun: false),
         E2ETestScenario(id: "tool-calendar-list", title: "calendar.list scoped", kind: .toolGuard, prompt: "List my upcoming calendar events", expectedIntent: .calendar, requiredAllowedToolIDs: ["calendar.create", "calendar.list"], forbiddenToolIDs: ["weather", "web.search", "reminders.create", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["weather for"], requiresAgentRun: false),
@@ -121,10 +124,158 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         E2ETestScenario(id: "tool-alarm-cancel", title: "alarm.cancel scoped", kind: .toolGuard, prompt: "Cancel alarm named morning wakeup", expectedIntent: .alarm, requiredAllowedToolIDs: ["alarm.cancel"], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft"], requiredTextHints: [], forbiddenTextHints: ["calendar event"], requiresAgentRun: false)
     ]
 
+    static let allToolCoverage: [E2ETestScenario] = multiScenarioCoverage(from: allToolCoverageBase)
+
     static let chatCoverage: [E2ETestScenario] = [
         E2ETestScenario(id: "chat-carpentry-advice", title: "Carpentry chat stays direct", kind: .chat, prompt: "Give me three tips for fitting a door hinge cleanly.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true),
         E2ETestScenario(id: "chat-code-explanation", title: "Code explanation stays chat", kind: .chat, prompt: "Explain actor isolation in Swift in simple terms.", expectedIntent: .chat, requiredAllowedToolIDs: [], forbiddenToolIDs: ["calendar.create", "weather", "web.search", "mail.draft", "reminders.create"], requiredTextHints: [], forbiddenTextHints: ["created a new event", "weather for"], requiresAgentRun: true)
     ]
+
+    private static func multiScenarioCoverage(from scenarios: [E2ETestScenario]) -> [E2ETestScenario] {
+        var expanded: [E2ETestScenario] = []
+        for scenario in scenarios {
+            expanded.append(scenario)
+            let prompts = variantPrompts(for: scenario)
+            precondition(prompts.count == 2, "Every E2E base scenario must produce exactly two variants")
+            for (index, prompt) in prompts.enumerated() {
+                let suffix = index == 0 ? "b" : "c"
+                expanded.append(
+                    E2ETestScenario(
+                        id: "\(scenario.id)-variant-\(suffix)",
+                        title: "\(scenario.title) (variant \(suffix.uppercased()))",
+                        kind: scenario.kind,
+                        prompt: prompt,
+                        expectedIntent: scenario.expectedIntent,
+                        requiredAllowedToolIDs: scenario.requiredAllowedToolIDs,
+                        forbiddenToolIDs: scenario.forbiddenToolIDs,
+                        requiredTextHints: scenario.requiredTextHints,
+                        forbiddenTextHints: scenario.forbiddenTextHints,
+                        requiresAgentRun: scenario.requiresAgentRun
+                    )
+                )
+            }
+        }
+        precondition(Set(expanded.map(\.id)).count == expanded.count, "E2E scenario IDs must be unique")
+        return expanded
+    }
+
+    private static func variantPrompts(for scenario: E2ETestScenario) -> [String] {
+        let required = Set(scenario.requiredAllowedToolIDs)
+        let forbidden = Set(scenario.forbiddenToolIDs)
+        func allows(_ toolID: String) -> Bool { required.contains(toolID) && !forbidden.contains(toolID) }
+        func allowsAll(_ toolIDs: [String]) -> Bool { toolIDs.allSatisfy(allows) }
+        func hasID(_ suffix: String) -> Bool { scenario.id.contains(suffix) }
+
+        if allows("calendar.create") && !allows("calendar.list") {
+            return [
+                "Create a calendar event for tomorrow at 4 PM called Project sync.",
+                "Schedule a calendar event next Tuesday at 9 AM named Team check-in."
+            ]
+        }
+        if allows("calendar.list") && !allows("calendar.create") {
+            return [
+                "List my upcoming calendar events for this week.",
+                "Show the next items on my calendar."
+            ]
+        }
+        if allowsAll(["calendar.create", "calendar.list"]) {
+            return [
+                "List my upcoming calendar items and then create one for Friday at 3 PM called Design review.",
+                "Show my next calendar events, then add a new one for tomorrow at 11 AM named Budget follow-up."
+            ]
+        }
+
+        if hasID("alarm-auth-status") {
+            return ["Check my alarm authorization status.", "Show whether alarm access is currently allowed."]
+        }
+        if hasID("alarm-request-auth") {
+            return ["Request alarm authorization access.", "Prompt for alarm permission."]
+        }
+        if hasID("alarm-countdown") {
+            return ["Start a countdown timer for 10 minutes.", "Set a 25-minute countdown timer."]
+        }
+        if hasID("alarm-schedule") {
+            return ["Set an alarm for tomorrow at 6:30 AM.", "Create an alarm for next Monday at 7:00 AM."]
+        }
+        if hasID("alarm-cancel") || allows("alarm.cancel") {
+            return [
+                "Cancel the alarm named morning wakeup.",
+                "Delete the alarm called gym reminder."
+            ]
+        }
+        if hasID("alarm-pause") {
+            return ["Pause alarm 00000000-0000-0000-0000-000000000000.", "Pause the currently ringing alarm."]
+        }
+        if hasID("alarm-resume") {
+            return ["Resume alarm 00000000-0000-0000-0000-000000000000.", "Resume the paused alarm."]
+        }
+        if hasID("alarm-stop") {
+            return ["Stop alarm 00000000-0000-0000-0000-000000000000.", "Stop the active alarm now."]
+        }
+        if hasID("alarm-snooze") {
+            return ["Snooze alarm 00000000-0000-0000-0000-000000000000.", "Snooze the ringing alarm for a few minutes."]
+        }
+        if hasID("alarm-list") || allows("alarm.list") {
+            return [
+                "List my active alarms.",
+                "Show all alarms currently set."
+            ]
+        }
+
+        if hasID("reminders-create") || (allows("reminders.create") && !allows("reminders.list")) {
+            return [
+                "Create a reminder for tomorrow to submit the timesheet.",
+                "Remind me next week to review quarterly invoices."
+            ]
+        }
+        if hasID("reminders-list") || (allows("reminders.list") && !allows("reminders.create")) {
+            return [
+                "List my current reminders.",
+                "Show all pending reminders."
+            ]
+        }
+
+        switch scenario.expectedIntent {
+        case .calendar: return ["Create a calendar event for tomorrow afternoon called Planning block.", "Schedule a calendar appointment for next week named Follow-up."]
+        case .weather: return ["What is the weather at my current location right now?", "Should I bring an umbrella here today based on today's forecast?"]
+        case .contactSearch: return ["Search contacts for Alex Johnson.", "Look up contact info for Sam Lee."]
+        case .phoneCall: return ["Call 5145551234.", "Place a call to Alex from contacts."]
+        case .maps: return hasID("maps-directions") ? ["Get driving directions to 123 Main Street.", "Show turn-by-turn directions to the nearest clinic."] : ["Find coffee shops near me on the map.", "Search maps for the closest hardware store."]
+        case .photos: return ["Search photos from last month.", "Find recent photos from this weekend."]
+        case .health: return ["Show my health summary for today.", "Display my recent step and health summary."]
+        case .motion: return ["Detect my recent motion activity.", "Show whether I was walking or driving recently."]
+        case .files: return ["Read file project-notes.md.", "Open and read architecture-notes.md."]
+        case .memory: return hasID("memory-save") ? ["Remember this preference: I like concise answers.", "Save this note: prioritize bullet points."] : ["What do you remember about my preferences?", "Recall my saved communication preferences."]
+        case .rag: return hasID("rag-search") ? ["Search my files for architecture notes and summarize key modules.", "Find local docs about the Lumen architecture and summarize modules."] : (hasID("rag-index-files") ? ["Reindex local files for retrieval.", "Refresh the file retrieval index."] : ["Reindex photos for retrieval search.", "Refresh the photo retrieval index."])
+        case .trigger: return hasID("trigger-create") ? ["Create a trigger in 10 minutes to summarize reminders.", "Schedule a trigger for tonight's reminder digest."] : (hasID("trigger-list") ? ["List my active triggers.", "Show all scheduled triggers."] : ["Cancel trigger named morning summary.", "Remove the trigger called morning summary."])
+        case .webSearch: return hasID("web-fetch") ? ["Read this web URL: https://example.com.", "Fetch and summarize https://example.com page content."] : ["Search the web for recent SwiftData performance tips.", "Look up current web guidance on actor isolation."]
+        case .weather: return ["What is the weather here right now using my current location?", "Should I carry an umbrella here today based on weather conditions?"]
+        case .emailDraft: return ["Draft a quick email update to Taylor about the delay and ask one question.", "Draft an email: subject release prep, body with concise status and one clarifying question."]
+        case .messageDraft: return ["Draft a text to Alex that I will be late.", "Help me message Jordan with a complete ETA and apology."]
+        case .camera: return ["Open the camera and prepare for a receipt photo when I confirm.", "Prepare camera capture so I can approve taking a photo."]
+        case .alarm: return ["Set an alarm for tomorrow at 6:30 AM.", "Create an alarm for next weekday morning at 7 AM."]
+        case .reminder: return ["Create a reminder for tomorrow morning to call the clinic.", "Remind me next week to review invoices."]
+        case .chat: return ["Explain in plain English why immutable data can reduce bugs.", "Give a normal explanation of how DNS works, no tools needed."]
+        default: return ["\(scenario.prompt)", "Please handle this request with the same tool boundary constraints: \(scenario.prompt)"]
+        }
+    }
+}
+
+nonisolated struct E2EPerformanceSample: Codable, Sendable {
+    let timestamp: Date
+    let residentMemoryMB: Double?
+    let totalMemoryMB: Double
+}
+
+nonisolated struct E2EPerformanceMatrix: Codable, Sendable {
+    let aneUtilizationPercent: Double?
+    let eventDensityCPUProxyPercent: Double?
+    let gpuUtilizationPercent: Double?
+    let peakRAMMB: Double
+    let averageRAMMB: Double
+    let sampleCount: Int
+    let notes: [String]
+    let accelerationDiagnostics: RuntimeAccelerationDiagnostics?
 }
 
 nonisolated struct E2ETestEvent: Codable, Sendable, Identifiable {
@@ -156,6 +307,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
     let rawFinalHadUnsafeLeakage: Bool
     let sanitizedFinalRemovedArtifacts: [String]
     let outputHygieneFailures: [String]
+    let performanceMatrix: E2EPerformanceMatrix?
 
     init(
         id: UUID,
@@ -177,7 +329,8 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         sanitizedFinalPrefix: String,
         rawFinalHadUnsafeLeakage: Bool,
         sanitizedFinalRemovedArtifacts: [String],
-        outputHygieneFailures: [String]
+        outputHygieneFailures: [String],
+        performanceMatrix: E2EPerformanceMatrix? = nil
     ) {
         self.id = id
         self.scenarioID = scenarioID
@@ -199,6 +352,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         self.rawFinalHadUnsafeLeakage = rawFinalHadUnsafeLeakage
         self.sanitizedFinalRemovedArtifacts = sanitizedFinalRemovedArtifacts
         self.outputHygieneFailures = outputHygieneFailures
+        self.performanceMatrix = performanceMatrix
     }
 
     init(from decoder: Decoder) throws {
@@ -223,6 +377,7 @@ nonisolated struct E2ETestResult: Codable, Sendable, Identifiable {
         rawFinalHadUnsafeLeakage = try c.decodeIfPresent(Bool.self, forKey: .rawFinalHadUnsafeLeakage) ?? false
         sanitizedFinalRemovedArtifacts = try c.decodeIfPresent([String].self, forKey: .sanitizedFinalRemovedArtifacts) ?? []
         outputHygieneFailures = try c.decodeIfPresent([String].self, forKey: .outputHygieneFailures) ?? []
+        performanceMatrix = try c.decodeIfPresent(E2EPerformanceMatrix.self, forKey: .performanceMatrix)
     }
 }
 
@@ -268,27 +423,35 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
             if !result.finalText.isEmpty {
                 lines.append("Final: \(result.finalText)")
             }
+            if let matrix = result.performanceMatrix {
+                lines.append("Performance: ANE \(displayPercent(matrix.aneUtilizationPercent)), CPU-proxy \(displayPercent(matrix.eventDensityCPUProxyPercent)), GPU \(displayPercent(matrix.gpuUtilizationPercent)), RAM avg \(Int(matrix.averageRAMMB))MB / peak \(Int(matrix.peakRAMMB))MB")
+            }
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private func displayPercent(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return "\(Int(value.rounded()))%"
     }
 }
 
 @MainActor
 enum E2ETestRunner {
-    static func runStandard(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context, onResult: onResult)
+    static func runStandard(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context, onResult: onResult, onEvent: onEvent)
     }
 
-    static func runTrainingValidation(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context, onResult: onResult)
+    static func runTrainingValidation(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context, onResult: onResult, onEvent: onEvent)
     }
 
-    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
+    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
         let started = Date()
         var results: [E2ETestResult] = []
         for scenario in scenarios {
-            let result = await runScenario(scenario, appState: appState, context: context)
+            let result = await runScenario(scenario, appState: appState, context: context, onEvent: onEvent)
             results.append(result)
             E2ETestLogStore.append(result)
             onResult?(result)
@@ -324,7 +487,7 @@ enum E2ETestRunner {
         }
     }
 
-    private static func runScenario(_ scenario: E2ETestScenario, appState: AppState, context: ModelContext) async -> E2ETestResult {
+    private static func runScenario(_ scenario: E2ETestScenario, appState: AppState, context: ModelContext, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestResult {
         let started = Date()
         var events: [E2ETestEvent] = []
         var failures: [String] = []
@@ -341,13 +504,34 @@ enum E2ETestRunner {
             recoveredBeforeRewrite: nil,
             recoveredAfterRewrite: nil
         )
+        var performanceSamples: [E2EPerformanceSample] = []
+        var lastPerformanceSampleAt: Date?
+        let totalMemoryMB = Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
 
         func event(_ phase: String, _ message: String) {
-            events.append(E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message))
+            let emitted = E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message)
+            events.append(emitted)
+            onEvent?(emitted)
+        }
+        func collectPerformanceSample(force: Bool = false) {
+            let now = Date()
+            if !force, let lastPerformanceSampleAt, now.timeIntervalSince(lastPerformanceSampleAt) < 0.5 {
+                return
+            }
+            performanceSamples.append(
+                E2EPerformanceSample(
+                    timestamp: now,
+                    residentMemoryMB: residentMemoryUsageMB(),
+                    totalMemoryMB: totalMemoryMB
+                )
+            )
+            lastPerformanceSampleAt = now
         }
 
+        collectPerformanceSample(force: true)
         event("start", scenario.prompt)
         let routing = await IntentClassifierService.shared.route(scenario.prompt)
+        collectPerformanceSample()
         event("intent", "actual=\(routing.intent.rawValue), expected=\(scenario.expectedIntent.rawValue)")
         if routing.intent != scenario.expectedIntent {
             failures.append("Intent mismatch: \(routing.intent.rawValue) != \(scenario.expectedIntent.rawValue)")
@@ -364,6 +548,7 @@ enum E2ETestRunner {
         if scenario.requiresAgentRun {
             let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
             let modelLoaded = await ModelLoader.ensureChatLoaded(appState: appState, stored: stored)
+            collectPerformanceSample()
             event("models", modelLoaded ? "chat fleet ready" : "no chat model loaded")
             if modelLoaded {
                 let req = AgentRequest(
@@ -382,6 +567,7 @@ enum E2ETestRunner {
                 for await agentEvent in SlotAgentService.shared.run(req) {
                     switch agentEvent {
                     case .step(let step):
+                        collectPerformanceSample()
                         steps.append(step)
                         event("step", "\(step.kind.rawValue): \(step.content)")
                         if let toolID = step.toolID, scenario.forbiddenToolIDs.contains(toolID) {
@@ -391,10 +577,13 @@ enum E2ETestRunner {
                         break
                     case .finalDelta(let chunk):
                         rawFinalText += chunk
+                        collectPerformanceSample()
                     case .done(let text, let allSteps):
+                        collectPerformanceSample(force: true)
                         if !text.isEmpty { rawFinalText = text }
                         steps = allSteps.isEmpty ? steps : allSteps
                     case .error(let message):
+                        collectPerformanceSample(force: true)
                         failures.append("Agent error: \(message)")
                     }
                 }
@@ -427,6 +616,7 @@ enum E2ETestRunner {
                 rewriteSuccess = rewriteOutcome.rewriteSuccess
                 event("final-hints", "missing_hints=\(missingHints), rewrite_attempted=\(rewriteAttempted), rewrite_success=\(rewriteSuccess)")
                 event("final", finalText)
+                collectPerformanceSample(force: true)
             } else {
                 finalText = "No model loaded; routing-only checks completed."
                 rawFinalText = finalText
@@ -480,7 +670,51 @@ enum E2ETestRunner {
             ? hygieneState.rawSanitized.artifactAudit.rawPrefix
             : hygieneState.postRewriteSanitized.artifactAudit.rawPrefix
         let sanitizedPrefix = hygieneState.postRewriteSanitized.artifactAudit.sanitizedPrefix
-        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: Date(), rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures)
+        let endedAt = Date()
+        collectPerformanceSample(force: true)
+        let matrix = await performanceMatrix(from: performanceSamples, startedAt: started, finishedAt: endedAt)
+        return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: endedAt, rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures, performanceMatrix: matrix)
+    }
+
+    private static func performanceMatrix(from samples: [E2EPerformanceSample], startedAt: Date, finishedAt: Date) async -> E2EPerformanceMatrix {
+        let residentSamples = samples.compactMap(\.residentMemoryMB)
+        let averageRAM = residentSamples.isEmpty ? 0 : residentSamples.reduce(0, +) / Double(residentSamples.count)
+        let peakRAM = residentSamples.max() ?? 0
+        let duration = finishedAt.timeIntervalSince(startedAt)
+        let cpuEstimate = duration > 0 ? min(100, (Double(samples.count) / max(duration, 0.001)) * 2.5) : nil
+        var notes = [
+            "CPU is an event-density estimate for test comparison only.",
+            "ANE and GPU counters are unavailable in this runtime and exported as null.",
+        ]
+        if residentSamples.isEmpty {
+            notes.append("Resident-memory sampling unavailable; RAM fields defaulted to 0MB.")
+        }
+        return E2EPerformanceMatrix(
+            aneUtilizationPercent: nil,
+            eventDensityCPUProxyPercent: cpuEstimate,
+            gpuUtilizationPercent: nil,
+            peakRAMMB: peakRAM,
+            averageRAMMB: averageRAM,
+            sampleCount: samples.count,
+            notes: notes,
+            accelerationDiagnostics: await AppLlamaService.shared.currentAccelerationDiagnostics()
+        )
+    }
+
+    private static func residentMemoryUsageMB() -> Double? {
+#if canImport(Darwin)
+        var info = mach_task_basic_info_data_t()
+        var count = mach_msg_type_number_t(MACH_TASK_BASIC_INFO_COUNT)
+        let result: kern_return_t = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPointer, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return Double(info.resident_size) / (1024 * 1024)
+#else
+        return nil
+#endif
     }
 
     static func mergeSanitizerOutputs(_ primary: SanitizedFinalOutput, recovered: SanitizedFinalOutput?) -> SanitizedFinalOutput {

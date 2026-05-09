@@ -7,6 +7,7 @@ nonisolated struct RuntimeReadinessMetrics: Sendable {
     let runtimePath: String
     let activeAdapterSlot: String?
     let accelerationDiagnostic: String
+    let accelerationDiagnostics: RuntimeAccelerationDiagnostics
 }
 
 @MainActor
@@ -124,7 +125,8 @@ final class SlotModelRuntimeCoordinator {
                 adapterActivationMs: 0,
                 runtimePath: "embedding",
                 activeAdapterSlot: nil,
-                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs.",
+                accelerationDiagnostics: RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "unknown", requestedGpuLayers: nil, requestedKQVOffload: nil)
             )
         }
         let started = Date()
@@ -145,7 +147,8 @@ final class SlotModelRuntimeCoordinator {
                 adapterActivationMs: activationMs,
                 runtimePath: "sharedAdapter",
                 activeAdapterSlot: slot.rawValue,
-                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs.",
+                accelerationDiagnostics: RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
             )
         }
 
@@ -156,7 +159,8 @@ final class SlotModelRuntimeCoordinator {
             adapterActivationMs: 0,
             runtimePath: "legacySlot",
             activeAdapterSlot: nil,
-            accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs."
+            accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs.",
+            accelerationDiagnostics: RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
         )
     }
 

@@ -368,6 +368,7 @@ private struct E2ETestRunnerView: View {
     @State private var reportText = E2ETestLogStore.latestText()
     @State private var latestReport: E2ETestReport? = E2ETestLogStore.latestReport()
     @State private var liveResults: [E2ETestResult] = []
+    @State private var liveEventBuffer: [E2ETestEvent] = []
     @State private var runStartedAt: Date?
     @State private var lastExportURL: URL?
     @State private var exportError: String?
@@ -514,6 +515,7 @@ private struct E2ETestRunnerView: View {
         reportText = E2ETestLogStore.latestText()
         latestReport = E2ETestLogStore.latestReport()
         liveResults = []
+        liveEventBuffer = []
         runStartedAt = nil
     }
 
@@ -523,21 +525,26 @@ private struct E2ETestRunnerView: View {
         exportError = nil
         latestReport = nil
         liveResults = []
+        liveEventBuffer = []
         runStartedAt = Date()
         reportText = runMode.runningLabel
         Task { @MainActor in
             let report: E2ETestReport
             switch runMode {
             case .standard:
-                report = await E2ETestRunner.runStandard(appState: appState, context: modelContext) { result in
+                report = await E2ETestRunner.runStandard(appState: appState, context: modelContext, onResult: { result in
                     liveResults.append(result)
                     reportText = inProgressReportText(results: liveResults, total: runMode.scenarios.count)
-                }
+                }, onEvent: { event in
+                    liveEventBuffer.append(event)
+                })
             case .trainingValidation:
-                report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext) { result in
+                report = await E2ETestRunner.runTrainingValidation(appState: appState, context: modelContext, onResult: { result in
                     liveResults.append(result)
                     reportText = inProgressReportText(results: liveResults, total: runMode.scenarios.count)
-                }
+                }, onEvent: { event in
+                    liveEventBuffer.append(event)
+                })
             }
             latestReport = report
             reportText = report.summaryText
@@ -603,17 +610,17 @@ private struct E2ETestRunnerView: View {
 
     private var eventLogEntries: [E2ERealtimeLogEntry] {
         let scenariosByID = Dictionary(uniqueKeysWithValues: runMode.scenarios.map { ($0.id, $0.title) })
-        let activeResults = isRunning || !liveResults.isEmpty ? liveResults : (latestReport?.results ?? [])
-        return activeResults.flatMap { result in
-            result.events.map { event in
+        let streamingEvents = isRunning ? liveEventBuffer : []
+        let reportEvents = (isRunning || !liveResults.isEmpty ? liveResults : (latestReport?.results ?? [])).flatMap(\.events)
+        let sourceEvents = isRunning ? streamingEvents : reportEvents
+        return sourceEvents.map { event in
                 E2ERealtimeLogEntry(
                     id: event.id,
                     createdAt: event.createdAt,
-                    scenarioTitle: scenariosByID[event.scenarioID] ?? result.title,
+                    scenarioTitle: scenariosByID[event.scenarioID] ?? event.scenarioID,
                     phase: event.phase,
                     message: event.message
                 )
-            }
         }
         .sorted { $0.createdAt < $1.createdAt }
     }

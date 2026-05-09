@@ -132,20 +132,43 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
     ]
 
     private static func multiScenarioCoverage(from scenarios: [E2ETestScenario]) -> [E2ETestScenario] {
-        scenarios.flatMap { scenario in
-            let variant = E2ETestScenario(
-                id: "\(scenario.id)-variant-b",
-                title: "\(scenario.title) (variant B)",
-                kind: scenario.kind,
-                prompt: "\(scenario.prompt). Keep the response concise and confirm the action boundaries.",
-                expectedIntent: scenario.expectedIntent,
-                requiredAllowedToolIDs: scenario.requiredAllowedToolIDs,
-                forbiddenToolIDs: scenario.forbiddenToolIDs,
-                requiredTextHints: scenario.requiredTextHints,
-                forbiddenTextHints: scenario.forbiddenTextHints,
-                requiresAgentRun: scenario.requiresAgentRun
-            )
-            return [scenario, variant]
+        var expanded: [E2ETestScenario] = []
+        for scenario in scenarios {
+            expanded.append(scenario)
+            for (index, prompt) in variantPrompts(for: scenario).enumerated() {
+                let suffix = index == 0 ? "b" : "c"
+                expanded.append(
+                    E2ETestScenario(
+                        id: "\(scenario.id)-variant-\(suffix)",
+                        title: "\(scenario.title) (variant \(suffix.uppercased()))",
+                        kind: scenario.kind,
+                        prompt: prompt,
+                        expectedIntent: scenario.expectedIntent,
+                        requiredAllowedToolIDs: scenario.requiredAllowedToolIDs,
+                        forbiddenToolIDs: scenario.forbiddenToolIDs,
+                        requiredTextHints: scenario.requiredTextHints,
+                        forbiddenTextHints: scenario.forbiddenTextHints,
+                        requiresAgentRun: scenario.requiresAgentRun
+                    )
+                )
+            }
+        }
+        precondition(Set(expanded.map(\.id)).count == expanded.count, "E2E scenario IDs must be unique")
+        return expanded
+    }
+
+    private static func variantPrompts(for scenario: E2ETestScenario) -> [String] {
+        switch scenario.expectedIntent {
+        case .calendar: return ["Set something for tomorrow afternoon on my calendar, or ask me to clarify the exact time.", "Can you list next week's calendar items and then create one for Friday?"]
+        case .weather: return ["What is the weather at my current location right now?", "Should I bring an umbrella here today based on today's forecast?"]
+        case .webSearch: return ["Look up recent SwiftData performance tips on the web.", "Find recent web sources about actor isolation best practices."]
+        case .emailDraft: return ["Draft a quick email update to Taylor about the delay and ask one question.", "Draft an email: subject release prep, body with concise status and one clarifying question."]
+        case .messageDraft: return ["Draft a text to Alex that I will be late.", "Help me message Jordan with a complete ETA and apology."]
+        case .camera: return ["Open the camera so I can capture a receipt photo.", "I need to take a photo now; use camera capture only."]
+        case .alarm: return ["Create an alarm for tomorrow 6:30 AM and confirm it is active.", "Start a 10-minute countdown timer and show active alarms."]
+        case .reminder: return ["Remind me next week to review invoices.", "Create a reminder for tomorrow morning to call the clinic."]
+        case .chat: return ["Explain in plain English why immutable data can reduce bugs.", "Give a normal explanation of how DNS works, no tools needed."]
+        default: return ["\(scenario.prompt)"]
         }
     }
 }
@@ -158,7 +181,7 @@ nonisolated struct E2EPerformanceSample: Codable, Sendable {
 
 nonisolated struct E2EPerformanceMatrix: Codable, Sendable {
     let aneUtilizationPercent: Double?
-    let cpuUtilizationPercentEstimate: Double?
+    let eventDensityCPUProxyPercent: Double?
     let gpuUtilizationPercent: Double?
     let peakRAMMB: Double
     let averageRAMMB: Double
@@ -312,7 +335,7 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
                 lines.append("Final: \(result.finalText)")
             }
             if let matrix = result.performanceMatrix {
-                lines.append("Performance: ANE \(displayPercent(matrix.aneUtilizationPercent)), CPU \(displayPercent(matrix.cpuUtilizationPercentEstimate)), GPU \(displayPercent(matrix.gpuUtilizationPercent)), RAM avg \(Int(matrix.averageRAMMB))MB / peak \(Int(matrix.peakRAMMB))MB")
+                lines.append("Performance: ANE \(displayPercent(matrix.aneUtilizationPercent)), CPU-proxy \(displayPercent(matrix.eventDensityCPUProxyPercent)), GPU \(displayPercent(matrix.gpuUtilizationPercent)), RAM avg \(Int(matrix.averageRAMMB))MB / peak \(Int(matrix.peakRAMMB))MB")
             }
             lines.append("")
         }
@@ -327,19 +350,19 @@ nonisolated struct E2ETestReport: Codable, Sendable, Identifiable {
 
 @MainActor
 enum E2ETestRunner {
-    static func runStandard(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context, onResult: onResult)
+    static func runStandard(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.standard, appState: appState, context: context, onResult: onResult, onEvent: onEvent)
     }
 
-    static func runTrainingValidation(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
-        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context, onResult: onResult)
+    static func runTrainingValidation(appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
+        await run(scenarios: E2ETestScenario.trainingValidation, appState: appState, context: context, onResult: onResult, onEvent: onEvent)
     }
 
-    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil) async -> E2ETestReport {
+    static func run(scenarios: [E2ETestScenario], appState: AppState, context: ModelContext, onResult: ((E2ETestResult) -> Void)? = nil, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestReport {
         let started = Date()
         var results: [E2ETestResult] = []
         for scenario in scenarios {
-            let result = await runScenario(scenario, appState: appState, context: context)
+            let result = await runScenario(scenario, appState: appState, context: context, onEvent: onEvent)
             results.append(result)
             E2ETestLogStore.append(result)
             onResult?(result)
@@ -375,7 +398,7 @@ enum E2ETestRunner {
         }
     }
 
-    private static func runScenario(_ scenario: E2ETestScenario, appState: AppState, context: ModelContext) async -> E2ETestResult {
+    private static func runScenario(_ scenario: E2ETestScenario, appState: AppState, context: ModelContext, onEvent: ((E2ETestEvent) -> Void)? = nil) async -> E2ETestResult {
         let started = Date()
         var events: [E2ETestEvent] = []
         var failures: [String] = []
@@ -395,7 +418,9 @@ enum E2ETestRunner {
         var performanceSamples: [E2EPerformanceSample] = []
 
         func event(_ phase: String, _ message: String) {
-            events.append(E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message))
+            let emitted = E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message)
+            events.append(emitted)
+            onEvent?(emitted)
         }
         func collectPerformanceSample() {
             performanceSamples.append(
@@ -563,7 +588,7 @@ enum E2ETestRunner {
         }
         return E2EPerformanceMatrix(
             aneUtilizationPercent: nil,
-            cpuUtilizationPercentEstimate: cpuEstimate,
+            eventDensityCPUProxyPercent: cpuEstimate,
             gpuUtilizationPercent: nil,
             peakRAMMB: peakRAM,
             averageRAMMB: averageRAM,

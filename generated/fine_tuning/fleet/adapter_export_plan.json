@@ -5,13 +5,13 @@
   "agent": "fleet",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "bd86b9afe5fad9baaee8e3b3a043fb9b9373267c",
+    "manifestCommit": "1c18273bf1d24c931eadfd1b238a6430e7402de8",
     "recordCounts": {
       "eval": 93,
       "train_dpo": 14,
-      "train_sft": 701,
+      "train_sft": 709,
       "val_dpo": 3,
-      "val_sft": 124
+      "val_sft": 125
     },
     "sourceFamilies": [
       "approval_boundary_samples",

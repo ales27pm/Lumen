@@ -1,19 +1,19 @@
 {
   "agent": "mouth",
-  "availableSFTRecords": 166,
+  "availableSFTRecords": 180,
   "constraints": {
     "agentSpecific": true,
     "manifestOnlyTools": true,
     "sentinelSafe": true
   },
   "deterministic": true,
-  "manifestCommit": "bd86b9afe5fad9baaee8e3b3a043fb9b9373267c",
+  "manifestCommit": "1c18273bf1d24c931eadfd1b238a6430e7402de8",
   "recordCounts": {
     "eval": 5,
     "train_dpo": 10,
-    "train_sft": 133,
+    "train_sft": 139,
     "val_dpo": 2,
-    "val_sft": 23
+    "val_sft": 25
   },
   "sourceFamilies": [
     "cross_model_training",

@@ -24,8 +24,6 @@ and whose previous run succeeded.
 # pylint: disable=too-many-lines,missing-class-docstring,missing-function-docstring,line-too-long
 # cspell:words Qwen qwen QWEN GGUF GGUFs gguf coreml mlmodel toolcalls scenarioresults adapterapplied jsons PYTHONUNBUFFERED PYTHONHASHSEED
 
-from __future__ import annotations
-
 import argparse
 import glob
 import hashlib

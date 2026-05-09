@@ -5,18 +5,6 @@ import json
 import pickle
 from pathlib import Path
 
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.pipeline import Pipeline
-except Exception:
-    raise SystemExit(
-        "Missing optional dependency scikit-learn.\n"
-        "Install with:\n"
-        "python -m pip install scikit-learn"
-    )
-
-
 def load_dataset(path: Path) -> tuple[list[str], list[str]]:
     if not path.exists():
         raise SystemExit(f"Dataset file not found: {path}")
@@ -48,6 +36,17 @@ def main() -> None:
     args = parser.parse_args()
 
     X, y = load_dataset(Path(args.dataset))
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+    except Exception:
+        raise SystemExit(
+            "Missing optional dependency scikit-learn.\n"
+            "Install with:\n"
+            "python -m pip install scikit-learn"
+        )
+
     model = Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),

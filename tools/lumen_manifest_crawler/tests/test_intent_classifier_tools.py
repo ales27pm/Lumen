@@ -19,7 +19,7 @@ def test_dataset_generation_is_deterministic_and_schema_aligned(tmp_path: Path):
     cmd = [sys.executable, "tools/intent_classifier/generate_intent_dataset.py", "--out", str(out1), "--repeat", "2", "--seed", "27"]
     r1 = run_cmd(cmd)
     assert r1.returncode == 0, r1.stderr
-    cmd[-3] = str(out2)
+    cmd[3] = str(out2)
     r2 = run_cmd(cmd)
     assert r2.returncode == 0, r2.stderr
 

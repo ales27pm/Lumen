@@ -5,13 +5,13 @@
   "agent": "rem",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "bd86b9afe5fad9baaee8e3b3a043fb9b9373267c",
+    "manifestCommit": "1c18273bf1d24c931eadfd1b238a6430e7402de8",
     "recordCounts": {
       "eval": 4,
       "train_dpo": 7,
-      "train_sft": 73,
+      "train_sft": 82,
       "val_dpo": 1,
-      "val_sft": 13
+      "val_sft": 15
     },
     "sourceFamilies": [
       "cross_model_training",
@@ -21,6 +21,7 @@
       "embedding_hard_negatives",
       "embedding_train_pairs",
       "embedding_train_triplets",
+      "embedding_val_pairs",
       "embedding_val_triplets",
       "manifest_grounding_cards",
       "rem_reflection",
@@ -34,6 +35,7 @@
       "embedding_hard_negatives",
       "embedding_train_pairs",
       "embedding_train_triplets",
+      "embedding_val_pairs",
       "embedding_val_triplets",
       "fleet_delegation",
       "fleet_delegation_preference",

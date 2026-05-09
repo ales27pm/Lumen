@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$REPO_ROOT/.local"
 CONFIG_FILE="$CONFIG_DIR/appstoreconnect-upload.env"
+STABLE_ARCHIVE_SCRIPT="$REPO_ROOT/scripts/archive_lumen_stable.sh"
 
 bold() { printf "\033[1m%s\033[0m\n" "$1"; }
 info() { printf "\n➡️  %s\n" "$1"; }
@@ -244,15 +245,6 @@ PLIST
 PLIST
 }
 
-build_project_selector_args() {
-  local project_path="$1"
-  if [[ "$project_path" == *.xcworkspace ]]; then
-    printf '%s\0%s\0' "-workspace" "$project_path"
-  else
-    printf '%s\0%s\0' "-project" "$project_path"
-  fi
-}
-
 [[ "$(uname -s)" == "Darwin" ]] || fail "This script must run on macOS."
 cd "$REPO_ROOT"
 load_local_config
@@ -271,6 +263,7 @@ DEFAULT_AUTH_MODE="${ASC_AUTH_MODE:-1}"
 PROJECT_PATH="$(read_with_default 'Project/workspace path' "$DEFAULT_PROJECT_PATH")"
 [[ -e "$PROJECT_PATH" ]] || fail "Path not found: $PROJECT_PATH"
 [[ "$PROJECT_PATH" == *.xcworkspace || "$PROJECT_PATH" == *.xcodeproj ]] || fail "Path must be .xcworkspace or .xcodeproj"
+[[ -f "$STABLE_ARCHIVE_SCRIPT" ]] || fail "Stable archive script not found: $STABLE_ARCHIVE_SCRIPT"
 
 SCHEME="$(read_with_default 'Scheme' "$DEFAULT_SCHEME")"
 CONFIGURATION="$(read_with_default 'Configuration' "$DEFAULT_CONFIGURATION")"
@@ -285,7 +278,6 @@ ARCHIVE_PATH="build/${SCHEME_SAFE}-${TIMESTAMP}.xcarchive"
 EXPORT_DIR="build/export-${SCHEME_SAFE}-${TIMESTAMP}"
 EXPORT_OPTIONS_PLIST="build/export-options-${SCHEME_SAFE}-${TIMESTAMP}.plist"
 LOG_DIR="build/logs"
-ARCHIVE_LOG="$LOG_DIR/archive-${SCHEME_SAFE}-${TIMESTAMP}.log"
 EXPORT_LOG="$LOG_DIR/export-${SCHEME_SAFE}-${TIMESTAMP}.log"
 
 mkdir -p build "$LOG_DIR"
@@ -335,11 +327,6 @@ fi
 
 write_export_options_plist "$EXPORT_OPTIONS_PLIST" "$EXPORT_METHOD" "$TEAM_ID" "$SIGNING_CERTIFICATE"
 
-PROJECT_SELECTOR=()
-while IFS= read -r -d '' arg; do
-  PROJECT_SELECTOR+=("$arg")
-done < <(build_project_selector_args "$PROJECT_PATH")
-
 XCODE_AUTH_ARGS=()
 if [[ "$AUTH_MODE" == "1" ]]; then
   XCODE_AUTH_ARGS+=(
@@ -349,32 +336,26 @@ if [[ "$AUTH_MODE" == "1" ]]; then
   )
 fi
 
-SIGNING_BUILD_SETTINGS=(
-  "CODE_SIGN_STYLE=Automatic"
-  "DEVELOPMENT_TEAM=$TEAM_ID"
-  "PROVISIONING_PROFILE_SPECIFIER="
+info "Archive via stable linker-safe archive script"
+ARCHIVE_ENV=(
+  "LUMEN_ARCHIVE_PATH=$REPO_ROOT/$ARCHIVE_PATH"
+  "LUMEN_IOS_PROJECT_PATH=$PROJECT_PATH"
+  "LUMEN_IOS_SCHEME=$SCHEME"
+  "LUMEN_IOS_CONFIGURATION=$CONFIGURATION"
+  "LUMEN_IOS_ALLOW_PROVISIONING_UPDATES=1"
+  "LUMEN_IOS_CODE_SIGN_STYLE=Automatic"
+  "LUMEN_IOS_DEVELOPMENT_TEAM=$TEAM_ID"
+  "LUMEN_IOS_CLEAR_PROVISIONING_PROFILE_SPECIFIER=1"
 )
+if [[ "$AUTH_MODE" == "1" ]]; then
+  ARCHIVE_ENV+=(
+    "LUMEN_IOS_AUTHENTICATION_KEY_PATH=$API_KEY_PATH"
+    "LUMEN_IOS_AUTHENTICATION_KEY_ID=$API_KEY"
+    "LUMEN_IOS_AUTHENTICATION_KEY_ISSUER_ID=$API_ISSUER"
+  )
+fi
 
-ARCHIVE_STABILITY_BUILD_SETTINGS=(
-  "COMPILER_INDEX_STORE_ENABLE=NO"
-  "SWIFT_COMPILATION_MODE=singlefile"
-  "SWIFT_WHOLE_MODULE_OPTIMIZATION=NO"
-  "SWIFT_OPTIMIZATION_LEVEL=-Osize"
-)
-
-info "Archive"
-run_logged "$ARCHIVE_LOG" \
-  xcodebuild \
-    "${PROJECT_SELECTOR[@]}" \
-    -scheme "$SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination "generic/platform=iOS" \
-    -archivePath "$ARCHIVE_PATH" \
-    -allowProvisioningUpdates \
-    "${XCODE_AUTH_ARGS[@]}" \
-    "${SIGNING_BUILD_SETTINGS[@]}" \
-    "${ARCHIVE_STABILITY_BUILD_SETTINGS[@]}" \
-    clean archive
+env "${ARCHIVE_ENV[@]}" bash "$STABLE_ARCHIVE_SCRIPT"
 
 info "Export IPA"
 run_logged "$EXPORT_LOG" \

@@ -55,6 +55,7 @@ def test_improve_loop_parser_defaults_and_enable_flag():
     spec = importlib.util.spec_from_file_location("lumen_terminal_improve_loop", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
+    sys.modules["lumen_terminal_improve_loop"] = module
     spec.loader.exec_module(module)
 
     defaults = module.parse_args([])

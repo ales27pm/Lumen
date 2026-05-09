@@ -5,6 +5,7 @@ import json
 import pickle
 from pathlib import Path
 
+
 def load_dataset(path: Path) -> tuple[list[str], list[str]]:
     if not path.exists():
         raise SystemExit(f"Dataset file not found: {path}")
@@ -28,14 +29,7 @@ def load_dataset(path: Path) -> tuple[list[str], list[str]]:
     return X, y
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--model-out", required=True)
-    parser.add_argument("--seed", type=int, default=27)
-    args = parser.parse_args()
-
-    X, y = load_dataset(Path(args.dataset))
+def build_model(seed: int):
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.linear_model import LogisticRegression
@@ -47,12 +41,23 @@ def main() -> None:
             "python -m pip install scikit-learn"
         )
 
-    model = Pipeline(
+    return Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
-            ("clf", LogisticRegression(max_iter=1200, random_state=int(args.seed))),
+            ("clf", LogisticRegression(max_iter=1200, random_state=seed)),
         ]
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--model-out", required=True)
+    parser.add_argument("--seed", type=int, default=27)
+    args = parser.parse_args()
+
+    X, y = load_dataset(Path(args.dataset))
+    model = build_model(int(args.seed))
     model.fit(X, y)
 
     model_out = Path(args.model_out)

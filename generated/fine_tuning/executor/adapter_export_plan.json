@@ -5,7 +5,7 @@
   "agent": "executor",
   "baseModelID": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
   "datasetCard": {
-    "manifestCommit": "1c18273bf1d24c931eadfd1b238a6430e7402de8",
+    "manifestCommit": "61b1fe021c20441e0ba66496b442a70c4629b97d",
     "recordCounts": {
       "eval": 111,
       "train_dpo": 11,

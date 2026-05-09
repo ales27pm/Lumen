@@ -1,0 +1,2127 @@
+{
+  "app" : {
+    "buildNumber" : "168",
+    "bundleIdentifier" : "com.27pm.lumen",
+    "name" : "Lumen",
+    "shortVersion" : "1.0.0"
+  },
+  "exportPolicy" : {
+    "format" : "live-e2e-test-report-json",
+    "includesDeterministicStaticScenarios" : false,
+    "notes" : [
+      "This is the live E2E model/test layer export.",
+      "Scenarios with requiresAgentRun=true are intended to exercise the loaded SlotAgentService path.",
+      "If a scenario says no model loaded or routing-only checks completed, the offline ingester treats it as invalid E2E evidence."
+    ],
+    "ownsLiveE2EScenarios" : true,
+    "privacy" : "Contains prompts, final outputs, failures, and event logs from the current local E2E run. Review before sharing outside the improve-loop.",
+    "sourceLayer" : "e2eTestReport"
+  },
+  "generatedAt" : "2026-05-08T23:41:20Z",
+  "payload" : {
+    "failed" : 0,
+    "finishedAt" : "2026-05-08T23:41:12Z",
+    "id" : "BF765B4C-9D4D-40D1-851D-6AE90C011DAE",
+    "passed" : 43,
+    "results" : [
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:39:05Z",
+            "id" : "0E5560F9-AF51-4C90-8678-BE38D4B3D8A2",
+            "message" : "What is the weather here?",
+            "phase" : "start",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:05Z",
+            "id" : "9E46D9D5-B503-4DEE-AA0D-23C8D3E5CEF2",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:05Z",
+            "id" : "4CC23CE1-EDB2-4FD9-9331-8ADA45A26BBE",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:05Z",
+            "id" : "21E109FD-67CB-4C8C-B4AD-DC5FB655B38B",
+            "message" : "action: weather()",
+            "phase" : "step",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "948438BF-E44A-468E-8BB3-1F1612EEA4B0",
+            "message" : "observation: Weather at your location: · mainly clear · 10°C · feels like 6°C · humidity 52% · wind 6 km/h · gusts 18 km/h · cloud cover 40% · updated 2026-05-08T19:30",
+            "phase" : "step",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "B117D6E4-F77D-48A7-A4F6-56A49511376D",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "weather-here-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "756E4CA9-6CFC-4BE0-9755-E859BF2ABA82",
+            "message" : "Weather update: Weather at your location: · mainly clear · 10°C · feels like 6°C · humidity 52% · wind 6 km/h · gusts 18 km/h · cloud cover 40% · updated 2026-05-08T19:30",
+            "phase" : "final",
+            "scenarioID" : "weather-here-no-calendar"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "Weather update: Weather at your location: · mainly clear · 10°C · feels like 6°C · humidity 52% · wind 6 km/h · gusts 18 km/h · cloud cover 40% · updated 2026-05-08T19:30",
+        "finishedAt" : "2026-05-08T23:39:06Z",
+        "id" : "26049EAA-7666-4FA7-94B0-973746C4FCEB",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What is the weather here?",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Weather update: Weather at your location: · mainly clear · 10°C · feels like 6°C · humidity 52% · wind 6 km/h · gusts 18 km/h · cloud cover 40% · updated 2026-05-08T19:30",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "Weather update: Weather at your location: · mainly clear · 10°C · feels like 6°C · humidity 52% · wind 6 km/h · gusts 18 km/h · cloud cover 40% · updated 2026-05-08T19:30",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "weather-here-no-calendar",
+        "startedAt" : "2026-05-08T23:39:05Z",
+        "title" : "Weather here must not create events"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "6B88E3E8-E589-405B-9325-EBAB6DF22195",
+            "message" : "Search web for diy underground shelter",
+            "phase" : "start",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "1A10CF5B-2437-4D90-BBEF-4D040F0268E7",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "1435E8EB-27EB-4C8E-A2E9-6217BA0D30B3",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:06Z",
+            "id" : "8C877BA6-53DC-4067-BA7E-992FC27E009F",
+            "message" : "action: web.search(query=diy underground shelter)",
+            "phase" : "step",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:07Z",
+            "id" : "135B0254-4E9A-4FC6-B4B9-0BE432D22F20",
+            "message" : "observation: Search results for: diy underground shelter\n\n1. 10 Steps to Build a DIY Underground Bushcraft Survival Shelter\nhttps://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter/\n\n2. Underground Survival Shelters: How to Build, Live, and Thrive Safely\nhttps://prepperswill.com/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface/\n\n3. Building an Underground Shelter: Complete Engineering Guide with Costs\nhttps://survivalstronghold.com/underground-shelter-engineering-guide/\n\n4. 21 Survival Shelters You Should Learn How to Make\nhttps://www.survivalsullivan.com/how-to-make-a-shelter/\n\n5. Building a Secret Underground Shelter - Digging the Ground and ...\nhttps://m.youtube.com/watch?v=T7TeQDXHpIU\n\n6. How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\nhttps://www.primalsurvivor.net/wilderness-survival-shelter-no-supplies/\n\n<lumen_web_payload>{\"generatedAt\":\"2026-05-08T23:39:07Z\",\"kind\":\"searchResults\",\"query\":\"diy underground shelter\",\"media\":[{\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"title\":\"21 Survival Shelters You Should Learn How to Make\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.survivalsullivan.com\\/how-to-make-a-shelter\\/\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/how-to-make-a-shelter\\/\"},{\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"kind\":\"video\",\"sourcePageURL\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"title\":\"Building A Secure Underground Shelter: Wood And Concrete Guide\",\"kind\":\"page\",\"sourcePageURL\":\"https:\\/\\/shuntool.com\\/article\\/how-to-build-a-wood-and-concrete-underground-shelter\",\"url\":\"https:\\/\\/shuntool.com\\/article\\/how-to-build-a-wood-and-concrete-underground-shelter\"}],\"results\":[{\"mediaKind\":\"page\",\"title\":\"10 Steps to Build a DIY Underground Bushcraft Survival Shelter\",\"source\":\"www.bushcraftbasecamp.com\",\"url\":\"https:\\/\\/www.bushcraftbasecamp.com\\/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter\\/\"},{\"mediaKind\":\"page\",\"title\":\"Underground Survival Shelters: How to Build, Live, and Thrive Safely\",\"source\":\"prepperswill.com\",\"url\":\"https:\\/\\/prepperswill.com\\/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface\\/\"},{\"mediaKind\":\"page\",\"title\":\"Building an Underground Shelter: Complete Engineering Guide with Costs\",\"source\":\"survivalstronghold.com\",\"url\":\"https:\\/\\/survivalstronghold.com\\/underground-shelter-engineering-guide\\/\"},{\"mediaKind\":\"page\",\"title\":\"21 Survival Shelters You Should Learn How to Make\",\"source\":\"www.survivalsullivan.com\",\"url\":\"https:\\/\\/www.survivalsullivan.com\\/how-to-make-a-shelter\\/\"},{\"mediaKind\":\"video\",\"title\":\"Building a Secret Underground Shelter - Digging the Ground and ...\",\"source\":\"m.youtube.com\",\"url\":\"https:\\/\\/m.youtube.com\\/watch?v=T7TeQDXHpIU\"},{\"mediaKind\":\"page\",\"title\":\"How To Build A Survival Shelter: 11 Simple Designs - Primal Survivor\",\"source\":\"www.primalsurvivor.net\",\"url\":\"https:\\/\\/www.primalsurvivor.net\\/wilderness-survival-shelter-no-supplies\\/\"},{\"mediaKind\":\"page\",\"title\":\"How To Build An Underground Shelter: A Comprehensive Guide\",\"source\":\"www.battlbox.com\",\"url\":\"https:\\/\\/www.battlbox.com\\/blogs\\/outdoors\\/how-to-build-an-underground-shelter-a-comprehensive-guide\"},{\"mediaKind\":\"page\",\"title\":\"Building A Secure Underground Shelter: Wood And Concrete Guide\",\"source\":\"shuntool.com\",\"url\":\"https:\\/\\/shuntool.com\\/article\\/how-to-build-a-wood-and-concrete-underground-shelter\"}]}</lumen_web_payload>",
+            "phase" : "step",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "1EB79C05-EC85-457F-A73E-617727E4C8DA",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "web-search-no-calendar"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "B4927E33-7DB6-4ECC-A42F-A1624584FD24",
+            "message" : "Here are some resources for DIY underground shelters:\n1. **Bushcraft Survival Shelter Guide** – 10 steps for building a sustainable underground shelter [link](https://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter/).\n2. **Survival Shelters** – Learn about diverse designs and safety tips for underground living [link](https://prepperswill.com/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface/).\n3. **Engineering Guide** – Cost-effective construction methods for underground shelters [link](https://survivalstronghold.com/underground-shelter-engineering-guide/).\n4. **21 Survival Shelters** – Explore various options for sheltering in underground spaces [link](https://www.survivalsullivan.com/how-to-make-a-shelter/).\n5. **YouTube Tutorial** – Visual instructions for digging and building an underground shelter [link](https://m.youtube.com/watch?v=T7TeQDXHpIU).\n6. **No-Supply Survival Shelter** – Simple designs for self-reliance in remote areas [link](https://www.primalsurvivor.net/wilderness-survival-shelter-no-supplies/).\n\nLet me know if you",
+            "phase" : "final",
+            "scenarioID" : "web-search-no-calendar"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Here are some resources for DIY underground shelters:\n1. **Bushcraft Survival Shelter Guide** – 10 steps for building a sustainable underground shelter [link](https://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-underground-bushcraft-survival-shelter/).\n2. **Survival Shelters** – Learn about diverse designs and safety tips for underground living [link](https://prepperswill.com/underground-survival-shelters-how-to-live-store-and-thrive-below-the-surface/).\n3. **Engineering Guide** – Cost-effective construction methods for underground shelters [link](https://survivalstronghold.com/underground-shelter-engineering-guide/).\n4. **21 Survival Shelters** – Explore various options for sheltering in underground spaces [link](https://www.survivalsullivan.com/how-to-make-a-shelter/).\n5. **YouTube Tutorial** – Visual instructions for digging and building an underground shelter [link](https://m.youtube.com/watch?v=T7TeQDXHpIU).\n6. **No-Supply Survival Shelter** – Simple designs for self-reliance in remote areas [link](https://www.primalsurvivor.net/wilderness-survival-shelter-no-supplies/).\n\nLet me know if you",
+        "finishedAt" : "2026-05-08T23:39:54Z",
+        "id" : "AC5715A5-23F0-476B-B45F-C4E1F409A0B1",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search web for diy underground shelter",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Here are some resources for DIY underground shelters:\n1. **Bushcraft Survival Shelter Guide** – 10 steps for building a sustainable underground shelter [link](https://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-und",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "Here are some resources for DIY underground shelters:\n1. **Bushcraft Survival Shelter Guide** – 10 steps for building a sustainable underground shelter [link](https://www.bushcraftbasecamp.com/10-steps-to-build-a-diy-und",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "web-search-no-calendar",
+        "startedAt" : "2026-05-08T23:39:06Z",
+        "title" : "Web search must not create calendar event"
+      },
+      {
+        "actualIntent" : "emailDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "D2E27169-7AB7-4F2E-8008-0A89178EFABF",
+            "message" : "Draft a email",
+            "phase" : "start",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "587F93CD-BDC6-4E71-8284-327CBDB955D3",
+            "message" : "actual=emailDraft, expected=emailDraft",
+            "phase" : "intent",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "D486D77B-416B-4391-930E-C45E9EE79DF0",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "81E4EEB3-C4EE-4559-8C26-C83FFF3AB381",
+            "message" : "reflection: Who should I send it to, and what should it say?",
+            "phase" : "step",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "5CB40021-4C88-46AF-9740-2E615BE1D5AC",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "vague-email-clarifies"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "C6B4C908-D602-44CF-842E-6EFDF4233198",
+            "message" : "Who should I send it to, and what should it say?",
+            "phase" : "final",
+            "scenarioID" : "vague-email-clarifies"
+          }
+        ],
+        "expectedIntent" : "emailDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Who should I send it to, and what should it say?",
+        "finishedAt" : "2026-05-08T23:39:54Z",
+        "id" : "08BAB128-C159-4171-A88B-2B9FB5636A44",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Draft a email",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Who should I send it to, and what should it say?",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "Who should I send it to, and what should it say?",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "vague-email-clarifies",
+        "startedAt" : "2026-05-08T23:39:54Z",
+        "title" : "Vague email draft asks clarification"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "9FA4F834-CC4C-49A4-9C4C-1145E613EF34",
+            "message" : "Explain why a sharp chisel is safer than a dull one.",
+            "phase" : "start",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "BAF46BD6-B9C9-484B-9AD8-8AC851466A09",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-08T23:39:54Z",
+            "id" : "C14405EF-E0E1-4390-B88D-E0D162E9F662",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2B38F342-700C-4F43-9FA4-8EDF18CC42FD",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "4600FA93-AE4E-47DE-B077-11BE05BB646C",
+            "message" : "A sharp chisel is safer than a dull one because it cuts more precisely, reduces the risk of slipping, and allows for better control. The sharp edge ensures even force distribution, minimizes accidental movement, and maintains efficiency over time.",
+            "phase" : "final",
+            "scenarioID" : "normal-chat-no-forced-tool"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "A sharp chisel is safer than a dull one because it cuts more precisely, reduces the risk of slipping, and allows for better control. The sharp edge ensures even force distribution, minimizes accidental movement, and maintains efficiency over time.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "8DF39347-E1AA-40D9-B22A-E57A987FC5FA",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Explain why a sharp chisel is safer than a dull one.",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "A sharp chisel is safer than a dull one because it cuts more precisely, reduces the risk of slipping, and allows for better control. The sharp edge ensures even force distribution, minimizes accidental movement, and main",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "A sharp chisel is safer than a dull one because it cuts more precisely, reduces the risk of slipping, and allows for better control. The sharp edge ensures even force distribution, minimizes accidental movement, and main",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "normal-chat-no-forced-tool",
+        "startedAt" : "2026-05-08T23:39:54Z",
+        "title" : "Normal chat does not force tools"
+      },
+      {
+        "actualIntent" : "calendar",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "347B5BD8-647E-4504-B128-C1B482C75405",
+            "message" : "Create an event tomorrow at 5 called test appointment",
+            "phase" : "start",
+            "scenarioID" : "tool-calendar-create"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "84F29DF3-E00E-45CD-BF91-5D286A38BBAB",
+            "message" : "actual=calendar, expected=calendar",
+            "phase" : "intent",
+            "scenarioID" : "tool-calendar-create"
+          }
+        ],
+        "expectedIntent" : "calendar",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "3EF4FBCD-CB1E-4702-B291-326405B3F454",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Create an event tomorrow at 5 called test appointment",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-calendar-create",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "calendar.create scoped"
+      },
+      {
+        "actualIntent" : "calendar",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "E3E54099-ED31-42C0-81AC-0965256F6B1B",
+            "message" : "List my upcoming calendar events",
+            "phase" : "start",
+            "scenarioID" : "tool-calendar-list"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A11E0249-92FA-4F78-A350-05481785D5CB",
+            "message" : "actual=calendar, expected=calendar",
+            "phase" : "intent",
+            "scenarioID" : "tool-calendar-list"
+          }
+        ],
+        "expectedIntent" : "calendar",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "34EED9C2-0FDE-4CF0-AEB3-63B4CAEB2753",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List my upcoming calendar events",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-calendar-list",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "calendar.list scoped"
+      },
+      {
+        "actualIntent" : "reminder",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "37A5F572-E574-4FBB-85C6-13E79D195E07",
+            "message" : "Remind me to call Alex tomorrow",
+            "phase" : "start",
+            "scenarioID" : "tool-reminders-create"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "05A6755E-0D76-41D8-B9DC-374A2CF1ECA6",
+            "message" : "actual=reminder, expected=reminder",
+            "phase" : "intent",
+            "scenarioID" : "tool-reminders-create"
+          }
+        ],
+        "expectedIntent" : "reminder",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "3BD54882-064F-4DF9-B962-B57533AD7CC7",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Remind me to call Alex tomorrow",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-reminders-create",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "reminders.create scoped"
+      },
+      {
+        "actualIntent" : "reminder",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "885A8E11-23B0-4806-96A1-F03B2DDC5D49",
+            "message" : "List my pending reminders",
+            "phase" : "start",
+            "scenarioID" : "tool-reminders-list"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "EF83C301-AB78-4C43-B8C1-9513A70162C5",
+            "message" : "actual=reminder, expected=reminder",
+            "phase" : "intent",
+            "scenarioID" : "tool-reminders-list"
+          }
+        ],
+        "expectedIntent" : "reminder",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "EDA8E8AB-C5C9-4F70-890C-3370B63C3474",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List my pending reminders",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-reminders-list",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "reminders.list scoped"
+      },
+      {
+        "actualIntent" : "contactSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "73F06584-C610-49F9-8CAA-4FB6CD3C003E",
+            "message" : "Search contacts for Alex",
+            "phase" : "start",
+            "scenarioID" : "tool-contacts-search"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "5D728D74-E924-4D86-BAB1-B31C9785199E",
+            "message" : "actual=contactSearch, expected=contactSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-contacts-search"
+          }
+        ],
+        "expectedIntent" : "contactSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "93BF92C7-C855-4623-950D-35CE5C833862",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search contacts for Alex",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-contacts-search",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "contacts.search scoped"
+      },
+      {
+        "actualIntent" : "messageDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "20874498-AF8A-4724-A7C8-B80FE3CBC20A",
+            "message" : "Draft a text message to Alex saying I am running late",
+            "phase" : "start",
+            "scenarioID" : "tool-messages-draft"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "BB5C7EEE-90F7-4030-9198-1B0FDE21FFFD",
+            "message" : "actual=messageDraft, expected=messageDraft",
+            "phase" : "intent",
+            "scenarioID" : "tool-messages-draft"
+          }
+        ],
+        "expectedIntent" : "messageDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "5EE713B2-3204-4C40-AD77-AF948B0FA2C2",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Draft a text message to Alex saying I am running late",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-messages-draft",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "messages.draft scoped"
+      },
+      {
+        "actualIntent" : "emailDraft",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "715B3406-70F4-437A-B31F-1A59B23E69BD",
+            "message" : "Write an email to alex@example.com saying the plans are ready",
+            "phase" : "start",
+            "scenarioID" : "tool-mail-draft"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "F823E966-A06E-4129-9D0F-FDBE5E49DACD",
+            "message" : "actual=emailDraft, expected=emailDraft",
+            "phase" : "intent",
+            "scenarioID" : "tool-mail-draft"
+          }
+        ],
+        "expectedIntent" : "emailDraft",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "82E0122D-1DCB-45C3-A992-55146DA7130A",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Write an email to alex@example.com saying the plans are ready",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-mail-draft",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "mail.draft scoped"
+      },
+      {
+        "actualIntent" : "phoneCall",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "C086F8DF-06FE-4DC5-9AF3-FB3DBC786DDD",
+            "message" : "Call 5145551234",
+            "phase" : "start",
+            "scenarioID" : "tool-phone-call"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "6C55B2A5-1A24-4C9F-9D70-5D56BE6B78D5",
+            "message" : "actual=phoneCall, expected=phoneCall",
+            "phase" : "intent",
+            "scenarioID" : "tool-phone-call"
+          }
+        ],
+        "expectedIntent" : "phoneCall",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "EC54A182-F9C9-4E86-93B6-D3C37E9AD1E5",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Call 5145551234",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-phone-call",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "phone.call scoped"
+      },
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "3711FFE0-8F61-40EA-BDCE-41CC6D649C25",
+            "message" : "Use my current location for the weather here",
+            "phase" : "start",
+            "scenarioID" : "tool-location-current"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "35BED2D1-3CE7-4D43-9689-DA90F1EE498C",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "tool-location-current"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "19DE1A28-8D34-4F29-83FC-879D0627342F",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Use my current location for the weather here",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-location-current",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "location.current scoped through local weather"
+      },
+      {
+        "actualIntent" : "weather",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "3F300EFA-B3FE-4D18-B3A3-B20D162553A7",
+            "message" : "What is the temperature outside right now?",
+            "phase" : "start",
+            "scenarioID" : "tool-weather"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "D43C62B4-CCCB-46BF-A8A5-9CF375177AB1",
+            "message" : "actual=weather, expected=weather",
+            "phase" : "intent",
+            "scenarioID" : "tool-weather"
+          }
+        ],
+        "expectedIntent" : "weather",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "80D7E4EA-3A8A-476B-AC0F-8849982EBE1E",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What is the temperature outside right now?",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-weather",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "weather scoped"
+      },
+      {
+        "actualIntent" : "maps",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "78763B33-150F-43FA-9673-E86B99C5AD29",
+            "message" : "Get directions to 123 Main Street",
+            "phase" : "start",
+            "scenarioID" : "tool-maps-directions"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "35C354A6-54DC-4066-AE3B-77AC65A43457",
+            "message" : "actual=maps, expected=maps",
+            "phase" : "intent",
+            "scenarioID" : "tool-maps-directions"
+          }
+        ],
+        "expectedIntent" : "maps",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "124965E0-F3AE-41A7-8B4F-D6CFD1890C91",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Get directions to 123 Main Street",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-maps-directions",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "maps.directions scoped"
+      },
+      {
+        "actualIntent" : "maps",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "9A4D8925-B75D-4A09-8684-0D72B078B55E",
+            "message" : "Find the closest hardware store near me",
+            "phase" : "start",
+            "scenarioID" : "tool-maps-search"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "9E60E47A-A869-4165-B455-9B647837F9DC",
+            "message" : "actual=maps, expected=maps",
+            "phase" : "intent",
+            "scenarioID" : "tool-maps-search"
+          }
+        ],
+        "expectedIntent" : "maps",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "3173F8AE-86D4-4C92-96CB-56D11AA00C26",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Find the closest hardware store near me",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-maps-search",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "maps.search scoped"
+      },
+      {
+        "actualIntent" : "photos",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "29DC04D5-4828-40C2-B74C-3C96D9F87788",
+            "message" : "Search photos from last month",
+            "phase" : "start",
+            "scenarioID" : "tool-photos-search"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "BF0B2765-6B39-4757-A751-C35C8F39EC58",
+            "message" : "actual=photos, expected=photos",
+            "phase" : "intent",
+            "scenarioID" : "tool-photos-search"
+          }
+        ],
+        "expectedIntent" : "photos",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "FD56C160-2E62-490A-B9B5-8609C1ABB79D",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search photos from last month",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-photos-search",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "photos.search scoped"
+      },
+      {
+        "actualIntent" : "camera",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "BEAC7893-9A08-4368-8C72-D6B0F377EAA6",
+            "message" : "Take a photo with the camera",
+            "phase" : "start",
+            "scenarioID" : "tool-camera-capture"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "584DC69F-0211-47AB-BB12-2AC4B8B5FE08",
+            "message" : "actual=camera, expected=camera",
+            "phase" : "intent",
+            "scenarioID" : "tool-camera-capture"
+          }
+        ],
+        "expectedIntent" : "camera",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "58ABB0F1-C38C-4145-93B7-B63E4E89402A",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Take a photo with the camera",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-camera-capture",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "camera.capture scoped"
+      },
+      {
+        "actualIntent" : "health",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2EACD1C8-A5A4-42DA-91C9-5D1BEFE5206E",
+            "message" : "Show my health summary and steps",
+            "phase" : "start",
+            "scenarioID" : "tool-health-summary"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A144F18E-14AD-4206-A2B5-4A53D18D846F",
+            "message" : "actual=health, expected=health",
+            "phase" : "intent",
+            "scenarioID" : "tool-health-summary"
+          }
+        ],
+        "expectedIntent" : "health",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "09413596-788F-4B92-8D5B-83E4D409AA50",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Show my health summary and steps",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-health-summary",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "health.summary scoped"
+      },
+      {
+        "actualIntent" : "motion",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "368FE22A-F960-4DF4-8107-D232B5D05603",
+            "message" : "Detect my recent motion activity",
+            "phase" : "start",
+            "scenarioID" : "tool-motion-activity"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "45455B05-08CE-4894-B5B8-59858090CD11",
+            "message" : "actual=motion, expected=motion",
+            "phase" : "intent",
+            "scenarioID" : "tool-motion-activity"
+          }
+        ],
+        "expectedIntent" : "motion",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "72854939-1DFF-4DD5-8A60-0C079B2720CF",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Detect my recent motion activity",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-motion-activity",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "motion.activity scoped"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A06CDB18-5D47-49EF-8986-FA990A38D25F",
+            "message" : "Search the web for latest SwiftData tips",
+            "phase" : "start",
+            "scenarioID" : "tool-web-search"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "961D9C5E-716E-4B01-9457-4EFFC1364D43",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-web-search"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "93E4C89B-FA9B-4179-BBEE-01FA5AA262B6",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search the web for latest SwiftData tips",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-web-search",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "web.search scoped"
+      },
+      {
+        "actualIntent" : "webSearch",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2FA8979A-29A2-4BAC-8945-B27F48591BFC",
+            "message" : "Read this URL https://example.com",
+            "phase" : "start",
+            "scenarioID" : "tool-web-fetch"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "C138E474-32A5-4B2F-8B65-EE340282ACC2",
+            "message" : "actual=webSearch, expected=webSearch",
+            "phase" : "intent",
+            "scenarioID" : "tool-web-fetch"
+          }
+        ],
+        "expectedIntent" : "webSearch",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "2F5485D3-3CD6-4C67-ACBF-6232AA67E11F",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Read this URL https://example.com",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-web-fetch",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "web.fetch scoped"
+      },
+      {
+        "actualIntent" : "files",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "FC7C16DD-ADD1-4233-B24D-AC289089CD8E",
+            "message" : "Read file project-notes.md",
+            "phase" : "start",
+            "scenarioID" : "tool-files-read"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2865511E-5E1F-473C-81F2-6BDA7CFBDC68",
+            "message" : "actual=files, expected=files",
+            "phase" : "intent",
+            "scenarioID" : "tool-files-read"
+          }
+        ],
+        "expectedIntent" : "files",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "B831C546-E20D-4125-869A-1E9E78047168",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Read file project-notes.md",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-files-read",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "files.read scoped"
+      },
+      {
+        "actualIntent" : "memory",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "33E8E7EC-6E34-4139-9587-93C975DFFCFD",
+            "message" : "Remember this: I prefer concise answers",
+            "phase" : "start",
+            "scenarioID" : "tool-memory-save"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "ACC95F9E-E1F7-468E-B1A4-A6C7A6F1E98E",
+            "message" : "actual=memory, expected=memory",
+            "phase" : "intent",
+            "scenarioID" : "tool-memory-save"
+          }
+        ],
+        "expectedIntent" : "memory",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "18541536-EAD8-4413-9430-3C695FAC018F",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Remember this: I prefer concise answers",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-memory-save",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "memory.save scoped"
+      },
+      {
+        "actualIntent" : "memory",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "3CE08213-86FC-4B17-AF44-1D677A618C69",
+            "message" : "What do you remember about my preferences?",
+            "phase" : "start",
+            "scenarioID" : "tool-memory-recall"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "60B820D1-DE18-42DD-AF88-7D606113CC4E",
+            "message" : "actual=memory, expected=memory",
+            "phase" : "intent",
+            "scenarioID" : "tool-memory-recall"
+          }
+        ],
+        "expectedIntent" : "memory",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "E3D4FD9E-9D3D-4003-BF85-2E6A01950937",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "What do you remember about my preferences?",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-memory-recall",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "memory.recall scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "0EE253B7-E02D-44FA-A74E-8A465D94B081",
+            "message" : "Search my files for the Lumen architecture notes",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-search"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "BECB3A98-D83E-4788-9EA6-AE9332E33A3E",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-search"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "174D589B-1746-4EB2-B3E6-2AB8CF5F6220",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Search my files for the Lumen architecture notes",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-rag-search",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "rag.search scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "6D605A0B-3DA6-4F6A-B06D-FAA3FF2E3C66",
+            "message" : "Reindex files",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-index-files"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "041C53CA-B1B4-4D36-AAC8-8B0FC5ECFE92",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-index-files"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "6B68EC0B-C2AC-4CA5-A95F-5752D82831A6",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Reindex files",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-rag-index-files",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "rag.index_files scoped"
+      },
+      {
+        "actualIntent" : "rag",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "43E6E2CC-2AC0-425D-906F-7F4CD96BE367",
+            "message" : "Reindex photos",
+            "phase" : "start",
+            "scenarioID" : "tool-rag-index-photos"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "8CEEE945-CA7F-4F8B-9CFE-4D90B9935160",
+            "message" : "actual=rag, expected=rag",
+            "phase" : "intent",
+            "scenarioID" : "tool-rag-index-photos"
+          }
+        ],
+        "expectedIntent" : "rag",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "EE7FE7D1-39F8-4A39-B14E-7A1A528C8BA9",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Reindex photos",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-rag-index-photos",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "rag.index_photos scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "41C798E7-BE42-419B-8C14-535F9BB1DB0A",
+            "message" : "Schedule agent run in 10 minutes to summarize reminders",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-create"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A64267C7-C6BD-4916-B385-C0E7E963FDEE",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-create"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "023E3DEC-1D45-402F-A873-F9839E3FC70B",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Schedule agent run in 10 minutes to summarize reminders",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-trigger-create",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "trigger.create scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "C898A592-C3E3-49AC-9936-5F906BBADB12",
+            "message" : "List triggers",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-list"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "B7D2151B-C14F-45FC-AB62-5BA0AB15F60E",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-list"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "BB67760B-9050-4E69-84FA-24255633EFD9",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List triggers",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-trigger-list",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "trigger.list scoped"
+      },
+      {
+        "actualIntent" : "trigger",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2262E345-82B0-4CBF-B523-F244E50AA5D2",
+            "message" : "Cancel trigger named morning summary",
+            "phase" : "start",
+            "scenarioID" : "tool-trigger-cancel"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "6CCFBA78-F185-441E-B967-BF2573FBC854",
+            "message" : "actual=trigger, expected=trigger",
+            "phase" : "intent",
+            "scenarioID" : "tool-trigger-cancel"
+          }
+        ],
+        "expectedIntent" : "trigger",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "38356538-F0A8-4A34-AA72-E3872266D57C",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Cancel trigger named morning summary",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-trigger-cancel",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "trigger.cancel scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "8ACA05D6-3147-4646-93CA-F9FBDDCEEB1F",
+            "message" : "Check alarm authorization status",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-auth-status"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "0707047B-71FE-40BB-84DE-DB1C525E8C58",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-auth-status"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "44F46850-7087-486E-BFF6-47B49DDE38DE",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Check alarm authorization status",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-auth-status",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.authorization_status scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "79DF25EA-7282-4EB1-BE04-5BF33390B0D4",
+            "message" : "Request alarm authorization",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-request-auth"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "21F7A85B-4168-4269-991B-D5A3EDE30C27",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-request-auth"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "4BBD1BC5-FF66-4418-BEF8-A019DFDF8857",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Request alarm authorization",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-request-auth",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.request_authorization scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A443A993-4B70-44C4-B038-116174C2FFA6",
+            "message" : "Set an alarm for tomorrow at 7",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-schedule"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2044BB62-5CF6-4026-A73E-D876B391BED4",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-schedule"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "30814D15-5738-41A8-B46B-FA777C915522",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Set an alarm for tomorrow at 7",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-schedule",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.schedule scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "41A88F09-1875-4B18-A033-111358009C72",
+            "message" : "Start a countdown timer for 10 minutes",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-countdown"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "F2A60A6C-5479-451C-8089-377A443B0A5D",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-countdown"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "6C818407-14A4-45B8-8F1B-772B538C9313",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Start a countdown timer for 10 minutes",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-countdown",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.countdown scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "46D57428-04FF-4E82-9539-6E060F6BDD1B",
+            "message" : "List alarms",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-list"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "2EE71AFC-157C-4AC8-8262-1E678C8B433C",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-list"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "E9080946-180F-4490-8976-A3F4E52EEE2D",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "List alarms",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-list",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.list scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "5E3746DC-1C69-4C5B-95B1-73D71C6B09EB",
+            "message" : "Pause alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-pause"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "D9E86A8D-44D1-4DE4-8731-F8C266EBAED8",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-pause"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "EDD274CB-B1C7-4425-B57D-0B3AD867AF0A",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Pause alarm 00000000-0000-0000-0000-000000000000",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-pause",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.pause scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "5F4BF92D-1D65-46D5-B3CF-F463BCECCB1B",
+            "message" : "Resume alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-resume"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "54AB1E8E-03D6-4DA3-824B-B60AD648E307",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-resume"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "23699CDD-A4AF-4705-A6B2-BC4927A6D49D",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Resume alarm 00000000-0000-0000-0000-000000000000",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-resume",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.resume scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "7F761846-1A12-4284-AD70-E4157AAAA7A9",
+            "message" : "Stop alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-stop"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A8C24843-7A78-450C-B89E-D72EB66C109E",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-stop"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "265F1151-6F6F-4DFB-B00F-016D2579BE97",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Stop alarm 00000000-0000-0000-0000-000000000000",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-stop",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.stop scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "9210336E-F9D5-491E-9543-C16EAFDB6013",
+            "message" : "Snooze alarm 00000000-0000-0000-0000-000000000000",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-snooze"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "A07DD3D1-5A72-45A7-838E-A33DE58166D0",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-snooze"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "E9B7FE8C-6DB0-429F-9572-7546D5838F36",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Snooze alarm 00000000-0000-0000-0000-000000000000",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-snooze",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.snooze scoped"
+      },
+      {
+        "actualIntent" : "alarm",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "5838926E-6E4C-40AC-A623-EA1924C6CF01",
+            "message" : "Cancel alarm named morning wakeup",
+            "phase" : "start",
+            "scenarioID" : "tool-alarm-cancel"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "4FDE016A-E7C3-491F-8B8F-9C645B9C2E8F",
+            "message" : "actual=alarm, expected=alarm",
+            "phase" : "intent",
+            "scenarioID" : "tool-alarm-cancel"
+          }
+        ],
+        "expectedIntent" : "alarm",
+        "failures" : [
+
+        ],
+        "finalText" : "Routing guard checks completed.",
+        "finishedAt" : "2026-05-08T23:40:13Z",
+        "id" : "A173A3D8-3123-4ABD-86FF-E0F7E6B10A1D",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Cancel alarm named morning wakeup",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Routing guard checks completed.",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : false,
+        "sanitizedFinalPrefix" : "Routing guard checks completed.",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "tool-alarm-cancel",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "alarm.cancel scoped"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "67ED36AE-6D5F-40D1-82C5-BE14FA92494F",
+            "message" : "Give me three tips for fitting a door hinge cleanly.",
+            "phase" : "start",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "8B3DAAD8-B825-4558-943E-688BD484F871",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:13Z",
+            "id" : "C14EF19A-7089-4853-B6E6-E1E6A24828C7",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:44Z",
+            "id" : "A6618D39-DB82-46B9-AECB-E31172AA1C7A",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "chat-carpentry-advice"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:44Z",
+            "id" : "814B39CA-B619-42B7-98AF-5DF233B97C2B",
+            "message" : "Here are three tips for fitting a door hinge cleanly:\n1. **Measure and Mark**: Use a pencil to mark the center of the door’s edge. This ensures the hinge is aligned precisely.\n2. **Align with a Level**: Place a level against the door to ensure the hinge is straight and parallel to the frame.\n3. **Check Thickness**: Confirm the hinge size matches the door’s thickness to prevent misalignment or uneven fit.\n\nLet me know if you need further details!",
+            "phase" : "final",
+            "scenarioID" : "chat-carpentry-advice"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "Here are three tips for fitting a door hinge cleanly:\n1. **Measure and Mark**: Use a pencil to mark the center of the door’s edge. This ensures the hinge is aligned precisely.\n2. **Align with a Level**: Place a level against the door to ensure the hinge is straight and parallel to the frame.\n3. **Check Thickness**: Confirm the hinge size matches the door’s thickness to prevent misalignment or uneven fit.\n\nLet me know if you need further details!",
+        "finishedAt" : "2026-05-08T23:40:44Z",
+        "id" : "A716C4FC-D5DD-41A3-A94C-A7C769D45F5C",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Give me three tips for fitting a door hinge cleanly.",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Here are three tips for fitting a door hinge cleanly:\n1. **Measure and Mark**: Use a pencil to mark the center of the door’s edge. This ensures the hinge is aligned precisely.\n2. **Align with a Level**: Place a level aga",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "Here are three tips for fitting a door hinge cleanly:\n1. **Measure and Mark**: Use a pencil to mark the center of the door’s edge. This ensures the hinge is aligned precisely.\n2. **Align with a Level**: Place a level aga",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "chat-carpentry-advice",
+        "startedAt" : "2026-05-08T23:40:13Z",
+        "title" : "Carpentry chat stays direct"
+      },
+      {
+        "actualIntent" : "chat",
+        "events" : [
+          {
+            "createdAt" : "2026-05-08T23:40:44Z",
+            "id" : "0ED8FFA8-477B-42FE-9107-6865C8B6DFE8",
+            "message" : "Explain actor isolation in Swift in simple terms.",
+            "phase" : "start",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:44Z",
+            "id" : "85A832D4-885B-45B8-A8D6-B3F65D63571C",
+            "message" : "actual=chat, expected=chat",
+            "phase" : "intent",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-08T23:40:44Z",
+            "id" : "3F6C4FA3-0BDF-411A-9ED0-601FF95A7780",
+            "message" : "chat fleet ready",
+            "phase" : "models",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-08T23:41:12Z",
+            "id" : "753BEA38-597D-4B85-9C3F-9C1283E3F589",
+            "message" : "missing_hints=[], rewrite_attempted=false, rewrite_success=true",
+            "phase" : "final-hints",
+            "scenarioID" : "chat-code-explanation"
+          },
+          {
+            "createdAt" : "2026-05-08T23:41:12Z",
+            "id" : "48E78C18-BFB5-4ABF-A992-CD94AF3EDBC1",
+            "message" : "Actor isolation in Swift ensures that each actor (a unit of execution) operates in its own isolated space. Think of it like having separate \"rooms\" in a building: each room (actor) can only access its own private data and can't interfere with others. To share data between actors, you must explicitly synchronize access using `synchronize` or `lock`, preventing race conditions. This isolation guarantees safety and simplicity in concurrent programming.",
+            "phase" : "final",
+            "scenarioID" : "chat-code-explanation"
+          }
+        ],
+        "expectedIntent" : "chat",
+        "failures" : [
+
+        ],
+        "finalText" : "Actor isolation in Swift ensures that each actor (a unit of execution) operates in its own isolated space. Think of it like having separate \"rooms\" in a building: each room (actor) can only access its own private data and can't interfere with others. To share data between actors, you must explicitly synchronize access using `synchronize` or `lock`, preventing race conditions. This isolation guarantees safety and simplicity in concurrent programming.",
+        "finishedAt" : "2026-05-08T23:41:12Z",
+        "id" : "1F971B19-20D1-442E-AB9F-6D6F8124DA41",
+        "missingHints" : [
+
+        ],
+        "outputHygieneFailures" : [
+
+        ],
+        "passed" : true,
+        "prompt" : "Explain actor isolation in Swift in simple terms.",
+        "rawFinalHadUnsafeLeakage" : false,
+        "rawFinalPrefix" : "Actor isolation in Swift ensures that each actor (a unit of execution) operates in its own isolated space. Think of it like having separate \"rooms\" in a building: each room (actor) can only access its own private data an",
+        "rewriteAttempted" : false,
+        "rewriteSuccess" : true,
+        "sanitizedFinalPrefix" : "Actor isolation in Swift ensures that each actor (a unit of execution) operates in its own isolated space. Think of it like having separate \"rooms\" in a building: each room (actor) can only access its own private data an",
+        "sanitizedFinalRemovedArtifacts" : [
+
+        ],
+        "scenarioID" : "chat-code-explanation",
+        "startedAt" : "2026-05-08T23:40:44Z",
+        "title" : "Code explanation stays chat"
+      }
+    ],
+    "startedAt" : "2026-05-08T23:39:05Z"
+  },
+  "schemaVersion" : "1.0.0"
+}

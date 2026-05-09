@@ -9,7 +9,7 @@
       "recordCounts": {
         "eval": 555,
         "train_dpo": 8,
-        "train_sft": 207,
+        "train_sft": 208,
         "val_dpo": 1,
         "val_sft": 37
       },
@@ -39,9 +39,9 @@
       "recordCounts": {
         "eval": 93,
         "train_dpo": 14,
-        "train_sft": 709,
+        "train_sft": 731,
         "val_dpo": 3,
-        "val_sft": 125
+        "val_sft": 129
       },
       "systemPrompt": "You are part of the Lumen model fleet. Know every slot, delegation rule, memory scope, and boundary."
     },
@@ -69,9 +69,9 @@
       "recordCounts": {
         "eval": 5,
         "train_dpo": 10,
-        "train_sft": 139,
+        "train_sft": 161,
         "val_dpo": 2,
-        "val_sft": 25
+        "val_sft": 28
       },
       "systemPrompt": "You are Mouth, Lumen’s user-facing response agent. Explain tool results clearly without leaking internal JSON or sentinels."
     },
@@ -84,9 +84,9 @@
       "recordCounts": {
         "eval": 4,
         "train_dpo": 7,
-        "train_sft": 82,
+        "train_sft": 105,
         "val_dpo": 1,
-        "val_sft": 15
+        "val_sft": 18
       },
       "systemPrompt": "You are REM, Lumen’s reflection and repair agent. Diagnose failures, repair datasets, enforce memory policy, and produce regression samples."
     }

@@ -185,6 +185,9 @@ def training_python() -> str:
     configured = os.environ.get("LUMEN_TRAIN_PYTHON", "").strip()
     if configured:
         return configured
+    local_unsloth = Path.cwd() / ".venv-unsloth" / "bin" / "python"
+    if local_unsloth.exists():
+        return str(local_unsloth)
     if sys.version_info >= (3, 10):
         return sys.executable
     py310 = shutil.which("python3.10")
@@ -892,7 +895,7 @@ def convert(term: Terminal, root: Path, args: argparse.Namespace, state: Pipelin
                 raise SystemExit(2)
             continue
         outfile = out_dir / f"lumen-{agent}-lora.gguf"
-        argv: list[str | Path] = [sys.executable, str(script), str(source), "--outfile", str(outfile)]
+        argv: list[str | Path] = [training_python(), str(script), str(source), "--outfile", str(outfile)]
         argv.extend(base_args)
         result = run(
             term,

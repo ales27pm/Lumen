@@ -184,6 +184,13 @@ def main() -> None:
         raise RuntimeError(
             "Missing dependencies for Unsloth SFT training. Install: unsloth, trl, datasets, transformers, peft, accelerate, bitsandbytes."
         ) from exc
+    except AssertionError as exc:
+        if "CUDA" in str(exc).upper():
+            raise RuntimeError(
+                "Unsloth SFT training requires a CUDA-enabled PyTorch runtime. "
+                "This host imported Unsloth, but Torch is not compiled with CUDA enabled."
+            ) from exc
+        raise
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=cfg["base_model_name"],

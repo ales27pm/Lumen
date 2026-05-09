@@ -7,7 +7,7 @@
       "cortex": {
         "eval": 555,
         "trainDPO": 8,
-        "trainSFT": 207,
+        "trainSFT": 208,
         "valDPO": 1,
         "valSFT": 37
       },
@@ -21,9 +21,9 @@
       "fleet": {
         "eval": 93,
         "trainDPO": 14,
-        "trainSFT": 709,
+        "trainSFT": 731,
         "valDPO": 3,
-        "valSFT": 125
+        "valSFT": 129
       },
       "mimicry": {
         "eval": 3,
@@ -35,21 +35,21 @@
       "mouth": {
         "eval": 5,
         "trainDPO": 10,
-        "trainSFT": 139,
+        "trainSFT": 161,
         "valDPO": 2,
-        "valSFT": 25
+        "valSFT": 28
       },
       "rem": {
         "eval": 4,
         "trainDPO": 7,
-        "trainSFT": 82,
+        "trainSFT": 105,
         "valDPO": 1,
-        "valSFT": 15
+        "valSFT": 18
       }
     },
     "embedding": {
-      "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-      "corpusCount": 503,
+      "artifactDirectory": "/Users/ales27pm/Desktop/Lumen/generated/agent_manifest/embedding",
+      "corpusCount": 650,
       "datasetCard": {
         "families": [
           "agent_role_question_to_fleet_slot",
@@ -84,10 +84,10 @@
         "schemaVersion": "1.0.0",
         "task": "retrieval_similarity_ranking"
       },
-      "evalCount": 672,
+      "evalCount": 819,
       "fallbackModel": "current-baseline-embedding-model",
       "generated": true,
-      "hardNegativeCount": 672,
+      "hardNegativeCount": 819,
       "metrics": {
         "hardNegativeAccuracy": 0.0,
         "mrr": 0.0,
@@ -99,27 +99,27 @@
         "toolRetrievalAccuracy": 0.0
       },
       "model": "Qwen/Qwen3-Embedding-0.6B",
-      "pairCount": 672,
+      "pairCount": 819,
       "teacherModel": "Qwen/Qwen3-Embedding-4B",
-      "trainPairCount": 600,
-      "trainTripletCount": 599,
-      "tripletCount": 672,
+      "trainPairCount": 728,
+      "trainTripletCount": 736,
+      "tripletCount": 819,
       "usedFallback": false,
-      "valPairCount": 72,
-      "valTripletCount": 73
+      "valPairCount": 91,
+      "valTripletCount": 83
     },
     "families": {
       "approval_boundary_samples": 115,
       "cortex_routing": 69,
       "dpo_preference_pairs": 53,
-      "embedding_corpus": 503,
+      "embedding_corpus": 650,
       "embedding_dataset_card": 1,
-      "embedding_eval_retrieval": 672,
-      "embedding_hard_negatives": 672,
-      "embedding_train_pairs": 600,
-      "embedding_train_triplets": 599,
-      "embedding_val_pairs": 72,
-      "embedding_val_triplets": 73,
+      "embedding_eval_retrieval": 819,
+      "embedding_hard_negatives": 819,
+      "embedding_train_pairs": 728,
+      "embedding_train_triplets": 736,
+      "embedding_val_pairs": 91,
+      "embedding_val_triplets": 83,
       "eval_scenarios": 550,
       "executor_tool_calls": 53,
       "manifest_grounding_cards": 4,
@@ -127,17 +127,17 @@
       "mouth_responses": 53,
       "negative_samples": 53,
       "rem_reflection": 5,
-      "runtime_audit_repairs": 14,
+      "runtime_audit_repairs": 161,
       "tool_schema_cards": 53,
       "train_sft": 298,
       "validation_sft": 53
     },
     "familyCount": 22,
-    "recordCount": 4568
+    "recordCount": 5450
   },
   "embedding": {
-    "artifactDirectory": "/home/ales27pm/Lumen/generated/agent_manifest/embedding",
-    "corpusCount": 503,
+    "artifactDirectory": "/Users/ales27pm/Desktop/Lumen/generated/agent_manifest/embedding",
+    "corpusCount": 650,
     "datasetCard": {
       "families": [
         "agent_role_question_to_fleet_slot",
@@ -172,10 +172,10 @@
       "schemaVersion": "1.0.0",
       "task": "retrieval_similarity_ranking"
     },
-    "evalCount": 672,
+    "evalCount": 819,
     "fallbackModel": "current-baseline-embedding-model",
     "generated": true,
-    "hardNegativeCount": 672,
+    "hardNegativeCount": 819,
     "metrics": {
       "hardNegativeAccuracy": 0.0,
       "mrr": 0.0,
@@ -187,50 +187,52 @@
       "toolRetrievalAccuracy": 0.0
     },
     "model": "Qwen/Qwen3-Embedding-0.6B",
-    "pairCount": 672,
+    "pairCount": 819,
     "teacherModel": "Qwen/Qwen3-Embedding-4B",
-    "trainPairCount": 600,
-    "trainTripletCount": 599,
-    "tripletCount": 672,
+    "trainPairCount": 728,
+    "trainTripletCount": 736,
+    "tripletCount": 819,
     "usedFallback": false,
-    "valPairCount": 72,
-    "valTripletCount": 73
+    "valPairCount": 91,
+    "valTripletCount": 83
   },
-  "errorGapCount": 14,
-  "gapCount": 14,
+  "errorGapCount": 161,
+  "gapCount": 161,
   "manifest": {
-    "commit": "1c18273bf1d24c931eadfd1b238a6430e7402de8",
-    "fingerprint": "31e7fab46978f6fa7d84dbf3c02c355e6a9b18d3c4df27a64989e4ab5c97237a",
+    "commit": "61b1fe021c20441e0ba66496b442a70c4629b97d",
+    "fingerprint": "05cff5f2a3eed9513564f98aaa2e8b08d5cbfc2719fc36b0df0554668a1bc811",
     "intentCount": 22,
     "modelSlotCount": 6,
     "routingEntryCount": 22,
     "toolCount": 53
   },
-  "nextActionPromptCount": 14,
-  "output": "/home/ales27pm/Lumen/generated/agent_manifest",
+  "nextActionPromptCount": 80,
+  "output": "/Users/ales27pm/Desktop/Lumen/generated/agent_manifest",
   "passed": false,
-  "root": "/home/ales27pm/Lumen",
+  "root": "/Users/ales27pm/Desktop/Lumen",
   "runtime": {
-    "failureCount": 14,
+    "failureCount": 161,
     "failureTypes": {
-      "trace_parse_error": 14
+      "trace_parse_error": 161
     },
-    "reportCount": 1,
+    "reportCount": 3,
     "sourceLayers": {
-      "agentBehaviorTraceRecorder": 14
+      "agentBehaviorTraceRecorder": 161
     }
   },
   "runtimeAuditInputs": [
-    "/home/ales27pm/Lumen/exports/lumen-agent-grounding-audit-2026-05-07T02-09-50Z-09eb2e75-80f7-4fa0-bff1-8b30963d16e6.json"
+    "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-24-37Z-c9116604-a999-4317-b4f5-4c5a92fe201f.json",
+    "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-41-33Z-68cb8124-6047-41d7-8c97-f078470ef203.json",
+    "/Users/ales27pm/Desktop/Lumen/exports/lumen-agent-grounding-audit-2026-05-08T23-45-56Z-59e705bd-9887-4cd4-9638-5a98c0b95d96.json"
   ],
   "schemaVersion": "1.1.0",
   "startedAt": "1970-01-01T00:00:00+00:00",
   "testFlight": {
     "buildLabel": null,
     "expectedExport": "lumen-agent-grounding-audit-*.json or lumen-live-e2e-report-*.json from Agent Grounding > Export Runtime Audit Package or End-to-end tests > Export Live E2E Report JSON",
-    "manifestFingerprint": "31e7fab46978f6fa7d84dbf3c02c355e6a9b18d3c4df27a64989e4ab5c97237a",
+    "manifestFingerprint": "05cff5f2a3eed9513564f98aaa2e8b08d5cbfc2719fc36b0df0554668a1bc811",
     "mode": "testflight",
-    "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /home/ales27pm/Lumen --output /home/ales27pm/Lumen/generated/agent_manifest --loop-output /home/ales27pm/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
+    "nextIngestCommand": "python -m lumen_manifest_crawler improve-loop --root /Users/ales27pm/Desktop/Lumen --output /Users/ales27pm/Desktop/Lumen/generated/agent_manifest --loop-output /Users/ales27pm/Desktop/Lumen/generated/agent_improvement_loop --runtime-audit '<exported-testflight-json>'",
     "requireRuntimeAuditForPass": false,
     "requiresTestFlightAppRun": true,
     "runbookPath": "TESTFLIGHT_RUNBOOK.md",

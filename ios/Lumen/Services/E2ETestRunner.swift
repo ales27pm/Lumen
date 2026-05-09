@@ -135,7 +135,9 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         var expanded: [E2ETestScenario] = []
         for scenario in scenarios {
             expanded.append(scenario)
-            for (index, prompt) in variantPrompts(for: scenario).enumerated() {
+            let prompts = variantPrompts(for: scenario)
+            precondition(prompts.count == 2, "Every E2E base scenario must produce exactly two variants")
+            for (index, prompt) in prompts.enumerated() {
                 let suffix = index == 0 ? "b" : "c"
                 expanded.append(
                     E2ETestScenario(
@@ -162,6 +164,7 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         let forbidden = Set(scenario.forbiddenToolIDs)
         func allows(_ toolID: String) -> Bool { required.contains(toolID) && !forbidden.contains(toolID) }
         func allowsAll(_ toolIDs: [String]) -> Bool { toolIDs.allSatisfy(allows) }
+        func hasID(_ suffix: String) -> Bool { scenario.id.contains(suffix) }
 
         if allows("calendar.create") && !allows("calendar.list") {
             return [
@@ -182,32 +185,50 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
             ]
         }
 
-        if allows("alarm.cancel") && !allows("alarm.list") {
+        if hasID("alarm-auth-status") {
+            return ["Check my alarm authorization status.", "Show whether alarm access is currently allowed."]
+        }
+        if hasID("alarm-request-auth") {
+            return ["Request alarm authorization access.", "Prompt for alarm permission."]
+        }
+        if hasID("alarm-countdown") {
+            return ["Start a countdown timer for 10 minutes.", "Set a 25-minute countdown timer."]
+        }
+        if hasID("alarm-schedule") {
+            return ["Set an alarm for tomorrow at 6:30 AM.", "Create an alarm for next Monday at 7:00 AM."]
+        }
+        if hasID("alarm-cancel") || allows("alarm.cancel") {
             return [
                 "Cancel the alarm named morning wakeup.",
                 "Delete the alarm called gym reminder."
             ]
         }
-        if allows("alarm.list") && !allows("alarm.schedule") && !allows("alarm.countdown") {
+        if hasID("alarm-pause") {
+            return ["Pause alarm 00000000-0000-0000-0000-000000000000.", "Pause the currently ringing alarm."]
+        }
+        if hasID("alarm-resume") {
+            return ["Resume alarm 00000000-0000-0000-0000-000000000000.", "Resume the paused alarm."]
+        }
+        if hasID("alarm-stop") {
+            return ["Stop alarm 00000000-0000-0000-0000-000000000000.", "Stop the active alarm now."]
+        }
+        if hasID("alarm-snooze") {
+            return ["Snooze alarm 00000000-0000-0000-0000-000000000000.", "Snooze the ringing alarm for a few minutes."]
+        }
+        if hasID("alarm-list") || allows("alarm.list") {
             return [
                 "List my active alarms.",
                 "Show all alarms currently set."
             ]
         }
-        if allows("alarm.schedule") && !allows("alarm.list") {
-            return [
-                "Set an alarm for tomorrow at 6:30 AM.",
-                "Create an alarm for next Monday at 7:00 AM."
-            ]
-        }
 
-        if allows("reminders.create") && !allows("reminders.list") {
+        if hasID("reminders-create") || (allows("reminders.create") && !allows("reminders.list")) {
             return [
                 "Create a reminder for tomorrow to submit the timesheet.",
                 "Remind me next week to review quarterly invoices."
             ]
         }
-        if allows("reminders.list") && !allows("reminders.create") {
+        if hasID("reminders-list") || (allows("reminders.list") && !allows("reminders.create")) {
             return [
                 "List my current reminders.",
                 "Show all pending reminders."
@@ -217,14 +238,25 @@ nonisolated struct E2ETestScenario: Identifiable, Codable, Sendable, Hashable {
         switch scenario.expectedIntent {
         case .calendar: return ["Create a calendar event for tomorrow afternoon called Planning block.", "Schedule a calendar appointment for next week named Follow-up."]
         case .weather: return ["What is the weather at my current location right now?", "Should I bring an umbrella here today based on today's forecast?"]
-        case .webSearch: return ["Look up recent SwiftData performance tips on the web.", "Find recent web sources about actor isolation best practices."]
+        case .contactSearch: return ["Search contacts for Alex Johnson.", "Look up contact info for Sam Lee."]
+        case .phoneCall: return ["Call 5145551234.", "Place a call to Alex from contacts."]
+        case .maps: return hasID("maps-directions") ? ["Get driving directions to 123 Main Street.", "Show turn-by-turn directions to the nearest clinic."] : ["Find coffee shops near me on the map.", "Search maps for the closest hardware store."]
+        case .photos: return ["Search photos from last month.", "Find recent photos from this weekend."]
+        case .health: return ["Show my health summary for today.", "Display my recent step and health summary."]
+        case .motion: return ["Detect my recent motion activity.", "Show whether I was walking or driving recently."]
+        case .files: return ["Read file project-notes.md.", "Open and read architecture-notes.md."]
+        case .memory: return hasID("memory-save") ? ["Remember this preference: I like concise answers.", "Save this note: prioritize bullet points."] : ["What do you remember about my preferences?", "Recall my saved communication preferences."]
+        case .rag: return hasID("rag-search") ? ["Search my files for architecture notes and summarize key modules.", "Find local docs about the Lumen architecture and summarize modules."] : (hasID("rag-index-files") ? ["Reindex local files for retrieval.", "Refresh the file retrieval index."] : ["Reindex photos for retrieval search.", "Refresh the photo retrieval index."])
+        case .trigger: return hasID("trigger-create") ? ["Create a trigger in 10 minutes to summarize reminders.", "Schedule a trigger for tonight's reminder digest."] : (hasID("trigger-list") ? ["List my active triggers.", "Show all scheduled triggers."] : ["Cancel trigger named morning summary.", "Remove the trigger called morning summary."])
+        case .webSearch: return hasID("web-fetch") ? ["Read this web URL: https://example.com.", "Fetch and summarize https://example.com page content."] : ["Search the web for recent SwiftData performance tips.", "Look up current web guidance on actor isolation."]
+        case .weather: return ["What is the weather here right now using my current location?", "Should I carry an umbrella here today based on weather conditions?"]
         case .emailDraft: return ["Draft a quick email update to Taylor about the delay and ask one question.", "Draft an email: subject release prep, body with concise status and one clarifying question."]
         case .messageDraft: return ["Draft a text to Alex that I will be late.", "Help me message Jordan with a complete ETA and apology."]
         case .camera: return ["Open the camera and prepare for a receipt photo when I confirm.", "Prepare camera capture so I can approve taking a photo."]
         case .alarm: return ["Set an alarm for tomorrow at 6:30 AM.", "Create an alarm for next weekday morning at 7 AM."]
         case .reminder: return ["Create a reminder for tomorrow morning to call the clinic.", "Remind me next week to review invoices."]
         case .chat: return ["Explain in plain English why immutable data can reduce bugs.", "Give a normal explanation of how DNS works, no tools needed."]
-        default: return ["\(scenario.prompt)"]
+        default: return ["\(scenario.prompt)", "Please handle this request with the same tool boundary constraints: \(scenario.prompt)"]
         }
     }
 }
@@ -473,25 +505,33 @@ enum E2ETestRunner {
             recoveredAfterRewrite: nil
         )
         var performanceSamples: [E2EPerformanceSample] = []
+        var lastPerformanceSampleAt: Date?
+        let totalMemoryMB = Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
 
         func event(_ phase: String, _ message: String) {
             let emitted = E2ETestEvent(id: UUID(), createdAt: Date(), scenarioID: scenario.id, phase: phase, message: message)
             events.append(emitted)
             onEvent?(emitted)
         }
-        func collectPerformanceSample() {
+        func collectPerformanceSample(force: Bool = false) {
+            let now = Date()
+            if !force, let lastPerformanceSampleAt, now.timeIntervalSince(lastPerformanceSampleAt) < 0.5 {
+                return
+            }
             performanceSamples.append(
                 E2EPerformanceSample(
-                    timestamp: Date(),
+                    timestamp: now,
                     residentMemoryMB: residentMemoryUsageMB(),
-                    totalMemoryMB: Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
+                    totalMemoryMB: totalMemoryMB
                 )
             )
+            lastPerformanceSampleAt = now
         }
 
-        collectPerformanceSample()
+        collectPerformanceSample(force: true)
         event("start", scenario.prompt)
         let routing = await IntentClassifierService.shared.route(scenario.prompt)
+        collectPerformanceSample()
         event("intent", "actual=\(routing.intent.rawValue), expected=\(scenario.expectedIntent.rawValue)")
         if routing.intent != scenario.expectedIntent {
             failures.append("Intent mismatch: \(routing.intent.rawValue) != \(scenario.expectedIntent.rawValue)")
@@ -508,6 +548,7 @@ enum E2ETestRunner {
         if scenario.requiresAgentRun {
             let stored = (try? context.fetch(FetchDescriptor<StoredModel>())) ?? []
             let modelLoaded = await ModelLoader.ensureChatLoaded(appState: appState, stored: stored)
+            collectPerformanceSample()
             event("models", modelLoaded ? "chat fleet ready" : "no chat model loaded")
             if modelLoaded {
                 let req = AgentRequest(
@@ -524,9 +565,9 @@ enum E2ETestRunner {
                 )
                 var steps: [AgentStep] = []
                 for await agentEvent in SlotAgentService.shared.run(req) {
-                    collectPerformanceSample()
                     switch agentEvent {
                     case .step(let step):
+                        collectPerformanceSample()
                         steps.append(step)
                         event("step", "\(step.kind.rawValue): \(step.content)")
                         if let toolID = step.toolID, scenario.forbiddenToolIDs.contains(toolID) {
@@ -536,10 +577,13 @@ enum E2ETestRunner {
                         break
                     case .finalDelta(let chunk):
                         rawFinalText += chunk
+                        collectPerformanceSample()
                     case .done(let text, let allSteps):
+                        collectPerformanceSample(force: true)
                         if !text.isEmpty { rawFinalText = text }
                         steps = allSteps.isEmpty ? steps : allSteps
                     case .error(let message):
+                        collectPerformanceSample(force: true)
                         failures.append("Agent error: \(message)")
                     }
                 }
@@ -572,6 +616,7 @@ enum E2ETestRunner {
                 rewriteSuccess = rewriteOutcome.rewriteSuccess
                 event("final-hints", "missing_hints=\(missingHints), rewrite_attempted=\(rewriteAttempted), rewrite_success=\(rewriteSuccess)")
                 event("final", finalText)
+                collectPerformanceSample(force: true)
             } else {
                 finalText = "No model loaded; routing-only checks completed."
                 rawFinalText = finalText
@@ -626,6 +671,7 @@ enum E2ETestRunner {
             : hygieneState.postRewriteSanitized.artifactAudit.rawPrefix
         let sanitizedPrefix = hygieneState.postRewriteSanitized.artifactAudit.sanitizedPrefix
         let endedAt = Date()
+        collectPerformanceSample(force: true)
         let matrix = await performanceMatrix(from: performanceSamples, startedAt: started, finishedAt: endedAt)
         return E2ETestResult(id: UUID(), scenarioID: scenario.id, title: scenario.title, prompt: scenario.prompt, expectedIntent: scenario.expectedIntent.rawValue, actualIntent: routing.intent.rawValue, passed: failures.isEmpty, failures: failures, finalText: finalText, missingHints: missingHints, rewriteAttempted: rewriteAttempted, rewriteSuccess: rewriteSuccess, events: events, startedAt: started, finishedAt: endedAt, rawFinalPrefix: rawPrefix, sanitizedFinalPrefix: sanitizedPrefix, rawFinalHadUnsafeLeakage: hygieneState.hadUnsafeLeakage, sanitizedFinalRemovedArtifacts: mergedAuditArtifacts.map(\.rawValue), outputHygieneFailures: outputHygieneFailures, performanceMatrix: matrix)
     }
@@ -657,10 +703,10 @@ enum E2ETestRunner {
 
     private static func residentMemoryUsageMB() -> Double? {
 #if canImport(Darwin)
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
-        let result: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPointer in
-            infoPointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
+        var info = mach_task_basic_info_data_t()
+        var count = mach_msg_type_number_t(MACH_TASK_BASIC_INFO_COUNT)
+        let result: kern_return_t = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPointer in
                 task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPointer, &count)
             }
         }

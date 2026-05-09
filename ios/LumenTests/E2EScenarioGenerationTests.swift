@@ -25,6 +25,15 @@ struct E2EScenarioGenerationTests {
         }
     }
 
+    @Test func everyBaseScenarioHasVariantBAndVariantC() {
+        let all = E2ETestScenario.allToolCoverage
+        let ids = Set(all.map(\.id))
+        for base in all where !base.id.contains("-variant-") {
+            #expect(ids.contains("\(base.id)-variant-b"))
+            #expect(ids.contains("\(base.id)-variant-c"))
+        }
+    }
+
     @Test func toolCoverageCountMatchesThreeVariantsPerBaseScenario() {
         let baseCount = E2ETestScenario.allToolCoverage.filter { !$0.id.contains("-variant-") }.count
         #expect(E2ETestScenario.allToolCoverage.count == baseCount * 3)
@@ -63,6 +72,19 @@ struct E2EScenarioGenerationTests {
             #expect(!p.contains("create"))
             #expect(!p.contains("set"))
             #expect(!p.contains("cancel"))
+            #expect(!p.contains("countdown"))
+        }
+        let countdownVariants = all.filter { $0.id.hasPrefix("tool-alarm-countdown-variant-") }
+        for scenario in countdownVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(p.contains("countdown") || p.contains("timer"))
+            #expect(!p.contains("monday at"))
+        }
+        let scheduleVariants = all.filter { $0.id.hasPrefix("tool-alarm-schedule-variant-") }
+        for scenario in scheduleVariants {
+            let p = scenario.prompt.lowercased()
+            #expect(p.contains("alarm"))
+            #expect(p.contains("set") || p.contains("create"))
         }
     }
 
@@ -82,6 +104,12 @@ struct E2EScenarioGenerationTests {
             #expect(scenario.requiredAllowedToolIDs.isEmpty)
             #expect(!scenario.forbiddenToolIDs.isEmpty)
         }
+    }
+
+    @Test func defaultFallbackStillGeneratesTwoVariants() {
+        let custom = E2ETestScenario(id: "custom", title: "x", kind: .toolGuard, prompt: "Ping", expectedIntent: .trigger, requiredAllowedToolIDs: ["trigger.list"], forbiddenToolIDs: ["calendar.create"], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)
+        let variants = [custom.id + "-variant-b", custom.id + "-variant-c"]
+        #expect(variants.count == 2)
     }
 }
 

@@ -627,7 +627,7 @@ private struct E2ETestRunnerView: View {
     }
 
     private var eventLogEntries: [E2ERealtimeLogEntry] {
-        let scenariosByID = Dictionary(uniqueKeysWithValues: runMode.scenarios.map { ($0.id, $0.title) })
+        let scenariosByID = Dictionary(runMode.scenarios.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
         let streamingEvents = isRunning ? liveEventBuffer : []
         let reportEvents = (isRunning || !liveResults.isEmpty ? liveResults : (latestReport?.results ?? [])).flatMap(\.events)
         let sourceEvents = isRunning ? streamingEvents : reportEvents

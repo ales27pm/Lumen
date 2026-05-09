@@ -584,7 +584,9 @@ final class SlotAgentService {
         let wordCount = text.split(whereSeparator: \.isWhitespace).count
         let needsMoreDepth = wordCount < RetryHeuristic.minWordCount && RetryHeuristic.intentsNeedingDepth.contains(routing.intent)
         let looksInvalid = text.isEmpty || lower == "none" || lower == "null" || lower == "undefined" || lower == "i’m here." || lower == "i'm here."
-        guard looksInvalid || needsMoreDepth else { return candidate }
+        // Do not retry concise valid answers on latency-sensitive paths.
+        let shouldRetryThin = needsMoreDepth && req.maxTokens >= 256
+        guard looksInvalid || shouldRetryThin else { return candidate }
         let retryTargetCap = max(baseCap, baseCap + StageTokenBudget.retryBump)
         let retryCap = Self.cappedMaxTokens(retryTargetCap, stageCap: StageTokenBudget.retryCeiling)
         let retried = await generateText(

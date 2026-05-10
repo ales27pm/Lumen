@@ -79,7 +79,7 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 14) {
-                        ForEach(conversation.sortedMessages) { message in
+                        ForEach(displayedMessages) { message in
                             MessageBubble(message: message).id(message.id)
                         }
                         if !streamingSteps.isEmpty {
@@ -157,6 +157,15 @@ struct ChatView: View {
             }
         }
         .onChange(of: draft) { _, _ in recomputeAttachmentPreview() }
+    }
+
+    private var displayedMessages: [ChatMessage] {
+        let sorted = conversation.sortedMessages
+        let renderLimit = 300
+        if sorted.count > renderLimit {
+            return Array(sorted.suffix(renderLimit))
+        }
+        return sorted
     }
 
     private func recomputeAttachmentPreview() {

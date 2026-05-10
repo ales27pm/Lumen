@@ -802,6 +802,7 @@ def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetC
             "permissionKey": tool.permissionKey,
             "arguments": [arg.model_dump() for arg in tool.arguments],
         }
+        required_args = [arg.name for arg in tool.arguments if arg.required]
         record_id = _stable_id(payload)
         records.append({
             "id": f"schema-{record_id[:16]}",
@@ -813,8 +814,36 @@ def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetC
                 {"role": "user", "content": f"What is the exact manifest schema for `{tool.id}`?"},
                 {"role": "assistant", "content": _content_to_string(payload)},
             ],
-            "metadata": {"generatedAt": config.generated_at, "source": tool.source or "ToolRegistry"},
+            "metadata": {
+                "generatedAt": config.generated_at,
+                "source": tool.source or "ToolRegistry",
+                "requiredArguments": required_args,
+            },
         })
+        if required_args:
+            required_payload = {
+                "tool": tool.id,
+                "requiredArguments": required_args,
+                "arguments": {name: f"sample_{name}" for name in required_args},
+            }
+            required_record_id = _stable_id({"tool": tool.id, "required": required_args})
+            records.append({
+                "id": f"schema-required-{required_record_id[:16]}",
+                "schemaVersion": DATASET_SCHEMA_VERSION,
+                "split": TRAIN_SPLIT,
+                "toolID": tool.id,
+                "messages": [
+                    {"role": "system", "content": "Return manifest-valid executor JSON and include every required argument."},
+                    {"role": "user", "content": f"For `{tool.id}`, produce a sample call that includes all required arguments and no unmanifested keys."},
+                    {"role": "assistant", "content": _content_to_string(required_payload)},
+                ],
+                "metadata": {
+                    "generatedAt": config.generated_at,
+                    "source": tool.source or "ToolRegistry",
+                    "requiredArguments": required_args,
+                    "scenarioKind": "required_argument_coverage",
+                },
+            })
     return records
 
 

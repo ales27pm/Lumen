@@ -792,6 +792,24 @@ def _build_dpo_records(role_records: dict[str, list[dict[str, Any]]], config: Da
 
 
 def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetCompilerConfig) -> list[dict[str, Any]]:
+    def _sample_argument_value(arg_type: str, arg_name: str) -> Any:
+        normalized = arg_type.strip().lower()
+        if normalized in {"string", "str"}:
+            return f"sample_{arg_name}"
+        if normalized in {"number", "float", "double"}:
+            return 1.0
+        if normalized in {"integer", "int"}:
+            return 1
+        if normalized in {"boolean", "bool"}:
+            return True
+        if normalized == "array":
+            return []
+        if normalized in {"object", "dict", "map"}:
+            return {}
+        if normalized in {"null", "none"}:
+            return None
+        return f"sample_{arg_name}"
+
     records: list[dict[str, Any]] = []
     for tool in manifest.tools:
         payload = {
@@ -823,8 +841,11 @@ def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetC
         if required_args:
             required_payload = {
                 "tool": tool.id,
-                "requiredArguments": required_args,
-                "arguments": {name: f"sample_{name}" for name in required_args},
+                "arguments": {
+                    arg.name: _sample_argument_value(arg.type, arg.name)
+                    for arg in tool.arguments
+                    if arg.required
+                },
             }
             required_record_id = _stable_id({"tool": tool.id, "required": required_args})
             records.append({

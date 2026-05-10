@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated enum EstimateConfidence: String, Sendable, Codable, Equatable, CaseIterable {
+enum EstimateConfidence: String, Sendable, Codable, Equatable, CaseIterable {
     case high
     case medium
     case low
 }
 
-nonisolated struct ModelMemoryEstimate: Sendable, Codable, Equatable {
+struct ModelMemoryEstimate: Sendable, Codable, Equatable {
     let modelID: String
     let estimatedModelMemoryMB: Int
     let estimatedKVCacheMB: Int
@@ -33,7 +33,7 @@ nonisolated struct ModelMemoryEstimate: Sendable, Codable, Equatable {
     }
 }
 
-nonisolated enum ModelMemoryEstimator {
+enum ModelMemoryEstimator {
     static func estimate(
         model: LocalLLMModel,
         profile: InferenceProfile,
@@ -106,7 +106,10 @@ nonisolated enum ModelMemoryEstimator {
         case .remote:
             return 16
         case .gguf, .coreML:
-            let effectiveContextTokens = max(1, min(profile.contextTokens, max(model.contextLength, budget.maxPromptTokens)))
+            let effectiveContextTokens = max(
+                1,
+                min(profile.contextTokens, min(model.contextLength, budget.maxPromptTokens))
+            )
             if let parameterCountBillion = model.parameterCountBillion, parameterCountBillion > 0 {
                 let contextScale = Double(effectiveContextTokens) / 4_096.0
                 let modelScale = max(128.0, parameterCountBillion * 256.0)

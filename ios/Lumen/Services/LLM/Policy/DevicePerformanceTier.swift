@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum DevicePerformanceTier: String, Sendable, Codable, Equatable, CaseIterable {
+enum DevicePerformanceTier: String, Sendable, Codable, Equatable, CaseIterable {
     case constrained
     case balanced
     case high

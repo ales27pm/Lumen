@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMEngineCapabilities: Sendable, Codable, Equatable {
+struct LLMEngineCapabilities: Sendable, Codable, Equatable {
     let supportsStreaming: Bool
     let supportsToolCalling: Bool
     let supportsStructuredOutput: Bool

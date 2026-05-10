@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct DeviceCapabilitySnapshot: Sendable, Codable, Equatable {
+struct DeviceCapabilitySnapshot: Sendable, Codable, Equatable {
     let formFactor: DeviceFormFactor
     let performanceTier: DevicePerformanceTier
     let physicalMemoryBytes: UInt64

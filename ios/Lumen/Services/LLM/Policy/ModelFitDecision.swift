@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum ModelFitDecision: Sendable, Codable, Equatable {
+enum ModelFitDecision: Sendable, Codable, Equatable {
     case allowed(ModelFitReport)
     case downgraded(ModelFitReport)
     case rejected(ModelFitReport)
@@ -29,7 +29,7 @@ nonisolated enum ModelFitDecision: Sendable, Codable, Equatable {
     }
 }
 
-nonisolated struct ModelFitReport: Sendable, Codable, Equatable {
+struct ModelFitReport: Sendable, Codable, Equatable {
     let model: LocalLLMModel
     let snapshot: DeviceCapabilitySnapshot
     let requestedProfile: InferenceProfile
@@ -40,7 +40,7 @@ nonisolated struct ModelFitReport: Sendable, Codable, Equatable {
     let reasons: [ModelFitReason]
 }
 
-nonisolated enum ModelFitReason: String, Sendable, Codable, Equatable, CaseIterable {
+enum ModelFitReason: String, Sendable, Codable, Equatable, CaseIterable {
     case modelFitsMemoryBudget
     case modelExceedsMemoryBudget
     case modelExceedsDeviceTier

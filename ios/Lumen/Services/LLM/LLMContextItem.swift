@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMContextItem: Sendable, Codable, Equatable, Identifiable {
+struct LLMContextItem: Sendable, Codable, Equatable, Identifiable {
     let id: UUID
     let title: String?
     let content: String

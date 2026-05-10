@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMRequest: Sendable, Codable, Equatable {
+struct LLMRequest: Sendable, Codable, Equatable {
     let id: UUID
     let conversationID: UUID?
     let messages: [LLMChatMessage]

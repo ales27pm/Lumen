@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum LLMEngineError: LocalizedError, Sendable, Equatable {
+enum LLMEngineError: LocalizedError, Sendable, Equatable {
     case modelNotFound
     case modelNotLoaded
     case wrongModelLoaded(expected: String, actual: String?)

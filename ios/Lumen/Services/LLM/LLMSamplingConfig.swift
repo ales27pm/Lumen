@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMSamplingConfig: Sendable, Codable, Equatable {
+struct LLMSamplingConfig: Sendable, Codable, Equatable {
     let temperature: Double
     let topP: Double
     let topK: Int

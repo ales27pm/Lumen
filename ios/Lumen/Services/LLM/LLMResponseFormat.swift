@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum LLMResponseFormat: Sendable, Codable, Equatable {
+enum LLMResponseFormat: Sendable, Codable, Equatable {
     case plainText
     case json
     case toolCallJSON

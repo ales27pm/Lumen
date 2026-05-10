@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct InferenceProfile: Sendable, Codable, Equatable {
+struct InferenceProfile: Sendable, Codable, Equatable {
     let name: String
     let contextTokens: Int
     let batchSize: Int

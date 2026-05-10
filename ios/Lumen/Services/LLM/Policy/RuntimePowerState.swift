@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct RuntimePowerState: Sendable, Codable, Equatable {
+struct RuntimePowerState: Sendable, Codable, Equatable {
     let isLowPowerModeEnabled: Bool
     let thermalPressure: ThermalPressureLevel
     let isExternalPowerConnected: Bool?

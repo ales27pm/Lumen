@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum DeviceFormFactor: String, Sendable, Codable, Equatable, CaseIterable {
+enum DeviceFormFactor: String, Sendable, Codable, Equatable, CaseIterable {
     case iPhone
     case iPad
     case mac

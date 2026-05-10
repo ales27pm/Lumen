@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum LLMBackendKind: String, Sendable, Codable, Equatable, CaseIterable {
+enum LLMBackendKind: String, Sendable, Codable, Equatable, CaseIterable {
     case gguf
     case coreML
     case tinyIntent

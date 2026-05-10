@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum LLMTokenEvent: Sendable, Equatable {
+enum LLMTokenEvent: Sendable, Equatable {
     case started(requestID: UUID)
     case token(String)
     case partialText(String)

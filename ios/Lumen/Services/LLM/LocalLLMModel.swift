@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LocalLLMModel: Sendable, Codable, Equatable, Identifiable {
+struct LocalLLMModel: Sendable, Codable, Equatable, Identifiable {
     let id: String
     let displayName: String
     let backend: LLMBackendKind

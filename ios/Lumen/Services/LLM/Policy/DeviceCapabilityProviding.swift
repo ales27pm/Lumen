@@ -2,11 +2,11 @@ import Foundation
 import Metal
 import UIKit
 
-nonisolated protocol DeviceCapabilityProviding: Sendable {
+protocol DeviceCapabilityProviding: Sendable {
     func currentSnapshot(appIsForeground: Bool) async -> DeviceCapabilitySnapshot
 }
 
-nonisolated final class SystemDeviceCapabilityProvider: DeviceCapabilityProviding {
+final class SystemDeviceCapabilityProvider: DeviceCapabilityProviding {
     init() {}
 
     func currentSnapshot(appIsForeground: Bool) async -> DeviceCapabilitySnapshot {

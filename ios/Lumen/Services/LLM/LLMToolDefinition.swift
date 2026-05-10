@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMToolDefinition: Codable, Sendable, Equatable {
+struct LLMToolDefinition: Codable, Sendable, Equatable {
     let name: String
     let description: String
     let jsonSchema: String

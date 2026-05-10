@@ -16,7 +16,7 @@ struct LLMEngineFoundationTests {
         #expect(config.temperature == 0)
         #expect(config.topP == 1)
         #expect(config.topK == 0)
-        #expect(config.repeatPenalty > 0)
+        #expect(config.repeatPenalty == 1.0)
         #expect(config.maxTokens == 1)
         #expect(config.stopSequences == ["\n"])
     }

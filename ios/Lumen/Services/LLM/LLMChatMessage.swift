@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct LLMChatMessage: Codable, Sendable, Equatable, Identifiable {
+struct LLMChatMessage: Codable, Sendable, Equatable, Identifiable {
     enum Role: String, Codable, Sendable, Equatable, CaseIterable {
         case system
         case user

@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum ThermalPressureLevel: String, Sendable, Codable, Equatable, CaseIterable {
+enum ThermalPressureLevel: String, Sendable, Codable, Equatable, CaseIterable {
     case nominal
     case fair
     case serious

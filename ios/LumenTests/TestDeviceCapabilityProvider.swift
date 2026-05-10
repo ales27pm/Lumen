@@ -1,7 +1,7 @@
 import Foundation
 @testable import Lumen
 
-nonisolated struct TestDeviceCapabilityProvider: DeviceCapabilityProviding {
+struct TestDeviceCapabilityProvider: DeviceCapabilityProviding {
     let formFactor: DeviceFormFactor
     let performanceTier: DevicePerformanceTier
     let physicalMemoryBytes: UInt64

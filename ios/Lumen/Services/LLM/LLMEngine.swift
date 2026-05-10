@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated protocol LLMEngine: Sendable {
+protocol LLMEngine: Sendable {
     var id: String { get }
     var displayName: String { get }
     var capabilities: LLMEngineCapabilities { get }

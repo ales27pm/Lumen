@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum LLMFinishReason: String, Sendable, Codable, Equatable {
+enum LLMFinishReason: String, Sendable, Codable, Equatable {
     case stop
     case length
     case cancelled
@@ -9,7 +9,7 @@ nonisolated enum LLMFinishReason: String, Sendable, Codable, Equatable {
     case unknown
 }
 
-nonisolated struct LLMCompletionSummary: Sendable, Codable, Equatable {
+struct LLMCompletionSummary: Sendable, Codable, Equatable {
     let requestID: UUID
     let modelID: String?
     let promptTokens: Int?

@@ -143,6 +143,48 @@ struct LLMDevicePolicyTests {
         #expect((530...545).contains(estimate.estimatedModelMemoryMB))
     }
 
+    @Test func kvCacheEstimateUsesTightestContextLimit() {
+        let model = ggufModel(id: "gguf.2b.q4.context", parameters: 2, quantization: "Q4_K_M")
+        let profile = InferenceProfile(
+            name: "Estimator Context Test",
+            contextTokens: 4_096,
+            batchSize: 128,
+            threadCount: 2,
+            gpuLayerCount: 0,
+            useMetal: false,
+            useMemoryMapping: true,
+            lowPowerMode: false
+        )
+        let largeContextBudget = InferenceBudget(
+            maxPromptTokens: 4_096,
+            maxCompletionTokens: 256,
+            maxWallClockSeconds: 30,
+            allowGPU: false,
+            allowBackgroundExecution: false
+        )
+        let tightContextBudget = InferenceBudget(
+            maxPromptTokens: 1_024,
+            maxCompletionTokens: 256,
+            maxWallClockSeconds: 30,
+            allowGPU: false,
+            allowBackgroundExecution: false
+        )
+
+        let largeContextEstimate = ModelMemoryEstimator.estimate(
+            model: model,
+            profile: profile,
+            budget: largeContextBudget
+        )
+        let tightContextEstimate = ModelMemoryEstimator.estimate(
+            model: model,
+            profile: profile,
+            budget: tightContextBudget
+        )
+
+        #expect(tightContextEstimate.estimatedKVCacheMB < largeContextEstimate.estimatedKVCacheMB)
+        #expect(tightContextEstimate.estimatedKVCacheMB == 128)
+    }
+
     @Test func oversizedSevenBModelIsRejectedOnConstrainedTier() async {
         let provider = TestDeviceCapabilityProvider(
             performanceTier: .constrained,
@@ -205,7 +247,37 @@ struct LLMDevicePolicyTests {
         )
 
         #expect(decision.isRejected)
+        #expect(decision.report.selectedProfile.useMetal)
+        #expect(decision.report.selectedBudget.allowGPU)
         #expect(decision.report.reasons.contains(ModelFitReason.backgroundExecutionBlocked))
+    }
+
+    @Test func backgroundGGUFWithGPUDisabledByPolicyDoesNotUseStaleRequestForRejection() async {
+        let provider = TestDeviceCapabilityProvider(
+            performanceTier: .high,
+            physicalMemoryBytes: 8 * Self.gibibyte,
+            hasMetalSupport: false,
+            powerState: RuntimePowerState(
+                isLowPowerModeEnabled: false,
+                thermalPressure: .nominal,
+                appIsForeground: false
+            )
+        )
+        let policy = DeviceModelPolicy(provider: provider)
+
+        let decision = await policy.evaluate(
+            model: ggufModel(id: "gguf.background.cpu", parameters: 3, quantization: "Q4_K_M"),
+            requestedProfile: InferenceProfile.iphoneBalanced,
+            requestedBudget: InferenceBudget.maximumForeground,
+            appIsForeground: false
+        )
+
+        #expect(decision.isAllowed)
+        #expect(decision.report.selectedProfile.useMetal == false)
+        #expect(decision.report.selectedProfile.gpuLayerCount == 0)
+        #expect(decision.report.selectedBudget.allowGPU == false)
+        #expect(decision.report.reasons.contains(ModelFitReason.metalUnavailable))
+        #expect(decision.report.reasons.contains(ModelFitReason.backgroundExecutionBlocked) == false)
     }
 
     @Test func selectedProfileReflectsSimulatorAndThermalDowngrades() async {

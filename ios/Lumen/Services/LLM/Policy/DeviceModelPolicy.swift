@@ -70,7 +70,7 @@ actor DeviceModelPolicy {
             applyMetalUnavailableDowngrade(profile: &selectedProfile, budget: &selectedBudget, reasons: &reasons)
         }
 
-        if !appIsForeground && !requestedBudget.allowBackgroundExecution && requiresHeavyGPU(profile: requestedProfile, budget: requestedBudget) {
+        if !appIsForeground && !selectedBudget.allowBackgroundExecution && requiresHeavyGPU(profile: selectedProfile, budget: selectedBudget) {
             add(.backgroundExecutionBlocked, to: &reasons)
             let estimate = ModelMemoryEstimator.estimate(model: model, profile: selectedProfile, budget: selectedBudget)
             return .rejected(report(
@@ -363,7 +363,7 @@ actor DeviceModelPolicy {
     }
 }
 
-nonisolated private extension Array where Element == ModelFitReason {
+private extension Array where Element == ModelFitReason {
     var containsDowngradeReason: Bool {
         contains(.simulatorDisablesMetal)
             || contains(.metalUnavailable)

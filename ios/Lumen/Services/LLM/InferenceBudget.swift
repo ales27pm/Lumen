@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct InferenceBudget: Sendable, Codable, Equatable {
+struct InferenceBudget: Sendable, Codable, Equatable {
     let maxPromptTokens: Int
     let maxCompletionTokens: Int
     let maxWallClockSeconds: Double

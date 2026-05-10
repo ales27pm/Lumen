@@ -73,4 +73,26 @@ nonisolated struct InferenceProfile: Sendable, Codable, Equatable {
         useMemoryMapping: true,
         lowPowerMode: false
     )
+
+    func adjusted(
+        name: String? = nil,
+        contextTokens: Int? = nil,
+        batchSize: Int? = nil,
+        threadCount: Int? = nil,
+        gpuLayerCount: Int? = nil,
+        useMetal: Bool? = nil,
+        useMemoryMapping: Bool? = nil,
+        lowPowerMode: Bool? = nil
+    ) -> InferenceProfile {
+        InferenceProfile(
+            name: name ?? self.name,
+            contextTokens: contextTokens ?? self.contextTokens,
+            batchSize: batchSize ?? self.batchSize,
+            threadCount: threadCount ?? self.threadCount,
+            gpuLayerCount: gpuLayerCount ?? self.gpuLayerCount,
+            useMetal: useMetal ?? self.useMetal,
+            useMemoryMapping: useMemoryMapping ?? self.useMemoryMapping,
+            lowPowerMode: lowPowerMode ?? self.lowPowerMode
+        )
+    }
 }

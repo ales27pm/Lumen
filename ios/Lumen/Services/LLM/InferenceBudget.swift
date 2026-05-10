@@ -59,4 +59,22 @@ nonisolated struct InferenceBudget: Sendable, Codable, Equatable {
         allowGPU: true,
         allowBackgroundExecution: false
     )
+
+    func adjusted(
+        maxPromptTokens: Int? = nil,
+        maxCompletionTokens: Int? = nil,
+        maxWallClockSeconds: Double? = nil,
+        maxMemoryMB: Int?? = nil,
+        allowGPU: Bool? = nil,
+        allowBackgroundExecution: Bool? = nil
+    ) -> InferenceBudget {
+        InferenceBudget(
+            maxPromptTokens: maxPromptTokens ?? self.maxPromptTokens,
+            maxCompletionTokens: maxCompletionTokens ?? self.maxCompletionTokens,
+            maxWallClockSeconds: maxWallClockSeconds ?? self.maxWallClockSeconds,
+            maxMemoryMB: maxMemoryMB ?? self.maxMemoryMB,
+            allowGPU: allowGPU ?? self.allowGPU,
+            allowBackgroundExecution: allowBackgroundExecution ?? self.allowBackgroundExecution
+        )
+    }
 }

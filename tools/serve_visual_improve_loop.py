@@ -173,8 +173,11 @@ class ImproveLoopHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as exc:
             self._send_json({"ok": False, "message": f"Invalid summary JSON: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
-        payload["ok"] = True
-        self._send_json(payload)
+        if isinstance(payload, dict):
+            payload["ok"] = True
+            self._send_json(payload)
+            return
+        self._send_json({"ok": True, "data": payload})
 
     def _send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -294,31 +297,45 @@ function renderChart(steps) {{
     const barH = (dur / maxDuration) * chartH;
     const x = margin + idx * (barW + barGap);
     const y = margin + chartH - barH;
-    const status = String(step.status || '').toLowerCase();
+    const status = normalizeStatus(step.status);
     ctx.fillStyle = status === 'success' ? '#44d483' : status === 'failed' ? '#ff6b7a' : '#73a7ff';
     ctx.fillRect(x, y, barW, Math.max(barH, 2));
   }});
 }}
 
 async function refreshDashboard() {{
-  const res = await fetch('/dashboard-summary.json');
-  if (!res.ok) {{
+  try {{
+    const res = await fetch('/dashboard-summary.json');
+    const payload = await res.json();
+    if (!res.ok) {{
+      document.getElementById('dashboard-overview').textContent = payload.message || 'Dashboard summary not generated yet.';
+      document.getElementById('step-details').textContent = '';
+      renderChart([]);
+      return;
+    }}
+    const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    const total = steps.length;
+    const success = steps.filter(s => normalizeStatus(s.status) === 'success').length;
+    const failed = steps.filter(s => normalizeStatus(s.status) === 'failed').length;
+    const running = steps.filter(s => normalizeStatus(s.status) === 'running').length;
+    document.getElementById('dashboard-overview').textContent = `Steps: ${{total}} · success: ${{success}} · failed: ${{failed}} · running: ${{running}}`;
+    document.getElementById('step-details').textContent = steps
+      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizeStatus(s.status)}} · duration=${{s.durationSeconds ?? 0}}s`)
+      .join('\n');
+    renderChart(steps);
+  }} catch (err) {{
+    console.error('Failed to refresh dashboard', err);
     document.getElementById('dashboard-overview').textContent = 'Dashboard summary not generated yet.';
     document.getElementById('step-details').textContent = '';
     renderChart([]);
     return;
   }}
-  const payload = await res.json();
-  const steps = Array.isArray(payload.steps) ? payload.steps : [];
-  const total = steps.length;
-  const success = steps.filter(s => String(s.status).toLowerCase() === 'success').length;
-  const failed = steps.filter(s => String(s.status).toLowerCase() === 'failed').length;
-  const running = steps.filter(s => String(s.status).toLowerCase() === 'running').length;
-  document.getElementById('dashboard-overview').textContent = `Steps: ${{total}} · success: ${{success}} · failed: ${{failed}} · running: ${{running}}`;
-  document.getElementById('step-details').textContent = steps
-    .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{s.status || 'unknown'}} · duration=${{s.durationSeconds ?? 0}}s`)
-    .join('\n');
-  renderChart(steps);
+}}
+function normalizeStatus(status) {{
+  const value = String(status || '').toLowerCase();
+  if (value === 'passed') return 'success';
+  if (value === 'in_progress') return 'running';
+  return value || 'unknown';
 }}
 setInterval(refresh, 1500);
 refresh();

@@ -86,3 +86,69 @@ def test_dashboard_summary_route_returns_payload(tmp_path: Path) -> None:
     assert status == server.HTTPStatus.OK
     assert payload["ok"] is True
     assert payload["steps"][0]["name"] == "compile"
+
+
+def test_dashboard_summary_route_missing_file_returns_not_found(tmp_path: Path) -> None:
+    server = _load_server()
+    dashboard_dir = tmp_path / "generated" / "visual_improve_loop"
+    dashboard_dir.mkdir(parents=True)
+
+    config = server.ServerConfig(
+        root=tmp_path,
+        host="127.0.0.1",
+        port=8765,
+        visual_command=["python", "runner.py"],
+        train_command=[],
+        dashboard_path=dashboard_dir / "index.html",
+        open_browser=False,
+    )
+
+    class Sink:
+        def __init__(self) -> None:
+            self.payload: tuple[dict, object] | None = None
+
+        def _send_json(self, payload, status=server.HTTPStatus.OK):
+            self.payload = (payload, status)
+
+    sink = Sink()
+    sink.config = config
+    server.ImproveLoopHandler._serve_dashboard_summary(sink)
+    assert sink.payload is not None
+    payload, status = sink.payload
+    assert status == server.HTTPStatus.NOT_FOUND
+    assert payload["ok"] is False
+    assert "not generated yet" in payload["message"].lower()
+
+
+def test_dashboard_summary_route_invalid_json_returns_error(tmp_path: Path) -> None:
+    server = _load_server()
+    dashboard_dir = tmp_path / "generated" / "visual_improve_loop"
+    dashboard_dir.mkdir(parents=True)
+    summary_path = dashboard_dir / "visual_improve_loop_summary.json"
+    summary_path.write_text("{ invalid", encoding="utf-8")
+
+    config = server.ServerConfig(
+        root=tmp_path,
+        host="127.0.0.1",
+        port=8765,
+        visual_command=["python", "runner.py"],
+        train_command=[],
+        dashboard_path=dashboard_dir / "index.html",
+        open_browser=False,
+    )
+
+    class Sink:
+        def __init__(self) -> None:
+            self.payload: tuple[dict, object] | None = None
+
+        def _send_json(self, payload, status=server.HTTPStatus.OK):
+            self.payload = (payload, status)
+
+    sink = Sink()
+    sink.config = config
+    server.ImproveLoopHandler._serve_dashboard_summary(sink)
+    assert sink.payload is not None
+    payload, status = sink.payload
+    assert status == server.HTTPStatus.INTERNAL_SERVER_ERROR
+    assert payload["ok"] is False
+    assert "invalid summary json" in payload["message"].lower()

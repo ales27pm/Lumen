@@ -1,14 +1,15 @@
 import Foundation
 
-nonisolated struct ToolExecutionPresentation: Equatable {
+struct ToolExecutionPresentation: Equatable {
     let status: ToolStatus
     let message: String
 
     static func presentation(for rawToolID: String, rawResult: String) -> ToolExecutionPresentation {
         let canonicalToolID = ToolRouteGuard.canonicalToolID(rawToolID)
+        let trimmedRaw = rawResult.trimmingCharacters(in: .whitespacesAndNewlines)
         let redacted = ToolArgumentRedactor.redactDisplayContent(rawResult)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let visible = redacted.isEmpty ? rawResult.trimmingCharacters(in: .whitespacesAndNewlines) : redacted
+        let visible = redacted.isEmpty && !trimmedRaw.isEmpty ? "(no displayable result)" : redacted
 
         if let authMessage = outlookAuthenticationMessage(for: canonicalToolID, result: visible) {
             return ToolExecutionPresentation(status: .failed, message: authMessage)
@@ -37,18 +38,22 @@ nonisolated struct ToolExecutionPresentation: Equatable {
         ]
         if failurePrefixes.contains(where: { lowered.hasPrefix($0) }) { return true }
 
-        let failureHints = [
+        let outlookFailureSignatures = [
             " not signed in",
             " sign in first",
-            " authorization failed",
-            " authentication failed",
-            "unauthorized",
-            "expired",
-            "permission",
+            "authorization failed",
+            "authentication failed",
+            "unauthorized or expired",
+            "permission denied",
             "requires explicit user approval",
-            "access to do that"
+            "access to do that",
+            "invalid_grant",
+            "interaction_required",
+            "consent_required",
+            "invalid_scope",
+            "aadsts70000"
         ]
-        if canonicalToolID.hasPrefix("outlook."), failureHints.contains(where: { lowered.contains($0) }) {
+        if canonicalToolID.hasPrefix("outlook."), outlookFailureSignatures.contains(where: { lowered.contains($0) }) {
             return true
         }
 
@@ -72,7 +77,7 @@ nonisolated struct ToolExecutionPresentation: Equatable {
     }
 }
 
-nonisolated enum ToolArgumentRedactor {
+enum ToolArgumentRedactor {
     private static let sensitiveKeys = [
         "pendingActionID",
         "pending_action_id",

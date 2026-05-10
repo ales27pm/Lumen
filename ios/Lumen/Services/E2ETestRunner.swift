@@ -753,7 +753,11 @@ enum E2ETestRunner {
 
     static func hygieneFailures(lowerRawFinal: String, lowerFinal: String, removedArtifacts: [FinalOutputArtifact], scenario: E2ETestScenario, observations: String) -> [String] {
         var failures: [String] = []
-        if lowerFinal.contains("<think") || lowerFinal.contains("</think>") {
+        if lowerFinal.contains("<think") || lowerFinal.contains("</think>")
+            || lowerFinal.contains("<analysis") || lowerFinal.contains("</analysis>")
+            || lowerFinal.contains("<reasoning") || lowerFinal.contains("</reasoning>")
+            || lowerFinal.contains("<thinking") || lowerFinal.contains("</thinking>")
+            || lowerFinal.contains("<chain_of_thought") || lowerFinal.contains("</chain_of_thought>") {
             failures.append("Sanitized output still contains hidden reasoning")
         }
         if lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") {

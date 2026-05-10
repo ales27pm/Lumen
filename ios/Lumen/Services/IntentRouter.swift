@@ -316,6 +316,18 @@ nonisolated enum IntentRouter {
     private static func priorityOverride(forNormalizedText text: String) -> IntentRoutingDecision? {
         guard !text.isEmpty else { return nil }
 
+        if isConcreteFileReadIntent(text) {
+            return IntentRoutingDecision(intent: .files, allowedToolIDs: filesToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if isExplicitRAGIndexIntent(text) {
+            return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if isExplicitMemorySaveIntent(text) || matchesAny(text, ["what do you remember", "recall my saved"]) {
+            return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
         if matchesAny(text, ["draft a text", "message jordan", "text message to"]) {
             let recipient = inferredRecipient(text)
             let content = inferredContent(text)
@@ -327,7 +339,11 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .messageDraft, allowedToolIDs: messageToolIDs, requiresClarification: clarification != nil, clarificationPrompt: clarification)
         }
 
-        if matchesAny(text, ["draft an email", "email:", "subject release prep"]) {
+        if matchesAny(text, [
+            "draft an email", "email:", "subject release prep",
+            "draft a quick email", "draft a quick email update to",
+            "write a quick email", "compose a quick email", "email update to"
+        ]) || (text.contains("email") && text.contains("ask one question")) {
             let recipient = inferredRecipient(text)
             let content = inferredContent(text)
             let clarification: String?
@@ -338,20 +354,29 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .emailDraft, allowedToolIDs: emailToolIDs, requiresClarification: clarification != nil, clarificationPrompt: clarification)
         }
 
-        if matchesAny(text, ["take a photo", "open camera", "capture"]) {
+        if isLikelyPhoneCallIntent(text) || matchesAny(text, ["place a call to", "start a call to"]) {
+            let hasTarget = text.split(separator: " ").count >= 2 || text.rangeOfCharacter(from: .decimalDigits) != nil
+            return IntentRoutingDecision(intent: .phoneCall, allowedToolIDs: phoneToolIDs, requiresClarification: !hasTarget, clarificationPrompt: hasTarget ? nil : "Who should I call?")
+        }
+
+        if matchesAny(text, [
+            "take a photo", "open camera", "open the camera", "prepare the camera",
+            "camera and prepare", "capture", "capture a photo", "take a picture"
+        ]) {
             return IntentRoutingDecision(intent: .camera, allowedToolIDs: cameraToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["read this url", "fetch and summarize"]) {
+        if matchesAny(text, [
+            "read this url", "read this web url", "fetch and summarize"
+        ]) || isURLFetchIntent(text) {
             return IntentRoutingDecision(intent: .webSearch, allowedToolIDs: webSearchToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
-        if matchesAny(text, ["reindex files", "refresh file retrieval index", "reindex photos", "refresh photo retrieval index"]) {
-            return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
-        }
-
-        if matchesAny(text, ["what do you remember", "recall my saved"]) {
-            return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        if matchesAny(text, [
+            "walking or driving", "whether i was walking", "whether i was driving",
+            "recent motion", "recent activity"
+        ]) {
+            return IntentRoutingDecision(intent: .motion, allowedToolIDs: motionToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
 
         return nil
@@ -368,6 +393,36 @@ nonisolated enum IntentRouter {
         }
 
         return matchesAny(text, localScopeMarkers) && matchesAny(text, ["architecture", "system design", "structure", "module", "modules"])
+    }
+
+    private static func isExplicitMemorySaveIntent(_ text: String) -> Bool {
+        matchesAny(text, [
+            "save this note:", "save this fact:", "remember this:", "remember that:",
+            "keep this in mind:", "save this note", "save this fact"
+        ])
+    }
+
+    private static func isExplicitRAGIndexIntent(_ text: String) -> Bool {
+        matchesAny(text, [
+            "reindex local files", "reindex files", "refresh the file retrieval index",
+            "refresh file retrieval index", "reindex photos", "refresh the photo retrieval index",
+            "refresh photo retrieval index"
+        ])
+    }
+
+    private static func isConcreteFileReadIntent(_ text: String) -> Bool {
+        guard matchesAny(text, ["open", "read", "show"]) else { return false }
+        return text.range(
+            of: #"(?i)\b[\w][\w ._-]*\.(md|txt|json|pdf|swift|docx|csv)\b"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func isURLFetchIntent(_ text: String) -> Bool {
+        text.range(
+            of: #"(?i)\b(read|fetch|open|summarize)\b.{0,80}\bhttps?://\S+"#,
+            options: .regularExpression
+        ) != nil
     }
 
     private static func normalized(_ text: String) -> String {

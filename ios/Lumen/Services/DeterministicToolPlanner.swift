@@ -44,6 +44,24 @@ nonisolated enum DeterministicToolPlanner {
             guard has("web.search") else { return nil }
             let query = extractWebQuery(from: prompt)
             return query.isEmpty ? nil : AgentAction(tool: "web.search", args: ["query": .string(query)])
+        case .emailDraft:
+            var args: AgentJSONArguments = ["subject": .string(extractEmailSubject(from: prompt)), "body": .string(extractCommunicationBody(from: prompt))]
+            if let email = extractEmailAddress(from: prompt) {
+                args["to"] = .string(email)
+            } else if let recipient = extractRecipientName(from: prompt), !recipient.isEmpty {
+                args["to"] = .string(recipient)
+            }
+            return action("mail.draft", args)
+        case .messageDraft:
+            var args: AgentJSONArguments = ["body": .string(extractCommunicationBody(from: prompt))]
+            if let recipient = extractRecipientName(from: prompt), !recipient.isEmpty { args["to"] = .string(recipient) }
+            return action("messages.draft", args)
+        case .phoneCall:
+            if let phone = firstPhoneNumber(in: prompt) { return action("phone.call", ["number": .string(phone)]) }
+            if let query = extractCallTarget(from: prompt), !query.isEmpty {
+                return action("contacts.search", ["query": .string(query)])
+            }
+            return nil
         case .outlook:
             return planOutlook(text: text, prompt: prompt, availableToolIDs: availableToolIDs)
         case .weather:
@@ -84,8 +102,8 @@ nonisolated enum DeterministicToolPlanner {
             if containsAny(text, ["remember", "save"]) { return action("memory.save", ["content": .string(prompt)]) }
             return nil
         case .rag:
-            if containsAny(text, ["reindex", "index files"]) { return action("rag.index_files") }
-            if containsAny(text, ["index photos", "reindex photos"]) { return action("rag.index_photos") }
+            if containsAny(text, ["index photos", "reindex photos", "photo retrieval index"]) { return action("rag.index_photos") }
+            if containsAny(text, ["reindex", "index files", "file retrieval index", "refresh retrieval index"]) { return action("rag.index_files") }
             if containsAny(text, ["search"]) {
                 let query = expandRAGQueryIfNeeded(originalPrompt: prompt)
                 return action("rag.search", ["query": .string(query)])
@@ -239,10 +257,65 @@ nonisolated enum DeterministicToolPlanner {
         return nil
     }
     static func extractFileName(from text: String) -> String? {
-        let pattern = #"[A-Za-z0-9_\- ]+\.[A-Za-z0-9]{2,6}"#
+        let pattern = #"[A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|txt|json|pdf|swift|docx|csv)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let ns = text as NSString
         guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else { return nil }
         return ns.substring(with: match.range)
+    }
+
+    private static func firstPhoneNumber(in text: String) -> String? {
+        let pattern = #"\+?[0-9][0-9\s\-\(\)]{6,}[0-9]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        return ns.substring(with: match.range).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func extractRecipientName(from text: String) -> String? {
+        extractNameAfterMarkers(
+            in: text,
+            markers: [" to ", " for "],
+            terminators: [" about ", " saying ", " that says ", " body ", " message ", " and ask ", " from contacts"]
+        )
+    }
+
+    private static func extractCallTarget(from text: String) -> String? {
+        extractNameAfterMarkers(
+            in: text,
+            markers: ["place a call to ", "start a call to ", "call ", "phone "],
+            terminators: [" from contacts", " using contacts", " in contacts"]
+        )
+    }
+
+    private static func extractNameAfterMarkers(in text: String, markers: [String], terminators: [String]) -> String? {
+        let lower = text.lowercased()
+        for marker in markers {
+            guard let range = lower.range(of: marker) else { continue }
+            var remainder = String(text[range.upperBound...])
+            let lowerRemainder = remainder.lowercased()
+            if let terminator = terminators.compactMap({ lowerRemainder.range(of: $0)?.lowerBound }).min() {
+                remainder = String(remainder[..<terminator])
+            }
+            let cleaned = remainder.trimmingCharacters(in: CharacterSet(charactersIn: "\"' :.,!?"))
+            return cleaned.isEmpty ? nil : cleaned
+        }
+        return nil
+    }
+
+    private static func extractCommunicationBody(from text: String) -> String {
+        let lower = text.lowercased()
+        for marker in [" saying ", " that says ", " body ", " body:", " message ", " about "] {
+            if let range = lower.range(of: marker) {
+                return String(text[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "\"' :.,!?"))
+            }
+        }
+        return ""
+    }
+
+    private static func extractEmailSubject(from text: String) -> String {
+        let body = extractCommunicationBody(from: text)
+        if !body.isEmpty { return String(body.prefix(48)) }
+        return ""
     }
 }

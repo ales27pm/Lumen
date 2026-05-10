@@ -114,9 +114,8 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         let holdbackStart = max(0, raw.count - holdbackCharacters)
         var unsafeStart = raw.count
 
-        if let thinkOpen = lower.range(of: "<think")?.lowerBound,
-           lower.range(of: "</think>", range: thinkOpen..<lower.endIndex) == nil {
-            unsafeStart = min(unsafeStart, lower.distance(from: lower.startIndex, to: thinkOpen))
+        if let hiddenOpen = firstUnclosedHiddenMarkerStart(in: lower) {
+            unsafeStart = min(unsafeStart, hiddenOpen)
         }
 
         if let payloadOpen = lower.range(of: "<lumen_web_payload")?.lowerBound,
@@ -155,6 +154,15 @@ nonisolated struct StreamingFinalOutputSanitizer: Sendable {
         }
         return braceIndex
     }
+
+    private func firstUnclosedHiddenMarkerStart(in lower: String) -> Int? {
+        let tagNames = ["think", "thinkresponse", "think_response", "thinking", "reasoning", "analysis", "chain_of_thought"]
+        return tagNames.compactMap { tag -> Int? in
+            guard let open = lower.range(of: "<\(tag)")?.lowerBound else { return nil }
+            if lower.range(of: "</\(tag)>", range: open..<lower.endIndex) != nil { return nil }
+            return lower.distance(from: lower.startIndex, to: open)
+        }.min()
+    }
 }
 
 nonisolated enum FinalOutputSanitizer {
@@ -180,7 +188,7 @@ nonisolated enum FinalOutputSanitizer {
         }
 
         let originalLower = raw.lowercased()
-        if originalLower.contains("<think") || originalLower.contains("</think>") {
+        if containsHiddenReasoningMarker(originalLower) {
             mark(.thinkBlock)
         }
         if originalLower.contains("<lumen_web_payload") || originalLower.contains("</lumen_web_payload>") {
@@ -190,12 +198,20 @@ nonisolated enum FinalOutputSanitizer {
             mark(.rawToolPayload)
         }
 
-        text = text.replacingOccurrences(of: "(?is)<think>.*?</think>", with: " ", options: .regularExpression)
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("<think>") {
+        let hiddenRemoval = removingHiddenReasoningBlocks(from: text)
+        if hiddenRemoval.removedAny {
+            text = hiddenRemoval.text
+            mark(.thinkBlock)
+        }
+        let malformedHiddenRemoval = removingMalformedHiddenReasoningLines(from: text)
+        if malformedHiddenRemoval.removedAny {
+            text = malformedHiddenRemoval.text
+            mark(.malformedThinkPrefix)
+        }
+        if beginsWithHiddenReasoningMarker(text) {
             text = ""
             mark(.malformedThinkPrefix)
         }
-        text = text.replacingOccurrences(of: "(?is)^\\s*<think>.*$", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)<lumen_web_payload>.*?</lumen_web_payload>", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)<lumen_web_payload[^>]*>.*$", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)</lumen_web_payload>", with: " ", options: .regularExpression)
@@ -270,17 +286,44 @@ nonisolated enum FinalOutputSanitizer {
 
     private static func sanitizedRecoveryKey(for raw: String) -> String {
         var text = raw
-        text = text.replacingOccurrences(of: "(?is)<think>.*?</think>", with: " ", options: .regularExpression)
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("<think>") {
+        text = removingHiddenReasoningBlocks(from: text).text
+        text = removingMalformedHiddenReasoningLines(from: text).text
+        if beginsWithHiddenReasoningMarker(text) {
             text = ""
         }
-        text = text.replacingOccurrences(of: "(?is)^\\s*<think>.*$", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)<lumen_web_payload>.*?</lumen_web_payload>", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)<lumen_web_payload[^>]*>.*$", with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: "(?is)</lumen_web_payload>", with: " ", options: .regularExpression)
         text = removingRawToolPayloadObjects(from: text).text
         text = normalizeWhitespace(text)
         return text.isEmpty ? fallback : text
+    }
+
+    private static let hiddenReasoningTagPattern = "(?:think[\\w_-]*|thinking|reasoning|analysis|chain_of_thought)"
+
+    private static func containsHiddenReasoningMarker(_ lowercasedText: String) -> Bool {
+        ["<think", "</think", "<thinking", "</thinking", "<reasoning", "</reasoning", "<analysis", "</analysis", "<chain_of_thought", "</chain_of_thought"].contains {
+            lowercasedText.contains($0)
+        }
+    }
+
+    private static func beginsWithHiddenReasoningMarker(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).range(
+            of: "^<\\s*\(hiddenReasoningTagPattern)\\b",
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    private static func removingHiddenReasoningBlocks(from source: String) -> (text: String, removedAny: Bool) {
+        let pattern = "(?is)<\\s*(\(hiddenReasoningTagPattern))\\b[^>]*>.*?</\\s*\\1\\s*>"
+        let redacted = source.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
+        return (redacted, redacted != source)
+    }
+
+    private static func removingMalformedHiddenReasoningLines(from source: String) -> (text: String, removedAny: Bool) {
+        let pattern = "(?im)^\\s*<\\s*\(hiddenReasoningTagPattern)\\b[^\\n]*(?:\\n|$)"
+        let redacted = source.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
+        return (redacted, redacted != source)
     }
 
     private static func normalizeWhitespace(_ text: String) -> String {

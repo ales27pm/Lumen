@@ -93,6 +93,51 @@ struct FinalOutputSanitizerTests {
         let raw = "<think>x</think> Answer"
         #expect(FinalOutputSanitizer.sanitizeUserVisibleText(raw) == FinalOutputSanitizer.sanitizeUserVisibleText(raw))
     }
+
+    @Test func removesMalformedHiddenReasoningTags() {
+        let thinkResponse = FinalOutputSanitizer.sanitizeUserVisibleText("<thinkresponse>secret</thinkresponse> visible")
+        #expect(thinkResponse.text == "visible")
+        #expect(thinkResponse.removedArtifacts.contains(.thinkBlock))
+
+        let thinking = FinalOutputSanitizer.sanitizeUserVisibleText("<thinking>secret</thinking>\nAnswer")
+        #expect(thinking.text == "Answer")
+
+        let analysisOnly = FinalOutputSanitizer.sanitizeUserVisibleText("<analysis>secret")
+        #expect(analysisOnly.text == FinalOutputSanitizer.fallback)
+        #expect(analysisOnly.removedArtifacts.contains(.emptyAfterSanitization))
+
+        let trailingReasoning = FinalOutputSanitizer.sanitizeUserVisibleText("Answer\n<reasoning>secret</reasoning>")
+        #expect(trailingReasoning.text == "Answer")
+
+        let thinkResponseUnderscore = FinalOutputSanitizer.sanitizeUserVisibleText("<think_response>secret</think_response>\nClean")
+        #expect(thinkResponseUnderscore.text == "Clean")
+    }
+
+    @Test func sanitizedHiddenMarkerVariantsDoNotLeak() {
+        let samples = [
+            "<thinkresponse>secret</thinkresponse> visible",
+            "<thinking>secret</thinking>\nAnswer",
+            "<analysis>secret",
+            "Answer\n<reasoning>secret</reasoning>",
+            "<think_response>secret</think_response>\nClean",
+            "<chain_of_thought>secret</chain_of_thought> Safe"
+        ]
+
+        for sample in samples {
+            let lowered = FinalOutputSanitizer.sanitizeUserVisibleText(sample).text.lowercased()
+            #expect(!lowered.contains("<think"))
+            #expect(!lowered.contains("<analysis"))
+            #expect(!lowered.contains("<reasoning"))
+            #expect(!lowered.contains("<thinking"))
+            #expect(!lowered.contains("<chain_of_thought"))
+        }
+    }
+
+    @Test func modelOutputSanitizerRemovesHiddenReasoningVariants() {
+        #expect(ModelOutputSanitizer.stripHiddenBlocks("<analysis>secret</analysis>\nAnswer") == "Answer")
+        #expect(ModelOutputSanitizer.stripHiddenBlocks("<think_response>secret</think_response>\nClean") == "Clean")
+        #expect(ModelOutputSanitizer.stripHiddenBlocks("<reasoning>secret") == "")
+    }
 }
 
 extension FinalOutputSanitizerTests {

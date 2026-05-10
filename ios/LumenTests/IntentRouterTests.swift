@@ -91,4 +91,50 @@ extension IntentRouterTests {
         #expect(required == ["memory.save", "memory.recall"])
         #expect(required.isSubset(of: decision.allowedToolIDs))
     }
+
+    @Test func concreteFileReadBeatsRAGArchitectureKeyword() async throws {
+        let decision = IntentRouter.classify("Open and read architecture-notes.md.")
+        #expect(decision.intent == .files)
+        #expect(decision.allowedToolIDs == ["files.read"])
+
+        let action = DeterministicToolPlanner.plan(
+            routing: decision,
+            prompt: "Open and read architecture-notes.md.",
+            availableToolIDs: decision.allowedToolIDs
+        )
+        #expect(action?.tool == "files.read")
+        #expect(action?.args["name"]?.stringValue == "architecture-notes.md")
+    }
+
+    @Test func ragIndexingPlansCorrectIndexTools() async throws {
+        let fileDecision = IntentRouter.classify("Refresh the file retrieval index.")
+        let fileAction = DeterministicToolPlanner.plan(
+            routing: fileDecision,
+            prompt: "Refresh the file retrieval index.",
+            availableToolIDs: fileDecision.allowedToolIDs
+        )
+        #expect(fileDecision.intent == .rag)
+        #expect(fileAction?.tool == "rag.index_files")
+
+        let photoDecision = IntentRouter.classify("Refresh the photo retrieval index.")
+        let photoAction = DeterministicToolPlanner.plan(
+            routing: photoDecision,
+            prompt: "Refresh the photo retrieval index.",
+            availableToolIDs: photoDecision.allowedToolIDs
+        )
+        #expect(photoDecision.intent == .rag)
+        #expect(photoAction?.tool == "rag.index_photos")
+    }
+
+    @Test func phoneCallFromContactsBeatsContactSearchAndStartsWithLookup() async throws {
+        let decision = IntentRouter.classify("Place a call to Alex from contacts.")
+        let action = DeterministicToolPlanner.plan(
+            routing: decision,
+            prompt: "Place a call to Alex from contacts.",
+            availableToolIDs: decision.allowedToolIDs
+        )
+        #expect(decision.intent == .phoneCall)
+        #expect(action?.tool == "contacts.search")
+        #expect(action?.args["query"]?.stringValue == "Alex")
+    }
 }

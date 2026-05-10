@@ -1,15 +1,17 @@
 import Foundation
 
 nonisolated enum ModelOutputSanitizer {
+    private static let hiddenReasoningTagPattern = "(?:think[\\w_-]*|thinking|reasoning|analysis|chain_of_thought)"
+
     static func stripHiddenBlocks(_ text: String) -> String {
         var output = text
         output = output.replacingOccurrences(
-            of: #"(?is)<think>.*?</think>"#,
+            of: "(?is)<\\s*(\(hiddenReasoningTagPattern))\\b[^>]*>.*?</\\s*\\1\\s*>",
             with: "",
             options: .regularExpression
         )
         output = output.replacingOccurrences(
-            of: #"(?is)<thinking>.*?</thinking>"#,
+            of: "(?im)^\\s*<\\s*\(hiddenReasoningTagPattern)\\b[^\\n]*(?:\\n|$)",
             with: "",
             options: .regularExpression
         )

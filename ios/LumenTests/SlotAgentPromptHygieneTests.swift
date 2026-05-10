@@ -48,4 +48,55 @@ struct SlotAgentPromptHygieneTests {
         #expect(out.text == "Hello")
         #expect(!out.text.contains("<think"))
     }
+
+    @Test func retryPolicyDoesNotRetryValidShortChatAnswers() {
+        #expect(!SlotAgentService.shouldRetryOutput(
+            candidate: "A sharp chisel is safer because it takes less force and is easier to control.",
+            intent: .chat,
+            maxTokens: 320
+        ))
+        #expect(SlotAgentService.shouldRetryOutput(candidate: "", intent: .chat, maxTokens: 320))
+        #expect(SlotAgentService.shouldRetryOutput(candidate: "null", intent: .unknown, maxTokens: 320))
+        #expect(SlotAgentService.shouldRetryOutput(candidate: "<analysis>secret", intent: .chat, maxTokens: 320))
+    }
+
+    @Test func deterministicDirectFinalsCoverSimpleLiveChatPrompts() {
+        let prompts = [
+            "Explain why a sharp chisel is safer than a dull one.",
+            "Give me three tips for fitting a door hinge cleanly.",
+            "Explain actor isolation in Swift in simple terms.",
+            "Explain tradeoffs between precision and recall in retrieval systems in plain English."
+        ]
+
+        for prompt in prompts {
+            let final = SlotAgentService.deterministicDirectFinalIfSafe(
+                prompt: prompt,
+                intent: .chat,
+                hasAttachments: false,
+                hasRelevantMemories: false
+            )
+            #expect(final?.isEmpty == false)
+        }
+    }
+
+    @Test func deterministicDirectFinalsRespectContextBoundaries() {
+        #expect(SlotAgentService.deterministicDirectFinalIfSafe(
+            prompt: "Explain actor isolation in Swift in simple terms.",
+            intent: .chat,
+            hasAttachments: true,
+            hasRelevantMemories: false
+        ) == nil)
+        #expect(SlotAgentService.deterministicDirectFinalIfSafe(
+            prompt: "Explain actor isolation in Swift in simple terms.",
+            intent: .chat,
+            hasAttachments: false,
+            hasRelevantMemories: true
+        ) == nil)
+        #expect(SlotAgentService.deterministicDirectFinalIfSafe(
+            prompt: "Explain actor isolation in Swift in simple terms.",
+            intent: .webSearch,
+            hasAttachments: false,
+            hasRelevantMemories: false
+        ) == nil)
+    }
 }

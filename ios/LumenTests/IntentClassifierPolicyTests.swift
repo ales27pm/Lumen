@@ -90,4 +90,26 @@ struct IntentClassifierPolicyTests {
         #expect(result.intent == .messageDraft)
         #expect(result.diagnostics == "deterministic_priority_override")
     }
+
+    @MainActor
+    @Test func liveE2ERoutingRegressionsUsePriorityOverrides() async {
+        let cases: [(String, UserIntent)] = [
+            ("Draft a quick email update to Taylor about the delay and ask one question.", .emailDraft),
+            ("Place a call to Alex from contacts.", .phoneCall),
+            ("Open the camera and prepare to take a photo.", .camera),
+            ("Show whether I was walking or driving recently.", .motion),
+            ("Read this web URL: https://example.com.", .webSearch),
+            ("Open and read architecture-notes.md.", .files),
+            ("Save this note: prioritize bullet points.", .memory),
+            ("Reindex local files for retrieval.", .rag),
+            ("Refresh the file retrieval index.", .rag),
+            ("Refresh the photo retrieval index.", .rag)
+        ]
+
+        for (prompt, expectedIntent) in cases {
+            let result = await IntentClassifierService.shared.classify(prompt)
+            #expect(result.intent == expectedIntent)
+            #expect(result.diagnostics == "deterministic_priority_override")
+        }
+    }
 }

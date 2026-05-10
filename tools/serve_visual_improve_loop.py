@@ -297,7 +297,7 @@ function renderChart(steps) {{
     const barH = (dur / maxDuration) * chartH;
     const x = margin + idx * (barW + barGap);
     const y = margin + chartH - barH;
-    const status = normalizeStatus(step.status);
+    const status = normalizeStatus(step);
     ctx.fillStyle = status === 'success' ? '#44d483' : status === 'failed' ? '#ff6b7a' : '#73a7ff';
     ctx.fillRect(x, y, barW, Math.max(barH, 2));
   }});
@@ -314,13 +314,14 @@ async function refreshDashboard() {{
       return;
     }}
     const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    const normalizedStatuses = steps.map(step => normalizeStatus(step));
     const total = steps.length;
-    const success = steps.filter(s => normalizeStatus(s.status) === 'success').length;
-    const failed = steps.filter(s => normalizeStatus(s.status) === 'failed').length;
-    const running = steps.filter(s => normalizeStatus(s.status) === 'running').length;
+    const success = normalizedStatuses.filter(status => status === 'success').length;
+    const failed = normalizedStatuses.filter(status => status === 'failed').length;
+    const running = normalizedStatuses.filter(status => status === 'running').length;
     document.getElementById('dashboard-overview').textContent = `Steps: ${{total}} · success: ${{success}} · failed: ${{failed}} · running: ${{running}}`;
     document.getElementById('step-details').textContent = steps
-      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizeStatus(s.status)}} · duration=${{s.durationSeconds ?? 0}}s`)
+      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizedStatuses[i]}} · duration=${{s.durationSeconds ?? 0}}s`)
       .join('\n');
     renderChart(steps);
   }} catch (err) {{
@@ -331,10 +332,26 @@ async function refreshDashboard() {{
     return;
   }}
 }}
-function normalizeStatus(status) {{
-  const value = String(status || '').toLowerCase();
-  if (value === 'passed') return 'success';
-  if (value === 'in_progress') return 'running';
+function normalizeStatus(stepOrStatus) {{
+  if (stepOrStatus && typeof stepOrStatus === 'object') {{
+    if (stepOrStatus.skipped === true) return 'skipped';
+    if (stepOrStatus.passed === true) return 'success';
+    if (stepOrStatus.passed === false) return 'failed';
+    const nestedStatus = stepOrStatus.status;
+    if (nestedStatus && typeof nestedStatus === 'object') {{
+      if (nestedStatus === stepOrStatus) return 'unknown';
+      if (nestedStatus.skipped === true || nestedStatus.passed === true || nestedStatus.passed === false) {{
+        return normalizeStatus(nestedStatus);
+      }}
+      return 'unknown';
+    }}
+    return normalizeStatus(nestedStatus);
+  }}
+  const value = String(stepOrStatus || '').toLowerCase();
+  if (value === 'passed' || value === 'success') return 'success';
+  if (value === 'failed' || value === 'error') return 'failed';
+  if (value === 'in_progress' || value === 'running') return 'running';
+  if (value === 'skipped') return 'skipped';
   return value || 'unknown';
 }}
 setInterval(refresh, 1500);

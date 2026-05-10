@@ -407,10 +407,13 @@ nonisolated enum IntentRouter {
     }
 
     private static func isExplicitReminderIntent(_ text: String) -> Bool {
-        text.hasPrefix("remind me to ")
-        || text.hasPrefix("remind me ")
-        || text.hasPrefix("create a reminder")
-        || text.contains(" set a reminder ")
+        let reminderPhrases = [
+            "remind me to",
+            "remind me",
+            "create a reminder",
+            "set a reminder"
+        ]
+        return matchesAny(text, reminderPhrases)
     }
 
     private static func isExplicitRAGIndexIntent(_ text: String) -> Bool {

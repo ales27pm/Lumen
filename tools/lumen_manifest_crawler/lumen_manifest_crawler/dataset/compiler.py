@@ -792,6 +792,24 @@ def _build_dpo_records(role_records: dict[str, list[dict[str, Any]]], config: Da
 
 
 def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetCompilerConfig) -> list[dict[str, Any]]:
+    def _sample_argument_value(arg_type: str, arg_name: str) -> Any:
+        normalized = arg_type.strip().lower()
+        if normalized in {"string", "str"}:
+            return f"sample_{arg_name}"
+        if normalized in {"number", "float", "double"}:
+            return 1.0
+        if normalized in {"integer", "int"}:
+            return 1
+        if normalized in {"boolean", "bool"}:
+            return True
+        if normalized == "array":
+            return []
+        if normalized in {"object", "dict", "map"}:
+            return {}
+        if normalized in {"null", "none"}:
+            return None
+        return f"sample_{arg_name}"
+
     records: list[dict[str, Any]] = []
     for tool in manifest.tools:
         payload = {
@@ -802,6 +820,7 @@ def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetC
             "permissionKey": tool.permissionKey,
             "arguments": [arg.model_dump() for arg in tool.arguments],
         }
+        required_args = [arg.name for arg in tool.arguments if arg.required]
         record_id = _stable_id(payload)
         records.append({
             "id": f"schema-{record_id[:16]}",
@@ -813,8 +832,39 @@ def _build_tool_schema_records(manifest: AgentBehaviorManifest, config: DatasetC
                 {"role": "user", "content": f"What is the exact manifest schema for `{tool.id}`?"},
                 {"role": "assistant", "content": _content_to_string(payload)},
             ],
-            "metadata": {"generatedAt": config.generated_at, "source": tool.source or "ToolRegistry"},
+            "metadata": {
+                "generatedAt": config.generated_at,
+                "source": tool.source or "ToolRegistry",
+                "requiredArguments": required_args,
+            },
         })
+        if required_args:
+            required_payload = {
+                "tool": tool.id,
+                "arguments": {
+                    arg.name: _sample_argument_value(arg.type, arg.name)
+                    for arg in tool.arguments
+                    if arg.required
+                },
+            }
+            required_record_id = _stable_id({"tool": tool.id, "required": required_args})
+            records.append({
+                "id": f"schema-required-{required_record_id[:16]}",
+                "schemaVersion": DATASET_SCHEMA_VERSION,
+                "split": TRAIN_SPLIT,
+                "toolID": tool.id,
+                "messages": [
+                    {"role": "system", "content": "Return manifest-valid executor JSON and include every required argument."},
+                    {"role": "user", "content": f"For `{tool.id}`, produce a sample call that includes all required arguments and no unmanifested keys."},
+                    {"role": "assistant", "content": _content_to_string(required_payload)},
+                ],
+                "metadata": {
+                    "generatedAt": config.generated_at,
+                    "source": tool.source or "ToolRegistry",
+                    "requiredArguments": required_args,
+                    "scenarioKind": "required_argument_coverage",
+                },
+            })
     return records
 
 

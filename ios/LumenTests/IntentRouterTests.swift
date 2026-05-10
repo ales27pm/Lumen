@@ -137,4 +137,19 @@ extension IntentRouterTests {
         #expect(action?.tool == "contacts.search")
         #expect(action?.args["query"]?.stringValue == "Alex")
     }
+
+    @Test func reminderPhrasesBeatEmbeddedCallTextMessageAndEmailVerbs() async throws {
+        let prompts = [
+            "Remind me to call Alex tomorrow",
+            "Remind me to text Alex tomorrow",
+            "Remind me to email Sarah next week",
+            "Create a reminder to call the supplier"
+        ]
+
+        for prompt in prompts {
+            let decision = IntentRouter.classify(prompt)
+            #expect(decision.intent == .reminder)
+            #expect(decision.allowedToolIDs == ["reminders.create", "reminders.list"])
+        }
+    }
 }

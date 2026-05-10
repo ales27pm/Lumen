@@ -96,6 +96,10 @@ struct IntentClassifierPolicyTests {
         let cases: [(String, UserIntent)] = [
             ("Draft a quick email update to Taylor about the delay and ask one question.", .emailDraft),
             ("Place a call to Alex from contacts.", .phoneCall),
+            ("Remind me to call Alex tomorrow.", .reminder),
+            ("Remind me to text Alex tomorrow.", .reminder),
+            ("Remind me to email Sarah next week.", .reminder),
+            ("Create a reminder to call the supplier.", .reminder),
             ("Open the camera and prepare to take a photo.", .camera),
             ("Show whether I was walking or driving recently.", .motion),
             ("Read this web URL: https://example.com.", .webSearch),

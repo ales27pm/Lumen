@@ -316,6 +316,10 @@ nonisolated enum IntentRouter {
     private static func priorityOverride(forNormalizedText text: String) -> IntentRoutingDecision? {
         guard !text.isEmpty else { return nil }
 
+        if isExplicitReminderIntent(text) {
+            return IntentRoutingDecision(intent: .reminder, allowedToolIDs: reminderToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
         if isConcreteFileReadIntent(text) {
             return IntentRoutingDecision(intent: .files, allowedToolIDs: filesToolIDs, requiresClarification: false, clarificationPrompt: nil)
         }
@@ -400,6 +404,16 @@ nonisolated enum IntentRouter {
             "save this note:", "save this fact:", "remember this:", "remember that:",
             "keep this in mind:", "save this note", "save this fact"
         ])
+    }
+
+    private static func isExplicitReminderIntent(_ text: String) -> Bool {
+        let reminderPhrases = [
+            "remind me to",
+            "remind me",
+            "create a reminder",
+            "set a reminder"
+        ]
+        return matchesAny(text, reminderPhrases)
     }
 
     private static func isExplicitRAGIndexIntent(_ text: String) -> Bool {

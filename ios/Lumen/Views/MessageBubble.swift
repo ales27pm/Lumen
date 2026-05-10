@@ -286,8 +286,9 @@ struct ToolCallCard: View {
             }
 
             if expanded {
-                if !message.content.isEmpty {
-                    Text(message.content)
+                let visibleToolContent = ToolArgumentRedactor.redactDisplayContent(message.content)
+                if !visibleToolContent.isEmpty {
+                    Text(visibleToolContent)
                         .font(.caption.monospaced())
                         .foregroundStyle(Theme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -341,12 +342,13 @@ struct ToolCallCard: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let toolID = message.toolName ?? ""
         var args = parseArgs(message.content)
-        if let pendingIDRaw = args["pendingActionID"],
+        if let pendingIDRaw = args["pendingActionID"] ?? args["pending_action_id"],
            let pendingID = UUID(uuidString: pendingIDRaw),
            let pending = ToolApprovalQueue.shared.consume(pendingID) {
             args = pending.arguments.stringCoerced
         }
         args.removeValue(forKey: "pendingActionID")
+        args.removeValue(forKey: "pending_action_id")
         let routing = IntentRouter.classify(inferredUserPrompt())
         guard IntentRouter.isToolAllowed(toolID, for: routing) else {
             message.toolStatus = ToolStatus.denied.rawValue
@@ -362,8 +364,10 @@ struct ToolCallCard: View {
                 arguments: args,
                 approval: .userApproved
             )
-            message.toolStatus = ToolStatus.completed.rawValue
-            message.toolResult = FinalIntentValidator.validate(result, routing: routing, fallback: nil)
+            let validated = FinalIntentValidator.validate(result, routing: routing, fallback: nil)
+            let presentation = ToolExecutionPresentation.presentation(for: toolID, rawResult: validated)
+            message.toolStatus = presentation.status.rawValue
+            message.toolResult = presentation.message
             try? modelContext.save()
         }
     }

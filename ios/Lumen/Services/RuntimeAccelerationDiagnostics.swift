@@ -13,6 +13,11 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
     let requestedKQVOffload: Bool?
     let actualBackend: String?
     let actualOffloadedLayers: Int?
+    let actualTotalLayers: Int?
+    let metalDeviceUsed: String?
+    let actualKQVOffload: Bool?
+    let promptEvalTokensPerSecond: Double?
+    let decodeTokensPerSecond: Double?
     let actualGpuMemoryMB: Double?
     let actualGpuUtilizationPercent: Double?
     let aneAvailable: Bool?
@@ -21,7 +26,19 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
     let verificationLevel: String
     let notes: [String]
 
-    static func forCurrentRuntime(requestedBackend: String, requestedGpuLayers: Int?, requestedKQVOffload: Bool?, actualBackend: String? = nil, notes extra: [String] = []) -> RuntimeAccelerationDiagnostics {
+    static func forCurrentRuntime(
+        requestedBackend: String,
+        requestedGpuLayers: Int?,
+        requestedKQVOffload: Bool?,
+        actualBackend: String? = nil,
+        actualOffloadedLayers: Int? = nil,
+        actualTotalLayers: Int? = nil,
+        metalDeviceUsed: String? = nil,
+        actualKQVOffload: Bool? = nil,
+        promptEvalTokensPerSecond: Double? = nil,
+        decodeTokensPerSecond: Double? = nil,
+        notes extra: [String] = []
+    ) -> RuntimeAccelerationDiagnostics {
         let device = MTLCreateSystemDefaultDevice()
         let deviceAvailable = device != nil
         #if os(iOS)
@@ -33,16 +50,16 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
         #endif
         var notes = extra
         notes.append("ANE is not used by the GGUF/llama.cpp runtime. ANE requires a Core ML / ANE-compatible runtime path.")
-        if actualBackend == nil && requestedBackend == "metal" {
-            notes.append("llama.cpp backend log callback unavailable from current Swift wrapper; actual Metal offload cannot be confirmed in-app.")
+        if actualBackend == nil && actualOffloadedLayers == nil && requestedBackend == "metal" {
+            notes.append("llama.cpp Metal offload has not been confirmed by runtime logs yet.")
         }
         let verification: String
         if requestedBackend == "cpu" {
             verification = "cpu_only"
-        } else if requestedBackend == "metal" && actualBackend == nil {
-            verification = "requested_unverified"
-        } else if actualBackend != nil {
+        } else if actualBackend != nil || actualOffloadedLayers != nil || actualKQVOffload != nil {
             verification = "confirmed"
+        } else if requestedBackend == "metal" {
+            verification = "requested_unverified"
         } else {
             verification = "unavailable"
         }
@@ -57,7 +74,12 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
             requestedGpuLayers: requestedGpuLayers,
             requestedKQVOffload: requestedKQVOffload,
             actualBackend: actualBackend,
-            actualOffloadedLayers: nil,
+            actualOffloadedLayers: actualOffloadedLayers,
+            actualTotalLayers: actualTotalLayers,
+            metalDeviceUsed: metalDeviceUsed,
+            actualKQVOffload: actualKQVOffload,
+            promptEvalTokensPerSecond: promptEvalTokensPerSecond,
+            decodeTokensPerSecond: decodeTokensPerSecond,
             actualGpuMemoryMB: nil,
             actualGpuUtilizationPercent: nil,
             aneAvailable: nil,
@@ -65,6 +87,22 @@ nonisolated struct RuntimeAccelerationDiagnostics: Codable, Sendable, Hashable {
             aneUtilizationPercent: nil,
             verificationLevel: verification,
             notes: notes
+        )
+    }
+
+    func withPerformance(promptEvalTokensPerSecond: Double?, decodeTokensPerSecond: Double?) -> RuntimeAccelerationDiagnostics {
+        RuntimeAccelerationDiagnostics.forCurrentRuntime(
+            requestedBackend: backendRequested,
+            requestedGpuLayers: requestedGpuLayers,
+            requestedKQVOffload: requestedKQVOffload,
+            actualBackend: actualBackend,
+            actualOffloadedLayers: actualOffloadedLayers,
+            actualTotalLayers: actualTotalLayers,
+            metalDeviceUsed: metalDeviceUsed,
+            actualKQVOffload: actualKQVOffload,
+            promptEvalTokensPerSecond: promptEvalTokensPerSecond,
+            decodeTokensPerSecond: decodeTokensPerSecond,
+            notes: notes.filter { !$0.hasPrefix("ANE is not used") && !$0.hasPrefix("llama.cpp Metal offload") }
         )
     }
 }

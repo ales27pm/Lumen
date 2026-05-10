@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct E2ETestRunnerHygieneTests {
-    @Test func rawThinkLeakFailsEvenWhenSanitizedFinalIsClean() {
+    @Test func recoveredRawThinkLeakPassesWhenSanitizedFinalIsClean() {
         let scenario = E2ETestScenario(id: "s", title: "t", kind: .chat, prompt: "p", expectedIntent: .chat, forbiddenToolIDs: [], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)
         let failures = E2ETestRunner.hygieneFailures(
             lowerRawFinal: "<think>secret</think> clean",
@@ -13,16 +13,16 @@ struct E2ETestRunnerHygieneTests {
             scenario: scenario,
             observations: ""
         )
-        #expect(failures.contains("Hidden reasoning leaked into final output"))
+        #expect(failures.isEmpty)
     }
 
     @Test func postRewriteThinkLeakFails() {
         let scenario = E2ETestScenario(id: "s", title: "t", kind: .chat, prompt: "p", expectedIntent: .chat, forbiddenToolIDs: [], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)
         let failures = E2ETestRunner.hygieneFailures(lowerRawFinal: "clean", lowerFinal: "<think>x</think>", removedArtifacts: [], scenario: scenario, observations: "")
-        #expect(failures.contains("Hidden reasoning leaked into final output"))
+        #expect(failures.contains("Sanitized output still contains hidden reasoning"))
     }
 
-    @Test func webPayloadFailuresAreDistinctAndDeduped() {
+    @Test func recoveredWebPayloadPassesWhenSanitizedFinalIsClean() {
         let scenario = E2ETestScenario(id: "s", title: "t", kind: .chat, prompt: "p", expectedIntent: .chat, forbiddenToolIDs: [], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)
         let failures = E2ETestRunner.hygieneFailures(
             lowerRawFinal: "<lumen_web_payload>{\"kind\":\"searchresults\",\"results\":[{\"mediakind\":\"page\"}]}</lumen_web_payload>",
@@ -31,9 +31,20 @@ struct E2ETestRunnerHygieneTests {
             scenario: scenario,
             observations: ""
         )
-        #expect(failures.contains("Raw lumen_web_payload marker leaked into final output"))
-        #expect(failures.contains("Raw search-results JSON leaked into final output"))
-        #expect(failures.count == 2)
+        #expect(failures.isEmpty)
+    }
+
+    @Test func visibleWebPayloadStillFails() {
+        let scenario = E2ETestScenario(id: "s", title: "t", kind: .chat, prompt: "p", expectedIntent: .chat, forbiddenToolIDs: [], requiredTextHints: [], forbiddenTextHints: [], requiresAgentRun: false)
+        let failures = E2ETestRunner.hygieneFailures(
+            lowerRawFinal: "clean",
+            lowerFinal: "<lumen_web_payload>{\"kind\":\"searchresults\",\"results\":[{\"mediakind\":\"page\"}]}</lumen_web_payload>",
+            removedArtifacts: [],
+            scenario: scenario,
+            observations: ""
+        )
+        #expect(failures.contains("Sanitized output still contains lumen_web_payload markers"))
+        #expect(failures.contains("Sanitized output still contains search-results JSON"))
     }
 
     @Test func weatherUmbrellaOverreachStillFailsWithoutPrecipSignals() {

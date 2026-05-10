@@ -5,10 +5,9 @@ nonisolated enum ToolObservationFinalizer {
         let canonicalTool = ToolRouteGuard.canonicalToolID(toolID)
         let cleanObservation = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(observation)
         guard !cleanObservation.isEmpty else { return nil }
-        guard !looksUnsafe(cleanObservation) else { return nil }
+        guard !looksUnsafe(WebRichContentPayload.removingMarkers(from: cleanObservation)) else { return nil }
 
         let lowerPrompt = originalPrompt.lowercased()
-        let lowerObservation = cleanObservation.lowercased()
         let payloadMarkers = WebRichContentPayload.decodeAll(from: cleanObservation).map { $0.encodedMarker() }.joined()
         let plainObservation = WebRichContentPayload.removingMarkers(from: cleanObservation).trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -22,7 +21,7 @@ nonisolated enum ToolObservationFinalizer {
         case "web.search":
             guard intent == .webSearch else { return nil }
             if asksForDeepSynthesis(lowerPrompt) { return nil }
-            return "Web search results:\n\(plainObservation)\(payloadMarkers)"
+            return "Web search results:\n\(compactWebResults(from: cleanObservation, fallback: plainObservation))\(payloadMarkers)"
         case "web.fetch":
             guard intent == .webSearch else { return nil }
             if asksForDeepSynthesis(lowerPrompt) { return nil }
@@ -63,5 +62,23 @@ nonisolated enum ToolObservationFinalizer {
     private static func looksUnsafe(_ text: String) -> Bool {
         let lower = text.lowercased()
         return lower.contains("<think") || lower.contains("{\"kind\"") || lower.contains("\"mediakind\"")
+    }
+
+    private static func compactWebResults(from text: String, fallback: String) -> String {
+        let payloads = WebRichContentPayload.decodeAll(from: text)
+        if let payload = payloads.first(where: { $0.kind == .searchResults }), !payload.results.isEmpty {
+            return payload.results.prefix(5).enumerated().map { index, result in
+                var lines = ["\(index + 1). \(result.title)"]
+                if let url = result.url, !url.isEmpty { lines.append(url) }
+                if let snippet = result.snippet, !snippet.isEmpty { lines.append(snippet) }
+                return lines.joined(separator: "\n")
+            }.joined(separator: "\n\n")
+        }
+        return fallback
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(12)
+            .joined(separator: "\n")
     }
 }

@@ -11,12 +11,12 @@ final class SlotAgentService {
     }
 
     private enum StageTokenBudget {
-        static let directLow = 200
-        static let directHigh = 320
-        static let finalLow = 260
-        static let finalHigh = 420
+        static let directLow = 120
+        static let directHigh = 160
+        static let finalLow = 140
+        static let finalHigh = 220
         static let retryBump = 80
-        static let retryCeiling = 640
+        static let retryCeiling = 320
     }
 
     private enum RetryHeuristic {
@@ -81,6 +81,11 @@ final class SlotAgentService {
                 }
 
                 if !requiresTool {
+                    if let fastFinal = deterministicDirectFinalIfSafe(req: req, resolution: resolution, routing: routing) {
+                        recordTrace(slot: .mouth, stage: "deterministic-direct-final", stepIndex: -1, error: "skippedMouthDirect=true;intent=\(routing.intent.rawValue)", raw: fastFinal, prompt: executionPrompt)
+                        yieldFinal(fastFinal, steps: steps, continuation: continuation)
+                        return
+                    }
                     let final = await generateDirectFinal(req: req, resolution: resolution, routing: routing)
                     yieldFinal(final, steps: steps, continuation: continuation)
                     return
@@ -482,6 +487,10 @@ final class SlotAgentService {
 
 
     private func generateFinal(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) async -> String {
+        if let fastFinal = deterministicFinalIfSafe(req: req, resolution: resolution, routing: routing, observations: observations, draft: draft) {
+            recordTrace(slot: .mouth, stage: "deterministic-tool-final", stepIndex: -1, error: "skippedMouthFinal=true;intent=\(routing.intent.rawValue)", raw: fastFinal, prompt: resolution.rewrittenPrompt)
+            return fastFinal
+        }
         let prompt = makeMouthPrompt(req: req, resolution: resolution, observations: observations, draft: draft)
         let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: .mouthFinal)
         let text = await generateText(
@@ -533,19 +542,9 @@ final class SlotAgentService {
         """
         }()
         let prompt = """
-        You are Lumen. Answer naturally and helpfully. Do not output JSON.
-        \(Self.mouthPromptHygieneRule)
-
-        Recent safe conversation context for pronoun/reference resolution only:
-        \(contextBlock)
-
-        Original user request:
-        \(resolution.originalPrompt)
-
-        Interpreted request to answer:
-        \(resolution.rewrittenPrompt)
-
-        Additional grounding rules:
+        You are Lumen. Answer naturally in 1-3 short paragraphs. Output visible text only; no JSON, debug text, or <think>.
+        Context for references: \(contextBlock.isEmpty ? "none" : contextBlock)
+        User: \(compactPromptText(resolution.rewrittenPrompt, maxChars: 520))
         \(ragGroundingRules)
         """
         let adaptiveCap = Self.adaptiveTokenCap(for: routing.intent, stage: .mouthDirect)
@@ -845,9 +844,9 @@ final class SlotAgentService {
 
 
     private enum PromptCharBudget {
-        static let context = 420
-        static let observations = 1400
-        static let draft = 500
+        static let context = 220
+        static let observations = 900
+        static let draft = 360
     }
 
     private func compactPromptText(_ text: String, maxChars: Int) -> String {
@@ -877,6 +876,101 @@ final class SlotAgentService {
         return selected.joined(separator: "\n")
     }
 
+    private func deterministicDirectFinalIfSafe(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision) -> String? {
+        guard routing.intent == .chat || routing.intent == .unknown else { return nil }
+        guard req.attachments.isEmpty, req.relevantMemories.isEmpty else { return nil }
+        let text = resolution.rewrittenPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = text.lowercased()
+        let words = lower.split(whereSeparator: \.isWhitespace)
+
+        if ["hi", "hello", "hey", "yo", "sup", "bonjour", "salut", "allo"].contains(lower) {
+            return "Hi. What would you like to work on?"
+        }
+        if ["thanks", "thank you", "thx", "appreciate it"].contains(lower) {
+            return "You’re welcome."
+        }
+        if ["ok", "okay", "got it", "sounds good"].contains(lower) {
+            return "Got it."
+        }
+        if lower == "how are you" || lower == "hi how are you" || lower == "hi. how are you" || lower == "hey how are you" {
+            return "I’m here and ready to help."
+        }
+        if lower == "what can you do" || lower == "what can you help with" {
+            return "I can answer questions, draft text, help with planning, and use enabled tools when you ask for things like weather, web, files, memory, or app actions."
+        }
+
+        guard words.count <= 4 else { return nil }
+        if lower.hasSuffix("?") {
+            return nil
+        }
+        return nil
+    }
+
+    private func deterministicFinalIfSafe(req: AgentRequest, resolution: ReferenceResolution, routing: IntentRoutingDecision, observations: [String], draft: String?) -> String? {
+        if routing.intent == .emailDraft {
+            let lower = resolution.rewrittenPrompt.lowercased()
+            let missingRecipient = !lower.contains(" to ") && !lower.contains("@") && !lower.contains("recipient")
+            let missingBody = !lower.contains(" saying ") && !lower.contains(" body ") && !lower.contains(" that says ") && !lower.contains(" about ")
+            if missingRecipient && missingBody { return "Who should I send it to, and what should it say?" }
+            if missingRecipient { return "Who should I send it to?" }
+            if missingBody { return "What should the email say?" }
+        }
+
+        guard observations.count == 1 else { return nil }
+        let observation = observations[0]
+        let clean = ModelOutputSanitizer.stripHiddenBlocksPreservingPayloadMarkers(observation)
+        guard !clean.isEmpty else { return nil }
+        let payloadMarkers = WebRichContentPayload.decodeAll(from: clean).map { $0.encodedMarker() }.joined()
+        let plain = WebRichContentPayload.removingMarkers(from: clean).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !plain.isEmpty else { return nil }
+
+        switch routing.intent {
+        case .weather:
+            return "Weather update: \(compactPromptText(plain, maxChars: 520))\(payloadMarkers)"
+        case .webSearch:
+            guard plain.lowercased().contains("search results") || !WebRichContentPayload.decodeAll(from: clean).isEmpty else { return nil }
+            return "Web search results:\n\(webResultSummary(from: clean, fallback: plain, maxResults: 5))\(payloadMarkers)"
+        default:
+            return nil
+        }
+    }
+
+    private func compactObservationForMouth(_ text: String) -> String {
+        let payloads = WebRichContentPayload.decodeAll(from: text)
+        if let search = payloads.first(where: { $0.kind == .searchResults }), !search.results.isEmpty {
+            return webResultSummary(from: text, fallback: WebRichContentPayload.removingMarkers(from: text), maxResults: 3)
+        }
+        if let fetched = payloads.first(where: { $0.kind == .fetchedPage }), let page = fetched.page {
+            var lines: [String] = []
+            if let title = page.title, !title.isEmpty { lines.append("Title: \(title)") }
+            lines.append("URL: \(page.url)")
+            if let description = page.description, !description.isEmpty {
+                lines.append("Description: \(compactPromptText(description, maxChars: 220))")
+            }
+            lines.append("Excerpt: \(compactPromptText(page.excerpt, maxChars: 520))")
+            return lines.joined(separator: "\n")
+        }
+        return compactPromptText(WebRichContentPayload.removingMarkers(from: text), maxChars: PromptCharBudget.observations)
+    }
+
+    private func webResultSummary(from text: String, fallback: String, maxResults: Int) -> String {
+        let payloads = WebRichContentPayload.decodeAll(from: text)
+        if let payload = payloads.first(where: { $0.kind == .searchResults }), !payload.results.isEmpty {
+            return payload.results.prefix(maxResults).enumerated().map { index, result in
+                var parts = ["\(index + 1). \(compactPromptText(result.title, maxChars: 140))"]
+                if let url = result.url, !url.isEmpty { parts.append(url) }
+                if let snippet = result.snippet, !snippet.isEmpty { parts.append(compactPromptText(snippet, maxChars: 220)) }
+                return parts.joined(separator: "\n")
+            }.joined(separator: "\n\n")
+        }
+
+        let lines = fallback
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return lines.prefix(maxResults * 3).joined(separator: "\n")
+    }
+
     private func observationPriority(_ text: String) -> Int {
         let lower = text.lowercased()
         if lower.contains("error") || lower.contains("denied") || lower.contains("unavailable") { return 4 }
@@ -886,8 +980,8 @@ final class SlotAgentService {
     }
 
     private func makeMouthPrompt(req: AgentRequest, resolution: ReferenceResolution, observations: [String], draft: String?) -> String {
-        let observationRaw = prioritizedObservationBlock(from: observations, maxItems: 4)
-        let observationBlock = compactPromptText(observationRaw, maxChars: PromptCharBudget.observations)
+        let observationRaw = prioritizedObservationBlock(from: observations, maxItems: 3)
+        let observationBlock = compactPromptText(compactObservationForMouth(observationRaw), maxChars: PromptCharBudget.observations)
         let draftBlockRaw = draft?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? draft! : "none"
         let draftBlock = compactPromptText(WebRichContentPayload.removingMarkers(from: draftBlockRaw), maxChars: PromptCharBudget.draft)
         let contextBlock = compactPromptText(shortTermContextBlock(req.history), maxChars: PromptCharBudget.context)
@@ -902,33 +996,13 @@ final class SlotAgentService {
         """
         }()
         return """
-        Write the final user-facing answer for the current user request only. Do not output JSON.
-        \(Self.mouthPromptHygieneRule)
-
-        Recent safe conversation context for pronoun/reference resolution only:
-        \(contextBlock)
-
-        Original user request:
-        \(resolution.originalPrompt)
-
-        Rewritten execution request (source of truth):
-        \(resolution.rewrittenPrompt)
-
-        Reference resolution diagnostics:
-        confidence=\(String(format: "%.2f", resolution.confidence)); map=\(resolution.resolvedReferences); notes=\(resolution.diagnostics)
-
-        Current request tool observations:
+        Finalize Lumen's answer. Output visible text only; no JSON, debug text, tool payloads, or <think>.
+        User request: \(compactPromptText(resolution.rewrittenPrompt, maxChars: 520))
+        Context for references: \(contextBlock.isEmpty ? "none" : contextBlock)
+        Evidence from this turn:
         \(observationBlock)
-
-        Draft final from the current request:
-        \(draftBlock)
-
-        Rules:
-        - Current request observations are the source of truth.
-        - Use recent context only to resolve references like her/him/it/that.
-        - Never reuse a result from a previous user request as a current tool result.
-        - Do not mention calendar, events, reminders, weather, email, or web search unless it belongs to this current request.
-        - Keep it concise, accurate, and do not claim actions that did not happen.
+        Draft: \(draftBlock)
+        Rules: ground the answer in Evidence, do not invent tool results, keep most answers under 120 words.
         \(ragGroundingRules)
         """
     }

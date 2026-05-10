@@ -1,4 +1,5 @@
 import Foundation
+import Metal
 import OSLog
 import SwiftLlama
 import llama
@@ -116,6 +117,116 @@ private struct ChatRuntime {
     var batchSize: UInt32
 }
 
+private final class LlamaRuntimeLogCapture: @unchecked Sendable {
+    nonisolated(unsafe) static let shared = LlamaRuntimeLogCapture()
+    nonisolated(unsafe) private static let callback: ggml_log_callback = { _, text, _ in
+        guard let text else { return }
+        let line = String(cString: text).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        LlamaRuntimeLogCapture.shared.record(line)
+    }
+
+    nonisolated(unsafe) private let lock = NSLock()
+    nonisolated(unsafe) private let logger = Logger(subsystem: "com.lumen.runtime", category: "llama.cpp")
+    nonisolated(unsafe) private var installed = false
+    nonisolated(unsafe) private var lines: [String] = []
+
+    nonisolated func installIfNeeded() {
+        lock.lock()
+        let shouldInstall = !installed
+        installed = true
+        lock.unlock()
+        guard shouldInstall else { return }
+        llama_log_set(Self.callback, nil)
+    }
+
+    nonisolated func markLoadBoundary() {
+        lock.lock()
+        lines.removeAll(keepingCapacity: true)
+        lock.unlock()
+    }
+
+    nonisolated func record(_ line: String) {
+        let lower = line.lowercased()
+        let interesting = lower.contains("metal")
+            || lower.contains("gpu")
+            || lower.contains("offload")
+            || lower.contains("kv")
+            || lower.contains("prompt eval")
+            || lower.contains("eval time")
+            || lower.contains("tokens per second")
+        guard interesting else { return }
+
+        lock.lock()
+        lines.append(line)
+        if lines.count > 80 {
+            lines.removeFirst(lines.count - 80)
+        }
+        lock.unlock()
+
+        logger.info("event=llama.cpp.log \(line, privacy: .public)")
+    }
+
+    nonisolated func snapshot() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return lines
+    }
+}
+
+private struct LlamaOffloadSnapshot {
+    let actualBackend: String?
+    let offloadedLayers: Int?
+    let totalLayers: Int?
+    let kqvOffloaded: Bool?
+    let notes: [String]
+
+    nonisolated static func fromRuntimeLogs(totalModelLayers: Int?, requestedKQVOffload: Bool) -> LlamaOffloadSnapshot {
+        let lines = LlamaRuntimeLogCapture.shared.snapshot()
+        let lowerLines = lines.map { $0.lowercased() }
+        let backend = lowerLines.contains { $0.contains("metal") || $0.contains("gpu") } ? "metal" : nil
+        var offloaded: Int?
+        var total: Int? = totalModelLayers
+
+        for line in lowerLines {
+            if let parsed = parseOffloadedLayerCount(from: line) {
+                offloaded = parsed.offloaded
+                total = parsed.total ?? total
+            }
+        }
+
+        let kqv = lowerLines.contains { line in
+            (line.contains("kv") || line.contains("kqv")) && line.contains("offload")
+        } ? true : (requestedKQVOffload && backend != nil ? true : nil)
+
+        let selectedNotes = lines
+            .filter { line in
+                let lower = line.lowercased()
+                return lower.contains("metal") || lower.contains("offload") || lower.contains("kv")
+            }
+            .suffix(8)
+        return LlamaOffloadSnapshot(actualBackend: backend, offloadedLayers: offloaded, totalLayers: total, kqvOffloaded: kqv, notes: Array(selectedNotes))
+    }
+
+    nonisolated private static func parseOffloadedLayerCount(from line: String) -> (offloaded: Int, total: Int?)? {
+        let patterns = [
+            #"offloaded\s+(\d+)\s*/\s*(\d+)\s+layers"#,
+            #"offloading\s+(\d+)\s+repeating layers"#,
+            #"offloading\s+(\d+)\s+layers"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let ns = line as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            guard let match = regex.firstMatch(in: line, range: range), match.numberOfRanges >= 2 else { continue }
+            let offloaded = Int(ns.substring(with: match.range(at: 1)))
+            let total = match.numberOfRanges >= 3 && match.range(at: 2).location != NSNotFound ? Int(ns.substring(with: match.range(at: 2))) : nil
+            if let offloaded { return (offloaded, total) }
+        }
+        return nil
+    }
+}
+
 private actor AdapterChatRuntime {
     private let model: LlamaModel
     private let context: LlamaContext
@@ -126,8 +237,11 @@ private actor AdapterChatRuntime {
     private var processedTokens: [llama_token] = []
     private var currentTokenPosition: Int32 = 0
     private var loadedAdapters: [LumenModelSlot: LlamaLoraAdapter] = [:]
+    private let accelerationDiagnostics: RuntimeAccelerationDiagnostics
 
     init(path: String, contextSize: Int, batchSize: UInt32) throws {
+        LlamaRuntimeLogCapture.shared.installIfNeeded()
+        LlamaRuntimeLogCapture.shared.markLoadBoundary()
         let detectedCores = ProcessInfo.processInfo.processorCount
         let runtimeThreadCount = Int32(max(2, detectedCores - 2))
         var modelParams = llama_model_default_params()
@@ -151,9 +265,23 @@ private actor AdapterChatRuntime {
         self.contextSize = contextSize
         self.batchSize = batchSize
         self.batch = LlamaBatch(initialSize: Int32(batchSize))
+        let layerCount = Int(model.nLayer())
+        let offload = LlamaOffloadSnapshot.fromRuntimeLogs(totalModelLayers: layerCount, requestedKQVOffload: true)
+        self.accelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(
+            requestedBackend: "metal",
+            requestedGpuLayers: 999,
+            requestedKQVOffload: true,
+            actualBackend: offload.actualBackend,
+            actualOffloadedLayers: offload.offloadedLayers,
+            actualTotalLayers: offload.totalLayers,
+            metalDeviceUsed: offload.actualBackend == "metal" ? MTLCreateSystemDefaultDevice()?.name : nil,
+            actualKQVOffload: offload.kqvOffloaded,
+            notes: offload.notes
+        )
     }
 
     func configuredContextSize() -> Int { contextSize }
+    func runtimeAccelerationDiagnostics() -> RuntimeAccelerationDiagnostics { accelerationDiagnostics }
 
     func loadRoleAdapter(slot: LumenModelSlot, path: String) throws {
         loadedAdapters[slot] = try LlamaLoraAdapter(model: model, path: path)
@@ -342,6 +470,12 @@ final actor AppLlamaService {
         )
         do {
             sharedChatRuntime = try AdapterChatRuntime(path: path, contextSize: contextSize, batchSize: batchSize)
+            if let diagnostics = await sharedChatRuntime?.runtimeAccelerationDiagnostics() {
+                lastAccelerationDiagnostics = diagnostics
+                logger.info(
+                    "event=llama.chat.acceleration_verified backend=\(diagnostics.actualBackend ?? "unknown", privacy: .public) metal_device=\(diagnostics.metalDeviceUsed ?? diagnostics.metalDeviceName ?? "unknown", privacy: .public) offloaded_layers=\(diagnostics.actualOffloadedLayers.map(String.init) ?? "unknown", privacy: .public) total_layers=\(diagnostics.actualTotalLayers.map(String.init) ?? "unknown", privacy: .public) kqv_offload=\(diagnostics.actualKQVOffload.map { String($0) } ?? "unknown", privacy: .public) verification=\(diagnostics.verificationLevel, privacy: .public)"
+                )
+            }
             logger.info(
                 "event=llama.chat.runtime_init_success path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public)"
             )
@@ -810,6 +944,16 @@ final actor AppLlamaService {
                     let preFirstTokenMs = firstTokenMs
                     let outputTokenEstimate = max(0, streamedSanitized.split(whereSeparator: \.isWhitespace).count)
                     let tps = decodeMs.flatMap { $0 > 0 ? Double(outputTokenEstimate) / (Double($0) / 1000.0) : nil }
+                    let promptEvalMs = firstTokenMs.map { max(1, $0 - readyMetrics.ensureReadyMs - messageBuildMs) }
+                    let promptEvalTps = promptEvalMs.map { Double(estimatedPromptTokenCount) / (Double($0) / 1000.0) }
+                    let accelerationDiagnostics = readyMetrics.accelerationDiagnostics.withPerformance(
+                        promptEvalTokensPerSecond: promptEvalTps,
+                        decodeTokensPerSecond: tps
+                    )
+                    await self.updateLastAccelerationDiagnostics(accelerationDiagnostics)
+                    logger.info(
+                        "event=llama.chat.generation_perf slot=\(slot.rawValue, privacy: .public) prompt_eval_tps=\(promptEvalTps ?? -1, privacy: .public) decode_tps=\(tps ?? -1, privacy: .public) prompt_tokens_est=\(estimatedPromptTokenCount, privacy: .public) output_words=\(outputTokenEstimate, privacy: .public)"
+                    )
                     await self.recordModelTrace(
                         slot: slot,
                         request: groundedRequest,
@@ -831,7 +975,7 @@ final actor AppLlamaService {
                         maxTokensEffective: groundedRequest.maxTokens,
                         promptCharCount: promptChars,
                         accelerationDiagnostic: readyMetrics.accelerationDiagnostic,
-                        accelerationDiagnostics: readyMetrics.accelerationDiagnostics
+                        accelerationDiagnostics: accelerationDiagnostics
                     )
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
@@ -921,8 +1065,25 @@ final actor AppLlamaService {
         )
         let service: SwiftLlama.LlamaService
         do {
+            LlamaRuntimeLogCapture.shared.installIfNeeded()
+            LlamaRuntimeLogCapture.shared.markLoadBoundary()
             service = SwiftLlama.LlamaService(modelUrl: URL(fileURLWithPath: path), config: preferredConfig)
-            lastAccelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
+            let offload = LlamaOffloadSnapshot.fromRuntimeLogs(totalModelLayers: nil, requestedKQVOffload: true)
+            self.lastAccelerationDiagnostics = RuntimeAccelerationDiagnostics.forCurrentRuntime(
+                requestedBackend: "metal",
+                requestedGpuLayers: 999,
+                requestedKQVOffload: true,
+                actualBackend: offload.actualBackend,
+                actualOffloadedLayers: offload.offloadedLayers,
+                actualTotalLayers: offload.totalLayers,
+                metalDeviceUsed: offload.actualBackend == "metal" ? MTLCreateSystemDefaultDevice()?.name : nil,
+                actualKQVOffload: offload.kqvOffloaded,
+                notes: offload.notes
+            )
+            let diagnostics = self.lastAccelerationDiagnostics
+            logger.info(
+                "event=llama.chat.acceleration_verified backend=\(diagnostics.actualBackend ?? "unknown", privacy: .public) metal_device=\(diagnostics.metalDeviceUsed ?? diagnostics.metalDeviceName ?? "unknown", privacy: .public) offloaded_layers=\(diagnostics.actualOffloadedLayers.map(String.init) ?? "unknown", privacy: .public) total_layers=\(diagnostics.actualTotalLayers.map(String.init) ?? "unknown", privacy: .public) kqv_offload=\(diagnostics.actualKQVOffload.map { String($0) } ?? "unknown", privacy: .public) verification=\(diagnostics.verificationLevel, privacy: .public)"
+            )
         } catch {
             logger.error(
                 "event=llama.chat.runtime_init_failure path=\(path, privacy: .public) context_size=\(contextSize, privacy: .public) batch_size=\(batchSize, privacy: .public) message=\(error.localizedDescription, privacy: .public) fallback=cpu_or_nonoffload"
@@ -949,6 +1110,10 @@ final actor AppLlamaService {
 
     func currentAccelerationDiagnostics() -> RuntimeAccelerationDiagnostics {
         lastAccelerationDiagnostics
+    }
+
+    private func updateLastAccelerationDiagnostics(_ diagnostics: RuntimeAccelerationDiagnostics) {
+        lastAccelerationDiagnostics = diagnostics
     }
 
     private func makeEmbeddingContext(for model: LlamaModel) -> LlamaContext? {

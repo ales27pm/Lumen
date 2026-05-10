@@ -83,4 +83,11 @@ struct IntentClassifierPolicyTests {
         let result = IntentClassifierPolicy.resolve(modelResult: nil, deterministic: fallback)
         #expect(result.intent == .chat)
     }
+
+    @MainActor
+    @Test func priorityOverridesRunBeforeBundledModel() async {
+        let result = await IntentClassifierService.shared.classify("Help me message Jordan with a complete ETA and apology.")
+        #expect(result.intent == .messageDraft)
+        #expect(result.diagnostics == "deterministic_priority_override")
+    }
 }

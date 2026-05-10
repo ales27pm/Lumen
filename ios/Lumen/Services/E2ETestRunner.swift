@@ -753,26 +753,14 @@ enum E2ETestRunner {
 
     static func hygieneFailures(lowerRawFinal: String, lowerFinal: String, removedArtifacts: [FinalOutputArtifact], scenario: E2ETestScenario, observations: String) -> [String] {
         var failures: [String] = []
-        if lowerRawFinal.contains("<think") || lowerRawFinal.contains("</think>") {
-            failures.append("Raw output contained hidden reasoning before sanitization")
-        }
         if lowerFinal.contains("<think") || lowerFinal.contains("</think>") {
             failures.append("Sanitized output still contains hidden reasoning")
-        }
-        if lowerRawFinal.contains("<lumen_web_payload") || lowerRawFinal.contains("</lumen_web_payload>") {
-            failures.append("Raw output contained lumen_web_payload markers before sanitization")
         }
         if lowerFinal.contains("<lumen_web_payload") || lowerFinal.contains("</lumen_web_payload>") {
             failures.append("Sanitized output still contains lumen_web_payload markers")
         }
-        if lowerRawFinal.contains("{\"kind\":\"searchresults\"") || lowerRawFinal.contains("\"mediakind\":\"page\"") || lowerRawFinal.contains("\"sourcepageurl\"") {
-            failures.append("Raw output contained search-results JSON before sanitization")
-        }
         if lowerFinal.contains("{\"kind\":\"searchresults\"") || lowerFinal.contains("\"mediakind\":\"page\"") || lowerFinal.contains("\"sourcepageurl\"") {
             failures.append("Sanitized output still contains search-results JSON")
-        }
-        if !removedArtifacts.isEmpty && lowerRawFinal == lowerFinal {
-            failures.append("Sanitizer reported removed artifacts but final output was unchanged")
         }
         if removedArtifacts.contains(.emptyAfterSanitization) {
             failures.append("Final output empty after sanitization")

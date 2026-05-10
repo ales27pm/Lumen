@@ -147,8 +147,8 @@ final class SlotModelRuntimeCoordinator {
                 adapterActivationMs: activationMs,
                 runtimePath: "sharedAdapter",
                 activeAdapterSlot: slot.rawValue,
-                accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs.",
-                accelerationDiagnostics: RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
+                accelerationDiagnostic: "See accelerationDiagnostics for parsed llama.cpp Metal/offload evidence.",
+                accelerationDiagnostics: await AppLlamaService.shared.currentAccelerationDiagnostics()
             )
         }
 
@@ -159,8 +159,8 @@ final class SlotModelRuntimeCoordinator {
             adapterActivationMs: 0,
             runtimePath: "legacySlot",
             activeAdapterSlot: nil,
-            accelerationDiagnostic: "GPU/offload introspection unavailable in wrapper; see runtime init logs.",
-            accelerationDiagnostics: RuntimeAccelerationDiagnostics.forCurrentRuntime(requestedBackend: "metal", requestedGpuLayers: 999, requestedKQVOffload: true)
+            accelerationDiagnostic: "See accelerationDiagnostics for parsed SwiftLlama/llama.cpp Metal/offload evidence.",
+            accelerationDiagnostics: await AppLlamaService.shared.currentAccelerationDiagnostics()
         )
     }
 

@@ -81,6 +81,10 @@ nonisolated enum IntentRouter {
             return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
         }
 
+        if let override = priorityOverride(forNormalizedText: text) {
+            return override
+        }
+
         if isPureConversationalGreeting(text) {
             return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
         }
@@ -199,6 +203,10 @@ nonisolated enum IntentRouter {
         return IntentRoutingDecision(intent: .chat, allowedToolIDs: [], requiresClarification: false, clarificationPrompt: nil)
     }
 
+    static func priorityOverride(_ userMessage: String) -> IntentRoutingDecision? {
+        priorityOverride(forNormalizedText: normalized(userMessage))
+    }
+
     static func allowedToolIDs(for intent: UserIntent) -> Set<String> {
         switch intent {
         case .weather: return weatherToolIDs
@@ -303,6 +311,50 @@ nonisolated enum IntentRouter {
         return directCallPatterns.contains { pattern in
             text.range(of: pattern, options: .regularExpression) != nil
         }
+    }
+
+    private static func priorityOverride(forNormalizedText text: String) -> IntentRoutingDecision? {
+        guard !text.isEmpty else { return nil }
+
+        if matchesAny(text, ["draft a text", "message jordan", "text message to"]) {
+            let recipient = inferredRecipient(text)
+            let content = inferredContent(text)
+            let clarification: String?
+            if !recipient && !content { clarification = "Who should I message, and what should it say?" }
+            else if !recipient { clarification = "Who should I message?" }
+            else if !content { clarification = "What should the message say?" }
+            else { clarification = nil }
+            return IntentRoutingDecision(intent: .messageDraft, allowedToolIDs: messageToolIDs, requiresClarification: clarification != nil, clarificationPrompt: clarification)
+        }
+
+        if matchesAny(text, ["draft an email", "email:", "subject release prep"]) {
+            let recipient = inferredRecipient(text)
+            let content = inferredContent(text)
+            let clarification: String?
+            if !recipient && !content { clarification = "Who should I send it to, and what should it say?" }
+            else if !recipient { clarification = "Who should I send it to?" }
+            else if !content { clarification = "What should the email say?" }
+            else { clarification = nil }
+            return IntentRoutingDecision(intent: .emailDraft, allowedToolIDs: emailToolIDs, requiresClarification: clarification != nil, clarificationPrompt: clarification)
+        }
+
+        if matchesAny(text, ["take a photo", "open camera", "capture"]) {
+            return IntentRoutingDecision(intent: .camera, allowedToolIDs: cameraToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if matchesAny(text, ["read this url", "fetch and summarize"]) {
+            return IntentRoutingDecision(intent: .webSearch, allowedToolIDs: webSearchToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if matchesAny(text, ["reindex files", "refresh file retrieval index", "reindex photos", "refresh photo retrieval index"]) {
+            return IntentRoutingDecision(intent: .rag, allowedToolIDs: ragToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        if matchesAny(text, ["what do you remember", "recall my saved"]) {
+            return IntentRoutingDecision(intent: .memory, allowedToolIDs: memoryToolIDs, requiresClarification: false, clarificationPrompt: nil)
+        }
+
+        return nil
     }
 
 

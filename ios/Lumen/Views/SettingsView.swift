@@ -468,6 +468,11 @@ private struct E2ETestRunnerView: View {
                     LabeledContent("Requested GPU layers", value: accel.requestedGpuLayers.map(String.init) ?? "nil")
                     LabeledContent("KQV offload requested", value: accel.requestedKQVOffload == true ? "true" : "false")
                     LabeledContent("Actual backend", value: accel.actualBackend ?? "unknown")
+                    LabeledContent("Metal device used", value: accel.metalDeviceUsed ?? "unknown")
+                    LabeledContent("Offloaded layers", value: "\(accel.actualOffloadedLayers.map(String.init) ?? "unknown") / \(accel.actualTotalLayers.map(String.init) ?? "unknown")")
+                    LabeledContent("KQV/cache offload", value: accel.actualKQVOffload.map { $0 ? "true" : "false" } ?? "unknown")
+                    LabeledContent("Prompt eval tok/s", value: accel.promptEvalTokensPerSecond.map { String(format: "%.1f", $0) } ?? "unknown")
+                    LabeledContent("Decode tok/s", value: accel.decodeTokensPerSecond.map { String(format: "%.1f", $0) } ?? "unknown")
                     LabeledContent("Verification", value: accel.verificationLevel)
                     LabeledContent("ANE used by runtime", value: accel.aneUsedByCurrentRuntime ? "yes" : "no")
                     ForEach(accel.notes, id: \.self) { note in

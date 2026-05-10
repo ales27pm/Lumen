@@ -24,9 +24,13 @@ actor TinyIntentEngine: LLMEngine {
         guard model.backend == .tinyIntent else {
             throw LLMEngineError.backendUnavailable(model.backend.rawValue)
         }
+        if let currentGenerationID {
+            cancelledGenerationIDs.insert(currentGenerationID)
+        } else {
+            cancelledGenerationIDs.removeAll(keepingCapacity: true)
+        }
         loadedModel = model
         loadedProfile = profile
-        cancelledGenerationIDs.removeAll(keepingCapacity: true)
     }
 
     func unload() async {

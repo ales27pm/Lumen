@@ -128,6 +128,9 @@ class ImproveLoopHandler(BaseHTTPRequestHandler):
         if self.path == "/status.json":
             self._send_json(self.runner.snapshot())
             return
+        if self.path == "/dashboard-summary.json":
+            self._serve_dashboard_summary()
+            return
         if self.path == "/dashboard":
             self._serve_dashboard()
             return
@@ -159,6 +162,22 @@ class ImproveLoopHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(dashboard.read_bytes())
+
+    def _serve_dashboard_summary(self) -> None:
+        summary_path = self.config.dashboard_path.parent / "visual_improve_loop_summary.json"
+        if not summary_path.exists():
+            self._send_json({"ok": False, "message": "Dashboard summary not generated yet."}, HTTPStatus.NOT_FOUND)
+            return
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            self._send_json({"ok": False, "message": f"Invalid summary JSON: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if isinstance(payload, dict):
+            payload["ok"] = True
+            self._send_json(payload)
+            return
+        self._send_json({"ok": True, "data": payload})
 
     def _send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -223,6 +242,13 @@ pre {{ white-space:pre-wrap; max-height:34rem; overflow:auto; background:#060910
 <div id="summary" class="muted">Loading…</div>
 <pre id="log"></pre>
 </section>
+<section class="panel">
+<h2>Live Dashboard</h2>
+<p class="muted">Real-time progress from the generated visual improve-loop summary.</p>
+<div id="dashboard-overview" class="muted">Waiting for summary…</div>
+<canvas id="step-chart" width="1024" height="280" style="width:100%;height:280px;background:#060910;border:1px solid var(--line);border-radius:14px;"></canvas>
+<pre id="step-details"></pre>
+</section>
 </main>
 <script>
 async function post(path) {{
@@ -237,6 +263,79 @@ async function refresh() {{
   const statusClass = data.status === 'passed' ? 'status-passed' : data.status === 'failed' ? 'status-failed' : '';
   document.getElementById('summary').innerHTML = `<strong class="${{statusClass}}">${{data.status}}</strong> · ${{data.name || 'no job'}} · ${{data.durationSeconds ?? 0}}s · rc=${{data.returncode ?? ''}}`;
   document.getElementById('log').textContent = (data.log || []).join('\n');
+  await refreshDashboard();
+}}
+function renderChart(steps) {{
+  const canvas = document.getElementById('step-chart');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#060910';
+  ctx.fillRect(0, 0, w, h);
+  if (!steps.length) return;
+
+  const margin = 36;
+  const chartW = w - margin * 2;
+  const chartH = h - margin * 2;
+  const maxDuration = Math.max(...steps.map(s => Number(s.durationSeconds || 0)), 1);
+  const barGap = 12;
+  const barW = Math.max((chartW - (steps.length - 1) * barGap) / steps.length, 8);
+
+  ctx.strokeStyle = '#2b3b55';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {{
+    const y = margin + chartH * (i / 4);
+    ctx.beginPath();
+    ctx.moveTo(margin, y);
+    ctx.lineTo(margin + chartW, y);
+    ctx.stroke();
+  }}
+
+  steps.forEach((step, idx) => {{
+    const dur = Number(step.durationSeconds || 0);
+    const barH = (dur / maxDuration) * chartH;
+    const x = margin + idx * (barW + barGap);
+    const y = margin + chartH - barH;
+    const status = normalizeStatus(step.status);
+    ctx.fillStyle = status === 'success' ? '#44d483' : status === 'failed' ? '#ff6b7a' : '#73a7ff';
+    ctx.fillRect(x, y, barW, Math.max(barH, 2));
+  }});
+}}
+
+async function refreshDashboard() {{
+  try {{
+    const res = await fetch('/dashboard-summary.json');
+    const payload = await res.json();
+    if (!res.ok) {{
+      document.getElementById('dashboard-overview').textContent = payload.message || 'Dashboard summary not generated yet.';
+      document.getElementById('step-details').textContent = '';
+      renderChart([]);
+      return;
+    }}
+    const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    const total = steps.length;
+    const success = steps.filter(s => normalizeStatus(s.status) === 'success').length;
+    const failed = steps.filter(s => normalizeStatus(s.status) === 'failed').length;
+    const running = steps.filter(s => normalizeStatus(s.status) === 'running').length;
+    document.getElementById('dashboard-overview').textContent = `Steps: ${{total}} · success: ${{success}} · failed: ${{failed}} · running: ${{running}}`;
+    document.getElementById('step-details').textContent = steps
+      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizeStatus(s.status)}} · duration=${{s.durationSeconds ?? 0}}s`)
+      .join('\n');
+    renderChart(steps);
+  }} catch (err) {{
+    console.error('Failed to refresh dashboard', err);
+    document.getElementById('dashboard-overview').textContent = 'Dashboard summary not generated yet.';
+    document.getElementById('step-details').textContent = '';
+    renderChart([]);
+    return;
+  }}
+}}
+function normalizeStatus(status) {{
+  const value = String(status || '').toLowerCase();
+  if (value === 'passed') return 'success';
+  if (value === 'in_progress') return 'running';
+  return value || 'unknown';
 }}
 setInterval(refresh, 1500);
 refresh();

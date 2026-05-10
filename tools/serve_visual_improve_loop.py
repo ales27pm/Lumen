@@ -314,13 +314,14 @@ async function refreshDashboard() {{
       return;
     }}
     const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    const normalizedStatuses = steps.map(step => normalizeStatus(step));
     const total = steps.length;
-    const success = steps.filter(s => normalizeStatus(s) === 'success').length;
-    const failed = steps.filter(s => normalizeStatus(s) === 'failed').length;
-    const running = steps.filter(s => normalizeStatus(s) === 'running').length;
+    const success = normalizedStatuses.filter(status => status === 'success').length;
+    const failed = normalizedStatuses.filter(status => status === 'failed').length;
+    const running = normalizedStatuses.filter(status => status === 'running').length;
     document.getElementById('dashboard-overview').textContent = `Steps: ${{total}} · success: ${{success}} · failed: ${{failed}} · running: ${{running}}`;
     document.getElementById('step-details').textContent = steps
-      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizeStatus(s)}} · duration=${{s.durationSeconds ?? 0}}s`)
+      .map((s, i) => `${{i + 1}}. ${{s.name || 'step'}} · status=${{normalizedStatuses[i]}} · duration=${{s.durationSeconds ?? 0}}s`)
       .join('\n');
     renderChart(steps);
   }} catch (err) {{
@@ -336,7 +337,15 @@ function normalizeStatus(stepOrStatus) {{
     if (stepOrStatus.skipped === true) return 'skipped';
     if (stepOrStatus.passed === true) return 'success';
     if (stepOrStatus.passed === false) return 'failed';
-    return normalizeStatus(stepOrStatus.status);
+    const nestedStatus = stepOrStatus.status;
+    if (nestedStatus && typeof nestedStatus === 'object') {{
+      if (nestedStatus === stepOrStatus) return 'unknown';
+      if (nestedStatus.skipped === true || nestedStatus.passed === true || nestedStatus.passed === false) {{
+        return normalizeStatus(nestedStatus);
+      }}
+      return 'unknown';
+    }}
+    return normalizeStatus(nestedStatus);
   }}
   const value = String(stepOrStatus || '').toLowerCase();
   if (value === 'passed' || value === 'success') return 'success';

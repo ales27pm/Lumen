@@ -129,10 +129,58 @@ struct GGUFEngineScaffoldTests {
         }
     }
 
+    @Test func ggufEngineCapsGenerationMaxTokensToRemainingContext() async throws {
+        let bridge = CapturingGGUFNativeBridge()
+        let tempURL = try makeTemporaryGGUFFile()
+        defer { try? FileManager.default.removeItem(at: tempURL.deletingLastPathComponent()) }
+
+        let profile = InferenceProfile(
+            name: "Tiny Context",
+            contextTokens: 16,
+            batchSize: 1,
+            threadCount: 1,
+            gpuLayerCount: 0,
+            useMetal: false,
+            useMemoryMapping: true,
+            lowPowerMode: true
+        )
+        let engine = GGUFEngine(nativeBridge: bridge)
+        try await engine.load(model: makeGGUFModel(id: "capped.gguf", localURL: tempURL), profile: profile)
+
+        let request = LLMRequest(
+            messages: [
+                LLMChatMessage(role: .user, content: "Use this prompt to leave only a small response window.")
+            ],
+            sampling: LLMSamplingConfig(
+                temperature: 0,
+                topP: 1,
+                topK: 1,
+                repeatPenalty: 1,
+                maxTokens: 128
+            ),
+            budget: InferenceBudget(
+                maxPromptTokens: 128,
+                maxCompletionTokens: 128,
+                maxWallClockSeconds: 10,
+                allowGPU: false,
+                allowBackgroundExecution: false
+            )
+        )
+        let prompt = try GGUFPromptBuilder.buildPrompt(from: request)
+        let promptTokens = Int(ceil(Double(prompt.count) / 4.0))
+        let expectedMaxTokens = max(0, min(profile.contextTokens, LLMEngineCapabilities.localGGUF.maximumContextTokens) - promptTokens)
+
+        for try await _ in engine.generate(request) {
+        }
+
+        #expect(bridge.generateConfigs.first?.sampling.maxTokens == expectedMaxTokens)
+    }
+
     @Test func engineFactoryRegistersTinyIntentEngine() async throws {
         let router = await LLMEngineFactory.makeDefaultRouter()
 
         #expect(await router.hasBackend(.tinyIntent))
+        #expect(await router.hasBackend(.gguf) == false)
 
         let engine = try await router.engine(for: .tinyIntent)
         #expect(engine.id == "tiny-intent")
@@ -200,5 +248,45 @@ struct GGUFEngineScaffoldTests {
         let url = directory.appendingPathComponent("test.gguf")
         try Data("fake gguf scaffold".utf8).write(to: url)
         return url
+    }
+}
+
+nonisolated private final class CapturingGGUFNativeBridge: GGUFNativeBridge, @unchecked Sendable {
+    private let lock = NSLock()
+    private var capturedGenerateConfigs: [GGUFBridgeGenerateConfig] = []
+
+    var generateConfigs: [GGUFBridgeGenerateConfig] {
+        lock.withLock {
+            capturedGenerateConfigs
+        }
+    }
+
+    func status() async -> GGUFBridgeStatus {
+        .loaded
+    }
+
+    func load(config: GGUFBridgeLoadConfig) async throws -> GGUFBridgeModelInfo {
+        GGUFBridgeModelInfo(
+            modelPath: config.modelPath,
+            contextTokens: config.contextTokens,
+            backendDescription: "Capturing test bridge",
+            isMetalEnabled: config.useMetal
+        )
+    }
+
+    func unload() async {
+    }
+
+    func generate(config: GGUFBridgeGenerateConfig) -> AsyncThrowingStream<String, Error> {
+        lock.withLock {
+            capturedGenerateConfigs.append(config)
+        }
+
+        return AsyncThrowingStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func cancel() async {
     }
 }

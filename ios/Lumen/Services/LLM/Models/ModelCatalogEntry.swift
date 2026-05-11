@@ -98,7 +98,8 @@ enum ModelCatalogSource: Sendable, Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(SourceType.self, forKey: .type)
+        let rawType = try container.decode(String.self, forKey: .type)
+        let type = SourceType(rawValue: rawType) ?? .unknown
 
         switch type {
         case .bundled:

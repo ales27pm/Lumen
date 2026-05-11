@@ -10,6 +10,9 @@ actor GGUFEngine: LLMEngine {
     private var loadedProfile: InferenceProfile?
     private var activeRequestID: UUID?
     private var cancelledRequestIDs: Set<UUID> = []
+    private var lifecycleTransitionInProgress = false
+    private var generationInProgress = false
+    private var generationInProgressWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(nativeBridge: any GGUFNativeBridge = UnavailableGGUFNativeBridge()) {
         self.nativeBridge = nativeBridge
@@ -19,6 +22,10 @@ actor GGUFEngine: LLMEngine {
         guard model.backend == .gguf else {
             throw LLMEngineError.backendUnavailable(model.backend.rawValue)
         }
+
+        await cancelActiveGenerationAndWait()
+        lifecycleTransitionInProgress = true
+        defer { lifecycleTransitionInProgress = false }
 
         guard let modelURL = model.localURL else {
             throw LLMEngineError.modelNotFound
@@ -45,21 +52,17 @@ actor GGUFEngine: LLMEngine {
             _ = try await nativeBridge.load(config: config)
             loadedModel = model
             loadedProfile = profile
-            if let activeRequestID {
-                cancelledRequestIDs.insert(activeRequestID)
-            } else {
-                cancelledRequestIDs.removeAll(keepingCapacity: true)
-            }
+            cancelledRequestIDs.removeAll(keepingCapacity: true)
         } catch {
             throw GGUFEngineErrorMapper.map(error)
         }
     }
 
     func unload() async {
-        if let activeRequestID {
-            cancelledRequestIDs.insert(activeRequestID)
-            await nativeBridge.cancel()
-        }
+        await cancelActiveGenerationAndWait()
+        lifecycleTransitionInProgress = true
+        defer { lifecycleTransitionInProgress = false }
+
         await nativeBridge.unload()
         loadedModel = nil
         loadedProfile = nil
@@ -100,7 +103,12 @@ actor GGUFEngine: LLMEngine {
     ) async {
         let startedAt = Date()
 
-        guard let loadedModel else {
+        guard lifecycleTransitionInProgress == false else {
+            continuation.finish(throwing: LLMEngineError.generationAlreadyRunning)
+            return
+        }
+
+        guard let loadedModel, let loadedProfile else {
             continuation.finish(throwing: LLMEngineError.modelNotLoaded)
             return
         }
@@ -114,21 +122,29 @@ actor GGUFEngine: LLMEngine {
             try validateSupportedFeatures(for: request)
             let prompt = try GGUFPromptBuilder.buildPrompt(from: request)
             let promptTokens = approximateTokenCount(for: prompt)
+            let remainingCompletionTokens = remainingCompletionTokens(
+                promptTokens: promptTokens,
+                profile: loadedProfile
+            )
 
             activeRequestID = request.id
+            generationInProgress = true
             defer {
-                activeRequestID = nil
-                cancelledRequestIDs.remove(request.id)
+                finishGeneration(requestID: request.id)
             }
 
             let generationConfig = GGUFBridgeGenerateConfig(
                 prompt: prompt,
-                sampling: makeSamplingConfig(from: request.sampling, budget: request.budget)
+                sampling: makeSamplingConfig(
+                    from: request.sampling,
+                    budget: request.budget,
+                    maximumTokens: remainingCompletionTokens
+                )
             )
 
             continuation.yield(.started(requestID: request.id))
 
-            var completionText = ""
+            var runningCompletionCharacters = 0
             var completionTokens = 0
 
             do {
@@ -140,8 +156,8 @@ actor GGUFEngine: LLMEngine {
                         return
                     }
 
-                    completionText += token
-                    completionTokens = approximateTokenCount(for: completionText)
+                    runningCompletionCharacters += token.count
+                    completionTokens = approximateTokenCount(forCharacterCount: runningCompletionCharacters)
                     continuation.yield(.token(token))
                 }
             } catch {
@@ -189,21 +205,64 @@ actor GGUFEngine: LLMEngine {
 
     private func makeSamplingConfig(
         from sampling: LLMSamplingConfig,
-        budget: InferenceBudget
+        budget: InferenceBudget,
+        maximumTokens: Int
     ) -> GGUFBridgeSamplingConfig {
-        GGUFBridgeSamplingConfig(
+        let requestedMaxTokens = min(
+            sampling.maxTokens,
+            budget.maxCompletionTokens,
+            capabilities.maximumOutputTokens
+        )
+
+        return GGUFBridgeSamplingConfig(
             temperature: sampling.temperature,
             topP: sampling.topP,
             topK: sampling.topK,
             repeatPenalty: sampling.repeatPenalty,
             seed: sampling.seed,
-            maxTokens: min(sampling.maxTokens, budget.maxCompletionTokens, capabilities.maximumOutputTokens),
+            maxTokens: min(requestedMaxTokens, max(0, maximumTokens)),
             stopSequences: sampling.stopSequences
         )
     }
 
+    private func remainingCompletionTokens(promptTokens: Int, profile: InferenceProfile) -> Int {
+        let contextLimit = min(profile.contextTokens, capabilities.maximumContextTokens)
+        return max(0, contextLimit - promptTokens)
+    }
+
     private func approximateTokenCount(for text: String) -> Int {
-        Int(ceil(Double(text.count) / 4.0))
+        approximateTokenCount(forCharacterCount: text.count)
+    }
+
+    private func approximateTokenCount(forCharacterCount characterCount: Int) -> Int {
+        Int(ceil(Double(characterCount) / 4.0))
+    }
+
+    private func cancelActiveGenerationAndWait() async {
+        guard generationInProgress else { return }
+        if let activeRequestID {
+            cancelledRequestIDs.insert(activeRequestID)
+        }
+        await nativeBridge.cancel()
+        await waitForActiveGenerationToFinish()
+    }
+
+    private func waitForActiveGenerationToFinish() async {
+        guard generationInProgress else { return }
+        await withCheckedContinuation { continuation in
+            generationInProgressWaiters.append(continuation)
+        }
+    }
+
+    private func finishGeneration(requestID: UUID) {
+        activeRequestID = nil
+        generationInProgress = false
+        cancelledRequestIDs.remove(requestID)
+        let waiters = generationInProgressWaiters
+        generationInProgressWaiters.removeAll(keepingCapacity: true)
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 }
 

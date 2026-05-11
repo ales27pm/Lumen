@@ -3,6 +3,7 @@ import Foundation
 enum ModelStorageError: LocalizedError, Sendable {
     case applicationSupportUnavailable
     case failedToCreateDirectory(URL, String)
+    case failedToSetResourceValues(URL, String)
     case fileNotFound(URL)
     case unreadableFile(URL)
     case invalidModelFileExtension(String)
@@ -20,6 +21,8 @@ enum ModelStorageError: LocalizedError, Sendable {
             return "Application Support is unavailable for model storage."
         case .failedToCreateDirectory(let url, let reason):
             return "Failed to create model storage directory at \(url.path): \(reason)"
+        case .failedToSetResourceValues(let url, let reason):
+            return "Failed to set model storage resource values at \(url.path): \(reason)"
         case .fileNotFound(let url):
             return "Model file was not found at \(url.path)."
         case .unreadableFile(let url):

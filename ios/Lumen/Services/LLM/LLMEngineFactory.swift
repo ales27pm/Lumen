@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated enum LLMEngineFactory {
-    static func makeDefaultRouter(includeUnavailableGGUF: Bool = true) async -> LLMEngineRouter {
+    static func makeDefaultRouter(includeUnavailableGGUF: Bool = false) async -> LLMEngineRouter {
         let router = LLMEngineRouter()
         await router.register(TinyIntentEngine(), for: .tinyIntent)
 

@@ -158,7 +158,12 @@ actor LLMModelStorage {
             verificationStatus: verifiedHash == nil ? .unverified : .verified
         )
 
-        try await saveRecord(record)
+        do {
+            try await saveRecord(record)
+        } catch {
+            try? fileManager.removeItem(at: destinationURL)
+            throw error
+        }
         return record
     }
 
@@ -263,7 +268,7 @@ actor LLMModelStorage {
 
     private func relativePath(for fileURL: URL, root: URL) -> String? {
         let rootPath = normalizedDirectoryPath(root)
-        let filePath = fileURL.standardizedFileURL.path
+        let filePath = fileURL.standardizedFileURL.resolvingSymlinksInPath().path
         guard filePath.hasPrefix(rootPath) else {
             return nil
         }
@@ -271,11 +276,11 @@ actor LLMModelStorage {
     }
 
     private func isDescendant(_ fileURL: URL, of rootURL: URL) -> Bool {
-        fileURL.standardizedFileURL.path.hasPrefix(normalizedDirectoryPath(rootURL))
+        fileURL.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(normalizedDirectoryPath(rootURL))
     }
 
     private func normalizedDirectoryPath(_ url: URL) -> String {
-        let path = url.standardizedFileURL.path
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().path
         return path.hasSuffix("/") ? path : "\(path)/"
     }
 

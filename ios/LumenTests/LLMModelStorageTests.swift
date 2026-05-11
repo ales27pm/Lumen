@@ -129,11 +129,81 @@ struct LLMModelStorageTests {
         #expect(try await storage.record(for: record.id) == nil)
     }
 
+    @Test func deleteModelDoesNotDeleteSymlinkResolvedFileOutsideRoot() async throws {
+        let temp = try makeTemporaryStorage()
+        defer { try? FileManager.default.removeItem(at: temp.baseDirectory) }
+        let outsideDirectory = temp.baseDirectory.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+        let outsideURL = outsideDirectory.appendingPathComponent("outside.gguf")
+        try Data("outside".utf8).write(to: outsideURL)
+
+        let symlinkURL = temp.location.modelsDirectory.appendingPathComponent("LinkedOutside", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: symlinkURL, withDestinationURL: outsideDirectory)
+
+        let storage = LLMModelStorage(location: temp.location)
+        let symlinkedFileURL = symlinkURL.appendingPathComponent("outside.gguf")
+        let record = installedGGUFRecord(id: "symlink.outside.root", fileURL: symlinkedFileURL)
+        try await storage.saveRecord(record)
+
+        try await storage.deleteModel(id: record.id, deleteFile: true)
+
+        #expect(FileManager.default.fileExists(atPath: outsideURL.path))
+        #expect(try await storage.record(for: record.id) == nil)
+    }
+
+    @Test func importRemovesCopiedFileWhenMetadataSaveFails() async throws {
+        let temp = try makeTemporaryStorage()
+        defer { try? FileManager.default.removeItem(at: temp.baseDirectory) }
+        let missingMetadataDirectory = temp.location.modelsDirectory
+            .appendingPathComponent("MissingMetadata", isDirectory: true)
+        let brokenLocation = ModelStorageLocation(
+            rootDirectory: temp.location.rootDirectory,
+            modelsDirectory: temp.location.modelsDirectory,
+            metadataDirectory: missingMetadataDirectory,
+            temporaryDirectory: temp.location.temporaryDirectory
+        )
+        let storage = LLMModelStorage(location: brokenLocation)
+        let sourceURL = temp.baseDirectory.appendingPathComponent("leaky.gguf")
+        try Data("leaky".utf8).write(to: sourceURL)
+        let copiedURL = temp.location.modelsDirectory.appendingPathComponent("leaky.gguf")
+
+        do {
+            _ = try await storage.importExistingModelFile(
+                fileURL: sourceURL,
+                catalogEntry: nil,
+                backend: .gguf,
+                displayName: "Leaky",
+                expectedSHA256: nil
+            )
+            #expect(Bool(false))
+        } catch ModelStorageError.metadataWriteFailed {
+            #expect(FileManager.default.fileExists(atPath: copiedURL.path) == false)
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
     @Test func builtInModelCatalogContainsTinyIntent() {
         let entry = BuiltInModelCatalog.entry(id: "builtin.tiny-intent")
 
         #expect(entry?.backend == .tinyIntent)
         #expect(entry?.recommendedUse == .tinyIntent)
+    }
+
+    @Test func builtInNomicDescriptorDoesNotAdvertiseEmbeddingExecution() {
+        let entry = BuiltInModelCatalog.entry(id: "nomic-embed-text-local")
+
+        #expect(entry?.backend == .gguf)
+        #expect(entry?.recommendedUse != .embedding)
+        #expect(entry?.tags.contains("embedding") == false)
+    }
+
+    @Test func modelCatalogSourceDecodesUnknownTypeAsUnknown() throws {
+        let data = Data(#"{"type":"futureBackend","url":"https://example.com/model.gguf"}"#.utf8)
+
+        let source = try JSONDecoder().decode(ModelCatalogSource.self, from: data)
+
+        #expect(source == .unknown)
     }
 
     @Test func modelSelectionServiceReturnsTinyIntentFallbackWhenOnlyUsableModel() async throws {

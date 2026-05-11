@@ -56,11 +56,11 @@ enum BuiltInModelCatalog {
             id: "nomic-embed-text-local",
             displayName: "Nomic Embed Text Local",
             backend: .gguf,
-            recommendedUse: .embedding,
+            recommendedUse: .testing,
             source: .unknown,
             contextLength: 8_192,
             minimumRecommendedTier: .balanced,
-            tags: ["embedding", "local"],
+            tags: ["local"],
             notes: "Catalog descriptor for future local embedding support; embedding execution is not implemented yet."
         )
     ]

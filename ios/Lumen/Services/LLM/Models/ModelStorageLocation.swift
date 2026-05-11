@@ -32,7 +32,7 @@ enum ModelStorageDirectoryResolver {
             var mutableModelsDirectory = modelsDirectory
             try mutableModelsDirectory.setResourceValues(values)
         } catch {
-            throw ModelStorageError.failedToCreateDirectory(modelsDirectory, error.localizedDescription)
+            throw ModelStorageError.failedToSetResourceValues(modelsDirectory, error.localizedDescription)
         }
 
         return ModelStorageLocation(

@@ -1,7 +1,7 @@
 import Foundation
 
 enum ModelFileValidator {
-    static func validateExtension(for url: URL, backend: LLMBackendKind) throws {
+    nonisolated static func validateExtension(for url: URL, backend: LLMBackendKind) throws {
         let fileExtension = url.pathExtension.lowercased()
 
         switch backend {
@@ -18,7 +18,7 @@ enum ModelFileValidator {
         }
     }
 
-    static func validateReadableFile(_ url: URL) throws {
+    nonisolated static func validateReadableFile(_ url: URL) throws {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: url.path) else {
             throw ModelStorageError.fileNotFound(url)

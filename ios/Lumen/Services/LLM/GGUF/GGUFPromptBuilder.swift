@@ -5,9 +5,33 @@ nonisolated enum GGUFPromptBuilder {
 
     static func buildPrompt(from request: LLMRequest) throws -> String {
         var parts: [String] = []
+        let reasoningCaptureEnabled = request.metadata.booleanValue(forAnyKey: [
+            "reasoningCaptureEnabled",
+            "developerReasoningCaptureEnabled",
+            "allowThinking"
+        ])
+        let shouldUseQwenThinkingDirective = request.metadata.booleanValue(forAnyKey: [
+            "useQwenThinkingDirective",
+            "qwenThinkingDirective"
+        ]) || request.metadata.valueContains("qwen3", forAnyKey: ["modelFamily", "model_family", "modelName", "model_name"])
+        let requireFinalAnswerOnly: Bool = {
+            if case .constrainedJSON = request.responseFormat { return false }
+            return true
+        }()
+        let hasPromptContent = nonEmpty(request.systemPrompt) != nil
+            || !request.messages.isEmpty
+            || !request.context.isEmpty
+            || !request.tools.isEmpty
 
-        if let systemPrompt = nonEmpty(request.systemPrompt) {
-            parts.append(section(marker: "<|system|>", body: systemPrompt))
+        if hasPromptContent {
+            parts.append(section(
+                marker: "<|system|>",
+                body: ModelThinkingControl.systemPrompt(
+                    request.systemPrompt ?? "",
+                    reasoningCaptureEnabled: reasoningCaptureEnabled,
+                    requireFinalAnswerOnly: requireFinalAnswerOnly
+                )
+            ))
         }
 
         if let toolDefinitions = buildToolDefinitions(request.tools) {
@@ -16,8 +40,9 @@ nonisolated enum GGUFPromptBuilder {
 
         let contextBlock = buildContextBlock(request.context)
         var insertedContext = false
+        let lastUserMessageIndex = request.messages.lastIndex { $0.role == .user }
 
-        for message in request.messages {
+        for (index, message) in request.messages.enumerated() {
             if message.role == .user, insertedContext == false {
                 if let contextBlock {
                     parts.append(section(marker: "<|system|>", body: contextBlock))
@@ -26,7 +51,14 @@ nonisolated enum GGUFPromptBuilder {
             }
 
             guard let content = nonEmpty(message.content) else { continue }
-            parts.append(section(marker: marker(for: message.role), body: content))
+            let controlledContent = message.role == .user && index == lastUserMessageIndex
+                ? ModelThinkingControl.userMessage(
+                    content,
+                    reasoningCaptureEnabled: reasoningCaptureEnabled,
+                    useQwenThinkingDirective: shouldUseQwenThinkingDirective
+                )
+                : content
+            parts.append(section(marker: marker(for: message.role), body: controlledContent))
         }
 
         if insertedContext == false, let contextBlock {
@@ -118,5 +150,26 @@ nonisolated enum GGUFPromptBuilder {
 
     private static func approximateTokenCount(forCharacterCount characterCount: Int) -> Int {
         Int(ceil(Double(characterCount) / 4.0))
+    }
+}
+
+private extension Dictionary where Key == String, Value == String {
+    func booleanValue(forAnyKey keys: [String]) -> Bool {
+        for key in keys {
+            guard let value = self[key]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+                continue
+            }
+            if ["1", "true", "yes", "enabled"].contains(value) {
+                return true
+            }
+        }
+        return false
+    }
+
+    func valueContains(_ needle: String, forAnyKey keys: [String]) -> Bool {
+        let target = needle.lowercased()
+        return keys.contains { key in
+            self[key]?.lowercased().contains(target) == true
+        }
     }
 }

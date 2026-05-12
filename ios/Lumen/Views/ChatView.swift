@@ -290,7 +290,20 @@ struct ChatView: View {
         let sanitizedSteps = AgentVisibleContentSanitizer.sanitizedSteps(steps)
 
         let persistedFinal = FinalOutputSanitizer.sanitizeUserVisibleText(finalText).text
-        let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps)
+        let assistantMsg = ChatMessage(role: .assistant, content: persistedFinal, agentSteps: sanitizedSteps, visibleContent: persistedFinal)
+        if appState.developerTraceModeEnabled {
+            let trace = makeAgentDeveloperTrace(
+                systemPrompt: baseSystemPrompt,
+                userPrompt: text,
+                modelName: "slot-agent",
+                memories: gatedMemories,
+                steps: sanitizedSteps,
+                visibleAnswer: persistedFinal,
+                messageID: assistantMsg.id
+            )
+            assistantMsg.developerTraceID = trace.id
+            assistantMsg.developerTraceJSON = DeveloperTraceCodec.encode(trace)
+        }
         conversation.messages.append(assistantMsg)
         if let approvalStep = sanitizedSteps.first(where: { $0.kind == .approvalBoundary }),
            let toolID = approvalStep.toolID {
@@ -325,6 +338,7 @@ struct ChatView: View {
 
     private func runPlain(turnID: UUID, requestID: UUID, text: String, memories: [MemoryContextItem], attachments: [ChatAttachment]) async {
         let request = GenerateRequest(
+            id: requestID,
             sessionID: conversation.id.uuidString,
             systemPrompt: conversation.systemPrompt ?? appState.systemPrompt,
             history: safeShortTermContext(excludingCurrentUserMessageID: conversation.sortedMessages.last?.id, maxTurns: 8),
@@ -335,7 +349,9 @@ struct ChatView: View {
             maxTokens: appState.maxTokens,
             modelName: conversation.modelName ?? "default",
             relevantMemories: memories,
-            attachments: attachments
+            attachments: attachments,
+            developerTraceModeEnabled: appState.developerTraceModeEnabled,
+            reasoningCaptureEnabled: appState.developerReasoningCaptureEnabled
         )
 
         var accumulated = ""
@@ -351,9 +367,31 @@ struct ChatView: View {
         }
 
         guard !Task.isCancelled, activeTurnID == turnID, generationController.isCurrent(requestID, for: conversation.id) else { return }
-        let sanitized = AssistantOutputSanitizer.sanitize(accumulated, lastUserMessage: text)
+        let completedPayload = await AppLlamaService.shared.takeCompletedTracePayload(requestID: request.id)
+        let modelVisibleAnswer = completedPayload?.visibleAnswer ?? accumulated
+        let sanitized = AssistantOutputSanitizer.sanitize(modelVisibleAnswer, lastUserMessage: text)
         let finalized = FinalOutputSanitizer.sanitizeUserVisibleText(sanitized).text
-        let assistantMsg = ChatMessage(role: .assistant, content: finalized)
+        let assistantMsg = ChatMessage(
+            role: .assistant,
+            content: finalized,
+            visibleContent: finalized,
+            reasoningTrace: appState.developerTraceModeEnabled ? completedPayload?.reasoningText : nil,
+            rawModelOutput: appState.developerTraceModeEnabled ? completedPayload?.rawModelOutput : nil
+        )
+        if appState.developerTraceModeEnabled {
+            let trace = makeDeveloperTrace(
+                request: request,
+                messageID: assistantMsg.id,
+                userPrompt: text,
+                memories: memories,
+                attachments: attachments,
+                payload: completedPayload,
+                visibleAnswer: finalized,
+                error: nil
+            )
+            assistantMsg.developerTraceID = trace.id
+            assistantMsg.developerTraceJSON = DeveloperTraceCodec.encode(trace)
+        }
         conversation.messages.append(assistantMsg)
         streamingText = ""
         activeTurnID = nil
@@ -384,6 +422,143 @@ struct ChatView: View {
 
     private func safeRecalledMemories(query: String, routing: IntentRoutingDecision) async -> [MemoryContextItem] {
         await MemoryRecall.recallAndNormalize(query: query, routing: routing, context: modelContext, limit: 8)
+    }
+
+    private func makeDeveloperTrace(
+        request: GenerateRequest,
+        messageID: UUID?,
+        userPrompt: String,
+        memories: [MemoryContextItem],
+        attachments: [ChatAttachment],
+        payload: CompletedGenerationTracePayload?,
+        visibleAnswer: String,
+        error: String?
+    ) -> DeveloperTrace {
+        DeveloperTrace(
+            conversationID: conversation.id,
+            messageID: messageID,
+            modelName: request.modelName,
+            systemPrompt: request.systemPrompt,
+            developerPrompt: ModelThinkingControl.developerInstruction(reasoningCaptureEnabled: request.reasoningCaptureEnabled),
+            userPrompt: userPrompt,
+            resolvedContext: traceContextItems(history: request.history, attachments: attachments),
+            retrievedMemory: memories.map(traceMemoryItem),
+            toolPlan: [],
+            toolCalls: [],
+            agentMessages: [],
+            rawModelOutput: payload?.rawModelOutput ?? "",
+            reasoningText: payload?.reasoningText,
+            visibleAnswer: visibleAnswer,
+            parserWarnings: payload?.parserWarnings ?? [],
+            tokenUsage: payload?.tokenUsage,
+            finishReason: payload?.finishReason,
+            error: error ?? payload?.error
+        )
+    }
+
+    private func makeAgentDeveloperTrace(
+        systemPrompt: String,
+        userPrompt: String,
+        modelName: String,
+        memories: [MemoryContextItem],
+        steps: [AgentStep],
+        visibleAnswer: String,
+        messageID: UUID?
+    ) -> DeveloperTrace {
+        let toolPlan = steps.compactMap { step -> TraceToolPlanItem? in
+            guard step.kind == .action || step.kind == .approvalBoundary, let toolID = step.toolID else { return nil }
+            return TraceToolPlanItem(
+                toolID: toolID,
+                reason: step.content,
+                requiresApproval: step.kind == .approvalBoundary,
+                arguments: step.toolArgs ?? [:]
+            )
+        }
+        let toolCalls = steps.compactMap { step -> TraceToolCall? in
+            guard step.kind == .action || step.kind == .observation || step.kind == .approvalBoundary,
+                  let toolID = step.toolID else { return nil }
+            let status: String
+            switch step.kind {
+            case .action: status = "planned"
+            case .approvalBoundary: status = "pendingApproval"
+            case .observation: status = "completed"
+            case .thought, .reflection: status = "message"
+            }
+            return TraceToolCall(
+                toolID: toolID,
+                arguments: step.toolArgs ?? [:],
+                status: status,
+                result: step.kind == .observation ? step.content : nil
+            )
+        }
+        let agentMessages = steps.map { step in
+            TraceAgentMessage(
+                id: step.id,
+                role: step.kind.rawValue,
+                content: step.content,
+                toolID: step.toolID,
+                metadata: step.toolArgs ?? [:]
+            )
+        }
+        return DeveloperTrace(
+            conversationID: conversation.id,
+            messageID: messageID,
+            modelName: modelName,
+            systemPrompt: systemPrompt,
+            developerPrompt: SlotAgentService.mouthPromptHygieneRule,
+            userPrompt: userPrompt,
+            resolvedContext: [],
+            retrievedMemory: memories.map(traceMemoryItem),
+            toolPlan: toolPlan,
+            toolCalls: toolCalls,
+            agentMessages: agentMessages,
+            rawModelOutput: visibleAnswer,
+            reasoningText: nil,
+            visibleAnswer: visibleAnswer,
+            parserWarnings: [],
+            tokenUsage: nil,
+            finishReason: "stop",
+            error: nil
+        )
+    }
+
+    private func traceContextItems(
+        history: [(role: MessageRole, content: String)],
+        attachments: [ChatAttachment]
+    ) -> [TraceContextItem] {
+        let historyItems = history.map { item in
+            TraceContextItem(
+                role: item.role.rawValue,
+                title: "History",
+                content: item.content,
+                source: "conversation"
+            )
+        }
+        let attachmentItems = attachments.map { attachment in
+            TraceContextItem(
+                role: "attachment",
+                title: attachment.name,
+                content: "Attachment included in prompt assembly.",
+                source: attachment.path,
+                metadata: [
+                    "kind": attachment.kind.rawValue,
+                    "byteSize": String(attachment.byteSize)
+                ]
+            )
+        }
+        return historyItems + attachmentItems
+    }
+
+    private func traceMemoryItem(_ item: MemoryContextItem) -> TraceMemoryItem {
+        TraceMemoryItem(
+            content: item.content,
+            scope: item.scope.rawValue,
+            authority: item.authority.rawValue,
+            createdAt: item.createdAt,
+            expiresAt: item.expiresAt,
+            source: item.source,
+            topic: item.topic
+        )
     }
 
     private func isSafeToStoreMemory(userText: String, assistantText: String, routing: IntentRoutingDecision) -> Bool {

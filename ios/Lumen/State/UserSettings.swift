@@ -19,6 +19,8 @@ fileprivate nonisolated enum UserSettingsKeys {
     static let maxAgentSteps = "maxAgentSteps"
     static let showThinkingByDefault = "showThinkingByDefault"
     static let agentModeEnabled = "agentModeEnabled"
+    static let developerTraceModeEnabled = "developerTraceModeEnabled"
+    static let developerReasoningCaptureEnabled = "developerReasoningCaptureEnabled"
     static let autoDownloadFleetModels = "autoDownloadFleetModels"
     static let confirmFleetDownloads = "confirmFleetDownloads"
 }
@@ -53,6 +55,8 @@ final class UserSettings {
     var maxAgentSteps: Int { didSet { save() } }
     var showThinkingByDefault: Bool { didSet { save() } }
     var agentModeEnabled: Bool { didSet { save() } }
+    var developerTraceModeEnabled: Bool { didSet { save() } }
+    var developerReasoningCaptureEnabled: Bool { didSet { save() } }
 
     // Fleet bootstrap
     var autoDownloadFleetModels: Bool { didSet { save() } }
@@ -89,6 +93,8 @@ final class UserSettings {
         maxAgentSteps = defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6
         showThinkingByDefault = defaults.object(forKey: UserSettingsKeys.showThinkingByDefault) as? Bool ?? false
         agentModeEnabled = defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true
+        developerTraceModeEnabled = defaults.object(forKey: UserSettingsKeys.developerTraceModeEnabled) as? Bool ?? false
+        developerReasoningCaptureEnabled = defaults.object(forKey: UserSettingsKeys.developerReasoningCaptureEnabled) as? Bool ?? false
         autoDownloadFleetModels = defaults.object(forKey: UserSettingsKeys.autoDownloadFleetModels) as? Bool ?? true
         confirmFleetDownloads = defaults.object(forKey: UserSettingsKeys.confirmFleetDownloads) as? Bool ?? false
     }
@@ -111,6 +117,8 @@ final class UserSettings {
         defaults.set(maxAgentSteps, forKey: UserSettingsKeys.maxAgentSteps)
         defaults.set(showThinkingByDefault, forKey: UserSettingsKeys.showThinkingByDefault)
         defaults.set(agentModeEnabled, forKey: UserSettingsKeys.agentModeEnabled)
+        defaults.set(developerTraceModeEnabled, forKey: UserSettingsKeys.developerTraceModeEnabled)
+        defaults.set(developerReasoningCaptureEnabled, forKey: UserSettingsKeys.developerReasoningCaptureEnabled)
         defaults.set(autoDownloadFleetModels, forKey: UserSettingsKeys.autoDownloadFleetModels)
         defaults.set(confirmFleetDownloads, forKey: UserSettingsKeys.confirmFleetDownloads)
     }
@@ -147,6 +155,8 @@ final class UserSettings {
             handsFree: handsFree,
             maxAgentSteps: maxAgentSteps,
             agentModeEnabled: agentModeEnabled,
+            developerTraceModeEnabled: developerTraceModeEnabled,
+            developerReasoningCaptureEnabled: developerReasoningCaptureEnabled,
             autoDownloadFleetModels: autoDownloadFleetModels,
             confirmFleetDownloads: confirmFleetDownloads
         )
@@ -171,6 +181,8 @@ nonisolated struct SettingsSnapshot: Sendable {
     let handsFree: Bool
     let maxAgentSteps: Int
     let agentModeEnabled: Bool
+    let developerTraceModeEnabled: Bool
+    let developerReasoningCaptureEnabled: Bool
     let autoDownloadFleetModels: Bool
     let confirmFleetDownloads: Bool
 
@@ -200,6 +212,8 @@ nonisolated struct SettingsSnapshot: Sendable {
             handsFree: defaults.object(forKey: UserSettingsKeys.handsFree) as? Bool ?? false,
             maxAgentSteps: defaults.object(forKey: UserSettingsKeys.maxAgentSteps) as? Int ?? 6,
             agentModeEnabled: defaults.object(forKey: UserSettingsKeys.agentModeEnabled) as? Bool ?? true,
+            developerTraceModeEnabled: defaults.object(forKey: UserSettingsKeys.developerTraceModeEnabled) as? Bool ?? false,
+            developerReasoningCaptureEnabled: defaults.object(forKey: UserSettingsKeys.developerReasoningCaptureEnabled) as? Bool ?? false,
             autoDownloadFleetModels: defaults.object(forKey: UserSettingsKeys.autoDownloadFleetModels) as? Bool ?? true,
             confirmFleetDownloads: defaults.object(forKey: UserSettingsKeys.confirmFleetDownloads) as? Bool ?? false
         )

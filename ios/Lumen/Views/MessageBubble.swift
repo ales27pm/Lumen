@@ -6,6 +6,7 @@ struct MessageBubble: View {
     let message: ChatMessage
     var streamingOverride: String? = nil
 
+    @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @State private var didBookmark: Bool = false
     @State private var webPreview: WebPreviewItem?
@@ -15,7 +16,7 @@ struct MessageBubble: View {
     @State private var pdfPreview: PDFPreviewItem?
 
     private var assistantRawContent: String {
-        streamingOverride ?? message.content
+        streamingOverride ?? message.assistantRenderContent
     }
 
     private var assistantVisibleContent: String {
@@ -120,6 +121,10 @@ struct MessageBubble: View {
                         MessageActionButton(icon: didBookmark ? "bookmark.fill" : "bookmark") { bookmark(content: visibleContent) }
                     }
                     .padding(.top, 2)
+
+                    if appState.developerTraceModeEnabled, let trace = message.developerTrace {
+                        DeveloperTracePanel(trace: trace)
+                    }
                 }
             }
             Spacer(minLength: 32)
@@ -216,6 +221,160 @@ struct MessageBubble: View {
             try? await MemoryStore.remember(snippet, kind: .fact, source: "bookmark", context: ctx)
         }
     }
+}
+
+private enum DeveloperTraceSection: String, CaseIterable, Identifiable {
+    case prompt = "Prompt"
+    case context = "Context"
+    case tools = "Tools"
+    case agentMessages = "Agent Messages"
+    case reasoning = "Reasoning"
+    case rawStream = "Raw Stream"
+    case parserWarnings = "Parser Warnings"
+
+    var id: String { rawValue }
+}
+
+private struct DeveloperTracePanel: View {
+    let trace: DeveloperTrace
+    @State private var expanded = false
+    @State private var section: DeveloperTraceSection = .prompt
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Trace section", selection: $section) {
+                    ForEach(DeveloperTraceSection.allCases) { item in
+                        Text(item.rawValue).tag(item)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(sectionText)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(Theme.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Theme.surfaceHigh)
+                    .clipShape(.rect(cornerRadius: 8))
+            }
+            .padding(.top, 6)
+        } label: {
+            Label("Developer Trace", systemImage: "chevron.left.forwardslash.chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .padding(10)
+        .background(Theme.surface)
+        .clipShape(.rect(cornerRadius: 8))
+        .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.border, lineWidth: 1) }
+    }
+
+    private var sectionText: String {
+        switch section {
+        case .prompt:
+            return promptText
+        case .context:
+            return contextText
+        case .tools:
+            return toolsText
+        case .agentMessages:
+            return agentMessagesText
+        case .reasoning:
+            return trace.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "No reasoning captured."
+        case .rawStream:
+            return trace.rawModelOutput.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "No raw stream captured."
+        case .parserWarnings:
+            return trace.parserWarnings.isEmpty ? "No parser warnings." : trace.parserWarnings.map { "- \($0)" }.joined(separator: "\n")
+        }
+    }
+
+    private var promptText: String {
+        [
+            labeled("Model", trace.modelName),
+            labeled("System Prompt", trace.systemPrompt),
+            labeled("Developer Prompt", trace.developerPrompt),
+            labeled("User Prompt", trace.userPrompt),
+            labeled("Finish Reason", trace.finishReason),
+            labeled("Error", trace.error),
+            labeled("Token Usage", tokenUsageText)
+        ]
+        .compactMap { $0 }
+        .joined(separator: "\n\n")
+    }
+
+    private var contextText: String {
+        var sections: [String] = []
+        if !trace.resolvedContext.isEmpty {
+            sections.append(trace.resolvedContext.enumerated().map { index, item in
+                var lines = ["[\(index + 1)] \(item.title ?? item.role ?? "Context")"]
+                if let source = item.source { lines.append("source: \(source)") }
+                if !item.metadata.isEmpty { lines.append("metadata: \(item.metadata)") }
+                lines.append(item.content)
+                return lines.joined(separator: "\n")
+            }.joined(separator: "\n\n"))
+        }
+        if !trace.retrievedMemory.isEmpty {
+            sections.append(trace.retrievedMemory.enumerated().map { index, item in
+                var lines = ["[memory \(index + 1)] \(item.scope) | \(item.authority)"]
+                if let source = item.source { lines.append("source: \(source)") }
+                if let topic = item.topic { lines.append("topic: \(topic)") }
+                lines.append(item.content)
+                return lines.joined(separator: "\n")
+            }.joined(separator: "\n\n"))
+        }
+        return sections.isEmpty ? "No context or memory captured." : sections.joined(separator: "\n\n")
+    }
+
+    private var toolsText: String {
+        var sections: [String] = []
+        if !trace.toolPlan.isEmpty {
+            sections.append("Plan:\n" + trace.toolPlan.map { item in
+                "- \(item.toolID) \(item.requiresApproval == true ? "(approval)" : "")\n  args: \(item.arguments)\n  reason: \(item.reason ?? "")"
+            }.joined(separator: "\n"))
+        }
+        if !trace.toolCalls.isEmpty {
+            sections.append("Calls:\n" + trace.toolCalls.map { call in
+                "- \(call.toolID) [\(call.status)]\n  args: \(call.arguments)\n  result: \(call.result ?? "")\n  error: \(call.error ?? "")"
+            }.joined(separator: "\n"))
+        }
+        return sections.isEmpty ? "No tools captured." : sections.joined(separator: "\n\n")
+    }
+
+    private var agentMessagesText: String {
+        guard !trace.agentMessages.isEmpty else { return "No agent messages captured." }
+        return trace.agentMessages.map { message in
+            var lines = ["[\(message.role)]"]
+            if let toolID = message.toolID { lines.append("tool: \(toolID)") }
+            if !message.metadata.isEmpty { lines.append("metadata: \(message.metadata)") }
+            lines.append(message.content)
+            return lines.joined(separator: "\n")
+        }.joined(separator: "\n\n")
+    }
+
+    private var tokenUsageText: String? {
+        guard let usage = trace.tokenUsage else { return nil }
+        return [
+            usage.promptTokens.map { "prompt=\($0)" },
+            usage.completionTokens.map { "completion=\($0)" },
+            usage.reasoningTokens.map { "reasoning=\($0)" },
+            usage.visibleTokens.map { "visible=\($0)" },
+            usage.totalTokens.map { "total=\($0)" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: ", ")
+        .nilIfEmpty
+    }
+
+    private func labeled(_ label: String, _ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return "\(label):\n\(value)"
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 private struct WebPreviewItem: Identifiable { let id = UUID(); let url: URL }

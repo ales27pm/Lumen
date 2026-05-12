@@ -146,6 +146,19 @@ actor GGUFEngine: LLMEngine {
 
             var runningCompletionCharacters = 0
             var completionTokens = 0
+            var parser = ReasoningAwareStreamParser(
+                config: ReasoningAwareStreamParserConfig(
+                    captureReasoning: request.metadata.booleanValue(forAnyKey: [
+                        "reasoningCaptureEnabled",
+                        "developerReasoningCaptureEnabled",
+                        "allowThinking"
+                    ]),
+                    reasoningTraceBudgetCharacters: request.metadata.intValue(forAnyKey: [
+                        "reasoningTraceBudgetCharacters",
+                        "reasoning_trace_budget_characters"
+                    ]) ?? 16_384
+                )
+            )
 
             do {
                 for try await token in nativeBridge.generate(config: generationConfig) {
@@ -158,7 +171,10 @@ actor GGUFEngine: LLMEngine {
 
                     runningCompletionCharacters += token.count
                     completionTokens = approximateTokenCount(forCharacterCount: runningCompletionCharacters)
-                    continuation.yield(.token(token))
+                    let parsedDelta = parser.ingest(token)
+                    if parsedDelta.visibleDelta.isEmpty == false {
+                        continuation.yield(.token(parsedDelta.visibleDelta))
+                    }
                 }
             } catch {
                 let mapped = GGUFEngineErrorMapper.map(error)
@@ -169,6 +185,11 @@ actor GGUFEngine: LLMEngine {
                     continuation.finish(throwing: mapped)
                 }
                 return
+            }
+
+            let parserFinalDelta = parser.finish()
+            if parserFinalDelta.visibleDelta.isEmpty == false {
+                continuation.yield(.token(parserFinalDelta.visibleDelta))
             }
 
             guard !Task.isCancelled, cancelledRequestIDs.contains(request.id) == false else {
@@ -277,5 +298,16 @@ private extension Dictionary where Key == String, Value == String {
             }
         }
         return false
+    }
+
+    nonisolated func intValue(forAnyKey keys: [String]) -> Int? {
+        for key in keys {
+            guard let value = self[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let parsed = Int(value) else {
+                continue
+            }
+            return parsed
+        }
+        return nil
     }
 }

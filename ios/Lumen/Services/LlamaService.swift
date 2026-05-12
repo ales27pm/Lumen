@@ -5,6 +5,7 @@ import SwiftLlama
 import llama
 
 nonisolated struct GenerateRequest: Sendable {
+    let id: UUID
     let sessionID: String?
     let systemPrompt: String
     let history: [(role: MessageRole, content: String)]
@@ -17,8 +18,12 @@ nonisolated struct GenerateRequest: Sendable {
     let relevantMemories: [MemoryContextItem]
     let attachments: [ChatAttachment]
     let seed: UInt32?
+    let developerTraceModeEnabled: Bool
+    let reasoningCaptureEnabled: Bool
+    let reasoningTraceBudgetCharacters: Int
 
     init(
+        id: UUID = UUID(),
         sessionID: String? = nil,
         systemPrompt: String,
         history: [(role: MessageRole, content: String)],
@@ -30,8 +35,12 @@ nonisolated struct GenerateRequest: Sendable {
         modelName: String,
         relevantMemories: [MemoryContextItem],
         attachments: [ChatAttachment] = [],
-        seed: UInt32? = nil
+        seed: UInt32? = nil,
+        developerTraceModeEnabled: Bool = false,
+        reasoningCaptureEnabled: Bool = false,
+        reasoningTraceBudgetCharacters: Int = 16_384
     ) {
+        self.id = id
         self.sessionID = sessionID
         self.systemPrompt = systemPrompt
         self.history = history
@@ -44,9 +53,13 @@ nonisolated struct GenerateRequest: Sendable {
         self.relevantMemories = relevantMemories
         self.attachments = attachments
         self.seed = seed
+        self.developerTraceModeEnabled = developerTraceModeEnabled
+        self.reasoningCaptureEnabled = developerTraceModeEnabled && reasoningCaptureEnabled
+        self.reasoningTraceBudgetCharacters = max(0, reasoningTraceBudgetCharacters)
     }
 
     init(
+        id: UUID = UUID(),
         sessionID: String? = nil,
         systemPrompt: String,
         history: [(role: MessageRole, content: String)],
@@ -58,9 +71,13 @@ nonisolated struct GenerateRequest: Sendable {
         modelName: String,
         legacyRelevantMemories: [String],
         attachments: [ChatAttachment] = [],
-        seed: UInt32? = nil
+        seed: UInt32? = nil,
+        developerTraceModeEnabled: Bool = false,
+        reasoningCaptureEnabled: Bool = false,
+        reasoningTraceBudgetCharacters: Int = 16_384
     ) {
         self.init(
+            id: id,
             sessionID: sessionID,
             systemPrompt: systemPrompt,
             history: history,
@@ -72,7 +89,32 @@ nonisolated struct GenerateRequest: Sendable {
             modelName: modelName,
             relevantMemories: MemoryContextAdapter.fromLegacyStrings(legacyRelevantMemories),
             attachments: attachments,
-            seed: seed
+            seed: seed,
+            developerTraceModeEnabled: developerTraceModeEnabled,
+            reasoningCaptureEnabled: reasoningCaptureEnabled,
+            reasoningTraceBudgetCharacters: reasoningTraceBudgetCharacters
+        )
+    }
+
+    func cappedForDeveloperReasoning() -> GenerateRequest {
+        guard reasoningCaptureEnabled else { return self }
+        return GenerateRequest(
+            id: id,
+            sessionID: sessionID,
+            systemPrompt: systemPrompt,
+            history: history,
+            userMessage: userMessage,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            maxTokens: min(maxTokens, 768),
+            modelName: modelName,
+            relevantMemories: relevantMemories,
+            attachments: attachments,
+            seed: seed,
+            developerTraceModeEnabled: developerTraceModeEnabled,
+            reasoningCaptureEnabled: reasoningCaptureEnabled,
+            reasoningTraceBudgetCharacters: reasoningTraceBudgetCharacters
         )
     }
 }
@@ -423,6 +465,7 @@ final actor AppLlamaService {
     private var roleAdapters: [LumenModelSlot: LoadedRoleAdapter] = [:]
     private var activeAdapterSlot: LumenModelSlot?
     private var lastAdapterFailureReason: String?
+    private var completedTracePayloads: [UUID: CompletedGenerationTracePayload] = [:]
 
     private var embeddingModelPath: String?
     private var embeddingModel: LlamaModel?
@@ -444,6 +487,10 @@ final actor AppLlamaService {
     }
 
     var activeAdapterSlotValue: LumenModelSlot? { activeAdapterSlot }
+
+    func takeCompletedTracePayload(requestID: UUID) -> CompletedGenerationTracePayload? {
+        completedTracePayloads.removeValue(forKey: requestID)
+    }
 
     func isChatLoaded(for slot: LumenModelSlot) -> Bool {
         sharedChatRuntime != nil || chatRuntimes[slot] != nil
@@ -812,11 +859,12 @@ final actor AppLlamaService {
             maxTokens: maxTokens,
             seed: seed
         )
-        var output = ""
+        var parser = ReasoningAwareStreamParser()
         for try await chunk in stream {
-            output += chunk
+            _ = parser.ingest(chunk)
         }
-        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
+        _ = parser.finish()
+        return FinalOutputSanitizer.sanitizeUserVisibleText(parser.result.visibleAnswer).text
     }
 
     func respond(
@@ -837,11 +885,12 @@ final actor AppLlamaService {
             maxTokens: maxTokens,
             seed: seed
         )
-        var output = ""
+        var parser = ReasoningAwareStreamParser()
         for try await chunk in stream {
-            output += chunk
+            _ = parser.ingest(chunk)
         }
-        return FinalOutputSanitizer.sanitizeUserVisibleText(output).text
+        _ = parser.finish()
+        return FinalOutputSanitizer.sanitizeUserVisibleText(parser.result.visibleAnswer).text
     }
 
     func resetKVCache() async {
@@ -886,7 +935,8 @@ final actor AppLlamaService {
                 }
 
                 do {
-                    guard req.maxTokens > 0 else {
+                    let requestForGeneration = req.cappedForDeveloperReasoning()
+                    guard requestForGeneration.maxTokens > 0 else {
                         continuation.yield(GenerationToken.done)
                         continuation.finish()
                         return
@@ -895,9 +945,9 @@ final actor AppLlamaService {
                     let startedAt = Date()
                     let readyMetrics = try await SlotModelRuntimeCoordinator.shared.ensureReadyWithMetrics(slot: slot)
                     let contextSize = await self.contextSizeForGeneration(slot: slot)
-                    let groundedRequest = req.groundingSystemPrompt(for: slot)
+                    let groundedRequest = requestForGeneration.groundingSystemPrompt(for: slot)
                     let messageBuildStarted = Date()
-                    let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize)
+                    let messages = await self.buildMessages(req: groundedRequest, contextSize: contextSize, slot: slot)
                     let messageBuildMs = Int(Date().timeIntervalSince(messageBuildStarted) * 1000)
                     let promptChars = messages.reduce(0) { $0 + $1.content.count }
                     let estimatedPromptTokenCount = max(1, promptChars / 4)
@@ -910,7 +960,12 @@ final actor AppLlamaService {
                         maxTokens: groundedRequest.maxTokens,
                         seed: groundedRequest.seed
                     )
-                    var rawOutput = ""
+                    var parser = ReasoningAwareStreamParser(
+                        config: ReasoningAwareStreamParserConfig(
+                            captureReasoning: groundedRequest.reasoningCaptureEnabled,
+                            reasoningTraceBudgetCharacters: groundedRequest.reasoningTraceBudgetCharacters
+                        )
+                    )
                     var streamingSanitizer = StreamingFinalOutputSanitizer()
                     var streamedSanitized = ""
                     var firstTokenMs: Int?
@@ -920,12 +975,18 @@ final actor AppLlamaService {
                             firstTokenMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                         }
                         outputChunks += 1
-                        rawOutput += chunk
-                        let safeDelta = streamingSanitizer.ingest(chunk)
+                        let parsedDelta = parser.ingest(chunk)
+                        let safeDelta = streamingSanitizer.ingest(parsedDelta.visibleDelta)
                         if !safeDelta.isEmpty {
                             streamedSanitized += safeDelta
                             continuation.yield(GenerationToken.text(safeDelta))
                         }
+                    }
+                    let parserFinishDelta = parser.finish()
+                    let finishSafeDelta = streamingSanitizer.ingest(parserFinishDelta.visibleDelta)
+                    if !finishSafeDelta.isEmpty {
+                        streamedSanitized += finishSafeDelta
+                        continuation.yield(GenerationToken.text(finishSafeDelta))
                     }
                     let finalization = streamingSanitizer.finish()
                     let sanitized: String
@@ -933,6 +994,7 @@ final actor AppLlamaService {
                     case let .append(final, remainingDelta):
                         sanitized = final.text
                         if !remainingDelta.isEmpty {
+                            streamedSanitized += remainingDelta
                             continuation.yield(GenerationToken.text(remainingDelta))
                         }
                     case let .replace(final):
@@ -943,6 +1005,15 @@ final actor AppLlamaService {
                     let decodeMs = firstTokenMs.map { max(0, elapsedMs - $0) }
                     let preFirstTokenMs = firstTokenMs
                     let outputTokenEstimate = max(0, streamedSanitized.split(whereSeparator: \.isWhitespace).count)
+                    let parserResult = parser.result
+                    let reasoningTokenEstimate = parserResult.reasoningText.map { max(0, $0.split(whereSeparator: \.isWhitespace).count) }
+                    let tokenUsage = TraceTokenUsage(
+                        promptTokens: estimatedPromptTokenCount,
+                        completionTokens: nil,
+                        reasoningTokens: reasoningTokenEstimate,
+                        visibleTokens: outputTokenEstimate,
+                        totalTokens: nil
+                    )
                     let tps = decodeMs.flatMap { $0 > 0 ? Double(outputTokenEstimate) / (Double($0) / 1000.0) : nil }
                     let promptEvalMs = firstTokenMs.map { max(1, $0 - readyMetrics.ensureReadyMs - messageBuildMs) }
                     let promptEvalTps = promptEvalMs.map { Double(estimatedPromptTokenCount) / (Double($0) / 1000.0) }
@@ -953,6 +1024,19 @@ final actor AppLlamaService {
                     await self.updateLastAccelerationDiagnostics(accelerationDiagnostics)
                     logger.info(
                         "event=llama.chat.generation_perf slot=\(slot.rawValue, privacy: .public) prompt_eval_tps=\(promptEvalTps ?? -1, privacy: .public) decode_tps=\(tps ?? -1, privacy: .public) prompt_tokens_est=\(estimatedPromptTokenCount, privacy: .public) output_words=\(outputTokenEstimate, privacy: .public)"
+                    )
+                    await self.storeCompletedTracePayloadIfNeeded(
+                        request: groundedRequest,
+                        payload: CompletedGenerationTracePayload(
+                            requestID: groundedRequest.id,
+                            rawModelOutput: parserResult.rawModelOutput,
+                            reasoningText: parserResult.reasoningText,
+                            visibleAnswer: sanitized,
+                            parserWarnings: parserResult.parserWarnings,
+                            tokenUsage: tokenUsage,
+                            finishReason: "stop",
+                            error: nil
+                        )
                     )
                     await self.recordModelTrace(
                         slot: slot,
@@ -979,6 +1063,19 @@ final actor AppLlamaService {
                     )
                 } catch {
                     let errorText = "Generation error: \(error.localizedDescription)"
+                    await self.storeCompletedTracePayloadIfNeeded(
+                        request: req,
+                        payload: CompletedGenerationTracePayload(
+                            requestID: req.id,
+                            rawModelOutput: "",
+                            reasoningText: nil,
+                            visibleAnswer: errorText,
+                            parserWarnings: [],
+                            tokenUsage: nil,
+                            finishReason: "error",
+                            error: error.localizedDescription
+                        )
+                    )
                     await self.recordModelTrace(slot: slot, request: req, output: errorText, parseError: "generation_error")
                     continuation.yield(GenerationToken.text(errorText))
                 }
@@ -1209,6 +1306,17 @@ final actor AppLlamaService {
         )
     }
 
+    private func storeCompletedTracePayloadIfNeeded(request: GenerateRequest, payload: CompletedGenerationTracePayload) {
+        guard request.sessionID != nil || request.developerTraceModeEnabled else { return }
+        completedTracePayloads[payload.requestID] = payload
+        if completedTracePayloads.count > 32 {
+            let overflow = completedTracePayloads.count - 32
+            for key in completedTracePayloads.keys.prefix(overflow) {
+                completedTracePayloads.removeValue(forKey: key)
+            }
+        }
+    }
+
 
 
     private func allowedToolIDs(for prompt: String, slot: LumenModelSlot) -> [String] {
@@ -1303,7 +1411,7 @@ final actor AppLlamaService {
         }
     }
 
-    private func buildMessages(req: GenerateRequest, contextSize: Int? = nil) -> [LlamaChatMessage] {
+    private func buildMessages(req: GenerateRequest, contextSize: Int? = nil, slot: LumenModelSlot? = nil) -> [LlamaChatMessage] {
         let budget = PromptBudget.make(
             contextSize: contextSize ?? 2048,
             maxTokens: req.maxTokens,
@@ -1322,9 +1430,20 @@ final actor AppLlamaService {
             budget: budget,
             attachmentNormalization: req.modelName == "agent-json" ? .agentRouting : .preserveRaw
         )
+        let useQwenDirective = currentChatModelLooksLikeQwen3(slot: slot)
+        let systemPrompt = ModelThinkingControl.systemPrompt(
+            assembly.systemPrompt,
+            reasoningCaptureEnabled: req.reasoningCaptureEnabled,
+            requireFinalAnswerOnly: !req.modelName.lowercased().contains("json")
+        )
+        let userMessage = ModelThinkingControl.userMessage(
+            assembly.userMessage,
+            reasoningCaptureEnabled: req.reasoningCaptureEnabled,
+            useQwenThinkingDirective: useQwenDirective
+        )
 
         var messages: [LlamaChatMessage] = [
-            LlamaChatMessage(role: .system, content: assembly.systemPrompt)
+            LlamaChatMessage(role: .system, content: systemPrompt)
         ]
 
         for h in assembly.history {
@@ -1340,8 +1459,15 @@ final actor AppLlamaService {
             }
         }
 
-        messages.append(LlamaChatMessage(role: .user, content: assembly.userMessage))
+        messages.append(LlamaChatMessage(role: .user, content: userMessage))
         return messages
+    }
+
+    private func currentChatModelLooksLikeQwen3(slot: LumenModelSlot?) -> Bool {
+        if sharedChatRuntime != nil { return true }
+        let path = slot.flatMap { chatRuntimes[$0]?.modelPath } ?? chatRuntimes[primaryChatSlot]?.modelPath ?? chatRuntimes.values.first?.modelPath
+        let lower = (path ?? "").lowercased()
+        return lower.contains("qwen3") || lower.contains("qwen-3")
     }
 
     private func classifyError(_ error: Error) -> LlamaErrorCode {

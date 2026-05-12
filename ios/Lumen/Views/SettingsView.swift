@@ -138,6 +138,12 @@ struct SettingsView: View {
                 }
 
                 Section("Developer") {
+                    Toggle("Developer trace mode", isOn: Binding(get: { state.developerTraceModeEnabled }, set: { state.developerTraceModeEnabled = $0 }))
+                        .accessibilityIdentifier("settings.developer.traceMode")
+                    Toggle("Capture reasoning", isOn: Binding(get: { state.developerReasoningCaptureEnabled }, set: { state.developerReasoningCaptureEnabled = $0 }))
+                        .disabled(!state.developerTraceModeEnabled)
+                        .accessibilityIdentifier("settings.developer.reasoningCapture")
+
                     NavigationLink {
                         AgentGroundingAuditView(registryProvider: LiveRuntimeToolRegistryProvider())
                     } label: {
@@ -269,6 +275,8 @@ struct SettingsView: View {
         • isGenerating: \(appState.isGenerating ? "true" : "false")
         • agentModeEnabled: \(appState.agentModeEnabled ? "true" : "false")
         • showThinkingByDefault: \(appState.showThinkingByDefault ? "true" : "false")
+        • developerTraceModeEnabled: \(appState.developerTraceModeEnabled ? "true" : "false")
+        • developerReasoningCaptureEnabled: \(appState.developerReasoningCaptureEnabled ? "true" : "false")
         • maxAgentSteps: \(appState.maxAgentSteps)
 
         Fleet:

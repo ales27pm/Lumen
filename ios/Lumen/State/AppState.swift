@@ -85,6 +85,14 @@ final class AppState {
         get { settings.agentModeEnabled }
         set { settings.agentModeEnabled = newValue }
     }
+    var developerTraceModeEnabled: Bool {
+        get { settings.developerTraceModeEnabled }
+        set { settings.developerTraceModeEnabled = newValue }
+    }
+    var developerReasoningCaptureEnabled: Bool {
+        get { settings.developerReasoningCaptureEnabled }
+        set { settings.developerReasoningCaptureEnabled = newValue }
+    }
     var autoDownloadFleetModels: Bool {
         get { settings.autoDownloadFleetModels }
         set { settings.autoDownloadFleetModels = newValue }

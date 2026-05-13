@@ -3,7 +3,7 @@ import Testing
 
 struct AgentIntentRouterToolMatrixTests {
     @Test func allRegisteredToolsReachableFromIntentRouters() {
-        let registered = Set(ToolRegistry.all.map(\ .id))
+        let registered = Set(ToolRegistry.all.map(\.id))
         let intentRouterCovered = Set(UserIntent.allCases.flatMap { IntentRouter.allowedToolIDs(for: $0) })
         let agentRouterCovered = Set(AgentIntentRouter.Intent.allCases.flatMap { AgentIntentRouter.allowedToolIDs(for: $0) })
         let combined = intentRouterCovered.union(agentRouterCovered)
@@ -18,7 +18,7 @@ struct AgentIntentRouterToolMatrixTests {
             #expect(!scenario.negativePrompts.isEmpty)
         }
 
-        let photoDecision = IntentRouter.classify("Search my photos for selfies")
+        let photoDecision = IntentRouter.classify("Search photos for selfies")
         #expect(IntentRouter.isToolAllowed("photos.search", for: photoDecision))
         #expect(!IntentRouter.isToolAllowed("web.search", for: photoDecision))
 

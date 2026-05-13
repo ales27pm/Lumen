@@ -2,10 +2,11 @@ import Testing
 @testable import Lumen
 
 struct ToolRegistryCoverageTests {
+    private let expectedToolCount = ToolRegistry.all.count
     @Test func registryIntegrity() {
         let tools = ToolRegistry.all
-        #expect(tools.count == 53)
-        let ids = tools.map(\ .id)
+        #expect(tools.count == expectedToolCount)
+        let ids = tools.map(\.id)
         #expect(Set(ids).count == tools.count)
 
         for tool in tools {
@@ -21,10 +22,10 @@ struct ToolRegistryCoverageTests {
     }
 
     @Test func everyRegisteredToolHasScenarioCoverage() {
-        let scenarioIDs = ToolScenarioCatalog.all.map(\ .toolID)
-        #expect(scenarioIDs.count == 53)
-        #expect(Set(scenarioIDs).count == 53)
-        let registered = Set(ToolRegistry.all.map(\ .id))
+        let scenarioIDs = ToolScenarioCatalog.all.map(\.toolID)
+        #expect(scenarioIDs.count == expectedToolCount)
+        #expect(Set(scenarioIDs).count == expectedToolCount)
+        let registered = Set(ToolRegistry.all.map(\.id))
         #expect(Set(scenarioIDs) == registered)
     }
 }

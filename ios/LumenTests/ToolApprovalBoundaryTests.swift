@@ -11,13 +11,9 @@ struct ToolApprovalBoundaryTests {
     ]
 
     @Test func requiresApprovalMatrixMatchesRegistry() {
-        let actual = Set(ToolRegistry.all.filter(\ .requiresApproval).map(\ .id))
+        let actual = Set(ToolRegistry.all.filter(\.requiresApproval).map(\.id))
         #expect(actual == expectedApprovalTools)
     }
 
-    @Test func nonApprovalToolsAreNotMarkedApproval() {
-        for tool in ToolRegistry.all where !expectedApprovalTools.contains(tool.id) {
-            #expect(tool.requiresApproval == false)
-        }
-    }
+
 }

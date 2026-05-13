@@ -1,4 +1,5 @@
 import Foundation
+@testable import Lumen
 
 struct ToolScenario: Sendable {
     let toolID: String

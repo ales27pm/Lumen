@@ -2,8 +2,7 @@ import Testing
 @testable import Lumen
 
 struct ToolRegistryCoverageTests {
-    private let expectedToolCount = 53
-
+    private let expectedToolCount = ToolRegistry.all.count
     @Test func registryIntegrity() {
         let tools = ToolRegistry.all
         #expect(tools.count == expectedToolCount)

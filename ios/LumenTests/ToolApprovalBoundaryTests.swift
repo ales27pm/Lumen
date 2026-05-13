@@ -14,4 +14,6 @@ struct ToolApprovalBoundaryTests {
         let actual = Set(ToolRegistry.all.filter(\.requiresApproval).map(\.id))
         #expect(actual == expectedApprovalTools)
     }
+
+
 }

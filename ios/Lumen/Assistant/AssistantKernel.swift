@@ -3,10 +3,12 @@ import Foundation
 actor AssistantKernel {
     private let router: AssistantRuntimeRouter
     private let metricsStore: RuntimeMetricsStore
+    private let toolRegistry: ToolRegistry
 
-    init(router: AssistantRuntimeRouter = .init(), metricsStore: RuntimeMetricsStore = .shared) {
+    init(router: AssistantRuntimeRouter = .init(), metricsStore: RuntimeMetricsStore = .shared, toolRegistry: ToolRegistry = .shared) {
         self.router = router
         self.metricsStore = metricsStore
+        self.toolRegistry = toolRegistry
     }
 
     func selectRuntime(for context: AssistantTurnContext) -> AssistantRuntimeKind {
@@ -37,5 +39,13 @@ actor AssistantKernel {
             try? await metricsStore.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: selection.runtime.rawValue, taskKind: "\(context.task)", modelIDHash: nil, policySummary: selection.reason, latencyMs: latency, success: false, errorCode: String(describing: error), thermalState: .from(processThermalState: context.thermalState), lowPowerMode: context.lowPowerMode, memoryWarningCount: 0))
             throw error
         }
+    }
+}
+
+
+extension AssistantKernel {
+    func executeTool(_ invocation: ToolInvocation, modelContext: ModelContext? = nil) async -> ToolResult {
+        let ctx = ToolExecutionContext(isForeground: invocation.source != .backgroundTrigger, appState: nil, modelContext: modelContext, permissionRegistry: .shared, metricsStore: metricsStore)
+        return await toolRegistry.execute(invocation, context: ctx)
     }
 }

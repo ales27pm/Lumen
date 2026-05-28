@@ -53,3 +53,8 @@
 - Added deterministic background policy and background execution lease actor.
 - Added background orchestrator wrapper that preserves existing TriggerScheduler behavior and identifiers.
 - Added entitlement validator for BG task IDs and usage description keys with non-fatal warnings.
+
+## Phase 5 Update
+- Added centralized permission domain/state/registry abstractions.
+- Added secure tool framework with approval policy, bounded outputs, and metrics recorder.
+- Integrated AssistantKernel tool execution through `ToolRegistry` while preserving legacy `ToolExecutor` path.

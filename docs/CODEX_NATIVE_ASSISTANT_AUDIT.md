@@ -45,3 +45,11 @@
   - Llama runtime adapter over current services
   - Deterministic fallback runtime
 - Add tests for runtime router selection policy.
+
+## Phase 3/4 Foundation Update (this change)
+- Added system capability snapshot/profiler with public API-only hardware/runtime capability inspection.
+- Added thermal, power, and memory pressure monitors plus memory-pressure metrics emission.
+- Added JSONL-backed runtime metrics store (`Application Support/Lumen/runtime-metrics.jsonl`).
+- Added deterministic background policy and background execution lease actor.
+- Added background orchestrator wrapper that preserves existing TriggerScheduler behavior and identifiers.
+- Added entitlement validator for BG task IDs and usage description keys with non-fatal warnings.

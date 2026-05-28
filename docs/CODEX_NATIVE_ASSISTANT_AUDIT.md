@@ -63,3 +63,9 @@
 - Added deferred built-in tools: `MemorySearchTool`, `RAGSearchTool`, `CalendarReadTool`, `ContactsLookupTool`, `LocationSnapshotTool`.
 - Added background-safe tool filtering in `ToolRegistry` and assistant kernel tool execution tests.
 - Kept legacy `ToolExecutor` intact while integrating secure path via `AssistantKernel.executeTool(...)`.
+
+## Phase 6 Update
+- Added MemoryEngine wrapper stack (`MemoryCandidate`, `MemoryScorer`, extraction policy, context builder, consolidator).
+- Added RAGEngine wrapper stack (`RAGEngine`, `RAGIndexer`, `ChunkingStrategy`, `RAGContextBuilder`, maintenance policy).
+- Added deterministic context budgeting (`ContextBudgetAllocator`) and `AssistantGroundingContext`.
+- Integrated Memory/RAG wrappers into `AssistantKernel` grounding path and background maintenance hooks.

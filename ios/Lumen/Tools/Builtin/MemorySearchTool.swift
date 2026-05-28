@@ -25,9 +25,10 @@ struct MemorySearchTool: LocalTool {
         do {
             let args = try parse(invocation.arguments)
             guard let mc = context.modelContext else { return .init(invocationID: invocation.id, status: .unavailable, displayText: "Memory storage unavailable.", modelText: "Memory search unavailable.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "no_model_context", errorCode: "unavailable") }
-            let all = (try? mc.fetch(FetchDescriptor<MemoryItem>())) ?? []
+            let engine = MemoryEngine()
             let now = Date()
-            let filtered = all.filter { item in
+            let initial = await engine.search(query: args.query, limit: args.limit * 2, context: mc)
+            let filtered = initial.filter { item in
                 if args.pinnedOnly && !item.isPinned { return false }
                 if let topic = args.topic, !(item.topic?.localizedCaseInsensitiveContains(topic) ?? false) { return false }
                 return !MemoryStore.isExpired(item, now: now)
@@ -39,10 +40,7 @@ struct MemorySearchTool: LocalTool {
                 if text == q { s += 5 }
                 if text.hasPrefix(q) { s += 2 }
                 if text.contains(q) { s += 1 }
-                if let t = item.topic?.lowercased(), t.contains(q) { s += 0.8 }
                 if item.isPinned { s += 0.5 }
-                let age = now.timeIntervalSince(item.createdAt)
-                s += max(0, 0.4 - age / (60*60*24*30*10))
                 return (item, s)
             }.sorted { $0.1 > $1.1 }.prefix(args.limit)
 

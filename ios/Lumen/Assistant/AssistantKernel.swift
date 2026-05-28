@@ -4,6 +4,8 @@ actor AssistantKernel {
     private let router: AssistantRuntimeRouter
     private let metricsStore: RuntimeMetricsStore
     private let toolRegistry: ToolRegistry
+    private let memoryEngine = MemoryEngine()
+    private let ragEngine = RAGEngine()
 
     init(router: AssistantRuntimeRouter = .init(), metricsStore: RuntimeMetricsStore = .shared, toolRegistry: ToolRegistry = .shared) {
         self.router = router
@@ -13,6 +15,16 @@ actor AssistantKernel {
 
     func selectRuntime(for context: AssistantTurnContext) -> AssistantRuntimeKind {
         router.runtime(for: context)
+    }
+
+    func buildGroundingContext(turn: AssistantTurnContext, modelContext: ModelContext?) async -> AssistantGroundingContext {
+        guard let modelContext else { return .init(memoryCount: 0, ragCount: 0, toolCount: 0, estimatedChars: 0) }
+        let budget = ContextBudgetAllocator.allocate(maxChars: 4000)
+        let mem = memoryEngine.buildContext(query: turn.input, budget: budget.memories, context: modelContext)
+        let rag = await ragEngine.buildContext(query: turn.input, budget: budget.rag, context: modelContext)
+        let tctx = ToolExecutionContext(isForeground: turn.isForeground, appState: nil, modelContext: modelContext, permissionRegistry: .shared, metricsStore: metricsStore)
+        let defs = await toolRegistry.availableDefinitions(context: tctx, source: turn.isForeground ? .modelProposed : .backgroundTrigger)
+        return .init(memoryCount: mem.selected.count, ragCount: rag.selected.count, toolCount: defs.count, estimatedChars: mem.totalChars + rag.totalChars)
     }
 
     func runTextTurn(_ context: AssistantTurnContext) async throws -> String {

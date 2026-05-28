@@ -23,9 +23,15 @@ struct RAGSearchTool: LocalTool {
             let (q, limitRaw, source, minScore) = try parse(invocation.arguments)
             let limit = context.isForeground ? limitRaw : min(limitRaw, 6)
             guard let mc = context.modelContext else { return .init(invocationID: invocation.id, status: .unavailable, displayText: "RAG storage unavailable.", modelText: "RAG unavailable.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "no_model_context", errorCode: "unavailable") }
-            let semantic = await RAGStore.search(query: q, context: mc, limit: limit)
-            var results = semantic
+            let engine = RAGEngine()
+            let semanticResults = await engine.retrieve(query: q, limit: limit, context: mc)
+            var results: [(chunk: RAGChunk, score: Double)] = []
             var mode = "semantic"
+            if !semanticResults.isEmpty {
+                let chunks = (try? mc.fetch(FetchDescriptor<RAGChunk>())) ?? []
+                let map = Dictionary(uniqueKeysWithValues: chunks.map { ($0.id, $0) })
+                results = semanticResults.compactMap { r in map[r.chunkID].map { (chunk: $0, score: r.score) } }
+            }
             if results.isEmpty {
                 mode = "lexical"
                 let all = (try? mc.fetch(FetchDescriptor<RAGChunk>())) ?? []

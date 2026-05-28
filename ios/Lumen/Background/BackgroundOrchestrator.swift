@@ -41,11 +41,16 @@ final class BackgroundOrchestrator {
     }
 
     func runMemoryConsolidationIfAllowed() async {
-        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "memoryConsolidation", modelIDHash: nil, policySummary: "not available in current runtime", latencyMs: nil, success: false, errorCode: "not_available", thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: 0))
+        guard let container = SharedContainer.shared else { return }
+        let context = ModelContext(container)
+        await MemoryConsolidator.consolidate(context: context, metricsStore: metrics)
     }
 
     func runRAGMaintenanceIfAllowed() async {
-        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "ragMaintenance", modelIDHash: nil, policySummary: "not available in current runtime", latencyMs: nil, success: false, errorCode: "not_available", thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: 0))
+        guard let container = SharedContainer.shared else { return }
+        let context = ModelContext(container)
+        let ok = await RAGEngine().maintenance(context: context)
+        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "ragMaintenance", modelIDHash: nil, policySummary: "maintenance", latencyMs: nil, success: ok, errorCode: ok ? nil : "unavailable", thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: 0))
     }
 
     func runModelHousekeepingIfAllowed() async {

@@ -79,3 +79,8 @@
 - Added shared legacy grounding coordinator + cache + prompt injection policy.
 - Added legacy secure tool executor wrapper to reduce policy bypass risk in legacy services.
 - Added legacy tool audit document with migration status classification.
+
+## Phase 7C Update
+- Added `LegacyPromptAssembler` and `LEGACY_PROMPT_PATH_AUDIT`.
+- Headless `AgentRunner` now uses coordinator + assembler consistently.
+- Legacy services route migrated tool execution through secure wrapper; prompt path migration still partial in interactive pipelines.

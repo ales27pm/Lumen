@@ -34,3 +34,7 @@ Headless path now maps secure tool definitions via `LegacyToolSchemaBridge` and 
 - mapped secure tools route via `ToolRegistry`/`ToolInvocation`
 - unknown sensitive/network/destructive-looking tool IDs are denied
 - only explicit read-only allowlist can run through legacy fallback
+
+Legacy bypass status:
+- Reduced: migrated execution points call `LegacySecureToolExecutor`.
+- Remaining: unmigrated legacy prompt/request paths may still expose legacy tool metadata until full coordinator adoption.

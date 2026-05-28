@@ -90,3 +90,5 @@
 - Prompt path audit updated with explicit partial/fully-migrated status and remaining blockers.
 
 - UI ModelContext injection audit added in `docs/MODEL_CONTEXT_INJECTION_AUDIT.md`.
+
+- Concrete AppIntent entrypoints implemented with bounded/degraded-safe behavior and open-app-required gates for sensitive actions.

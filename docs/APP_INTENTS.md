@@ -1,4 +1,15 @@
 # App Intents
-- App intents are bounded and local-first.
-- Sensitive actions require foreground approval in-app.
-- Intents return "Open Lumen to approve" for sensitive action categories.
+
+Implemented concrete intents:
+- Ask Lumen (`LumenAskIntent`)
+- Search Lumen Memory (`LumenMemorySearchIntent`)
+- Add Lumen Memory (`LumenAddMemoryIntent`)
+- Run Lumen Trigger (`LumenRunTriggerIntent`)
+- App shortcuts provider (`LumenAppShortcuts`)
+
+Safety rules:
+- No sensitive tool execution directly from intents.
+- Sensitive operations return: "Open Lumen to approve."
+- No external network by default.
+- Outputs are bounded and compact.
+- If model/store context is unavailable, intents return degraded responses and do not fake success.

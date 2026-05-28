@@ -96,3 +96,6 @@
 - DiagnosticsProvider and diagnostics UI surfaces implemented with metadata-only snapshots (no raw user content).
 
 - VoiceModeView migration completed to VoiceSessionController primary state/runtime with legacy VoiceService bridge for compatibility.
+
+- Build hardening pass documented synchronized Xcode project membership, static validation script, and SecureToolRegistry/legacy ToolRegistry symbol split.
+- Build hardening also split new assistant symbols from legacy names: `SecureToolCategory`, `AssistantPermissionState`, and `AssistantDeviceCapabilitySnapshot` avoid collisions with existing UI/runtime types.

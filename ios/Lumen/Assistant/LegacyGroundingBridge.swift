@@ -13,10 +13,10 @@ struct LegacyGroundingBundle: Sendable {
 final class LegacyGroundingBridge {
     private let memoryEngine = MemoryEngine()
     private let ragEngine = RAGEngine()
-    private let toolRegistry: ToolRegistry
+    private let toolRegistry: SecureToolRegistry
     private let metricsStore: RuntimeMetricsStore
 
-    init(toolRegistry: ToolRegistry = .shared, metricsStore: RuntimeMetricsStore = .shared) {
+    init(toolRegistry: SecureToolRegistry = .shared, metricsStore: RuntimeMetricsStore = .shared) {
         self.toolRegistry = toolRegistry
         self.metricsStore = metricsStore
     }

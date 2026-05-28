@@ -19,7 +19,7 @@ enum LegacySecureToolExecutor {
         if let mappedSecureID {
             let invocation = ToolInvocation(id: UUID(), toolID: mappedSecureID, arguments: arguments.stringCoerced, source: isBackground ? .backgroundTrigger : .modelProposed, conversationID: conversationID, turnID: turnID, createdAt: Date())
             let ctx = ToolExecutionContext(isForeground: !isBackground, appState: nil, modelContext: modelContext, permissionRegistry: .shared, metricsStore: .shared)
-            let result = await ToolRegistry.shared.execute(invocation, context: ctx)
+            let result = await SecureToolRegistry.shared.execute(invocation, context: ctx)
             return result.modelText
         }
 

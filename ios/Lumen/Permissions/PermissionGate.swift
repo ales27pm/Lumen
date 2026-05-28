@@ -3,7 +3,7 @@ import Foundation
 struct PermissionGateDecision: Sendable, Equatable { let allowed: Bool; let reason: String? }
 
 enum PermissionGate {
-    static func evaluate(domain: PermissionDomain, state: PermissionState, isForeground: Bool) -> PermissionGateDecision {
+    static func evaluate(domain: PermissionDomain, state: AssistantPermissionState, isForeground: Bool) -> PermissionGateDecision {
         if !isForeground && state == .notDetermined { return .init(allowed: false, reason: "Permission requests are blocked in background") }
         switch state {
         case .granted: return .init(allowed: true, reason: nil)

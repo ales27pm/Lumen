@@ -19,7 +19,7 @@ enum DeviceThermalState: String, Codable, Sendable {
     }
 }
 
-struct DeviceCapabilitySnapshot: Codable, Sendable, Equatable {
+struct AssistantDeviceCapabilitySnapshot: Codable, Sendable, Equatable {
     let osVersion: String
     let deviceIdiom: String
     let processorCount: Int

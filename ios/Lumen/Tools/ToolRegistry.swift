@@ -2,8 +2,8 @@ import Foundation
 import SwiftData
 
 @MainActor
-final class ToolRegistry {
-    static let shared = ToolRegistry()
+final class SecureToolRegistry {
+    static let shared = SecureToolRegistry()
     private let tools: [ToolID: any LocalTool]
     private let metrics = ToolMetricsRecorder()
 

@@ -21,7 +21,7 @@ enum LegacyToolSchemaBridge {
         ToolInvocation(id: UUID(), toolID: toolID, arguments: arguments, source: source, conversationID: conversationID, turnID: turnID, createdAt: Date())
     }
 
-    private static func mapCategory(_ c: ToolCategory) -> ToolCategory {
+    private static func mapCategory(_ c: SecureToolCategory) -> ToolCategory {
         switch c {
         case .readOnly, .permissionRead: return .knowledge
         case .userVisibleAction: return .productivity

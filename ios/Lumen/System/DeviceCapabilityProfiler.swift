@@ -3,7 +3,7 @@ import UIKit
 import Metal
 
 struct DeviceCapabilityProfiler {
-    func captureSnapshot(processInfo: ProcessInfo = .processInfo) -> DeviceCapabilitySnapshot {
+    func captureSnapshot(processInfo: ProcessInfo = .processInfo) -> AssistantDeviceCapabilitySnapshot {
         let idiom: String
         switch UIDevice.current.userInterfaceIdiom {
         case .phone: idiom = "phone"
@@ -22,7 +22,7 @@ struct DeviceCapabilityProfiler {
         @unknown default: bgStatus = "unknown"
         }
 
-        return DeviceCapabilitySnapshot(
+        return AssistantDeviceCapabilitySnapshot(
             osVersion: processInfo.operatingSystemVersionString,
             deviceIdiom: idiom,
             processorCount: processInfo.processorCount,

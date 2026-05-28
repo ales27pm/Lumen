@@ -1,13 +1,14 @@
 import Foundation
+import SwiftData
 
 actor AssistantKernel {
     private let router: AssistantRuntimeRouter
     private let metricsStore: RuntimeMetricsStore
-    private let toolRegistry: ToolRegistry
+    private let toolRegistry: SecureToolRegistry
     private let memoryEngine = MemoryEngine()
     private let ragEngine = RAGEngine()
 
-    init(router: AssistantRuntimeRouter = .init(), metricsStore: RuntimeMetricsStore = .shared, toolRegistry: ToolRegistry = .shared) {
+    init(router: AssistantRuntimeRouter = .init(), metricsStore: RuntimeMetricsStore = .shared, toolRegistry: SecureToolRegistry = .shared) {
         self.router = router
         self.metricsStore = metricsStore
         self.toolRegistry = toolRegistry

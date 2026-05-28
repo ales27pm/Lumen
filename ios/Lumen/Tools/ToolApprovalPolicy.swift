@@ -4,7 +4,7 @@ struct ToolPolicySettings: Sendable { let networkAccessEnabled: Bool; let userAl
 enum ToolApprovalDecision: Sendable, Equatable { case allow, deny(String), requiresApproval(String) }
 
 enum ToolApprovalPolicy {
-    static func decide(definition: SecureToolDefinition, invocation: ToolInvocation, isForeground: Bool, permissionStates: [PermissionDomain: PermissionState], settings: ToolPolicySettings) -> ToolApprovalDecision {
+    static func decide(definition: SecureToolDefinition, invocation: ToolInvocation, isForeground: Bool, permissionStates: [PermissionDomain: AssistantPermissionState], settings: ToolPolicySettings) -> ToolApprovalDecision {
         if definition.category == .externalNetwork && !settings.networkAccessEnabled { return .deny("Network tools are disabled") }
         if invocation.source == .backgroundTrigger {
             if definition.category != .readOnly && !(definition.category == .permissionRead && definition.supportsBackgroundExecution) { return .deny("Tool unavailable in background") }

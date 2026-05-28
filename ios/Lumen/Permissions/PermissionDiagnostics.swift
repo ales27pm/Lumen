@@ -1,7 +1,7 @@
 import Foundation
 
 struct PermissionDiagnostics: Sendable {
-    let statuses: [PermissionDomain: PermissionState]
+    let statuses: [PermissionDomain: AssistantPermissionState]
     let entitlementWarnings: [EntitlementAuditWarning]
 
     static func collect(registry: PermissionRegistry = .shared, infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) async -> PermissionDiagnostics {

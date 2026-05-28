@@ -28,3 +28,9 @@ Deferred tools:
 
 ## Legacy bridge status
 Headless path now maps secure tool definitions via `LegacyToolSchemaBridge` and injects only background-safe tool definitions. Legacy `ToolExecutor` remains active for backward compatibility and is the main remaining migration risk.
+
+## Legacy secure executor
+`LegacySecureToolExecutor` now wraps legacy tool execution:
+- mapped secure tools route via `ToolRegistry`/`ToolInvocation`
+- unknown sensitive/network/destructive-looking tool IDs are denied
+- only explicit read-only allowlist can run through legacy fallback

@@ -74,3 +74,8 @@
 - Added `LegacyGroundingBridge`, `PromptGroundingRenderer`, and `PromptGroundingSection` for bounded grounding in legacy paths.
 - Integrated `AgentRunner` headless flow with bridge-generated grounding and secure-tool availability mapping.
 - Added `LegacyToolSchemaBridge` for secure-to-legacy tool schema compatibility.
+
+## Phase 7B.1/7B.2 Update
+- Added shared legacy grounding coordinator + cache + prompt injection policy.
+- Added legacy secure tool executor wrapper to reduce policy bypass risk in legacy services.
+- Added legacy tool audit document with migration status classification.

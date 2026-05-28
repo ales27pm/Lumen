@@ -205,7 +205,7 @@ final class RolePipelineAgentService {
         executedActionFingerprints.insert(fingerprint)
         yieldStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
 
-        let observation = await ToolExecutor.shared.execute(
+        let observation = await LegacySecureToolExecutor.execute(
             canonicalTool,
             arguments: normalizedArgs,
             approval: .autonomous

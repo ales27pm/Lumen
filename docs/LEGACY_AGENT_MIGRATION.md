@@ -16,3 +16,9 @@ Phase 7 introduces `LegacyGroundingBridge` for legacy agent/headless paths.
 ## Risks remaining
 - Some legacy-only tools continue to bypass new approval policy unless routed through secure invocation path.
 - Full per-stage grounding reuse in role pipeline is pending deeper integration.
+
+## Phase 7B migration progress
+- Added `LegacyTurnGroundingCoordinator` as shared bounded grounding entrypoint.
+- Added short-lived `LegacyGroundingCache` for reuse across role stages and to reduce repeated Memory/RAG lookups.
+- Added `LegacyPromptInjectionPolicy` profiles for foreground/headless/role/slot flows.
+- `AgentRunner` uses coordinator output; legacy services now route tool execution through `LegacySecureToolExecutor`.

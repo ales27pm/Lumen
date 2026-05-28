@@ -1449,7 +1449,7 @@ final class AgentService {
                 if !isEnabled {
                     result = "Tool \(action.tool) is disabled. Enable it in Tools."
                 } else {
-                    result = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
+                    result = await LegacySecureToolExecutor.execute(action.tool, arguments: action.args)
                 }
 
                 let obs = AgentStep(kind: .observation, content: result, toolID: action.tool)

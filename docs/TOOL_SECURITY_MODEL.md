@@ -25,3 +25,6 @@ Legacy bridge:
 
 Deferred tools:
 - camera/microphone capture and file-import tools are intentionally deferred until explicit foreground user flows + approval UI integration are completed.
+
+## Legacy bridge status
+Headless path now maps secure tool definitions via `LegacyToolSchemaBridge` and injects only background-safe tool definitions. Legacy `ToolExecutor` remains active for backward compatibility and is the main remaining migration risk.

@@ -69,3 +69,8 @@
 - Added RAGEngine wrapper stack (`RAGEngine`, `RAGIndexer`, `ChunkingStrategy`, `RAGContextBuilder`, maintenance policy).
 - Added deterministic context budgeting (`ContextBudgetAllocator`) and `AssistantGroundingContext`.
 - Integrated Memory/RAG wrappers into `AssistantKernel` grounding path and background maintenance hooks.
+
+## Phase 7 Integration Update
+- Added `LegacyGroundingBridge`, `PromptGroundingRenderer`, and `PromptGroundingSection` for bounded grounding in legacy paths.
+- Integrated `AgentRunner` headless flow with bridge-generated grounding and secure-tool availability mapping.
+- Added `LegacyToolSchemaBridge` for secure-to-legacy tool schema compatibility.

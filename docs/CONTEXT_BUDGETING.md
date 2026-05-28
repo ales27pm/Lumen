@@ -9,3 +9,6 @@
 - runtime policy
 
 `AssistantKernel.buildGroundingContext` uses Memory + RAG context builders and available secure tool definitions, then records compact counts/char totals in `AssistantGroundingContext`.
+
+## Legacy bridge rendering
+`PromptGroundingRenderer` emits bounded sections for memories, retrieved sources, tools, and runtime policy. `LegacyGroundingBridge` applies this renderer with strict character caps before injecting into legacy prompts.

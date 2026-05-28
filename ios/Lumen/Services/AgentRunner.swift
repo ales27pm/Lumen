@@ -41,13 +41,16 @@ enum AgentRunner {
         let resolution = ReferenceResolver.resolve(prompt: prompt, history: [], relevantMemories: cascade.promptFragments)
         let executionPrompt = resolution.rewrittenPrompt
         let routing = await IntentClassifierService.shared.route(executionPrompt)
+
+        let turn = AssistantTurnContext(task: .backgroundTrigger, input: executionPrompt, isForeground: false, lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, thermalState: ProcessInfo.processInfo.thermalState)
+        let grounding = await LegacyGroundingBridge().build(userMessage: executionPrompt, conversationID: nil, turnID: nil, history: [], modelContext: context, turn: turn)
         let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: executionPrompt)
-        let tools = ToolRegistry.all.filter { settings.enabledToolIDs.contains($0.id) }
+        let tools = LegacyToolSchemaBridge.toLegacyToolDefinitions(grounding.secureTools).filter { settings.enabledToolIDs.contains($0.id) }
         let mimicry = MimicryProfiler.profile(userMessage: executionPrompt, settings: settings)
         let req = AgentRequest(
             systemPrompt: composedSystemPrompt(basePrompt: settings.systemPrompt, fleetSnapshot: fleetSnapshot, mimicry: mimicry),
             history: [],
-            userMessage: executionPrompt,
+            userMessage: executionPrompt + "\n\n" + grounding.renderedPromptContext,
             temperature: settings.temperature,
             topP: settings.topP,
             repetitionPenalty: settings.repetitionPenalty,

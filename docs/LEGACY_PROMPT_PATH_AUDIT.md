@@ -9,3 +9,5 @@
 ## Remaining risks
 - Some legacy request builders outside `run(_:)` still pass pre-grounded prompts and may double-ground if they are not normalized upstream.
 - External legacy tools still depend on `LegacySecureToolExecutor` deny/allow heuristics when not present in `ToolRegistry`.
+
+- Non-run path status: normalized where using assembler idempotency; remaining risky paths documented.

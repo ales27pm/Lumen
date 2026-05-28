@@ -29,3 +29,6 @@ Phase 7 introduces `LegacyGroundingBridge` for legacy agent/headless paths.
 
 ## Interactive services update
 `AgentService`, `SlotAgentService`, and `RolePipelineAgentService` now enforce one bounded grounding assembly pass at run-entry using `LegacyPromptAssembler`, reducing duplicate/unbounded prompt injection. Full coordinator-in-service integration remains dependent on model-context plumbing.
+
+- Added explicit UI ModelContext injection via `LegacyAgentRunOptions` in ChatView and VoiceModeView.
+- Added idempotency guard marker/strip logic to prevent duplicate grounding sections.

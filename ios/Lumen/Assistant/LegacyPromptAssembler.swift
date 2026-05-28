@@ -12,7 +12,7 @@ struct LegacyPromptAssembled: Sendable {
 }
 
 enum LegacyPromptAssembler {
-    static func assemble(baseSystemPrompt: String, baseUserMessage: String, sections: [PromptGroundingSection], policy: LegacyPromptInjectionPolicy, roleMetadata: String? = nil) -> LegacyPromptAssembled {
+    static func assemble(baseSystemPrompt: String, baseUserMessage: String, sections: [PromptGroundingSection], policy: LegacyPromptInjectionPolicy, roleMetadata: String? = nil, preventDoubleGrounding: Bool = true) -> LegacyPromptAssembled {
         func titled(_ name: String, _ body: String) -> String { body.isEmpty ? "" : "[\(name)]\n\(body)\n" }
         let mem = sections.first(where: {$0.title.lowercased().contains("memory") && (policy.allowSensitiveSections || $0.privacyLevel != .sensitive)})?.content ?? ""
         let rag = sections.first(where: {$0.title.lowercased().contains("source") && (policy.allowSensitiveSections || $0.privacyLevel != .sensitive)})?.content ?? ""
@@ -23,13 +23,21 @@ enum LegacyPromptAssembler {
         let ragC = String(rag.prefix(policy.ragMax))
         let toolC = String(tool.prefix(policy.toolMax))
         let runC = String(runtime.prefix(policy.runtimeMax))
-        var appendix = ""
+        var appendix = PromptGroundingIdempotencyGuard.marker + "\n"
         appendix += titled("LOCAL MEMORY", memC)
         appendix += titled("LOCAL SOURCES", ragC)
         appendix += titled("AVAILABLE LOCAL TOOLS", toolC)
         appendix += titled("RUNTIME POLICY", runC)
         if let roleMetadata, !roleMetadata.isEmpty { appendix += titled("ROLE STAGE", String(roleMetadata.prefix(180))) }
-        let finalUser = baseUserMessage + (appendix.isEmpty ? "" : "\n\n" + appendix)
+        let normalizedBase: String
+        if preventDoubleGrounding {
+            let stripped = PromptGroundingIdempotencyGuard.stripExistingGrounding(from: baseUserMessage)
+            normalizedBase = stripped.text
+            if stripped.ambiguous { appendix = "" }
+        } else {
+            normalizedBase = baseUserMessage
+        }
+        let finalUser = normalizedBase + (appendix.isEmpty ? "" : "\n\n" + appendix)
         let trunc = mem.count > memC.count || rag.count > ragC.count || tool.count > toolC.count || runtime.count > runC.count
         return .init(systemPrompt: baseSystemPrompt, userMessage: finalUser, groundingAppendix: appendix, estimatedChars: finalUser.count + baseSystemPrompt.count, truncationOccurred: trunc, memorySectionChars: memC.count, ragSectionChars: ragC.count, toolSectionChars: toolC.count)
     }

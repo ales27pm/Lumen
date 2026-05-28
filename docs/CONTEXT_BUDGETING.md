@@ -16,3 +16,5 @@
 `LegacyPromptAssembler` enforces profile caps (foreground/headless/role/slot) and guarantees bounded LOCAL MEMORY/LOCAL SOURCES/AVAILABLE LOCAL TOOLS/RUNTIME POLICY sections.
 
 Interactive legacy services now apply `LegacyPromptAssembler` at run-entry to enforce bounded LOCAL MEMORY / LOCAL SOURCES / AVAILABLE LOCAL TOOLS / RUNTIME POLICY sections exactly once per request.
+
+- Grounding injection now uses marker-based idempotency guard (`LUMEN_GROUNDING_V1`) to avoid duplicate blocks.

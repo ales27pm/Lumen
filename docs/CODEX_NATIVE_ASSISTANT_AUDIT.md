@@ -88,3 +88,5 @@
 ## Phase 7D Update
 - Interactive legacy services now call a shared bounded grounding assembly helper at run-entry.
 - Prompt path audit updated with explicit partial/fully-migrated status and remaining blockers.
+
+- UI ModelContext injection audit added in `docs/MODEL_CONTEXT_INJECTION_AUDIT.md`.

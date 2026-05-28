@@ -245,7 +245,7 @@ struct VoiceModeView: View {
             )
 
             var finalText = ""
-            for await event in SlotAgentService.shared.run(req) {
+            for await event in SlotAgentService.shared.run(req, options: .init(modelContext: modelContext, conversationID: convo.id, turnID: turnID, groundingMode: .slotAgent, allowDegradedGrounding: true, preventDoubleGrounding: true, diagnosticsEnabled: false)) {
                 if Task.isCancelled || activeVoiceTurnID != turnID || !generationController.isCurrent(controllerRequestID, for: "voice") { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)

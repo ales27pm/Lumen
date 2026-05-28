@@ -70,6 +70,7 @@ final class SlotAgentService {
     private init() {}
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
+        let req = Self.applyLegacyGroundingAssembly(req)
         AsyncStream { continuation in
             let task = Task { @MainActor in
                 var steps: [AgentStep] = []
@@ -1519,5 +1520,18 @@ nonisolated enum SlotAgentDiagnosticsRecorder {
         let directory = base.appendingPathComponent("Diagnostics", isDirectory: true).appendingPathComponent("SlotAgent", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+
+private extension SlotAgentService {
+    static func applyLegacyGroundingAssembly(_ req: AgentRequest) -> AgentRequest {
+        let sections: [PromptGroundingSection] = [
+            .init(title: "Relevant memories", content: req.relevantMemories.prefix(8).map { "- \\($0.content)" }.joined(separator: "\n"), estimatedChars: 0, sourceIDs: [], privacyLevel: .moderate),
+            .init(title: "Available tools", content: req.availableTools.prefix(24).map { "- \\($0.id): \\($0.description)" }.joined(separator: "\n"), estimatedChars: 0, sourceIDs: [], privacyLevel: .low),
+            .init(title: "Runtime policy", content: "legacy-interactive", estimatedChars: 0, sourceIDs: [], privacyLevel: .low)
+        ].filter { !$0.content.isEmpty }
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: req.systemPrompt, baseUserMessage: req.userMessage, sections: sections, policy: .rolePipeline)
+        return AgentRequest(systemPrompt: assembled.systemPrompt, history: req.history, userMessage: assembled.userMessage, temperature: req.temperature, topP: req.topP, repetitionPenalty: req.repetitionPenalty, maxTokens: req.maxTokens, maxSteps: req.maxSteps, availableTools: req.availableTools, relevantMemories: req.relevantMemories, attachments: req.attachments, conversationID: req.conversationID, turnID: req.turnID)
     }
 }

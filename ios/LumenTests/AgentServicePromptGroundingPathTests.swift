@@ -1,9 +1,8 @@
 import XCTest
-@testable import Lumen
 
 final class AgentServicePromptGroundingPathTests: XCTestCase {
-    func testHasAssemblerType() {
-        _ = LegacyPromptAssembler.self
-        XCTAssertTrue(true)
+    func testAgentServiceUsesAssemblerInRunPath() throws {
+        let source = try String(contentsOfFile: "ios/Lumen/Services/AgentService.swift")
+        XCTAssertTrue(source.contains("applyLegacyGroundingAssembly"))
     }
 }

@@ -84,3 +84,7 @@
 - Added `LegacyPromptAssembler` and `LEGACY_PROMPT_PATH_AUDIT`.
 - Headless `AgentRunner` now uses coordinator + assembler consistently.
 - Legacy services route migrated tool execution through secure wrapper; prompt path migration still partial in interactive pipelines.
+
+## Phase 7D Update
+- Interactive legacy services now call a shared bounded grounding assembly helper at run-entry.
+- Prompt path audit updated with explicit partial/fully-migrated status and remaining blockers.

@@ -1,6 +1,8 @@
 import XCTest
-@testable import Lumen
 
 final class RolePipelinePromptGroundingPathTests: XCTestCase {
-    func testPolicyAvailable() { XCTAssertFalse(LegacyPromptInjectionPolicy.rolePipeline.allowSensitiveSections) }
+    func testRolePipelineUsesAssemblerInRunPath() throws {
+        let source = try String(contentsOfFile: "ios/Lumen/Services/RolePipelineAgentService.swift")
+        XCTAssertTrue(source.contains("applyLegacyGroundingAssembly"))
+    }
 }

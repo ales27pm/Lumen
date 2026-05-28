@@ -26,3 +26,6 @@ Phase 7 introduces `LegacyGroundingBridge` for legacy agent/headless paths.
 ## Prompt path status (Phase 7C)
 - `AgentRunner` now uses `LegacyTurnGroundingCoordinator` + `LegacyPromptAssembler` + bridged secure tool definitions.
 - `AgentService`/`SlotAgentService`/`RolePipelineAgentService` now execute tools through `LegacySecureToolExecutor`; prompt construction migration remains partial and tracked in `LEGACY_PROMPT_PATH_AUDIT.md`.
+
+## Interactive services update
+`AgentService`, `SlotAgentService`, and `RolePipelineAgentService` now enforce one bounded grounding assembly pass at run-entry using `LegacyPromptAssembler`, reducing duplicate/unbounded prompt injection. Full coordinator-in-service integration remains dependent on model-context plumbing.

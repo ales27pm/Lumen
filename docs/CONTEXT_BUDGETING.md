@@ -14,3 +14,5 @@
 `PromptGroundingRenderer` emits bounded sections for memories, retrieved sources, tools, and runtime policy. `LegacyGroundingBridge` applies this renderer with strict character caps before injecting into legacy prompts.
 
 `LegacyPromptAssembler` enforces profile caps (foreground/headless/role/slot) and guarantees bounded LOCAL MEMORY/LOCAL SOURCES/AVAILABLE LOCAL TOOLS/RUNTIME POLICY sections.
+
+Interactive legacy services now apply `LegacyPromptAssembler` at run-entry to enforce bounded LOCAL MEMORY / LOCAL SOURCES / AVAILABLE LOCAL TOOLS / RUNTIME POLICY sections exactly once per request.

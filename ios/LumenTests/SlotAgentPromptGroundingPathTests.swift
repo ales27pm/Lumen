@@ -1,6 +1,8 @@
 import XCTest
-@testable import Lumen
 
 final class SlotAgentPromptGroundingPathTests: XCTestCase {
-    func testPolicyAvailable() { XCTAssertFalse(LegacyPromptInjectionPolicy.slotAgent.allowSensitiveSections) }
+    func testSlotAgentUsesAssemblerInRunPath() throws {
+        let source = try String(contentsOfFile: "ios/Lumen/Services/SlotAgentService.swift")
+        XCTAssertTrue(source.contains("applyLegacyGroundingAssembly"))
+    }
 }

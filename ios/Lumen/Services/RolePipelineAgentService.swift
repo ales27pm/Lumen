@@ -10,9 +10,11 @@ final class RolePipelineAgentService {
     private init() {}
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
-        let req = Self.applyLegacyGroundingAssembly(req)
+        let originalReq = req
         AsyncStream { continuation in
             let task = Task { @MainActor in
+                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(.init(userMessage: originalReq.userMessage, conversationID: originalReq.conversationID, turnID: originalReq.turnID, history: originalReq.history, mode: .foreground, task: .chat, roleOrSlot: nil, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: .rolePipeline, baseSystemPrompt: originalReq.systemPrompt))
+                let req = AgentRequest(systemPrompt: grounded.systemPrompt, history: originalReq.history, userMessage: grounded.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: grounded.bridgedTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: originalReq.conversationID, turnID: originalReq.turnID)
                 var steps: [AgentStep] = []
                 var observations: [String] = []
                 var executedActionFingerprints: Set<String> = []

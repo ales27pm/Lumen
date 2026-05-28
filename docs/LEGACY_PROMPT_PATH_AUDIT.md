@@ -1,11 +1,11 @@
 # Legacy Prompt Path Audit
 
-| Path | Mode | Coordinator | Assembler | Bounded | Secure Executor | Status |
-|---|---|---|---|---|---|---|
-| `AgentRunner.runHeadless` | headless | yes | yes | yes | yes | fully migrated |
-| `AgentService.run` | interactive | partial (no ModelContext-bound coordinator call in-service) | yes | yes | yes | partially migrated |
-| `SlotAgentService.run` | slot | partial (no ModelContext-bound coordinator call in-service) | yes | yes | yes | partially migrated |
-| `RolePipelineAgentService.run` | role-pipeline | partial (no ModelContext-bound coordinator call in-service) | yes | yes | yes | partially migrated |
+## Status
+- AgentRunner headless: fully migrated.
+- AgentService interactive run path: fully migrated to `LegacyTurnGroundingCoordinator.prepareGroundedRequest(...)` with degraded fallback.
+- SlotAgentService interactive run path: fully migrated to `LegacyTurnGroundingCoordinator.prepareGroundedRequest(...)` with degraded fallback.
+- RolePipelineAgentService interactive run path: fully migrated to `LegacyTurnGroundingCoordinator.prepareGroundedRequest(...)` with degraded fallback.
 
-## Why partial remains
-These services receive prebuilt `AgentRequest` and currently do not own a `ModelContext` at the run boundary. They now enforce a single bounded grounding assembly pass internally, but full in-service coordinator invocation needs model-context plumbing through call sites.
+## Remaining risks
+- Some legacy request builders outside `run(_:)` still pass pre-grounded prompts and may double-ground if they are not normalized upstream.
+- External legacy tools still depend on `LegacySecureToolExecutor` deny/allow heuristics when not present in `ToolRegistry`.

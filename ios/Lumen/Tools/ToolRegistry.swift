@@ -7,7 +7,7 @@ final class ToolRegistry {
     private let tools: [ToolID: any LocalTool]
     private let metrics = ToolMetricsRecorder()
 
-    init(tools: [any LocalTool] = [DeviceStatusTool(), OpenURLTool(), NotificationTool()]) {
+    init(tools: [any LocalTool] = [DeviceStatusTool(), MemorySearchTool(), RAGSearchTool(), CalendarReadTool(), ContactsLookupTool(), LocationSnapshotTool(), OpenURLTool(), NotificationTool()]) {
         var map: [ToolID: any LocalTool] = [:]
         for tool in tools { map[tool.definition.id] = tool }
         self.tools = map

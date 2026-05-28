@@ -58,3 +58,8 @@
 - Added centralized permission domain/state/registry abstractions.
 - Added secure tool framework with approval policy, bounded outputs, and metrics recorder.
 - Integrated AssistantKernel tool execution through `ToolRegistry` while preserving legacy `ToolExecutor` path.
+
+## Phase 5C Completion Update
+- Added deferred built-in tools: `MemorySearchTool`, `RAGSearchTool`, `CalendarReadTool`, `ContactsLookupTool`, `LocationSnapshotTool`.
+- Added background-safe tool filtering in `ToolRegistry` and assistant kernel tool execution tests.
+- Kept legacy `ToolExecutor` intact while integrating secure path via `AssistantKernel.executeTool(...)`.

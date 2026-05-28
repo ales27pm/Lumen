@@ -1,7 +1,10 @@
 # Permissions
 
-Phase 5 introduces a centralized `PermissionRegistry` with explicit status and request APIs by domain.
+`PermissionRegistry` centralizes runtime permission state and explicit request calls.
 
-- Permissions are never requested at startup.
-- Background/headless flows are blocked from prompt-requiring permission escalation.
-- `networkAccess` is an app-controlled setting (disabled by default), not an iOS runtime permission.
+Behavior:
+- No permission requests at startup.
+- Background/headless flows do not prompt; not-determined states are denied in background.
+- Permission-read tools check `PermissionGate` before execution.
+- `networkAccess` is app-controlled and defaults disabled.
+- Local network domain reports capability/status conservatively based on Info.plist/runtime constraints.

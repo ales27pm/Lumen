@@ -5,24 +5,70 @@ import Observation
 @Observable
 final class VoiceSessionController {
     var state: VoiceSessionState = .idle
+    var partialTranscript: String = ""
+    var finalTranscript: String = ""
+    var lastErrorReason: String?
+
     private let recognition = SpeechRecognitionService()
     private let synthesis = SpeechSynthesisService()
+    private let legacyVoice = VoiceService.shared
 
-    func startPushToTalk() async {
+    func startPushToTalk(onFinal: @escaping (String) -> Void) async {
         state = .requestingPermissions
         let ok = await recognition.requestPermissions()
-        state = ok ? .listening : .denied("microphone_or_speech_denied")
+        guard ok else {
+            state = .denied("microphone_or_speech_denied")
+            return
+        }
+        legacyVoice.stopSpeaking()
+        await legacyVoice.startListening { [weak self] text in
+            Task { @MainActor in
+                self?.finalTranscript = text
+                self?.state = .processing
+                onFinal(text)
+            }
+        }
+        state = .listening
+        partialTranscript = legacyVoice.liveTranscript
+    }
+
+    func finishListening() {
+        legacyVoice.finishListening()
+        state = .processing
+    }
+
+    func pollTranscript() {
+        partialTranscript = legacyVoice.liveTranscript
+    }
+
+    func startSpeaking() { state = .speaking }
+
+    func speakChunk(_ text: String, voiceID: String?, rate: Double) {
+        synthesis.stop()
+        legacyVoice.speakChunk(text, voiceID: voiceID, rate: rate)
+        state = .speaking
+    }
+
+    func stopSpeaking() {
+        legacyVoice.stopSpeaking()
+        synthesis.stop()
+        if state == .speaking { state = .idle }
     }
 
     func handleAppDidEnterBackground() {
-        if VoiceInterruptionHandler.shouldInterruptOnBackground(), state == .listening || state == .speaking {
-            state = .interrupted
+        if VoiceInterruptionHandler.shouldInterruptOnBackground(), state == .listening || state == .speaking || state == .processing {
+            legacyVoice.stopListening()
+            legacyVoice.stopSpeaking()
             synthesis.stop()
+            state = .interrupted
         }
     }
 
     func cancel() {
+        legacyVoice.stopListening()
+        legacyVoice.stopSpeaking()
         synthesis.stop()
+        partialTranscript = ""
         state = .idle
     }
 }

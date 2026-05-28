@@ -94,3 +94,5 @@
 - Concrete AppIntent entrypoints implemented with bounded/degraded-safe behavior and open-app-required gates for sensitive actions.
 
 - DiagnosticsProvider and diagnostics UI surfaces implemented with metadata-only snapshots (no raw user content).
+
+- VoiceModeView migration completed to VoiceSessionController primary state/runtime with legacy VoiceService bridge for compatibility.

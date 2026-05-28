@@ -6,7 +6,8 @@ struct VoiceModeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
-    @Environment(VoiceService.self) private var voice
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var session = VoiceSessionController()
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
 
@@ -48,7 +49,7 @@ struct VoiceModeView: View {
 
                 Spacer()
 
-                VoiceWaveform(level: voice.inputLevel, phase: phase)
+                VoiceWaveform(level: 0.5, phase: phase)
                     .frame(height: 120)
                     .padding(.horizontal, 40)
 
@@ -103,7 +104,8 @@ struct VoiceModeView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { generationController.startupIfNeeded(for: "voice") { startListening() } }
+        .onAppear { generationController.startupIfNeeded(for: "voice") { } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { session.handleAppDidEnterBackground(); self.phase = .idle } }
         .onDisappear { cleanup() }
     }
 
@@ -118,7 +120,7 @@ struct VoiceModeView: View {
 
     private var transcriptText: String {
         switch phase {
-        case .listening: voice.liveTranscript.isEmpty ? "Say something — Lumen is listening." : voice.liveTranscript
+        case .listening: session.partialTranscript.isEmpty ? "Say something — Lumen is listening." : session.partialTranscript
         case .thinking: voice.liveTranscript
         case .speaking: responseText
         case .idle: "Tap the mic to start."
@@ -177,19 +179,19 @@ struct VoiceModeView: View {
     }
 
     private func startListening() {
-        voice.stopSpeaking()
+        session.stopSpeaking()
         responseText = ""
         activeVoiceTurnID = nil
         phase = .listening
         Task {
-            await voice.startListening { text in
+            await session.startPushToTalk { text in
                 Task { @MainActor in handleTranscript(text) }
             }
         }
     }
 
     private func finishListening() {
-        voice.finishListening()
+        session.finishListening()
     }
 
     private func handleTranscript(_ text: String) {
@@ -254,7 +256,7 @@ struct VoiceModeView: View {
                     finalText += chunk
                     let sanitized = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
                     responseText = FinalIntentValidator.validate(sanitized, routing: routing, fallback: nil)
-                    if phase != .speaking { phase = .speaking }
+                    if phase != .speaking { phase = .speaking }; session.startSpeaking()
                     speakPending()
                 case .done(let f, let all):
                     finalText = f.isEmpty ? finalText : f
@@ -313,7 +315,7 @@ struct VoiceModeView: View {
     }
 
     private func speakPending() {
-        if phase != .speaking { phase = .speaking }
+        if phase != .speaking { phase = .speaking }; session.startSpeaking()
         let currentChars = Array(responseText)
         guard spokenPrefix < currentChars.count else {
             if finishedStreaming && !voice.isSpeaking { onFinishedSpeaking() }
@@ -332,17 +334,17 @@ struct VoiceModeView: View {
         let chunk = String(remaining[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
         spokenPrefix += end
         guard !chunk.isEmpty else { return }
-        if !voice.isSpeaking {
-            voice.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
+        if !VoiceService.shared.isSpeaking {
+            session.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
             observeSpeechEnd()
         } else {
-            voice.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
+            session.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
         }
     }
 
     private func observeSpeechEnd() {
         Task { @MainActor in
-            while voice.isSpeaking { try? await Task.sleep(for: .milliseconds(150)); if Task.isCancelled { return } }
+            while VoiceService.shared.isSpeaking { try? await Task.sleep(for: .milliseconds(150)); if Task.isCancelled { return } }
             if finishedStreaming && spokenPrefix >= responseText.count {
                 onFinishedSpeaking()
             } else {
@@ -365,8 +367,8 @@ struct VoiceModeView: View {
         activeVoiceTurnID = nil
         generationController.cancel(for: "voice")
         responseTask?.cancel()
-        voice.stopSpeaking()
-        voice.stopListening()
+        session.stopSpeaking()
+        session.cancel()
         phase = .idle
         if turnID != nil, appState.handsFree { startListening() }
     }
@@ -385,8 +387,8 @@ struct VoiceModeView: View {
         activeVoiceTurnID = nil
         generationController.cancel(for: "voice")
         responseTask?.cancel()
-        voice.stopListening()
-        voice.stopSpeaking()
+        session.cancel()
+        session.stopSpeaking()
     }
 }
 

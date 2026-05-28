@@ -27,18 +27,20 @@ struct AssistantRuntimeRouter {
         let decision = ComputePolicy.decide(for: context)
         switch context.task {
         case .embedding, .safetyClassification:
-            return coreML.isAvailable ? .init(runtime: .coreML, reason: "embedding uses CoreML") : .init(runtime: .deterministicFallback, reason: "embedding fallback")
+            return coreML.isAvailable ? .init(runtime: .coreML, reason: "embedding uses CoreML") : .init(runtime: .deterministicFallback, reason: coreML.unavailableReason ?? "embedding fallback")
         case .backgroundTrigger, .remConsolidation:
             if decision.allowHeavyRuntime, llama.isAvailable {
                 return .init(runtime: .llama, reason: "background heavy runtime allowed")
             }
-            return .init(runtime: .deterministicFallback, reason: "background constrained")
+            return .init(runtime: .deterministicFallback, reason: decision.allowHeavyRuntime ? (llama.unavailableReason ?? "llama unavailable") : "heavy runtime disallowed")
         case .chat, .agentPlan, .toolDecision, .summarization, .memoryExtraction, .speechCommandParsing:
             if context.prefersFoundationModels, foundation.isAvailable, decision.allowHeavyRuntime {
                 return .init(runtime: .foundationModels, reason: "preferred on-device foundation runtime")
             }
-            if llama.isAvailable { return .init(runtime: .llama, reason: "llama available") }
-            return .init(runtime: .deterministicFallback, reason: "no capable runtime")
+            if decision.allowHeavyRuntime, llama.isAvailable {
+                return .init(runtime: .llama, reason: "llama available")
+            }
+            return .init(runtime: .deterministicFallback, reason: decision.allowHeavyRuntime ? "no capable runtime" : "heavy runtime disallowed")
         }
     }
 

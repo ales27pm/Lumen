@@ -105,11 +105,14 @@ struct VoiceModeView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { generationController.startupIfNeeded(for: "voice") { } }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { session.handleAppDidEnterBackground(); self.phase = .idle } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { session.handleAppDidEnterBackground(); syncPhaseFromSession() } }
         .onDisappear { cleanup() }
     }
 
     private var statusTitle: String {
+        if case .denied = session.state { return "Permission denied" }
+        if case .interrupted = session.state { return "Interrupted" }
+        if case .failed(let reason) = session.state { return reason }
         switch phase {
         case .idle: "Tap to speak"
         case .listening: "Listening"
@@ -121,9 +124,15 @@ struct VoiceModeView: View {
     private var transcriptText: String {
         switch phase {
         case .listening: session.partialTranscript.isEmpty ? "Say something — Lumen is listening." : session.partialTranscript
-        case .thinking: voice.liveTranscript
+        case .thinking: session.finalTranscript.isEmpty ? session.partialTranscript : session.finalTranscript
         case .speaking: responseText
-        case .idle: "Tap the mic to start."
+        case .idle:
+            switch session.state {
+            case .denied(let reason): "Permission denied: \(reason). Check Settings and try again."
+            case .interrupted: "Voice session interrupted. Tap the mic to start again."
+            case .failed(let reason): "Voice error: \(reason)"
+            default: "Tap the mic to start."
+            }
         }
     }
 
@@ -182,16 +191,30 @@ struct VoiceModeView: View {
         session.stopSpeaking()
         responseText = ""
         activeVoiceTurnID = nil
-        phase = .listening
         Task {
             await session.startPushToTalk { text in
                 Task { @MainActor in handleTranscript(text) }
             }
+            syncPhaseFromSession()
         }
     }
 
     private func finishListening() {
         session.finishListening()
+        syncPhaseFromSession()
+    }
+
+    private func syncPhaseFromSession() {
+        switch session.state {
+        case .idle, .denied, .interrupted, .failed:
+            phase = .idle
+        case .requestingPermissions, .listening:
+            phase = .listening
+        case .processing:
+            phase = .thinking
+        case .speaking:
+            phase = .speaking
+        }
     }
 
     private func handleTranscript(_ text: String) {

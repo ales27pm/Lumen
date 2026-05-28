@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
-import CryptoKit
+
+struct RAGMaintenanceResult: Sendable, Equatable {
+    let success: Bool
+    let metricSummary: String
+}
 
 @MainActor
 final class RAGEngine {
@@ -9,12 +13,15 @@ final class RAGEngine {
     func retrieve(query: String, limit: Int, context: ModelContext) async -> [RAGRetrievalResult] {
         let semantic = await RAGStore.search(query: query, context: context, limit: limit)
         let mapped = semantic.map { item in
-            RAGRetrievalResult(chunkID: item.chunk.id, source: .init(id: item.chunk.sourceName, type: item.chunk.sourceType, title: item.chunk.sourceName, ref: item.chunk.sourceRef), excerpt: String(item.chunk.content.prefix(220)), score: item.score, retrievalMode: "semantic", offsetStart: nil, offsetEnd: nil)
+            let ref = item.chunk.sourceRef ?? item.chunk.id.uuidString
+            return RAGRetrievalResult(chunkID: item.chunk.id, source: .init(id: ref, type: item.chunk.sourceType, title: item.chunk.sourceName, ref: item.chunk.sourceRef), excerpt: String(item.chunk.content.prefix(220)), score: item.score, retrievalMode: "semantic", offsetStart: nil, offsetEnd: nil)
         }
         var seen = Set<String>()
-        return mapped.filter { r in
-            let key = SHA256.hash(data: Data((r.source.id + r.excerpt).utf8)).map { String(format:"%02x", $0) }.joined()
-            if seen.contains(key) { return false }; seen.insert(key); return true
+        return mapped.filter { result in
+            let key = "\(result.source.id)#\(result.chunkID.uuidString)"
+            if seen.contains(key) { return false }
+            seen.insert(key)
+            return true
         }
     }
 
@@ -23,12 +30,18 @@ final class RAGEngine {
         return RAGContextBuilder.build(results: r, budgetChars: budget)
     }
 
-    func index(source: RAGSource, title: String, text: String, metadata: [String:String], context: ModelContext) async -> Int {
-        await indexer.indexText(source: source, title: title, text: text, metadata: metadata, context: context)
+    func index(source: RAGSource, title: String, text: String, metadata: [String:String], context: ModelContext) async throws -> Int {
+        try await indexer.indexText(source: source, title: title, text: text, metadata: metadata, context: context)
     }
 
-    func maintenance(context: ModelContext) async -> Bool {
-        let chunks = (try? context.fetch(FetchDescriptor<RAGChunk>())) ?? []
-        return !chunks.isEmpty
+    func maintenance(context: ModelContext) async -> RAGMaintenanceResult {
+        do {
+            var descriptor = FetchDescriptor<RAGChunk>()
+            descriptor.fetchLimit = 1
+            let hasChunks = try !context.fetch(descriptor).isEmpty
+            return .init(success: true, metricSummary: hasChunks ? "maintenance_success_work_done" : "maintenance_success_empty")
+        } catch {
+            return .init(success: false, metricSummary: "maintenance_failed")
+        }
     }
 }

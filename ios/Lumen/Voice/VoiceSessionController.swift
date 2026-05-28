@@ -12,6 +12,7 @@ final class VoiceSessionController {
     private let recognition = SpeechRecognitionService()
     private let synthesis = SpeechSynthesisService()
     private let legacyVoice = VoiceService.shared
+    private var transcriptPollTask: Task<Void, Never>?
 
     func startPushToTalk(onFinal: @escaping (String) -> Void) async {
         state = .requestingPermissions
@@ -23,6 +24,7 @@ final class VoiceSessionController {
         legacyVoice.stopSpeaking()
         await legacyVoice.startListening { [weak self] text in
             Task { @MainActor in
+                self?.stopTranscriptPolling()
                 self?.finalTranscript = text
                 self?.state = .processing
                 onFinal(text)
@@ -30,9 +32,11 @@ final class VoiceSessionController {
         }
         state = .listening
         partialTranscript = legacyVoice.liveTranscript
+        startTranscriptPolling()
     }
 
     func finishListening() {
+        stopTranscriptPolling()
         legacyVoice.finishListening()
         state = .processing
     }
@@ -56,7 +60,8 @@ final class VoiceSessionController {
     }
 
     func handleAppDidEnterBackground() {
-        if VoiceInterruptionHandler.shouldInterruptOnBackground(), state == .listening || state == .speaking || state == .processing {
+        if VoiceInterruptionHandler.shouldInterruptOnBackground() && (state == .listening || state == .speaking || state == .processing) {
+            stopTranscriptPolling()
             legacyVoice.stopListening()
             legacyVoice.stopSpeaking()
             synthesis.stop()
@@ -65,10 +70,26 @@ final class VoiceSessionController {
     }
 
     func cancel() {
+        stopTranscriptPolling()
         legacyVoice.stopListening()
         legacyVoice.stopSpeaking()
         synthesis.stop()
         partialTranscript = ""
         state = .idle
+    }
+
+    private func startTranscriptPolling() {
+        stopTranscriptPolling()
+        transcriptPollTask = Task { @MainActor in
+            while !Task.isCancelled && state == .listening {
+                partialTranscript = legacyVoice.liveTranscript
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+        }
+    }
+
+    private func stopTranscriptPolling() {
+        transcriptPollTask?.cancel()
+        transcriptPollTask = nil
     }
 }

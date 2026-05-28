@@ -23,7 +23,10 @@ actor RuntimeMetricsStore {
     func appendMetric(_ metric: RuntimeMetric) async throws {
         let line = try encoder.encode(metric) + Data([0x0A])
         if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: line)
+            let created = FileManager.default.createFile(atPath: fileURL.path, contents: line)
+            if !created {
+                try line.write(to: fileURL, options: .atomic)
+            }
             return
         }
         let handle = try FileHandle(forWritingTo: fileURL)
@@ -33,7 +36,7 @@ actor RuntimeMetricsStore {
     }
 
     func recentMetrics(limit: Int) async throws -> [RuntimeMetric] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [RuntimeMetric]() }
         let data = try Data(contentsOf: fileURL)
         let lines = data.split(separator: 0x0A)
         let decoded: [RuntimeMetric] = lines.compactMap { try? decoder.decode(RuntimeMetric.self, from: Data($0)) }

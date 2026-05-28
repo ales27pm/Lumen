@@ -4,6 +4,7 @@ import Foundation
 final class ThermalStateMonitor: ObservableObject {
     @Published private(set) var currentState: DeviceThermalState
     private let notificationCenter: NotificationCenter
+    private var observerToken: NSObjectProtocol?
     private var continuation: AsyncStream<DeviceThermalState>.Continuation?
     let updates: AsyncStream<DeviceThermalState>
 
@@ -14,7 +15,7 @@ final class ThermalStateMonitor: ObservableObject {
         self.updates = AsyncStream { streamContinuation = $0 }
         self.continuation = streamContinuation
 
-        notificationCenter.addObserver(
+        observerToken = notificationCenter.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification,
             object: nil,
             queue: .main
@@ -23,6 +24,12 @@ final class ThermalStateMonitor: ObservableObject {
             let state = DeviceThermalState.from(processThermalState: ProcessInfo.processInfo.thermalState)
             self.currentState = state
             self.continuation?.yield(state)
+        }
+    }
+
+    deinit {
+        if let observerToken {
+            notificationCenter.removeObserver(observerToken)
         }
     }
 }

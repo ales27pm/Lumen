@@ -99,3 +99,8 @@
 
 - Build hardening pass documented synchronized Xcode project membership, static validation script, and SecureToolRegistry/legacy ToolRegistry symbol split.
 - Build hardening also split new assistant symbols from legacy names: `SecureToolCategory`, `AssistantPermissionState`, and `AssistantDeviceCapabilitySnapshot` avoid collisions with existing UI/runtime types.
+
+## PR #232 Review Remediation Update
+- Runtime adapters no longer echo prompts; unavailable/not-yet-wired runtimes now fail with typed, sanitized errors instead of returning user input.
+- `AssistantKernel.runTextTurn` is limited to text-generation tasks and records sanitized metric error codes.
+- Background, metrics, permission, tool, AppIntent, Memory, and RAG review fixes are tracked in `docs/PR_REVIEW_REMEDIATION.md`.

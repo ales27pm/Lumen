@@ -3,6 +3,7 @@ import UIKit
 import Metal
 
 struct DeviceCapabilityProfiler {
+    @MainActor
     func captureSnapshot(processInfo: ProcessInfo = .processInfo) -> AssistantDeviceCapabilitySnapshot {
         let idiom: String
         switch UIDevice.current.userInterfaceIdiom {

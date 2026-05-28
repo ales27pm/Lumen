@@ -8,6 +8,7 @@ enum PermissionGate {
         switch state {
         case .granted: return .init(allowed: true, reason: nil)
         case .notDetermined: return .init(allowed: false, reason: "Permission not granted yet")
+        case .limited: return .init(allowed: false, reason: "Permission limited")
         case .denied: return .init(allowed: false, reason: "Permission denied")
         case .restricted: return .init(allowed: false, reason: "Permission restricted")
         case .unavailable: return .init(allowed: false, reason: "Capability unavailable")

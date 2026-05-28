@@ -12,7 +12,16 @@ struct OpenURLTool: LocalTool {
             return .init(invocationID: invocation.id, status: .failed, displayText: "Invalid URL.", modelText: "URL rejected.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "invalid_args", errorCode: "invalid_url")
         }
         guard let raw = invocation.arguments["url"], let url = URL(string: raw) else { return .init(invocationID: invocation.id, status: .failed, displayText: "Invalid URL.", modelText: "URL rejected.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "invalid_args", errorCode: "invalid_url") }
-        await MainActor.run { UIApplication.shared.open(url) }
+        let opened = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            Task { @MainActor in
+                UIApplication.shared.open(url, options: [:]) { success in
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+        guard opened else {
+            return .init(invocationID: invocation.id, status: .failed, displayText: "Unable to open URL.", modelText: "URL open was rejected by the system.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "open_rejected", errorCode: "open_rejected")
+        }
         return .init(invocationID: invocation.id, status: .success, displayText: "Opened URL.", modelText: "Opened URL successfully.", structuredPayload: nil, privacyLevel: .moderate, metricsSummary: "opened", errorCode: nil)
     }
 }

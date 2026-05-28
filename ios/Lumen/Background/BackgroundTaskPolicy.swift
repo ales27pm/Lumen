@@ -31,8 +31,8 @@ enum BackgroundTaskPolicy {
         guard input.backgroundAgentsEnabled else {
             return .init(allow: false, denyReason: "background agents disabled", maxSteps: 0, maxTokens: 0, allowModelLoading: false, allowNetwork: false)
         }
-        if input.thermalState == .critical {
-            return .init(allow: false, denyReason: "critical thermal state", maxSteps: 0, maxTokens: 0, allowModelLoading: false, allowNetwork: false)
+        if input.thermalState == .serious || input.thermalState == .critical {
+            return .init(allow: false, denyReason: "thermal state disallows background work", maxSteps: 0, maxTokens: 0, allowModelLoading: false, allowNetwork: false)
         }
         let isLowPowerBackground = input.lowPowerMode && !input.isForeground
         if isLowPowerBackground && input.taskKind != .triggerScan {
@@ -41,6 +41,9 @@ enum BackgroundTaskPolicy {
 
         let allowModelLoading = !(!input.isForeground && input.estimatedCost > 5)
         let allowNetwork = input.requiresNetwork && !isLowPowerBackground
+        if input.requiresNetwork && !allowNetwork {
+            return .init(allow: false, denyReason: "network unavailable for required background task", maxSteps: 0, maxTokens: 0, allowModelLoading: false, allowNetwork: false)
+        }
         return .init(allow: true, denyReason: nil, maxSteps: input.taskKind == .triggerScan ? 2 : 1, maxTokens: 256, allowModelLoading: allowModelLoading, allowNetwork: allowNetwork)
     }
 }

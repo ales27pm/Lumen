@@ -11,6 +11,13 @@ struct ContextBudgetSections: Sendable {
 
 enum ContextBudgetAllocator {
     static func allocate(maxChars: Int) -> ContextBudgetSections {
-        ContextBudgetSections(system: Int(Double(maxChars)*0.18), history: Int(Double(maxChars)*0.34), memories: Int(Double(maxChars)*0.18), rag: Int(Double(maxChars)*0.2), tools: Int(Double(maxChars)*0.06), runtime: maxChars - Int(Double(maxChars)*0.96))
+        let bounded = max(0, maxChars)
+        let system = Int(Double(bounded) * 0.18)
+        let history = Int(Double(bounded) * 0.34)
+        let memories = Int(Double(bounded) * 0.18)
+        let rag = Int(Double(bounded) * 0.20)
+        let tools = Int(Double(bounded) * 0.06)
+        let runtime = max(0, bounded - (system + history + memories + rag + tools))
+        return ContextBudgetSections(system: system, history: history, memories: memories, rag: rag, tools: tools, runtime: runtime)
     }
 }

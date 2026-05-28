@@ -30,8 +30,12 @@ struct LumenAddMemoryIntent: AppIntent {
         guard score.decision == .save else {
             return .result(value: "Memory not saved: did not meet save policy.")
         }
-        try? await MemoryStore.remember(body, kind: .fact, source: "app-intent", topic: nil, context: ctx)
-        return .result(value: "Memory saved.")
+        do {
+            try await MemoryStore.remember(body, kind: .fact, source: "app-intent", topic: nil, context: ctx)
+            return .result(value: "Memory saved.")
+        } catch {
+            return .result(value: LumenIntentResultRenderer.degraded("memory save failed"))
+        }
     }
 }
 #endif

@@ -97,9 +97,12 @@ final class PermissionRegistry: NSObject, CLLocationManagerDelegate {
             let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
             return .init(domain: domain, state: mapPhoto(status), message: "Photo authorization updated")
         case .locationWhenInUse:
-            locationManager.requestWhenInUseAuthorization()
+            guard locationContinuation == nil else {
+                return .init(domain: domain, state: await currentStatus(for: domain), message: "Location request already in progress")
+            }
             return await withCheckedContinuation { continuation in
                 self.locationContinuation = continuation
+                locationManager.requestWhenInUseAuthorization()
             }
         case .calendars:
             let store = EKEventStore()
@@ -138,7 +141,7 @@ final class PermissionRegistry: NSObject, CLLocationManagerDelegate {
         case .reminders: return ["NSRemindersUsageDescription", "NSRemindersFullAccessUsageDescription"]
         case .contacts: return ["NSContactsUsageDescription"]
         case .localNetwork: return ["NSLocalNetworkUsageDescription"]
-        default: return []
+        default: return [String]()
         }
     }
 
@@ -152,7 +155,8 @@ final class PermissionRegistry: NSObject, CLLocationManagerDelegate {
 
     private func mapEventKit(_ status: EKAuthorizationStatus) -> AssistantPermissionState {
         switch status {
-        case .fullAccess, .writeOnly: return .granted
+        case .fullAccess: return .granted
+        case .writeOnly: return .limited
         case .denied: return .denied
         case .restricted: return .restricted
         case .notDetermined: return .notDetermined

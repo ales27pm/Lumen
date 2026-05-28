@@ -2,8 +2,11 @@ import Foundation
 
 enum SafeToolOutputLimiter {
     static func clamp(_ text: String, max: Int) -> String {
-        guard max > 0, text.count > max else { return text }
-        return String(text.prefix(max)) + "\n…(truncated)"
+        guard max > 0 else { return "" }
+        guard text.count > max else { return text }
+        let suffix = "\n…(truncated)"
+        guard max > suffix.count else { return String(text.prefix(max)) }
+        return String(text.prefix(max - suffix.count)) + suffix
     }
 
     static func limit(result: ToolResult, maxOutput: Int) -> ToolResult {

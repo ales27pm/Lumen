@@ -22,7 +22,17 @@ struct CalendarReadTool: LocalTool {
     func validateArguments(_ arguments: [String : String]) throws { _ = try parse(arguments) }
     func parse(_ a:[String:String], now: Date = Date()) throws -> (Date,Date,Int,String?) {
         let limit = Int(a["limit"] ?? "10") ?? 10; guard (1...20).contains(limit) else { throw ToolExecutionError.invalidArguments("limit") }
-        let f = ISO8601DateFormatter(); let start = a["startDate"].flatMap{f.date(from:$0)} ?? now; let end = a["endDate"].flatMap{f.date(from:$0)} ?? now.addingTimeInterval(7*24*3600)
+        let f = ISO8601DateFormatter()
+        let start: Date
+        if let rawStart = a["startDate"] {
+            guard let parsed = f.date(from: rawStart) else { throw ToolExecutionError.invalidArguments("startDate") }
+            start = parsed
+        } else { start = now }
+        let end: Date
+        if let rawEnd = a["endDate"] {
+            guard let parsed = f.date(from: rawEnd) else { throw ToolExecutionError.invalidArguments("endDate") }
+            end = parsed
+        } else { end = now.addingTimeInterval(7*24*3600) }
         guard end > start else { throw ToolExecutionError.invalidArguments("endDate") }
         guard end.timeIntervalSince(start) <= 31*24*3600 else { throw ToolExecutionError.invalidArguments("date range max 31d") }
         let title = a["calendarTitleFilter"]?.trimmingCharacters(in: .whitespacesAndNewlines)

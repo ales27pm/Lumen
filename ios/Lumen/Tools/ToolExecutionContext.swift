@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-struct ToolExecutionContext: Sendable {
+struct ToolExecutionContext {
     let isForeground: Bool
     let appState: AppState?
     let modelContext: ModelContext?

@@ -5,11 +5,13 @@ import SwiftData
 final class SecureToolRegistry {
     static let shared = SecureToolRegistry()
     private let tools: [ToolID: any LocalTool]
-    private let metrics = ToolMetricsRecorder()
 
     init(tools: [any LocalTool] = [DeviceStatusTool(), MemorySearchTool(), RAGSearchTool(), CalendarReadTool(), ContactsLookupTool(), LocationSnapshotTool(), OpenURLTool(), NotificationTool()]) {
         var map: [ToolID: any LocalTool] = [:]
-        for tool in tools { map[tool.definition.id] = tool }
+        for tool in tools {
+            precondition(map[tool.definition.id] == nil, "Duplicate secure tool id: \(tool.definition.id)")
+            map[tool.definition.id] = tool
+        }
         self.tools = map
     }
 
@@ -27,23 +29,25 @@ final class SecureToolRegistry {
 
     func execute(_ invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolResult {
         guard let tool = tools[invocation.toolID] else {
-            return .init(invocationID: invocation.id, status: .unavailable, displayText: "Tool unavailable.", modelText: "Tool unavailable.", structuredPayload: nil, privacyLevel: .low, metricsSummary: "missing_tool", errorCode: "missing_tool")
+            let result = ToolResult(invocationID: invocation.id, status: .unavailable, displayText: "Tool unavailable.", modelText: "Tool unavailable.", structuredPayload: nil, privacyLevel: .low, metricsSummary: "missing_tool", errorCode: "missing_tool")
+            _ = await ToolMetricsRecorder(store: context.metricsStore).record(toolID: invocation.toolID, status: result.status, success: false, errorCode: result.errorCode, memoryWarningCount: MemoryPressureMonitor.shared.warningCount)
+            return result
         }
         let states = await context.permissionRegistry.diagnostics()
         let policy = ToolApprovalPolicy.decide(definition: tool.definition, invocation: invocation, isForeground: context.isForeground, permissionStates: states, settings: .init(networkAccessEnabled: states[.networkAccess] == .granted, userAllowlist: []))
         switch policy {
         case .deny(let reason):
             let result = ToolResult(invocationID: invocation.id, status: .denied, displayText: reason, modelText: "Tool denied: \(reason)", structuredPayload: nil, privacyLevel: tool.definition.resultPrivacyLevel, metricsSummary: "denied", errorCode: "denied")
-            await metrics.record(toolID: invocation.toolID, status: result.status, success: false, errorCode: result.errorCode)
+            _ = await ToolMetricsRecorder(store: context.metricsStore).record(toolID: invocation.toolID, status: result.status, success: false, errorCode: result.errorCode, memoryWarningCount: MemoryPressureMonitor.shared.warningCount)
             return result
         case .requiresApproval(let reason):
             let result = ToolResult(invocationID: invocation.id, status: .requiresApproval, displayText: reason, modelText: "Approval required.", structuredPayload: nil, privacyLevel: tool.definition.resultPrivacyLevel, metricsSummary: "requires_approval", errorCode: nil)
-            await metrics.record(toolID: invocation.toolID, status: result.status, success: false)
+            _ = await ToolMetricsRecorder(store: context.metricsStore).record(toolID: invocation.toolID, status: result.status, success: false, memoryWarningCount: MemoryPressureMonitor.shared.warningCount)
             return result
         case .allow:
             let raw = await tool.execute(invocation: invocation, context: context)
             let bounded = SafeToolOutputLimiter.limit(result: raw, maxOutput: tool.definition.maxOutputCharacters)
-            await metrics.record(toolID: invocation.toolID, status: bounded.status, success: bounded.status == .success, errorCode: bounded.errorCode)
+            _ = await ToolMetricsRecorder(store: context.metricsStore).record(toolID: invocation.toolID, status: bounded.status, success: bounded.status == .success, errorCode: bounded.errorCode, memoryWarningCount: MemoryPressureMonitor.shared.warningCount)
             return bounded
         }
     }

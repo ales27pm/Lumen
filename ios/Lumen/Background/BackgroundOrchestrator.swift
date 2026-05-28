@@ -35,9 +35,9 @@ final class BackgroundOrchestrator {
     func runTriggerScan(context: ModelContext) async {
         let acquired = await lease.acquire(category: "triggerScan", reason: "background trigger scan")
         guard acquired else { return }
-        defer { Task { await lease.release(category: "triggerScan") } }
         await TriggerScheduler.shared.fireDueTriggers(context: context, settings: SettingsSnapshot.loadFromDisk())
-        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "triggerScan", modelIDHash: nil, policySummary: "trigger scheduler fireDueTriggers", latencyMs: nil, success: true, errorCode: nil, thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: 0))
+        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "triggerScan", modelIDHash: nil, policySummary: "trigger scheduler fireDueTriggers", latencyMs: nil, success: true, errorCode: nil, thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: MemoryPressureMonitor.shared.warningCount))
+        await lease.release(category: "triggerScan")
     }
 
     func runMemoryConsolidationIfAllowed() async {
@@ -49,8 +49,8 @@ final class BackgroundOrchestrator {
     func runRAGMaintenanceIfAllowed() async {
         guard let container = SharedContainer.shared else { return }
         let context = ModelContext(container)
-        let ok = await RAGEngine().maintenance(context: context)
-        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "ragMaintenance", modelIDHash: nil, policySummary: "maintenance", latencyMs: nil, success: ok, errorCode: ok ? nil : "unavailable", thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: 0))
+        let result = await RAGEngine().maintenance(context: context)
+        try? await metrics.appendMetric(RuntimeMetric(timestamp: Date(), runtimeName: "background", taskKind: "ragMaintenance", modelIDHash: nil, policySummary: result.metricSummary, latencyMs: nil, success: result.success, errorCode: result.success ? nil : "maintenance_failed", thermalState: .from(processThermalState: ProcessInfo.processInfo.thermalState), lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, memoryWarningCount: MemoryPressureMonitor.shared.warningCount))
     }
 
     func runModelHousekeepingIfAllowed() async {

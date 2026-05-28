@@ -38,6 +38,8 @@ rg -n "FoundationModels|@available|canImport\(FoundationModels\)" ios/Lumen >/de
 rg -n "NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription|NSCalendars|NSContactsUsageDescription|NSLocationWhenInUseUsageDescription|BGTaskSchedulerPermittedIdentifiers" ios >/dev/null
 if rg -n "OSLog|Logger" ios/Lumen/AppIntents ios/Lumen/Voice ios/Lumen/Diagnostics; then
   echo "Found logging APIs in privacy-sensitive additions; review output above." >&2
+else
+  true
 fi
 
 echo "Build readiness static checks completed. Run xcodebuild on macOS for compile validation."

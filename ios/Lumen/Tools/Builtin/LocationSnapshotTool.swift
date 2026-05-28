@@ -2,25 +2,80 @@ import Foundation
 import CoreLocation
 
 struct LocationSnapshotTool: LocalTool {
-    protocol Provider { func currentLocation(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval) async -> CLLocation? }
+    @MainActor protocol Provider { func currentLocation(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval) async -> CLLocation? }
+    @MainActor
     final class CoreLocationProvider: NSObject, Provider, CLLocationManagerDelegate {
-        private let manager = CLLocationManager(); private var cont: CheckedContinuation<CLLocation?, Never>?
-        override init() { super.init(); manager.delegate = self }
+        private let manager = CLLocationManager()
+        private var active: LocationRequestState?
+
+        override init() {
+            super.init()
+            manager.delegate = self
+        }
+
         func currentLocation(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval) async -> CLLocation? {
-            manager.desiredAccuracy = desiredAccuracy; manager.requestLocation()
-            return await withTaskGroup(of: CLLocation?.self) { g in
-                g.addTask { await withCheckedContinuation { self.cont = $0 } }
-                g.addTask { try? await Task.sleep(nanoseconds: UInt64(timeout*1_000_000_000)); return nil }
-                let v = await g.next() ?? nil; g.cancelAll(); return v
+            guard active == nil else { return nil }
+            let state = LocationRequestState()
+            active = state
+            manager.desiredAccuracy = desiredAccuracy
+            manager.requestLocation()
+            let timeoutTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                state.resume(nil)
+                if active === state { active = nil }
+            }
+            let value = await state.value()
+            timeoutTask.cancel()
+            if active === state { active = nil }
+            return value
+        }
+
+        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+            active?.resume(locations.last)
+            active = nil
+        }
+
+        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+            active?.resume(nil)
+            active = nil
+        }
+    }
+
+    private final class LocationRequestState {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<CLLocation?, Never>?
+        private var completed = false
+        private var completedValue: CLLocation?
+
+        func value() async -> CLLocation? {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                if completed {
+                    let value = completedValue
+                    lock.unlock()
+                    continuation.resume(returning: value)
+                } else {
+                    self.continuation = continuation
+                    lock.unlock()
+                }
             }
         }
-        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) { cont?.resume(returning: locations.last); cont=nil }
-        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) { cont?.resume(returning: nil); cont=nil }
+
+        func resume(_ value: CLLocation?) {
+            lock.lock()
+            guard !completed else { lock.unlock(); return }
+            completed = true
+            completedValue = value
+            let continuation = self.continuation
+            self.continuation = nil
+            lock.unlock()
+            continuation?.resume(returning: value)
+        }
     }
 
     let definition = SecureToolDefinition(id: "location.snapshot", displayName: "Location Snapshot", description: "Get current location snapshot", category: .permissionRead, requiredPermissions: [.locationWhenInUse], supportsBackgroundExecution: false, requiresUserApproval: false, argumentSchemaDescription: "{desiredAccuracy?:low|medium|high,precision?:approximate|precise}", resultPrivacyLevel: .sensitive, maxOutputCharacters: 600)
     let provider: Provider
-    init(provider: Provider = CoreLocationProvider()) { self.provider = provider }
+    @MainActor init(provider: Provider = CoreLocationProvider()) { self.provider = provider }
 
     func validateArguments(_ arguments: [String : String]) throws {
         let accuracy = arguments["desiredAccuracy"] ?? "low"; guard ["low","medium","high"].contains(accuracy) else { throw ToolExecutionError.invalidArguments("desiredAccuracy") }

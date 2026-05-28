@@ -7,13 +7,17 @@ enum MemoryPressureUnloadPolicy {
 
 @MainActor
 final class MemoryPressureMonitor {
+    static let shared = MemoryPressureMonitor()
     private(set) var warningCount: Int = 0
     private(set) var lastWarningAt: Date?
     private let metricsStore: RuntimeMetricsStore
+    private let notificationCenter: NotificationCenter
+    private var observerToken: NSObjectProtocol?
 
     init(metricsStore: RuntimeMetricsStore = .shared, notificationCenter: NotificationCenter = .default) {
         self.metricsStore = metricsStore
-        notificationCenter.addObserver(
+        self.notificationCenter = notificationCenter
+        observerToken = notificationCenter.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: .main
@@ -21,6 +25,12 @@ final class MemoryPressureMonitor {
             Task { @MainActor in
                 await self?.handleWarning()
             }
+        }
+    }
+
+    deinit {
+        if let observerToken {
+            notificationCenter.removeObserver(observerToken)
         }
     }
 
@@ -41,6 +51,6 @@ final class MemoryPressureMonitor {
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             memoryWarningCount: warningCount
         )
-        try? await metricsStore.appendMetric(metric)
+        _ = try? await metricsStore.appendMetric(metric)
     }
 }

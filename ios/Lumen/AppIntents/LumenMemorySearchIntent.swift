@@ -6,7 +6,7 @@ import AppIntents
 @available(iOS 16.0, *)
 struct LumenMemorySearchIntent: AppIntent {
     static var title: LocalizedStringResource = "Search Lumen Memory"
-    static var openAppWhenRun = false
+    static var openAppWhenRun = true
 
     @Parameter(title: "Query") var query: String
     @Parameter(title: "Limit", default: 5) var limit: Int

@@ -92,3 +92,5 @@
 - UI ModelContext injection audit added in `docs/MODEL_CONTEXT_INJECTION_AUDIT.md`.
 
 - Concrete AppIntent entrypoints implemented with bounded/degraded-safe behavior and open-app-required gates for sensitive actions.
+
+- DiagnosticsProvider and diagnostics UI surfaces implemented with metadata-only snapshots (no raw user content).

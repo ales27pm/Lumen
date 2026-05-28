@@ -1,8 +1,7 @@
 # Privacy Model
 
-- Local-first assistant execution.
-- No background always-on microphone capture.
-- App Intents use bounded local-safe paths.
-- Sensitive actions must be approved in-app.
-- Degraded responses are explicit when context is unavailable.
-- No raw private prompt/message/transcript logging in AppIntents.
+- Diagnostics expose status summaries and categories only.
+- No raw prompt/message/transcript content is shown in diagnostics.
+- Tool diagnostics show metadata (category, permissions, approval/background flags) only.
+- Background diagnostics show identifier/warning summaries only.
+- Network state is represented as permission/status metadata.

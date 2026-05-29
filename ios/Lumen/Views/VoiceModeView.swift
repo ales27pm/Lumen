@@ -113,7 +113,7 @@ struct VoiceModeView: View {
         if case .denied = session.state { return "Permission denied" }
         if case .interrupted = session.state { return "Interrupted" }
         if case .failed(let reason) = session.state { return reason }
-        switch phase {
+        return switch phase {
         case .idle: "Tap to speak"
         case .listening: "Listening"
         case .thinking: "Thinking"
@@ -341,7 +341,7 @@ struct VoiceModeView: View {
         if phase != .speaking { phase = .speaking }; session.startSpeaking()
         let currentChars = Array(responseText)
         guard spokenPrefix < currentChars.count else {
-            if finishedStreaming && !voice.isSpeaking { onFinishedSpeaking() }
+            if finishedStreaming && !VoiceService.shared.isSpeaking { onFinishedSpeaking() }
             return
         }
         let remaining = Array(currentChars[spokenPrefix...])

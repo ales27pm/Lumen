@@ -190,14 +190,18 @@ private final class LlamaRuntimeLogCapture: @unchecked Sendable {
 
     nonisolated func record(_ line: String) {
         let lower = line.lowercased()
-        let interesting = lower.contains("metal")
-            || lower.contains("gpu")
+        let isBackendSignal = lower.contains("using device")
+            || lower.contains("picking default device")
+            || lower.contains("gpu name")
+            || lower.contains("recommendedmaxworkingsetsize")
+            || lower.contains("assigned to device")
             || lower.contains("offload")
             || lower.contains("kv")
             || lower.contains("prompt eval")
             || lower.contains("eval time")
             || lower.contains("tokens per second")
-        guard interesting else { return }
+        let isKernelCatalogNoise = lower.contains("loaded kernel") || lower.contains("skipping kernel")
+        guard isBackendSignal, !isKernelCatalogNoise else { return }
 
         lock.lock()
         lines.append(line)
@@ -636,6 +640,9 @@ final actor AppLlamaService {
         guard FileManager.default.fileExists(atPath: path) else {
             throw LlamaError.modelFileNotFound(path)
         }
+
+        LlamaRuntimeLogCapture.shared.installIfNeeded()
+        LlamaRuntimeLogCapture.shared.markLoadBoundary()
 
         var modelParams = llama_model_default_params()
         modelParams.n_gpu_layers = 0
@@ -1095,12 +1102,11 @@ final actor AppLlamaService {
         guard !trimmed.isEmpty else { return [] }
 
         guard let embeddingModel else { throw LlamaError.embeddingModelNotLoaded }
-        guard embeddingContext != nil else { throw LlamaError.embeddingModelNotLoaded }
-        guard let embeddingContext = makeEmbeddingContext(for: embeddingModel) else {
-            throw LlamaError.failedToInitializeContext("Unable to reset embedding context")
-        }
+        guard let embeddingContext else { throw LlamaError.embeddingModelNotLoaded }
 
-        self.embeddingContext = embeddingContext
+        embeddingContext.clearKVCache()
+        embeddingContext.setEmbeddingsOutput(true)
+        embeddingContext.setCausalAttention(false)
 
         let tokens = embeddingModel.tokenize(text: trimmed, addBos: embeddingModel.shouldAddBos(), special: false)
         guard !tokens.isEmpty else { return [] }
@@ -1108,9 +1114,6 @@ final actor AppLlamaService {
         if tokens.count >= Int(embeddingContext.contextSize()) {
             throw LlamaError.embeddingFailed("Input exceeds embedding context window")
         }
-
-        embeddingContext.setEmbeddingsOutput(true)
-        embeddingContext.setCausalAttention(false)
 
         let batch = LlamaBatch(initialSize: 1)
         do {

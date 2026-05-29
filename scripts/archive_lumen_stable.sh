@@ -16,6 +16,7 @@ TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 ARCHIVE_PATH="${LUMEN_ARCHIVE_PATH:-$REPO_ROOT/build/Lumen-$TIMESTAMP.xcarchive}"
 LOG_DIR="$REPO_ROOT/build/logs"
 LOG_PATH="$LOG_DIR/archive-stable-$TIMESTAMP.log"
+SANITIZED_ENTITLEMENTS_PATH="$REPO_ROOT/build/LumenArchive.entitlements"
 ALLOW_PROVISIONING_UPDATES="${LUMEN_IOS_ALLOW_PROVISIONING_UPDATES:-0}"
 CODE_SIGN_STYLE_VALUE="${LUMEN_IOS_CODE_SIGN_STYLE:-}"
 DEVELOPMENT_TEAM_VALUE="${LUMEN_IOS_DEVELOPMENT_TEAM:-}"
@@ -149,10 +150,13 @@ elif [[ -n "$PROVISIONING_PROFILE_SPECIFIER_VALUE" ]]; then
 fi
 
 bold "Lumen stable iOS archive"
-info "Validating iOS signing capabilities"
+info "Validating and sanitizing iOS signing capabilities"
 python3 "$REPO_ROOT/scripts/validate_ios_signing_capabilities.py" \
   --project-file "$PROJECT_FILE" \
-  --entitlements "$REPO_ROOT/ios/Lumen/Lumen.entitlements"
+  --entitlements "$REPO_ROOT/ios/Lumen/Lumen.entitlements" \
+  --sanitized-entitlements-output "$SANITIZED_ENTITLEMENTS_PATH" \
+  --allow-sanitized-output
+SIGNING_BUILD_SETTINGS+=("CODE_SIGN_ENTITLEMENTS=$SANITIZED_ENTITLEMENTS_PATH")
 
 info "Applying durable archive/linker build settings"
 python3 "$REPO_ROOT/scripts/apply_ios_archive_linker_fix.py" "$PROJECT_FILE" --no-backup

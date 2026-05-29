@@ -10,6 +10,7 @@ import argparse
 import plistlib
 import sys
 from pathlib import Path
+from typing import Any
 
 DISALLOWED_ENTITLEMENTS = {
     "com.apple.developer.carplay": (
@@ -30,7 +31,7 @@ def repo_root_from_script() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def read_plist(path: Path) -> dict[str, object]:
+def read_plist(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as handle:
             value = plistlib.load(handle)
@@ -41,6 +42,30 @@ def read_plist(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise SystemExit(f"error: expected plist dictionary in {path}")
     return value
+
+
+def sanitized_entitlements(entitlements: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Return entitlements with App-Store-profile-incompatible keys removed."""
+    sanitized = dict(entitlements)
+    removed: list[str] = []
+    for key in DISALLOWED_ENTITLEMENTS:
+        if key in sanitized:
+            sanitized.pop(key)
+            removed.append(key)
+    return sanitized, removed
+
+
+def write_plist(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        plistlib.dump(value, handle, sort_keys=False)
+
+
+def sanitize_entitlements_file(source: Path, destination: Path) -> list[str]:
+    entitlements = read_plist(source)
+    sanitized, removed = sanitized_entitlements(entitlements)
+    write_plist(destination, sanitized)
+    return removed
 
 
 def validate_entitlements(path: Path) -> list[str]:
@@ -81,11 +106,35 @@ def main(argv: list[str] | None = None) -> int:
         default=root / "ios" / "Lumen" / "Lumen.entitlements",
         help="Path to app entitlements plist (default: ios/Lumen/Lumen.entitlements)",
     )
+    parser.add_argument(
+        "--sanitized-entitlements-output",
+        type=Path,
+        help=(
+            "Write a copy of --entitlements with App Store profile-incompatible "
+            "entitlements removed. Validation still fails unless --allow-sanitized-output is set."
+        ),
+    )
+    parser.add_argument(
+        "--allow-sanitized-output",
+        action="store_true",
+        help="Allow disallowed entitlements when they are removed into --sanitized-entitlements-output.",
+    )
     args = parser.parse_args(argv)
+
+    entitlement_failures = validate_entitlements(args.entitlements)
+    removed: list[str] = []
+    if args.sanitized_entitlements_output:
+        removed = sanitize_entitlements_file(args.entitlements, args.sanitized_entitlements_output)
+        if removed:
+            print(
+                "Wrote sanitized entitlements without disallowed keys "
+                f"{', '.join(removed)}: {args.sanitized_entitlements_output}",
+                file=sys.stderr,
+            )
 
     failures = [
         *validate_project_settings(args.project_file),
-        *validate_entitlements(args.entitlements),
+        *([] if args.allow_sanitized_output and args.sanitized_entitlements_output else entitlement_failures),
     ]
     if failures:
         print("iOS signing capability validation failed:", file=sys.stderr)

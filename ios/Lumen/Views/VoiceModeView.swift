@@ -6,7 +6,8 @@ struct VoiceModeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
-    @Environment(VoiceService.self) private var voice
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var session = VoiceSessionController()
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
 
@@ -48,7 +49,7 @@ struct VoiceModeView: View {
 
                 Spacer()
 
-                VoiceWaveform(level: voice.inputLevel, phase: phase)
+                VoiceWaveform(level: 0.5, phase: phase)
                     .frame(height: 120)
                     .padding(.horizontal, 40)
 
@@ -103,11 +104,15 @@ struct VoiceModeView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { generationController.startupIfNeeded(for: "voice") { startListening() } }
+        .onAppear { generationController.startupIfNeeded(for: "voice") { } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { session.handleAppDidEnterBackground(); syncPhaseFromSession() } }
         .onDisappear { cleanup() }
     }
 
     private var statusTitle: String {
+        if case .denied = session.state { return "Permission denied" }
+        if case .interrupted = session.state { return "Interrupted" }
+        if case .failed(let reason) = session.state { return reason }
         switch phase {
         case .idle: "Tap to speak"
         case .listening: "Listening"
@@ -118,10 +123,16 @@ struct VoiceModeView: View {
 
     private var transcriptText: String {
         switch phase {
-        case .listening: voice.liveTranscript.isEmpty ? "Say something — Lumen is listening." : voice.liveTranscript
-        case .thinking: voice.liveTranscript
+        case .listening: session.partialTranscript.isEmpty ? "Say something — Lumen is listening." : session.partialTranscript
+        case .thinking: session.finalTranscript.isEmpty ? session.partialTranscript : session.finalTranscript
         case .speaking: responseText
-        case .idle: "Tap the mic to start."
+        case .idle:
+            switch session.state {
+            case .denied(let reason): "Permission denied: \(reason). Check Settings and try again."
+            case .interrupted: "Voice session interrupted. Tap the mic to start again."
+            case .failed(let reason): "Voice error: \(reason)"
+            default: "Tap the mic to start."
+            }
         }
     }
 
@@ -177,19 +188,33 @@ struct VoiceModeView: View {
     }
 
     private func startListening() {
-        voice.stopSpeaking()
+        session.stopSpeaking()
         responseText = ""
         activeVoiceTurnID = nil
-        phase = .listening
         Task {
-            await voice.startListening { text in
+            await session.startPushToTalk { text in
                 Task { @MainActor in handleTranscript(text) }
             }
+            syncPhaseFromSession()
         }
     }
 
     private func finishListening() {
-        voice.finishListening()
+        session.finishListening()
+        syncPhaseFromSession()
+    }
+
+    private func syncPhaseFromSession() {
+        switch session.state {
+        case .idle, .denied, .interrupted, .failed:
+            phase = .idle
+        case .requestingPermissions, .listening:
+            phase = .listening
+        case .processing:
+            phase = .thinking
+        case .speaking:
+            phase = .speaking
+        }
     }
 
     private func handleTranscript(_ text: String) {
@@ -245,7 +270,7 @@ struct VoiceModeView: View {
             )
 
             var finalText = ""
-            for await event in SlotAgentService.shared.run(req) {
+            for await event in SlotAgentService.shared.run(req, options: .init(modelContext: modelContext, conversationID: convo.id, turnID: turnID, groundingMode: .slotAgent, allowDegradedGrounding: true, preventDoubleGrounding: true, diagnosticsEnabled: false)) {
                 if Task.isCancelled || activeVoiceTurnID != turnID || !generationController.isCurrent(controllerRequestID, for: "voice") { break }
                 switch event {
                 case .step(let s): stepsBuffer.append(s)
@@ -254,7 +279,7 @@ struct VoiceModeView: View {
                     finalText += chunk
                     let sanitized = AssistantOutputSanitizer.sanitize(finalText, lastUserMessage: text)
                     responseText = FinalIntentValidator.validate(sanitized, routing: routing, fallback: nil)
-                    if phase != .speaking { phase = .speaking }
+                    if phase != .speaking { phase = .speaking }; session.startSpeaking()
                     speakPending()
                 case .done(let f, let all):
                     finalText = f.isEmpty ? finalText : f
@@ -313,7 +338,7 @@ struct VoiceModeView: View {
     }
 
     private func speakPending() {
-        if phase != .speaking { phase = .speaking }
+        if phase != .speaking { phase = .speaking }; session.startSpeaking()
         let currentChars = Array(responseText)
         guard spokenPrefix < currentChars.count else {
             if finishedStreaming && !voice.isSpeaking { onFinishedSpeaking() }
@@ -332,17 +357,17 @@ struct VoiceModeView: View {
         let chunk = String(remaining[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
         spokenPrefix += end
         guard !chunk.isEmpty else { return }
-        if !voice.isSpeaking {
-            voice.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
+        if !VoiceService.shared.isSpeaking {
+            session.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
             observeSpeechEnd()
         } else {
-            voice.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
+            session.speakChunk(chunk, voiceID: appState.voiceID, rate: appState.speakingRate)
         }
     }
 
     private func observeSpeechEnd() {
         Task { @MainActor in
-            while voice.isSpeaking { try? await Task.sleep(for: .milliseconds(150)); if Task.isCancelled { return } }
+            while VoiceService.shared.isSpeaking { try? await Task.sleep(for: .milliseconds(150)); if Task.isCancelled { return } }
             if finishedStreaming && spokenPrefix >= responseText.count {
                 onFinishedSpeaking()
             } else {
@@ -365,8 +390,8 @@ struct VoiceModeView: View {
         activeVoiceTurnID = nil
         generationController.cancel(for: "voice")
         responseTask?.cancel()
-        voice.stopSpeaking()
-        voice.stopListening()
+        session.stopSpeaking()
+        session.cancel()
         phase = .idle
         if turnID != nil, appState.handsFree { startListening() }
     }
@@ -385,8 +410,8 @@ struct VoiceModeView: View {
         activeVoiceTurnID = nil
         generationController.cancel(for: "voice")
         responseTask?.cancel()
-        voice.stopListening()
-        voice.stopSpeaking()
+        session.cancel()
+        session.stopSpeaking()
     }
 }
 

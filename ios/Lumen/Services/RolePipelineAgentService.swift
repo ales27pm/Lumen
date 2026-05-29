@@ -10,8 +10,16 @@ final class RolePipelineAgentService {
     private init() {}
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
+        run(req, options: .default)
+    }
+
+    func run(_ req: AgentRequest, options: LegacyAgentRunOptions) -> AsyncStream<AgentEvent> {
+        let originalReq = req
         AsyncStream { continuation in
             let task = Task { @MainActor in
+                let provider = LegacyGroundingContextProvider(directContext: options.modelContext)
+                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(.init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: .foreground, task: .chat, roleOrSlot: nil, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: .rolePipeline, baseSystemPrompt: originalReq.systemPrompt, preventDoubleGrounding: options.preventDoubleGrounding), provider: provider)
+                let req = AgentRequest(systemPrompt: grounded.systemPrompt, history: originalReq.history, userMessage: grounded.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: grounded.bridgedTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID)
                 var steps: [AgentStep] = []
                 var observations: [String] = []
                 var executedActionFingerprints: Set<String> = []
@@ -205,7 +213,7 @@ final class RolePipelineAgentService {
         executedActionFingerprints.insert(fingerprint)
         yieldStep(kind: .action, content: action.displayContent, toolID: canonicalTool, toolArgs: normalizedArgs, steps: &steps, continuation: continuation)
 
-        let observation = await ToolExecutor.shared.execute(
+        let observation = await LegacySecureToolExecutor.execute(
             canonicalTool,
             arguments: normalizedArgs,
             approval: .autonomous
@@ -596,5 +604,21 @@ final class RolePipelineAgentService {
         case .fetchedPage:
             return "page:\(payload.page?.url ?? "")"
         }
+    }
+}
+
+
+private extension RolePipelineAgentService {
+    static func applyLegacyGroundingAssembly(_ req: AgentRequest) -> AgentRequest {
+        let memoryContent = req.relevantMemories.prefix(8).map { "- \($0.content)" }.joined(separator: "\n")
+        let toolContent = req.availableTools.prefix(24).map { "- \($0.id): \($0.description)" }.joined(separator: "\n")
+        let runtimeContent = "legacy-interactive"
+        let sections: [PromptGroundingSection] = [
+            .init(title: "Relevant memories", content: memoryContent, estimatedChars: memoryContent.count, sourceIDs: req.relevantMemories.prefix(8).map { $0.id.uuidString }, privacyLevel: .moderate),
+            .init(title: "Available tools", content: toolContent, estimatedChars: toolContent.count, sourceIDs: req.availableTools.prefix(24).map { $0.id }, privacyLevel: .low),
+            .init(title: "Runtime policy", content: runtimeContent, estimatedChars: runtimeContent.count, sourceIDs: [], privacyLevel: .low)
+        ].filter { !$0.content.isEmpty }
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: req.systemPrompt, baseUserMessage: req.userMessage, sections: sections, policy: .rolePipeline)
+        return AgentRequest(systemPrompt: assembled.systemPrompt, history: req.history, userMessage: assembled.userMessage, temperature: req.temperature, topP: req.topP, repetitionPenalty: req.repetitionPenalty, maxTokens: req.maxTokens, maxSteps: req.maxSteps, availableTools: req.availableTools, relevantMemories: req.relevantMemories, attachments: req.attachments, conversationID: req.conversationID, turnID: req.turnID)
     }
 }

@@ -199,6 +199,14 @@ struct SettingsView: View {
                     Text("Review which system features Lumen can access.")
                 }
 
+                Section("Diagnostics") {
+                    NavigationLink {
+                        DiagnosticsView()
+                    } label: {
+                        Label("Diagnostics", systemImage: "waveform.path.ecg")
+                    }
+                }
+
                 Section("About") {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Lumen").font(.subheadline.weight(.semibold))

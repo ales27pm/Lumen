@@ -1316,8 +1316,18 @@ final class AgentService {
     private static let structuredTurnMinTokenCap = 128
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
+        run(req, options: .default)
+    }
+
+    func run(_ req: AgentRequest, options: LegacyAgentRunOptions) -> AsyncStream<AgentEvent> {
+        let originalReq = req
         AsyncStream { continuation in
-            let task = Task { await self.runLoop(req, continuation: continuation) }
+            let task = Task { @MainActor in
+                let provider = LegacyGroundingContextProvider(directContext: options.modelContext)
+                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(.init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: .foreground, task: .chat, roleOrSlot: nil, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: .rolePipeline, baseSystemPrompt: originalReq.systemPrompt, preventDoubleGrounding: options.preventDoubleGrounding), provider: provider)
+                let req = AgentRequest(systemPrompt: grounded.systemPrompt, history: originalReq.history, userMessage: grounded.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: grounded.bridgedTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID)
+                await self.runLoop(req, continuation: continuation)
+            }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
@@ -1449,7 +1459,7 @@ final class AgentService {
                 if !isEnabled {
                     result = "Tool \(action.tool) is disabled. Enable it in Tools."
                 } else {
-                    result = await ToolExecutor.shared.execute(action.tool, arguments: action.args)
+                    result = await LegacySecureToolExecutor.execute(action.tool, arguments: action.args)
                 }
 
                 let obs = AgentStep(kind: .observation, content: result, toolID: action.tool)
@@ -1985,5 +1995,21 @@ final class AgentService {
 
     func sanitizeInternalErrorNoiseForTests(_ raw: String) -> String {
         Self.sanitizeInternalErrorNoise(from: raw)
+    }
+}
+
+
+private extension AgentService {
+    static func applyLegacyGroundingAssembly(_ req: AgentRequest) -> AgentRequest {
+        let memoryContent = req.relevantMemories.prefix(8).map { "- \($0.content)" }.joined(separator: "\n")
+        let toolContent = req.availableTools.prefix(24).map { "- \($0.id): \($0.description)" }.joined(separator: "\n")
+        let runtimeContent = "legacy-interactive"
+        let sections: [PromptGroundingSection] = [
+            .init(title: "Relevant memories", content: memoryContent, estimatedChars: memoryContent.count, sourceIDs: req.relevantMemories.prefix(8).map { $0.id.uuidString }, privacyLevel: .moderate),
+            .init(title: "Available tools", content: toolContent, estimatedChars: toolContent.count, sourceIDs: req.availableTools.prefix(24).map { $0.id }, privacyLevel: .low),
+            .init(title: "Runtime policy", content: runtimeContent, estimatedChars: runtimeContent.count, sourceIDs: [], privacyLevel: .low)
+        ].filter { !$0.content.isEmpty }
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: req.systemPrompt, baseUserMessage: req.userMessage, sections: sections, policy: .rolePipeline)
+        return AgentRequest(systemPrompt: assembled.systemPrompt, history: req.history, userMessage: assembled.userMessage, temperature: req.temperature, topP: req.topP, repetitionPenalty: req.repetitionPenalty, maxTokens: req.maxTokens, maxSteps: req.maxSteps, availableTools: req.availableTools, relevantMemories: req.relevantMemories, attachments: req.attachments, conversationID: req.conversationID, turnID: req.turnID)
     }
 }

@@ -70,8 +70,32 @@ final class SlotAgentService {
     private init() {}
 
     func run(_ req: AgentRequest) -> AsyncStream<AgentEvent> {
+        run(req, options: .default)
+    }
+
+
+    static func makeLegacyGroundingRequest(_ originalReq: AgentRequest, options: LegacyAgentRunOptions) -> LegacyGroundingRequest {
+        let mode: LegacyGroundingRequest.Mode = options.groundingMode == .headlessTrigger ? .headless : .foreground
+        let policy: LegacyPromptInjectionPolicy
+        switch options.groundingMode {
+        case .headlessTrigger: policy = .headlessTrigger
+        case .slotAgent: policy = .slotAgent
+        case .rolePipeline: policy = .rolePipeline
+        case .foregroundChat: policy = .foregroundChat
+        }
+        let role = "\(options.groundingMode)" + (options.diagnosticsEnabled ? ":diagnostics" : "")
+        return .init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: mode, task: .chat, roleOrSlot: role, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: policy, baseSystemPrompt: originalReq.systemPrompt, preventDoubleGrounding: options.preventDoubleGrounding)
+    }
+
+    func run(_ req: AgentRequest, options: LegacyAgentRunOptions) -> AsyncStream<AgentEvent> {
+        let originalReq = req
         AsyncStream { continuation in
             let task = Task { @MainActor in
+                let provider = LegacyGroundingContextProvider(directContext: options.modelContext, allowSharedFallback: options.allowDegradedGrounding)
+                let groundingRequest = Self.makeLegacyGroundingRequest(originalReq, options: options)
+                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(groundingRequest, provider: provider)
+                let useGrounded = options.allowDegradedGrounding || grounded.grounding != nil
+                let req = AgentRequest(systemPrompt: useGrounded ? grounded.systemPrompt : originalReq.systemPrompt, history: originalReq.history, userMessage: useGrounded ? grounded.userMessage : originalReq.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: useGrounded ? grounded.bridgedTools : originalReq.availableTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID)
                 var steps: [AgentStep] = []
                 var observations: [String] = []
                 var finalText = ""
@@ -437,7 +461,7 @@ final class SlotAgentService {
         continuation.yield(.step(actionStep))
 
         executedActionFingerprints.insert(fingerprint)
-        let observation = await ToolExecutor.shared.execute(
+        let observation = await LegacySecureToolExecutor.execute(
             canonicalTool,
             arguments: normalizedArgs,
             approval: .autonomous
@@ -1519,5 +1543,21 @@ nonisolated enum SlotAgentDiagnosticsRecorder {
         let directory = base.appendingPathComponent("Diagnostics", isDirectory: true).appendingPathComponent("SlotAgent", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+
+private extension SlotAgentService {
+    static func applyLegacyGroundingAssembly(_ req: AgentRequest) -> AgentRequest {
+        let memoryContent = req.relevantMemories.prefix(8).map { "- \($0.content)" }.joined(separator: "\n")
+        let toolContent = req.availableTools.prefix(24).map { "- \($0.id): \($0.description)" }.joined(separator: "\n")
+        let runtimeContent = "legacy-interactive"
+        let sections: [PromptGroundingSection] = [
+            .init(title: "Relevant memories", content: memoryContent, estimatedChars: memoryContent.count, sourceIDs: req.relevantMemories.prefix(8).map { $0.id.uuidString }, privacyLevel: .moderate),
+            .init(title: "Available tools", content: toolContent, estimatedChars: toolContent.count, sourceIDs: req.availableTools.prefix(24).map { $0.id }, privacyLevel: .low),
+            .init(title: "Runtime policy", content: runtimeContent, estimatedChars: runtimeContent.count, sourceIDs: [], privacyLevel: .low)
+        ].filter { !$0.content.isEmpty }
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: req.systemPrompt, baseUserMessage: req.userMessage, sections: sections, policy: .rolePipeline)
+        return AgentRequest(systemPrompt: assembled.systemPrompt, history: req.history, userMessage: assembled.userMessage, temperature: req.temperature, topP: req.topP, repetitionPenalty: req.repetitionPenalty, maxTokens: req.maxTokens, maxSteps: req.maxSteps, availableTools: req.availableTools, relevantMemories: req.relevantMemories, attachments: req.attachments, conversationID: req.conversationID, turnID: req.turnID)
     }
 }

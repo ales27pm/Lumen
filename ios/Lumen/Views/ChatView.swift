@@ -259,7 +259,7 @@ struct ChatView: View {
         var steps: [AgentStep] = []
         var finalText = ""
 
-        for await event in SlotAgentService.shared.run(req) {
+        for await event in SlotAgentService.shared.run(req, options: .init(modelContext: modelContext, conversationID: conversation.id, turnID: turnID, groundingMode: .slotAgent, allowDegradedGrounding: true, preventDoubleGrounding: true, diagnosticsEnabled: false)) {
             if Task.isCancelled || activeTurnID != turnID || !generationController.isCurrent(requestID, for: conversation.id) { break }
             switch event {
             case .step(let step):

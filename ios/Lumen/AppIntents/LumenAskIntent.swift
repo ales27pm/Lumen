@@ -11,6 +11,7 @@ struct LumenAskIntent: AppIntent {
 
     @Parameter(title: "Question") var question: String
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .result(value: "Question is required.") }

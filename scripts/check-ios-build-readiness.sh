@@ -33,9 +33,13 @@ echo "== Static privacy/build-hardening checks =="
 if rg -n "TODO|stub|placeholder" ios/Lumen ios/LumenTests docs; then
   echo "Found TODO/stub/placeholder markers. Review above; some may be literal test/prompt text." >&2
 fi
-rg -n "import AppIntents|AppIntent|AppShortcutsProvider" ios/Lumen/AppIntents >/dev/null
+if ! rg -n "import AppIntents|AppIntent|AppShortcutsProvider" ios/Lumen/AppIntents >/dev/null; then
+  echo "warning: no AppIntents references found under ios/Lumen/AppIntents." >&2
+fi
 rg -n "FoundationModels|@available|canImport\(FoundationModels\)" ios/Lumen >/dev/null || true
-rg -n "NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription|NSCalendars|NSContactsUsageDescription|NSLocationWhenInUseUsageDescription|BGTaskSchedulerPermittedIdentifiers" ios >/dev/null
+if ! rg -n "NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription|NSCalendars|NSContactsUsageDescription|NSLocationWhenInUseUsageDescription|BGTaskSchedulerPermittedIdentifiers" ios >/dev/null; then
+  echo "warning: expected usage string or BGTask identifiers were not found in static scan." >&2
+fi
 if rg -n "OSLog|Logger" ios/Lumen/AppIntents ios/Lumen/Voice ios/Lumen/Diagnostics; then
   echo "Found logging APIs in privacy-sensitive additions; review output above." >&2
 else

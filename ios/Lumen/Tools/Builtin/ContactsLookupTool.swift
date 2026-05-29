@@ -40,14 +40,24 @@ struct ContactsLookupTool: LocalTool {
         let st = await context.permissionRegistry.currentStatus(for: .contacts)
         let gate = PermissionGate.evaluate(domain: .contacts, state: st, isForeground: context.isForeground)
         guard gate.allowed else { return .init(invocationID: invocation.id, status: .denied, displayText: gate.reason ?? "Contacts permission required.", modelText: "Contacts permission required.", structuredPayload: nil, privacyLevel: .sensitive, metricsSummary: "permission_denied", errorCode: "permission") }
+        return executeAfterPermissionGranted(invocation: invocation)
+    }
+
+    func executeAfterPermissionGranted(invocation: ToolInvocation) -> ToolResult {
+        let parsed: (String, Int, Bool, Bool)
         do {
-            let (q,l,e,p) = try parse(invocation.arguments)
+            parsed = try parse(invocation.arguments)
+        } catch {
+            return .init(invocationID: invocation.id, status: .failed, displayText: "Invalid contacts query.", modelText: "Contacts input invalid.", structuredPayload: nil, privacyLevel: .sensitive, metricsSummary: "invalid_args", errorCode: "invalid")
+        }
+        do {
+            let (q,l,e,p) = parsed
             let rows = try provider.search(query: q, limit: l, includeEmails: e, includePhones: p)
             let text = rows.map { "- \($0["name"] ?? "")\(($0["emails"]?.isEmpty==false) ? " | emails: \($0["emails"]!)" : "")\(($0["phones"]?.isEmpty==false) ? " | phone labels: \($0["phones"]!)" : "")" }.joined(separator: "\n")
             let out = text.isEmpty ? "No contacts matched your query." : text
             return SafeToolOutputLimiter.limit(result: .init(invocationID: invocation.id, status: .success, displayText: out, modelText: out, structuredPayload: ["count":"\(rows.count)"], privacyLevel: .sensitive, metricsSummary: "contacts", errorCode: nil), maxOutput: definition.maxOutputCharacters)
         } catch {
-            return .init(invocationID: invocation.id, status: .failed, displayText: "Invalid contacts query.", modelText: "Contacts input invalid.", structuredPayload: nil, privacyLevel: .sensitive, metricsSummary: "invalid_args", errorCode: "invalid")
+            return .init(invocationID: invocation.id, status: .failed, displayText: "Contacts provider failed.", modelText: "Contacts provider unavailable.", structuredPayload: nil, privacyLevel: .sensitive, metricsSummary: "provider_error", errorCode: "provider_error")
         }
     }
 }

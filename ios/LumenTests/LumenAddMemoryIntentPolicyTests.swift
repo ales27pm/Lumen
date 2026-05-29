@@ -2,9 +2,17 @@ import XCTest
 @testable import Lumen
 
 final class LumenAddMemoryIntentPolicyTests: XCTestCase {
-    func testCredentialLikeRejected() {
-        let text = "my password is 123"
-        let lowered = text.lowercased()
-        XCTAssertTrue(lowered.contains("password"))
+    func testCredentialLikeRejectedByPolicyEntrypoint() {
+        if #available(iOS 16.0, *) {
+            let message = LumenAddMemoryIntent.policyMessage(for: "my password is 123")
+            XCTAssertEqual(message, "Memory rejected: credential-like content is not allowed.")
+        }
+    }
+
+    func testSensitiveMemoryRequiresOpenApp() {
+        if #available(iOS 16.0, *) {
+            let message = LumenAddMemoryIntent.policyMessage(for: "medical detail")
+            XCTAssertTrue(message?.contains("Open Lumen to approve") == true)
+        }
     }
 }

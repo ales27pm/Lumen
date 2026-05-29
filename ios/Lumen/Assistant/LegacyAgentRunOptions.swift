@@ -1,8 +1,8 @@
 import Foundation
 import SwiftData
 
-struct LegacyAgentRunOptions: Sendable {
-    enum GroundingMode: Sendable { case foregroundChat, headlessTrigger, slotAgent, rolePipeline }
+struct LegacyAgentRunOptions {
+    enum GroundingMode: Sendable, Equatable { case foregroundChat, headlessTrigger, slotAgent, rolePipeline }
 
     var modelContext: ModelContext?
     var conversationID: UUID?

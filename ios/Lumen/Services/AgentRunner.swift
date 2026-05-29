@@ -42,11 +42,10 @@ enum AgentRunner {
         let executionPrompt = resolution.rewrittenPrompt
         let routing = await IntentClassifierService.shared.route(executionPrompt)
 
-        let turn = AssistantTurnContext(task: .backgroundTrigger, input: executionPrompt, isForeground: false, lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, thermalState: ProcessInfo.processInfo.thermalState)
-        let grounding = await LegacyGroundingBridge().build(userMessage: executionPrompt, conversationID: nil, turnID: nil, history: [], modelContext: context, turn: turn)
+        let grounding = await LegacyTurnGroundingCoordinator.shared.build(userMessage: executionPrompt, conversationID: nil, turnID: nil, history: [], modelContext: context, isBackground: true, task: .backgroundTrigger, role: "headless-trigger")
         let memories = MemoryGate.filter(intent: routing.intent, items: cascade.promptFragments, userMessage: executionPrompt)
-        let tools = LegacyToolSchemaBridge.toLegacyToolDefinitions(grounding.secureTools).filter { settings.enabledToolIDs.contains($0.id) }
-        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: settings.systemPrompt, baseUserMessage: executionPrompt, sections: grounding.sections, policy: .headlessTrigger)
+        let tools = grounding.legacyTools.filter { settings.enabledToolIDs.contains($0.id) }
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: settings.systemPrompt, baseUserMessage: executionPrompt, sections: grounding.sections, policy: .headlessTrigger, roleMetadata: "headless-trigger")
         let mimicry = MimicryProfiler.profile(userMessage: executionPrompt, settings: settings)
         let req = AgentRequest(
             systemPrompt: composedSystemPrompt(basePrompt: assembled.systemPrompt, fleetSnapshot: fleetSnapshot, mimicry: mimicry),

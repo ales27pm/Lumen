@@ -13,13 +13,8 @@ struct LumenAddMemoryIntent: AppIntent {
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, body.count <= 1000 else { return .result(value: "Memory text must be 1...1000 characters.") }
-        let lower = body.lowercased()
-        if lower.contains("password") || lower.contains("api key") || lower.contains("secret") {
-            return .result(value: "Memory rejected: credential-like content is not allowed.")
-        }
-        let sensitivity = (lower.contains("medical") || lower.contains("legal") || lower.contains("bank") || lower.contains("financial"))
-        if sensitivity {
-            return .result(value: LumenIntentResultRenderer.openAppRequired("sensitive memory requires in-app approval"))
+        if let policyMessage = Self.policyMessage(for: body) {
+            return .result(value: policyMessage)
         }
         guard let container = SharedContainer.shared else {
             return .result(value: LumenIntentResultRenderer.degraded("memory store unavailable"))
@@ -36,6 +31,17 @@ struct LumenAddMemoryIntent: AppIntent {
         } catch {
             return .result(value: LumenIntentResultRenderer.degraded("memory save failed"))
         }
+    }
+
+    static func policyMessage(for body: String) -> String? {
+        let lower = body.lowercased()
+        if lower.contains("password") || lower.contains("api key") || lower.contains("secret") {
+            return "Memory rejected: credential-like content is not allowed."
+        }
+        if lower.contains("medical") || lower.contains("legal") || lower.contains("bank") || lower.contains("financial") {
+            return LumenIntentResultRenderer.openAppRequired("sensitive memory requires in-app approval")
+        }
+        return nil
     }
 }
 #endif

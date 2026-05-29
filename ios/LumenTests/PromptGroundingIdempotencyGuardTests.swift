@@ -15,4 +15,11 @@ final class PromptGroundingIdempotencyGuardTests: XCTestCase {
         XCTAssertFalse(stripped.stripped)
         XCTAssertTrue(stripped.ambiguous)
     }
+
+    func testEarliestKnownHeaderStrippedWhenGeneratedHeadersExist() {
+        let text = "hello\n[AVAILABLE LOCAL TOOLS]\ntool\n[LOCAL MEMORY]\nmemory"
+        let stripped = PromptGroundingIdempotencyGuard.stripExistingGrounding(from: text)
+        XCTAssertTrue(stripped.stripped)
+        XCTAssertEqual(stripped.text, "hello")
+    }
 }

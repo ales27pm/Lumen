@@ -610,10 +610,13 @@ final class RolePipelineAgentService {
 
 private extension RolePipelineAgentService {
     static func applyLegacyGroundingAssembly(_ req: AgentRequest) -> AgentRequest {
+        let memoryContent = req.relevantMemories.prefix(8).map { "- \($0.content)" }.joined(separator: "\n")
+        let toolContent = req.availableTools.prefix(24).map { "- \($0.id): \($0.description)" }.joined(separator: "\n")
+        let runtimeContent = "legacy-interactive"
         let sections: [PromptGroundingSection] = [
-            .init(title: "Relevant memories", content: req.relevantMemories.prefix(8).map { "- \\($0.content)" }.joined(separator: "\n"), estimatedChars: 0, sourceIDs: [], privacyLevel: .moderate),
-            .init(title: "Available tools", content: req.availableTools.prefix(24).map { "- \\($0.id): \\($0.description)" }.joined(separator: "\n"), estimatedChars: 0, sourceIDs: [], privacyLevel: .low),
-            .init(title: "Runtime policy", content: "legacy-interactive", estimatedChars: 0, sourceIDs: [], privacyLevel: .low)
+            .init(title: "Relevant memories", content: memoryContent, estimatedChars: memoryContent.count, sourceIDs: req.relevantMemories.prefix(8).map { $0.id.uuidString }, privacyLevel: .moderate),
+            .init(title: "Available tools", content: toolContent, estimatedChars: toolContent.count, sourceIDs: req.availableTools.prefix(24).map { $0.id }, privacyLevel: .low),
+            .init(title: "Runtime policy", content: runtimeContent, estimatedChars: runtimeContent.count, sourceIDs: [], privacyLevel: .low)
         ].filter { !$0.content.isEmpty }
         let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: req.systemPrompt, baseUserMessage: req.userMessage, sections: sections, policy: .rolePipeline)
         return AgentRequest(systemPrompt: assembled.systemPrompt, history: req.history, userMessage: assembled.userMessage, temperature: req.temperature, topP: req.topP, repetitionPenalty: req.repetitionPenalty, maxTokens: req.maxTokens, maxSteps: req.maxSteps, availableTools: req.availableTools, relevantMemories: req.relevantMemories, attachments: req.attachments, conversationID: req.conversationID, turnID: req.turnID)

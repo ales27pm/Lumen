@@ -1,6 +1,7 @@
 import XCTest
 @testable import Lumen
 
+@MainActor
 final class AssistantKernelTextTurnRemediationTests: XCTestCase {
     func testRunTextTurnRejectsEmbedding() async {
         let kernel = AssistantKernel()

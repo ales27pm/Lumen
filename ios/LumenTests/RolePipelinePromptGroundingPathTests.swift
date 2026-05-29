@@ -1,8 +1,11 @@
 import XCTest
+@testable import Lumen
 
 final class RolePipelinePromptGroundingPathTests: XCTestCase {
-    func testRolePipelineUsesAssemblerInRunPath() throws {
-        let source = try String(contentsOfFile: "ios/Lumen/Services/RolePipelineAgentService.swift")
-        XCTAssertTrue(source.contains("applyLegacyGroundingAssembly"))
+    func testRoleMetadataTruncationIsReported() {
+        let role = String(repeating: "r", count: 240)
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: "sys", baseUserMessage: "hi", sections: [], policy: .rolePipeline, roleMetadata: role)
+        XCTAssertTrue(assembled.truncationOccurred)
+        XCTAssertFalse(assembled.userMessage.contains(role))
     }
 }

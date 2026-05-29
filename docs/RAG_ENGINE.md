@@ -9,3 +9,7 @@ Phase 6 adds `RAGEngine` and `RAGIndexer` wrappers around `RAGStore`/`RAGChunk`.
 - Maintenance hook exists for background orchestration.
 
 No fake embeddings are generated: embedding calls rely on existing local runtime (`AppLlamaService.embed`).
+
+
+## Vector index freshness
+`RAGIndexer` saves inserted chunks before appending their non-empty embeddings to `RAGVectorIndex`. If the in-memory vector index is already loaded, new chunks become visible to semantic retrieval immediately after save; if it is not loaded, first search loads persisted chunks from SwiftData. Empty embeddings are not appended.

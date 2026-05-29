@@ -1,6 +1,7 @@
 import XCTest
 @testable import Lumen
 
+@MainActor
 final class AssistantKernelToolExecutionTests: XCTestCase {
     func testOpenURLRequiresApprovalForModelProposed() async {
         let kernel = AssistantKernel()

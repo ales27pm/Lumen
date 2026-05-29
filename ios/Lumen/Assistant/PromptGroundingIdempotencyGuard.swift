@@ -19,8 +19,11 @@ enum PromptGroundingIdempotencyGuard {
         }
         let counts = sectionOccurrenceCounts(text)
         let total = counts.values.reduce(0,+)
-        if total >= 2, let idx = text.range(of: "[LOCAL MEMORY]")?.lowerBound {
-            return (String(text[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines), true, false)
+        if total >= 2 {
+            let earliest = sectionHeaders.compactMap { text.range(of: $0)?.lowerBound }.min()
+            if let idx = earliest {
+                return (String(text[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines), true, false)
+            }
         }
         return (text, false, total == 1)
     }

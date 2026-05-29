@@ -28,3 +28,6 @@ Review threads could not be queried in this runner because the GitHub CLI is una
 | Manual Xcode project source membership additions requested. | `ios/Lumen.xcodeproj/project.pbxproj` | Skipped because the project uses `PBXFileSystemSynchronizedRootGroup`; converting to manual source lists would violate the PR instruction and project model. |
 | Full legacy grounding cache/idempotency deep changes. | `ios/Lumen/Assistant/*` | Partially out of scope for this pass; no direct unresolved thread data was available locally. Existing static checks did not find escaped interpolation regressions in services. |
 | Brittle source-reading test rewrites. | `ios/LumenTests/*` | Skipped for this focused production remediation because Xcode is unavailable to validate broad test rewrites safely. |
+
+## Final cleanup note
+A final narrow cleanup pass is tracked in `docs/PR_REVIEW_FINAL_CLEANUP.md`, covering remaining documentation, ModelContext isolation, contacts provider errors, RAG vector freshness, legacy grounding role/idempotency, test hygiene, and readiness-script no-match handling.

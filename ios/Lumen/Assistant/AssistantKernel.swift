@@ -1,7 +1,8 @@
 import Foundation
 import SwiftData
 
-actor AssistantKernel {
+@MainActor
+final class AssistantKernel {
     enum KernelError: Error, Sendable, Equatable {
         case unsupportedTaskForTextTurn(AssistantTaskKind)
         case unsupportedRuntimeForTextTurn(AssistantRuntimeKind)
@@ -24,7 +25,7 @@ actor AssistantKernel {
     }
 
     func buildGroundingContext(turn: AssistantTurnContext, modelContext: ModelContext?) async -> AssistantGroundingContext {
-        guard let modelContext else { return .init(memoryCount: 0, ragCount: 0, toolCount: 0, estimatedChars: 0) }
+        guard let modelContext else { return .empty }
         let budget = ContextBudgetAllocator.allocate(maxChars: 4000)
         let mem = memoryEngine.buildContext(query: turn.input, budget: budget.memories, context: modelContext)
         let rag = await ragEngine.buildContext(query: turn.input, budget: budget.rag, context: modelContext)

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct PowerModeSnapshot: Sendable, Equatable {
     let lowPowerModeEnabled: Bool

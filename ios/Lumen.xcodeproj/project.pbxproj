@@ -512,7 +512,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSupportsCarPlay = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Lumen uses AlarmKit to schedule prominent alarms and countdowns when you ask.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Lumen uses your calendar to create and read events when you ask.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Lumen uses the camera to capture images when you ask.";
@@ -578,7 +577,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSupportsCarPlay = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Lumen uses AlarmKit to schedule prominent alarms and countdowns when you ask.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Lumen uses your calendar to create and read events when you ask.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Lumen uses the camera to capture images when you ask.";

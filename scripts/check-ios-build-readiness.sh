@@ -29,6 +29,9 @@ find ios/Lumen -name "*.swift" -print | sort >/tmp/lumen_app_swift_files.txt
 find ios/LumenTests -name "*.swift" -print | sort >/tmp/lumen_test_swift_files.txt
 wc -l /tmp/lumen_app_swift_files.txt /tmp/lumen_test_swift_files.txt
 
+echo "== iOS signing capability checks =="
+python3 scripts/validate_ios_signing_capabilities.py
+
 echo "== Static privacy/build-hardening checks =="
 if rg -n "TODO|stub|placeholder" ios/Lumen ios/LumenTests docs; then
   echo "Found TODO/stub/placeholder markers. Review above; some may be literal test/prompt text." >&2

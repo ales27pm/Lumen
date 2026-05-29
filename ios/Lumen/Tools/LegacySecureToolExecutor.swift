@@ -5,11 +5,15 @@ import SwiftData
 enum LegacySecureToolExecutor {
     private static let readOnlyAllowlist: Set<String> = ["weather", "maps.search", "rag.search", "memory.recall", "files.read", "trigger.list"]
 
-    static func execute(_ toolID: String, arguments: AgentJSONArguments, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
-        await execute(toolID: toolID, arguments: arguments, conversationID: conversationID, turnID: turnID, modelContext: modelContext, isBackground: isBackground)
+    static func execute(_ toolID: String, arguments: [String: String], approval: ToolExecutionApproval = .autonomous, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
+        await execute(toolID: toolID, arguments: AgentJSONArguments(stringDictionary: arguments), approval: approval, conversationID: conversationID, turnID: turnID, modelContext: modelContext, isBackground: isBackground)
     }
 
-    static func execute(toolID: String, arguments: AgentJSONArguments, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
+    static func execute(_ toolID: String, arguments: AgentJSONArguments, approval: ToolExecutionApproval = .autonomous, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
+        await execute(toolID: toolID, arguments: arguments, approval: approval, conversationID: conversationID, turnID: turnID, modelContext: modelContext, isBackground: isBackground)
+    }
+
+    static func execute(toolID: String, arguments: AgentJSONArguments, approval: ToolExecutionApproval = .autonomous, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
         let canonical = ToolRouteGuard.canonicalToolID(toolID)
         let mappedSecureID: String? = {
             switch canonical {
@@ -34,6 +38,6 @@ enum LegacySecureToolExecutor {
         guard readOnlyAllowlist.contains(canonical) else {
             return "Tool unavailable pending secure migration."
         }
-        return await ToolExecutor.shared.execute(canonical, arguments: arguments)
+        return await ToolExecutor.shared.execute(canonical, arguments: arguments, approval: approval)
     }
 }

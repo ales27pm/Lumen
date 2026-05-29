@@ -2,12 +2,12 @@
 
 Ce rapport décrit la conception d’une clé USB **TripleBoot** automatisée, pré-chargée avec les installateurs d’Ubuntu, Windows et macOS. L’objectif est de démarrer sur une machine cible PC UEFI/GPT x86_64 et d’installer l’un de ces trois systèmes avec un minimum d’interactions manuelles.
 
-Le script **TripleBoot AIO** du dépôt `ales27pm/TripleBoot` sert de base conceptuelle. Il orchestre le téléchargement des images, la préparation de la clé USB avec Ventoy et l’ajout d’un kit de secours macOS via OSX-KVM. Les étapes majeures sont le téléchargement et la vérification des ISO, l’installation de Ventoy avec prise en charge UEFI/Secure Boot, puis le *staging* des payloads dans l’arborescence Ventoy.
+Le script **TripleBoot AIO** du dépôt `ales27pm/TripleBoot` sert de base conceptuelle. Il orchestre le téléchargement des images, la préparation de la clé USB avec Ventoy et l’ajout d’un kit de secours macOS via OSX-KVM. Les étapes majeures sont le téléchargement et la vérification des ISO, la vérification d’intégrité de l’archive Ventoy, l’installation de Ventoy avec prise en charge UEFI/Secure Boot, puis le *staging* des payloads dans l’arborescence Ventoy. Le rapport est rédigé en français ; les identifiants de commandes, options et fichiers restent volontairement en anglais lorsqu’ils représentent des noms CLI littéraux.
 
 ## Synthèse exécutive
 
 - **Ubuntu et Windows** sont adaptés à une clé Ventoy multi-boot : les ISO peuvent être téléchargées, vérifiées ou fournies par l’utilisateur, puis copiées dans des dossiers dédiés de la partition de données Ventoy.
-- **macOS** est le cas contraint : la création officielle d’un média d’installation requiert généralement un Mac et `createinstallmedia`. Sur Linux, le flux doit rester un *scaffold* OpenCore/OSX-KVM pour VM ou récupération, sans redistribution de fichiers Apple propriétaires.
+- **macOS** est le cas contraint : la création officielle d’un média d’installation requiert généralement un Mac et `createinstallmedia`. Sur Linux, le flux doit rester un *scaffold* OpenCore/OSX-KVM pour VM ou récupération ; l’utilisateur doit fournir lui-même tout binaire Apple requis, et aucun binaire Apple ne doit être intégré ou redistribué par le kit.
 - **L’installation sans surveillance** est réaliste pour Ubuntu avec `autoinstall`/cloud-init et pour Windows avec `Autounattend.xml`. macOS ne dispose pas d’un équivalent gratuit et natif hors infrastructure Apple/MDM.
 - **La sécurité opérationnelle** doit être prioritaire : détection UEFI, état Secure Boot, refus d’écrire sur le disque racine actif, protection des partitions `LABEL=DATA`, sauvegarde EFI et confirmations explicites avant toute action destructive.
 
@@ -31,14 +31,15 @@ Contraintes principales :
 
 ## 2. Architecture du pipeline automatisé
 
-Le pipeline suit six phases.
+Le pipeline suit sept phases.
 
 1. **Préparation de l’hôte** : exécuter un diagnostic de type `installer-doctor` pour vérifier les dépendances (`curl`, `sha256sum`, `lsblk`, `sgdisk`, `wipefs`, `mkfs.vfat`, `wimlib-imagex`, `qemu-system-x86_64`, etc.).
 2. **Téléchargement des installateurs** : récupérer Ubuntu depuis les miroirs officiels, Windows depuis une URL Microsoft ou un ISO local, et macOS depuis `softwareupdate` sur macOS ou via un flux OSX-KVM expérimental.
-3. **Téléchargement de Ventoy** : récupérer l’archive Ventoy, extraire les outils et localiser `Ventoy2Disk.sh`.
-4. **Préparation de la clé USB** : lancer l’installation Ventoy sur le disque USB, typiquement en GPT et avec l’option Secure Boot si requise.
-5. **Staging des payloads** : monter la partition de données Ventoy et copier les ISO ou ressources dans une arborescence stable.
-6. **Validation finale** : démonter proprement, afficher l’état de la clé et résumer les fichiers disponibles au démarrage.
+3. **Téléchargement de Ventoy** : récupérer l’archive Ventoy et le checksum ou la signature publié par les mainteneurs. Vérifier l’archive avec `sha256sum -c` ou `gpg --verify`, puis abandonner immédiatement en cas d’écart avant toute extraction ou exécution.
+4. **Extraction de Ventoy** : extraire les outils seulement après vérification réussie, puis localiser `Ventoy2Disk.sh`.
+5. **Préparation de la clé USB** : lancer l’installation Ventoy sur le disque USB, typiquement en GPT et avec l’option Secure Boot si requise.
+6. **Staging des payloads** : monter la partition de données Ventoy et copier les ISO ou ressources dans une arborescence stable.
+7. **Validation finale** : démonter proprement, afficher l’état de la clé et résumer les fichiers disponibles au démarrage.
 
 Arborescence recommandée sur la partition de données Ventoy :
 
@@ -65,7 +66,7 @@ Dépendances Linux recommandées :
 
 - **Base système** : `bash`, `coreutils`, `util-linux`, `gawk`, `sed`, `grep`, `findutils`, `file`, `jq`.
 - **Téléchargement et archives** : `curl`, `wget`, `unzip`, `zip`, `git`, `rsync`.
-- **Partitionnement et fichiersystems** : `gdisk`, `parted`, `dosfstools`, `e2fsprogs`, `ntfs-3g`, `efibootmgr`, `mokutil`.
+- **Partitionnement et systèmes de fichiers** : `gdisk`, `parted`, `dosfstools`, `e2fsprogs`, `ntfs-3g`, `efibootmgr`, `mokutil`.
 - **Diagnostic matériel** : `pciutils`, `usbutils`, `dmidecode`, `lshw`, `fwupd`, `nvme-cli`.
 - **Windows** : `wimtools`, notamment `wimlib-imagex` pour les médias FAT32 traditionnels nécessitant de scinder `install.wim`.
 - **macOS VM** : `qemu-system-x86`, `qemu-utils`, `ovmf`, éventuellement `dmg2img`, `genisoimage`, `virt-manager` et `libguestfs-tools`.
@@ -104,23 +105,26 @@ Les liens Microsoft pouvant être temporaires, le script doit traiter l’URL co
 
 ### macOS
 
-Sur Mac, le chemin officiel repose sur `softwareupdate` puis `createinstallmedia` :
+Sur Mac, le chemin officiel repose sur `softwareupdate` puis `createinstallmedia`. L’exemple ci-dessous utilise des placeholders afin d’éviter d’ancrer le rapport à une version macOS précise :
 
 ```bash
-softwareupdate --fetch-full-installer --full-installer-version 15
-sudo /Applications/Install\ macOS\ Sequoia.app/Contents/Resources/createinstallmedia --volume /Volumes/MyVolume --nointeraction
+MACOS_VERSION="<VERSION>"
+MACOS_APP_NAME="Install macOS <NAME>"
+softwareupdate --fetch-full-installer --full-installer-version "$MACOS_VERSION"
+sudo "/Applications/${MACOS_APP_NAME}.app/Contents/Resources/createinstallmedia" --volume /Volumes/MyVolume --nointeraction
 ```
 
-Sur Linux, le pipeline ne doit pas prétendre générer un installateur macOS complet et redistribuable. Il peut seulement préparer un kit de VM/récupération basé sur OpenCore/OSX-KVM, avec avertissement de licence et étapes manuelles.
+Sur Linux, le pipeline ne doit pas prétendre générer un installateur macOS complet et redistribuable. Il peut seulement préparer un kit de VM/récupération basé sur OpenCore/OSX-KVM, avec avertissement de licence et étapes manuelles. L’utilisateur doit apporter tout contenu Apple obtenu légalement ; le projet ne doit jamais regrouper, héberger ni redistribuer ces binaires.
 
 ## 5. Installation de Ventoy et préparation de la clé USB
 
 Ventoy simplifie la préparation multi-boot : on installe son bootloader sur une clé, puis on copie les ISO sur la partition de données.
 
-Workflow recommandé :
+Workflow recommandé, à traiter comme une interface cible ou conceptuelle tant que les commandes ne sont pas présentes dans l’implémentation locale :
 
 ```bash
 sudo scripts/tripleboot_aio.sh download-ventoy
+sha256sum -c Ventoy.sha256sum   # ou : gpg --verify Ventoy.tar.gz.sig Ventoy.tar.gz
 sudo scripts/tripleboot_aio.sh prepare-usb-ventoy --usb-disk /dev/sdX --secure-boot --yes-destroy
 ```
 
@@ -147,7 +151,8 @@ Un hôte Linux peut préparer un environnement OSX-KVM avec OpenCore, un disque 
 - un avertissement EULA ;
 - l’absence de fichiers Apple redistribués ;
 - une séparation nette entre ressources OpenCore publiques et contenu Apple téléchargé par l’utilisateur ;
-- une mention que l’adaptation matériel/OpenCore reste manuelle.
+- l’obligation pour l’utilisateur de fournir lui-même les binaires Apple légalement obtenus, sans empaquetage ni redistribution par le kit ;
+- une mention que l’adaptation matérielle/OpenCore reste manuelle.
 
 ## 7. Installation sans surveillance après démarrage
 
@@ -185,7 +190,7 @@ Le script doit séparer les actions sûres des actions destructrices afin que le
 
 ## 9. Workflow recommandé
 
-Exemple complet :
+Exemple complet, à considérer comme une interface cible ou conceptuelle si `scripts/tripleboot_aio.sh` et ses sous-commandes ne sont pas encore implémentés dans le dépôt local :
 
 ```bash
 # 1. Vérifier l’environnement
@@ -194,10 +199,11 @@ sudo scripts/tripleboot_aio.sh installer-doctor
 # 2. Télécharger ou enregistrer les installateurs
 sudo scripts/tripleboot_aio.sh download-ubuntu --version 26.04 --edition desktop --arch amd64
 sudo scripts/tripleboot_aio.sh download-windows --iso-url "URL_DE_VOTRE_ISO_WINDOWS"
-# Sur Mac uniquement : sudo scripts/tripleboot_aio.sh download-macos --version 15
+# Sur Mac uniquement : sudo scripts/tripleboot_aio.sh download-macos --version "<VERSION>"
 
-# 3. Télécharger Ventoy
+# 3. Télécharger Ventoy et vérifier son intégrité avant extraction/exécution
 sudo scripts/tripleboot_aio.sh download-ventoy
+sha256sum -c Ventoy.sha256sum   # ou : gpg --verify Ventoy.tar.gz.sig Ventoy.tar.gz
 
 # 4. Préparer la clé Ventoy
 sudo scripts/tripleboot_aio.sh prepare-usb-ventoy --usb-disk /dev/sdX --secure-boot --yes-destroy

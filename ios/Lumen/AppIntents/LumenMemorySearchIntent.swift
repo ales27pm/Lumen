@@ -11,6 +11,7 @@ struct LumenMemorySearchIntent: AppIntent {
     @Parameter(title: "Query") var query: String
     @Parameter(title: "Limit", default: 5) var limit: Int
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (1...300).contains(q.count) else { return .result(value: "Query must be 1...300 characters.") }

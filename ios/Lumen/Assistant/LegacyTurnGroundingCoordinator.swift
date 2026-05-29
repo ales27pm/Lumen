@@ -65,7 +65,7 @@ final class LegacyTurnGroundingCoordinator {
                 Self.toolsSection(request.externalAvailableTools.prefix(24)),
                 Self.runtimeSection("degraded-legacy-grounding")
             ].filter { !$0.content.isEmpty }
-            let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: request.baseSystemPrompt, baseUserMessage: request.userMessage, sections: fallbackSections, policy: request.policy, roleMetadata: request.roleOrSlot)
+            let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: request.baseSystemPrompt, baseUserMessage: request.userMessage, sections: fallbackSections, policy: request.policy, roleMetadata: request.roleOrSlot, preventDoubleGrounding: request.preventDoubleGrounding)
             return .init(systemPrompt: assembled.systemPrompt, userMessage: assembled.userMessage, grounding: nil, sections: fallbackSections, bridgedTools: request.externalAvailableTools, degradedReasons: degraded, metricsSummary: "degraded", truncationOccurred: assembled.truncationOccurred)
         }
 
@@ -74,7 +74,7 @@ final class LegacyTurnGroundingCoordinator {
         if !request.externalRelevantMemories.isEmpty {
             sections.append(Self.memorySection(request.externalRelevantMemories.prefix(6), sourceID: "legacyCallerMemory"))
         }
-        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: request.baseSystemPrompt, baseUserMessage: request.userMessage, sections: sections, policy: request.policy, roleMetadata: request.roleOrSlot)
+        let assembled = LegacyPromptAssembler.assemble(baseSystemPrompt: request.baseSystemPrompt, baseUserMessage: request.userMessage, sections: sections, policy: request.policy, roleMetadata: request.roleOrSlot, preventDoubleGrounding: request.preventDoubleGrounding)
         let tools = output.legacyTools.isEmpty ? request.externalAvailableTools : output.legacyTools
         return .init(systemPrompt: assembled.systemPrompt, userMessage: assembled.userMessage, grounding: output.grounding, sections: sections, bridgedTools: tools, degradedReasons: degraded, metricsSummary: output.metricsSummary, truncationOccurred: assembled.truncationOccurred)
     }

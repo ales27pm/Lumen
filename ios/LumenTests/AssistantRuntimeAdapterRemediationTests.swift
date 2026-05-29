@@ -21,6 +21,26 @@ final class AssistantRuntimeAdapterRemediationTests: XCTestCase {
         XCTAssertEqual(runtime.unavailableReason, "Configured Core ML model file is missing")
     }
 
+
+    func testCoreMLNilModelUnavailableReason() {
+        let runtime = CoreMLRuntimeAdapter(modelURL: nil)
+        XCTAssertFalse(runtime.isAvailable)
+        XCTAssertEqual(runtime.unavailableReason, "No Core ML embedding model configured")
+    }
+
+    func testCoreMLEmbedThrowsWhenModelMissing() async {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let runtime = CoreMLRuntimeAdapter(modelURL: url)
+        do {
+            _ = try await runtime.embed(request: EmbeddingRequest(text: "hello", dimensions: nil))
+            XCTFail("CoreML embed should not return an empty success vector for missing model")
+        } catch CoreMLRuntimeError.modelNotFound {
+            // Expected.
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testMetricErrorSanitizerDoesNotExposeDescription() {
         let code = RuntimeMetricErrorSanitizer.code(for: LocalRuntimeError.unavailable("raw private text"))
         XCTAssertEqual(code, "runtime_unavailable")

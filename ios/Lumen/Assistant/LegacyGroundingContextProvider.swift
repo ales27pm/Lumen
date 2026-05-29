@@ -4,10 +4,11 @@ import SwiftData
 @MainActor
 struct LegacyGroundingContextProvider {
     var directContext: ModelContext?
+    var allowSharedFallback: Bool = true
 
     func resolveContext() -> ModelContext? {
         if let directContext { return directContext }
-        if let shared = SharedContainer.shared { return ModelContext(shared) }
+        if allowSharedFallback, let shared = SharedContainer.shared { return ModelContext(shared) }
         return nil
     }
 

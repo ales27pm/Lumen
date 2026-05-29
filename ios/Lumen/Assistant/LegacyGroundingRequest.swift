@@ -1,7 +1,7 @@
 import Foundation
 
 struct LegacyGroundingRequest: Sendable {
-    enum Mode: String, Codable, Sendable { case foreground, background, headless }
+    enum Mode: String, Codable, Sendable, Equatable { case foreground, background, headless }
 
     let userMessage: String
     let conversationID: UUID?
@@ -14,4 +14,5 @@ struct LegacyGroundingRequest: Sendable {
     let externalAvailableTools: [ToolDefinition]
     let policy: LegacyPromptInjectionPolicy
     let baseSystemPrompt: String
+    let preventDoubleGrounding: Bool
 }

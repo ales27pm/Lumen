@@ -46,7 +46,7 @@
 - Added thermal, power, and memory pressure monitors plus memory-pressure metrics emission.
 - Added JSONL-backed runtime metrics store (`Application Support/Lumen/runtime-metrics.jsonl`).
 - Added deterministic background policy and background execution lease actor.
-- Added background orchestrator wrapper that preserves existing TriggerScheduler behavior and identifiers; launch wiring remains staged to avoid duplicate registrations until Xcode/device validation.
+- Added background orchestrator wrapper that preserves existing TriggerScheduler behavior and identifiers; launch wiring remains staged to avoid duplicate BGTaskScheduler registration for the same identifiers until Xcode/device validation.
 - Added entitlement validator for BG task IDs and usage description keys with non-fatal warnings.
 
 ## Phase 5 Update

@@ -73,13 +73,29 @@ final class SlotAgentService {
         run(req, options: .default)
     }
 
+
+    static func makeLegacyGroundingRequest(_ originalReq: AgentRequest, options: LegacyAgentRunOptions) -> LegacyGroundingRequest {
+        let mode: LegacyGroundingRequest.Mode = options.groundingMode == .headlessTrigger ? .headless : .foreground
+        let policy: LegacyPromptInjectionPolicy
+        switch options.groundingMode {
+        case .headlessTrigger: policy = .headlessTrigger
+        case .slotAgent: policy = .slotAgent
+        case .rolePipeline: policy = .rolePipeline
+        case .foregroundChat: policy = .foregroundChat
+        }
+        let role = "\(options.groundingMode)" + (options.diagnosticsEnabled ? ":diagnostics" : "")
+        return .init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: mode, task: .chat, roleOrSlot: role, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: policy, baseSystemPrompt: originalReq.systemPrompt, preventDoubleGrounding: options.preventDoubleGrounding)
+    }
+
     func run(_ req: AgentRequest, options: LegacyAgentRunOptions) -> AsyncStream<AgentEvent> {
         let originalReq = req
         AsyncStream { continuation in
             let task = Task { @MainActor in
-                let provider = LegacyGroundingContextProvider(directContext: options.modelContext)
-                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(.init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: .foreground, task: .chat, roleOrSlot: nil, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: .slotAgent, baseSystemPrompt: originalReq.systemPrompt), provider: provider)
-                let req = AgentRequest(systemPrompt: grounded.systemPrompt, history: originalReq.history, userMessage: grounded.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: grounded.bridgedTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID)
+                let provider = LegacyGroundingContextProvider(directContext: options.modelContext, allowSharedFallback: options.allowDegradedGrounding)
+                let groundingRequest = Self.makeLegacyGroundingRequest(originalReq, options: options)
+                let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(groundingRequest, provider: provider)
+                let useGrounded = options.allowDegradedGrounding || grounded.grounding != nil
+                let req = AgentRequest(systemPrompt: useGrounded ? grounded.systemPrompt : originalReq.systemPrompt, history: originalReq.history, userMessage: useGrounded ? grounded.userMessage : originalReq.userMessage, temperature: originalReq.temperature, topP: originalReq.topP, repetitionPenalty: originalReq.repetitionPenalty, maxTokens: originalReq.maxTokens, maxSteps: originalReq.maxSteps, availableTools: useGrounded ? grounded.bridgedTools : originalReq.availableTools, relevantMemories: originalReq.relevantMemories, attachments: originalReq.attachments, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID)
                 var steps: [AgentStep] = []
                 var observations: [String] = []
                 var finalText = ""

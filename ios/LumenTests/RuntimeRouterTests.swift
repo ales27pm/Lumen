@@ -31,4 +31,15 @@ final class RuntimeRouterTests: XCTestCase {
         let context = AssistantTurnContext(task: .chat, input: "hello", isForeground: true, lowPowerMode: false, thermalState: .nominal)
         XCTAssertEqual(router.runtime(for: context), .llama)
     }
+
+    func testChatDoesNotUseCoreMLTextFallback() {
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("fake-chat.mlmodelc")
+        FileManager.default.createFile(atPath: tempURL.path, contents: Data(), attributes: nil)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let router = AssistantRuntimeRouter(llama: .init(isAvailable: false), coreML: CoreMLRuntimeAdapter(modelURL: tempURL))
+        let context = AssistantTurnContext(task: .chat, input: "hello", isForeground: true, lowPowerMode: false, thermalState: .nominal)
+        XCTAssertEqual(router.runtime(for: context), .deterministicFallback)
+    }
+
 }

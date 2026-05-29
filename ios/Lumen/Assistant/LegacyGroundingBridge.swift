@@ -9,6 +9,9 @@ struct LegacyGroundingBundle: Sendable {
     let metricsSummary: String
 }
 
+/// Implementation detail used by `LegacyTurnGroundingCoordinator` to build legacy grounding bundles.
+/// Legacy callers should use the coordinator as the single entrypoint so cache keys, role metadata,
+/// idempotency policy, and degraded behavior stay centralized.
 @MainActor
 final class LegacyGroundingBridge {
     private let memoryEngine = MemoryEngine()

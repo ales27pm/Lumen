@@ -10,6 +10,7 @@ struct LumenRunTriggerIntent: AppIntent {
 
     @Parameter(title: "Trigger Name") var triggerName: String
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let name = triggerName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 120 else { return .result(value: "Trigger name must be 1...120 characters.") }

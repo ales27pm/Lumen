@@ -89,6 +89,57 @@ final class SlotAgentService {
         return requiredDepth && maxTokens >= 256 && [.webSearch, .rag, .files, .outlook].contains(intent)
     }
 
+    nonisolated static func shared_extractWebQuery(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        for marker in ["search for ", "look up ", "find ", "google ", "web search "] {
+            if let range = lower.range(of: marker) {
+                let query = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !query.isEmpty { return String(query.prefix(300)) }
+            }
+        }
+        return String(trimmed.prefix(300))
+    }
+
+    nonisolated static func shared_extractOutlookSearchQuery(_ text: String) -> String {
+        let base = shared_extractWebQuery(text)
+        let cleaned = base
+            .replacingOccurrences(of: "email", with: "", options: [.caseInsensitive])
+            .replacingOccurrences(of: "outlook", with: "", options: [.caseInsensitive])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String((cleaned.isEmpty ? base : cleaned).prefix(300))
+    }
+
+    nonisolated static func shared_extractOutlookMessageReference(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        for marker in ["about ", "from ", "subject ", "regarding "] {
+            if let range = lower.range(of: marker) {
+                let value = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty { return String(value.prefix(160)) }
+            }
+        }
+        return nil
+    }
+
+    nonisolated static func shared_extractOutlookBody(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for marker in [":", " saying ", " body "] {
+            if let range = trimmed.range(of: marker, options: [.caseInsensitive]) {
+                let body = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !body.isEmpty { return String(body.prefix(1_000)) }
+            }
+        }
+        return String(trimmed.prefix(1_000))
+    }
+
+    nonisolated static func shared_firstURL(_ text: String) -> String? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return detector.firstMatch(in: text, options: [], range: range)?.url?.absoluteString
+    }
+
     private nonisolated static func deterministicAnswer(for req: AgentRequest) -> String {
         let visible = req.userMessage
             .replacingOccurrences(of: "<!-- LUMEN_GROUNDING_V1 -->", with: "")

@@ -5,6 +5,10 @@ import SwiftData
 enum LegacySecureToolExecutor {
     private static let readOnlyAllowlist: Set<String> = ["weather", "maps.search", "rag.search", "memory.recall", "files.read", "trigger.list"]
 
+    static func execute(_ toolID: String, arguments: AgentJSONArguments, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
+        await execute(toolID: toolID, arguments: arguments, conversationID: conversationID, turnID: turnID, modelContext: modelContext, isBackground: isBackground)
+    }
+
     static func execute(toolID: String, arguments: AgentJSONArguments, conversationID: UUID? = nil, turnID: UUID? = nil, modelContext: ModelContext? = nil, isBackground: Bool = false) async -> String {
         let canonical = ToolRouteGuard.canonicalToolID(toolID)
         let mappedSecureID: String? = {

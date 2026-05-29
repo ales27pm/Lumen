@@ -1,0 +1,256 @@
+name: Lumen
+
+options:
+  minimumXcodeGenVersion: 2.42.0
+  projectFormat: xcode16_0
+  xcodeVersion: 16.0
+  developmentLanguage: en
+  defaultConfig: Release
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  transitivelyLinkDependencies: false
+
+configs:
+  Debug: debug
+  Release: release
+
+attributes:
+  BuildIndependentTargetsInParallel: true
+
+packages:
+  swift-llama-cpp:
+    url: https://github.com/pgorzelany/swift-llama-cpp.git
+    exactVersion: 1.2.0
+  MSAL:
+    url: https://github.com/AzureAD/microsoft-authentication-library-for-objc.git
+    from: 1.7.0
+
+settings:
+  base:
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CLANG_ANALYZER_NONNULL: YES
+    CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION: YES_AGGRESSIVE
+    CLANG_CXX_LANGUAGE_STANDARD: gnu++20
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    CLANG_ENABLE_OBJC_WEAK: YES
+    CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING: YES
+    CLANG_WARN_BOOL_CONVERSION: YES
+    CLANG_WARN_COMMA: YES
+    CLANG_WARN_CONSTANT_CONVERSION: YES
+    CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS: YES
+    CLANG_WARN_DIRECT_OBJC_ISA_USAGE: YES_ERROR
+    CLANG_WARN_DOCUMENTATION_COMMENTS: YES
+    CLANG_WARN_EMPTY_BODY: YES
+    CLANG_WARN_ENUM_CONVERSION: YES
+    CLANG_WARN_INFINITE_RECURSION: YES
+    CLANG_WARN_INT_CONVERSION: YES
+    CLANG_WARN_NON_LITERAL_NULL_CONVERSION: YES
+    CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF: YES
+    CLANG_WARN_OBJC_LITERAL_CONVERSION: YES
+    CLANG_WARN_OBJC_ROOT_CLASS: YES_ERROR
+    CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER: YES
+    CLANG_WARN_RANGE_LOOP_ANALYSIS: YES
+    CLANG_WARN_STRICT_PROTOTYPES: YES
+    CLANG_WARN_SUSPICIOUS_MOVE: YES
+    CLANG_WARN_UNGUARDED_AVAILABILITY: YES_AGGRESSIVE
+    CLANG_WARN_UNREACHABLE_CODE: YES
+    CLANG_WARN__DUPLICATE_METHOD_MATCH: YES
+    COPY_PHASE_STRIP: NO
+    DEVELOPMENT_TEAM: 52T7P32J34
+    ENABLE_STRICT_OBJC_MSGSEND: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GCC_C_LANGUAGE_STANDARD: gnu17
+    GCC_NO_COMMON_BLOCKS: YES
+    GCC_WARN_64_TO_32_BIT_CONVERSION: YES
+    GCC_WARN_ABOUT_RETURN_TYPE: YES_ERROR
+    GCC_WARN_UNDECLARED_SELECTOR: YES
+    GCC_WARN_UNINITIALIZED_AUTOS: YES_AGGRESSIVE
+    GCC_WARN_UNUSED_FUNCTION: YES
+    GCC_WARN_UNUSED_VARIABLE: YES
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    MTL_FAST_MATH: YES
+    SDKROOT: iphoneos
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_EMIT_LOC_STRINGS: YES
+    SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+    SWIFT_VERSION: "5.0"
+    ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
+    LD_RUNPATH_SEARCH_PATHS:
+      - $(inherited)
+      - "@executable_path/Frameworks"
+      - "@loader_path/Frameworks"
+  configs:
+    Debug:
+      DEBUG_INFORMATION_FORMAT: dwarf
+      ENABLE_TESTABILITY: YES
+      GCC_DYNAMIC_NO_PIC: NO
+      GCC_OPTIMIZATION_LEVEL: 0
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - DEBUG=1
+        - $(inherited)
+      MTL_ENABLE_DEBUG_INFO: INCLUDE_SOURCE
+      ONLY_ACTIVE_ARCH: YES
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG $(inherited)
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+    Release:
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ENABLE_NS_ASSERTIONS: NO
+      MTL_ENABLE_DEBUG_INFO: NO
+      VALIDATE_PRODUCT: YES
+      DEAD_CODE_STRIPPING: NO
+      SWIFT_COMPILATION_MODE: singlefile
+      SWIFT_OPTIMIZATION_LEVEL: -Osize
+      SWIFT_WHOLE_MODULE_OPTIMIZATION: NO
+
+targetTemplates:
+  GeneratedInfoPlistApp:
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleIconName: AppIcon
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSAlarmKitUsageDescription: Lumen uses AlarmKit to schedule prominent alarms and countdowns when you ask.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: Lumen uses your calendar to create and read events when you ask.
+        INFOPLIST_KEY_NSCameraUsageDescription: Lumen uses the camera to capture images when you ask.
+        INFOPLIST_KEY_NSContactsUsageDescription: Lumen searches your contacts when you ask about people.
+        INFOPLIST_KEY_NSHealthShareUsageDescription: Lumen reads basic Health data to answer questions about your activity.
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: Lumen can log entries to Health when you ask.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Lumen uses your location for location-aware answers.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Lumen uses the microphone for voice input.
+        INFOPLIST_KEY_NSMotionUsageDescription: Lumen uses motion data to describe your recent activity.
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Lumen searches your photo library when you ask.
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: Lumen uses Reminders to add and read tasks when you ask.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Lumen uses speech recognition to transcribe your voice input on-device.
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UIBackgroundModes: fetch processing
+        INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers: com.27pm.lumen.agent.refresh com.27pm.lumen.agent.process
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_LSApplicationQueriesSchemes:
+          - msauth
+          - msauthv2
+          - msauthv3
+        INFOPLIST_KEY_CFBundleURLTypes:
+          - CFBundleURLName: com.27pm.lumen
+            CFBundleURLSchemes:
+              - msauth.com.27pm.lumen
+
+targets:
+  Lumen:
+    templates:
+      - GeneratedInfoPlistApp
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Lumen
+        excludes:
+          - Lumen.entitlements
+          - Scripts/**
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Lumen/Lumen.entitlements
+        CURRENT_PROJECT_VERSION: 1
+        DEVELOPMENT_TEAM: 52T7P32J34
+        ENABLE_PREVIEWS: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        MARKETING_VERSION: 1.0.0
+        PRODUCT_BUNDLE_IDENTIFIER: com.27pm.lumen
+        PRODUCT_NAME: $(TARGET_NAME)
+        STRING_CATALOG_GENERATE_SYMBOLS: YES
+        TARGETED_DEVICE_FAMILY: 1,2
+    dependencies:
+      - package: swift-llama-cpp
+        product: SwiftLlama
+      - package: MSAL
+        product: MSAL
+    postBuildScripts:
+      - name: Bundle Agent Grounding Artifacts
+        shell: /bin/sh
+        script: |
+          /bin/sh "${PROJECT_DIR}/Lumen/Scripts/copy_agent_grounding_resources.sh"
+        inputFiles:
+          - $(SRCROOT)/../generated/agent_manifest
+          - $(SRCROOT)/../generated/cross_model_training
+          - $(SRCROOT)/../generated/agent_manifest/cross_model_training
+          - $(SRCROOT)/../generated/agent_improvement_loop
+          - $(SRCROOT)/Lumen/Scripts/copy_agent_grounding_resources.sh
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_manifest
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/cross_model_training
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_improvement_loop
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_manifest/AgentBehaviorManifest.json
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/agent_manifest/fleet_system_prompts.json
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AgentGrounding/cross_model_training/cross_model_training.jsonl
+        basedOnDependencyAnalysis: true
+
+  LumenTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: LumenTests
+    dependencies:
+      - target: Lumen
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.27pm.lumen.tests
+        PRODUCT_NAME: $(TARGET_NAME)
+        DEVELOPMENT_TEAM: 52T7P32J34
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: 1,2
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+  LumenUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: LumenUITests
+    dependencies:
+      - target: Lumen
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.27pm.lumen.uitests
+        PRODUCT_NAME: $(TARGET_NAME)
+        DEVELOPMENT_TEAM: 52T7P32J34
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: 1,2
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+fileGroups:
+  - project.yml
+  - Lumen/Scripts
+
+schemes:
+  Lumen:
+    build:
+      targets:
+        Lumen: all
+    test:
+      config: Debug
+      targets:
+        - LumenTests
+        - LumenUITests
+      gatherCoverageData: false
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

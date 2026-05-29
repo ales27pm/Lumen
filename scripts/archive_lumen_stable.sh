@@ -149,6 +149,11 @@ elif [[ -n "$PROVISIONING_PROFILE_SPECIFIER_VALUE" ]]; then
 fi
 
 bold "Lumen stable iOS archive"
+info "Validating iOS signing capabilities"
+python3 "$REPO_ROOT/scripts/validate_ios_signing_capabilities.py" \
+  --project-file "$PROJECT_FILE" \
+  --entitlements "$REPO_ROOT/ios/Lumen/Lumen.entitlements"
+
 info "Applying durable archive/linker build settings"
 python3 "$REPO_ROOT/scripts/apply_ios_archive_linker_fix.py" "$PROJECT_FILE" --no-backup
 

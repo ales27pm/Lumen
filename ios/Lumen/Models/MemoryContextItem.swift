@@ -26,6 +26,18 @@ nonisolated struct MemoryContextItem: Sendable, Hashable {
     let expiresAt: Date?
     let source: String?
     let topic: String?
+
+    var id: UUID {
+        var hasher = Hasher()
+        hasher.combine(content)
+        hasher.combine(scope)
+        hasher.combine(authority)
+        hasher.combine(source)
+        hasher.combine(topic)
+        let value = UInt64(bitPattern: Int64(hasher.finalize()))
+        let hex = String(format: "%016llx%016llx", value, value ^ 0xa5a5a5a5a5a5a5a5)
+        return UUID(uuidString: "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20).prefix(12))") ?? UUID()
+    }
 }
 
 nonisolated enum MemoryContextAdapter {

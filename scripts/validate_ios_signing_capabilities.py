@@ -12,10 +12,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# The approved voice-based conversational CarPlay capability uses the category-
+# specific entitlement below. Keep rejecting the legacy/generic CarPlay key because
+# it is the one Xcode reports when a stale provisioning profile was generated
+# before Apple attached the approved CarPlay capability to the App ID.
+APPROVED_CARPLAY_ENTITLEMENTS = {
+    "com.apple.developer.carplay-voice-based-conversation",
+}
+
 DISALLOWED_ENTITLEMENTS = {
     "com.apple.developer.carplay": (
-        "CarPlay requires a provisioning profile with the CarPlay entitlement. "
-        "Remove the entitlement or use a CarPlay-enabled App Store profile."
+        "Use the approved category-specific CarPlay entitlement "
+        "'com.apple.developer.carplay-voice-based-conversation' and archive with "
+        "a freshly regenerated CarPlay-enabled App Store provisioning profile."
     ),
 }
 

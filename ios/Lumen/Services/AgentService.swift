@@ -1321,7 +1321,7 @@ final class AgentService {
 
     func run(_ req: AgentRequest, options: LegacyAgentRunOptions) -> AsyncStream<AgentEvent> {
         let originalReq = req
-        AsyncStream { continuation in
+        return AsyncStream { continuation in
             let task = Task { @MainActor in
                 let provider = LegacyGroundingContextProvider(directContext: options.modelContext)
                 let grounded = await LegacyTurnGroundingCoordinator.shared.prepareGroundedRequest(.init(userMessage: originalReq.userMessage, conversationID: options.conversationID ?? originalReq.conversationID, turnID: options.turnID ?? originalReq.turnID, history: originalReq.history, mode: .foreground, task: .chat, roleOrSlot: nil, externalRelevantMemories: originalReq.relevantMemories, externalAvailableTools: originalReq.availableTools, policy: .rolePipeline, baseSystemPrompt: originalReq.systemPrompt, preventDoubleGrounding: options.preventDoubleGrounding), provider: provider)

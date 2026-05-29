@@ -10,6 +10,7 @@ struct LumenAddMemoryIntent: AppIntent {
 
     @Parameter(title: "Memory Text") var text: String
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, body.count <= 1000 else { return .result(value: "Memory text must be 1...1000 characters.") }

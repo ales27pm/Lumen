@@ -54,8 +54,11 @@ final class LegacyTurnGroundingCoordinator {
         return .init(grounding: roleAwareBundle.grounding, sections: roleAwareBundle.sections, legacyTools: LegacyToolSchemaBridge.toLegacyToolDefinitions(roleAwareBundle.secureTools), promptInjection: roleAwareBundle.renderedPromptContext, metricsSummary: roleAwareBundle.metricsSummary)
     }
 
+    func prepareGroundedRequest(_ request: LegacyGroundingRequest) async -> LegacyGroundingResult {
+        await prepareGroundedRequest(request, provider: LegacyGroundingContextProvider())
+    }
 
-    func prepareGroundedRequest(_ request: LegacyGroundingRequest, provider: LegacyGroundingContextProvider = .init()) async -> LegacyGroundingResult {
+    func prepareGroundedRequest(_ request: LegacyGroundingRequest, provider: LegacyGroundingContextProvider) async -> LegacyGroundingResult {
         let context = provider.resolveContext()
         var degraded: [String] = []
         guard let modelContext = context else {

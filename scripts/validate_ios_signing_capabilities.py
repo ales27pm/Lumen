@@ -29,7 +29,26 @@ DISALLOWED_PROJECT_SETTINGS = {
         "CarPlay support has been removed. Remove UIApplicationSupportsCarPlay "
         "so Xcode/App Store signing does not expect CarPlay capability support."
     ),
+    "CPTemplateApplicationSceneSessionRoleApplication": (
+        "CarPlay scene sessions must not be declared in generated Info.plist settings."
+    ),
+    "CarPlaySceneDelegate": (
+        "CarPlay scene delegate references must be removed from project settings."
+    ),
+    "com.apple.developer.carplay": (
+        "CarPlay must not be enabled in Xcode SystemCapabilities."
+    ),
 }
+
+DISALLOWED_APP_SOURCE_TOKENS = {
+    "import CarPlay": "Remove CarPlay framework imports from Swift sources.",
+    "CPTemplateApplicationSceneSessionRoleApplication": (
+        "Remove CarPlay scene manifest entries from app plist fragments."
+    ),
+    "CarPlaySceneDelegate": "Remove CarPlay scene delegate code and references.",
+}
+
+APP_SOURCE_SUFFIXES = {".swift", ".plist", ".entitlements", ".fragment"}
 
 
 def repo_root_from_script() -> Path:
@@ -89,6 +108,20 @@ def validate_entitlements(path: Path) -> list[str]:
     return failures
 
 
+def entitlements_to_validate(primary: Path, root: Path) -> list[Path]:
+    """Return the primary entitlements plus every checked-in app entitlements file."""
+    candidates = [primary, *(root / "ios" / "Lumen").glob("*.entitlements")]
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(candidate)
+    return unique
+
+
 def validate_project_settings(path: Path) -> list[str]:
     try:
         text = path.read_text(encoding="utf-8")
@@ -99,7 +132,27 @@ def validate_project_settings(path: Path) -> list[str]:
     for token, message in DISALLOWED_PROJECT_SETTINGS.items():
         for index, line in enumerate(lines, start=1):
             if token in line:
-                failures.append(f"{path}:{index}: disallowed build setting '{token}'. {message}")
+                failures.append(f"{path}:{index}: disallowed project setting '{token}'. {message}")
+    return failures
+
+
+def app_source_files(root: Path) -> list[Path]:
+    app_root = root / "ios" / "Lumen"
+    return sorted(
+        path
+        for path in app_root.rglob("*")
+        if path.is_file() and path.suffix in APP_SOURCE_SUFFIXES
+    )
+
+
+def validate_app_sources(root: Path) -> list[str]:
+    failures: list[str] = []
+    for path in app_source_files(root):
+        text = path.read_text(encoding="utf-8")
+        for token, message in DISALLOWED_APP_SOURCE_TOKENS.items():
+            for index, line in enumerate(text.splitlines(), start=1):
+                if token in line:
+                    failures.append(f"{path}:{index}: disallowed CarPlay reference '{token}'. {message}")
     return failures
 
 
@@ -133,7 +186,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    entitlement_failures = validate_entitlements(args.entitlements)
+    entitlement_failures = [
+        failure
+        for entitlement_path in entitlements_to_validate(args.entitlements, root)
+        for failure in validate_entitlements(entitlement_path)
+    ]
     removed: list[str] = []
     if args.sanitized_entitlements_output:
         removed = sanitize_entitlements_file(args.entitlements, args.sanitized_entitlements_output)
@@ -146,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
 
     failures = [
         *validate_project_settings(args.project_file),
+        *validate_app_sources(root),
         *([] if args.allow_sanitized_output and args.sanitized_entitlements_output else entitlement_failures),
     ]
     if failures:

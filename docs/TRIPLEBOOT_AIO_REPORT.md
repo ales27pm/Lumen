@@ -1,5 +1,7 @@
 # Rapport de conception TripleBoot AIO
 
+> Statut d'implémentation : le workflow décrit dans ce rapport est maintenant disponible via `scripts/tripleboot_aio.sh`. Consultez `docs/TRIPLEBOOT_USB_SOLUTION.md` pour les commandes opérationnelles, le modèle de sécurité et le guide de bout en bout.
+
 Ce rapport décrit la conception d’une clé USB **TripleBoot** automatisée, pré-chargée avec les installateurs d’Ubuntu, Windows et macOS. L’objectif est de démarrer sur une machine cible PC UEFI/GPT x86_64 et d’installer l’un de ces trois systèmes avec un minimum d’interactions manuelles.
 
 Le script **TripleBoot AIO** du dépôt `ales27pm/TripleBoot` sert de base conceptuelle. Il orchestre le téléchargement des images, la préparation de la clé USB avec Ventoy et l’ajout d’un kit de secours macOS via OSX-KVM. Les étapes majeures sont le téléchargement et la vérification des ISO, la vérification d’intégrité de l’archive Ventoy, l’installation de Ventoy avec prise en charge UEFI/Secure Boot, puis le *staging* des payloads dans l’arborescence Ventoy. Le rapport est rédigé en français ; les identifiants de commandes, options et fichiers restent volontairement en anglais lorsqu’ils représentent des noms CLI littéraux.

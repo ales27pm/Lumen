@@ -12,26 +12,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# The approved voice-based conversational CarPlay capability uses the category-
-# specific entitlement below. Keep rejecting the legacy/generic CarPlay key because
-# it is the one Xcode reports when a stale provisioning profile was generated
-# before Apple attached the approved CarPlay capability to the App ID.
-APPROVED_CARPLAY_ENTITLEMENTS = {
-    "com.apple.developer.carplay-voice-based-conversation",
-}
-
+# Lumen no longer ships CarPlay features. Reject both the generic CarPlay
+# entitlement and the prior category-specific entitlement so archive signing does
+# not require CarPlay-enabled provisioning profiles.
 DISALLOWED_ENTITLEMENTS = {
     "com.apple.developer.carplay": (
-        "Use the approved category-specific CarPlay entitlement "
-        "'com.apple.developer.carplay-voice-based-conversation' and archive with "
-        "a freshly regenerated CarPlay-enabled App Store provisioning profile."
+        "CarPlay support has been removed. Remove this entitlement and archive "
+        "with a provisioning profile that does not require CarPlay capabilities."
+    ),
+    "com.apple.developer.carplay-voice-based-conversation": (
+        "CarPlay support has been removed. Remove this entitlement and archive "
+        "with a provisioning profile that does not require CarPlay capabilities."
     ),
 }
 
 DISALLOWED_PROJECT_SETTINGS = {
     "INFOPLIST_KEY_UIApplicationSupportsCarPlay": (
-        "UIApplicationSupportsCarPlay causes Xcode/App Store signing to expect "
-        "CarPlay capability support. Remove it unless the profile is enabled for CarPlay."
+        "CarPlay support has been removed. Remove UIApplicationSupportsCarPlay "
+        "so Xcode/App Store signing does not expect CarPlay capability support."
     ),
 }
 

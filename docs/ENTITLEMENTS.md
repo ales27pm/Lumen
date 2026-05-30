@@ -10,4 +10,4 @@ The entitlement validator accepts either `NSCalendarsUsageDescription` or `NSCal
 
 AppIntents/Shortcuts added in this phase do not require additional entitlements; sensitive actions return an open-app approval message instead of executing directly.
 
-CarPlay voice-based conversation support is enabled with the Apple-approved `com.apple.developer.carplay-voice-based-conversation` entitlement in `ios/Lumen/Lumen.entitlements`. App Store archives must use a provisioning profile regenerated after enabling the matching App ID capability; stale profiles created before approval can fail with `Provisioning profile ... doesn't include the com.apple.developer.carplay entitlement`.
+CarPlay support is intentionally not enabled. `ios/Lumen/Lumen.entitlements` must not include generic or category-specific CarPlay entitlements, and generated Info.plist settings must not declare `UIApplicationSupportsCarPlay`.

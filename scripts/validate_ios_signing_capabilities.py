@@ -89,6 +89,20 @@ def validate_entitlements(path: Path) -> list[str]:
     return failures
 
 
+def entitlements_to_validate(primary: Path, root: Path) -> list[Path]:
+    """Return the primary entitlements plus every checked-in app entitlements file."""
+    candidates = [primary, *(root / "ios" / "Lumen").glob("*.entitlements")]
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(candidate)
+    return unique
+
+
 def validate_project_settings(path: Path) -> list[str]:
     try:
         text = path.read_text(encoding="utf-8")
@@ -133,7 +147,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    entitlement_failures = validate_entitlements(args.entitlements)
+    entitlement_failures = [
+        failure
+        for entitlement_path in entitlements_to_validate(args.entitlements, root)
+        for failure in validate_entitlements(entitlement_path)
+    ]
     removed: list[str] = []
     if args.sanitized_entitlements_output:
         removed = sanitize_entitlements_file(args.entitlements, args.sanitized_entitlements_output)

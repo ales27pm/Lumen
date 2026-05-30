@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import SwiftData
 import OSLog
@@ -89,7 +90,19 @@ final class AppStartupCoordinator {
     }
 
     private static func defaultContainerFactory() throws -> ModelContainer {
-        try makeContainer(isStoredInMemoryOnly: false)
+        try ensureApplicationSupportDirectoryExists()
+        return try makeContainer(isStoredInMemoryOnly: false)
+    }
+
+    static func ensureApplicationSupportDirectoryExists(fileManager: FileManager = .default) throws {
+        guard let applicationSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        try ensureDirectoryExists(applicationSupportURL, fileManager: fileManager)
+    }
+
+    static func ensureDirectoryExists(_ url: URL, fileManager: FileManager = .default) throws {
+        try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
     private static func makeContainer(isStoredInMemoryOnly: Bool) throws -> ModelContainer {

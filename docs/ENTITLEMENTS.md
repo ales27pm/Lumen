@@ -10,4 +10,4 @@ The entitlement validator accepts either `NSCalendarsUsageDescription` or `NSCal
 
 AppIntents/Shortcuts added in this phase do not require additional entitlements; sensitive actions return an open-app approval message instead of executing directly.
 
-CarPlay support is intentionally not enabled. `ios/Lumen/Lumen.entitlements` must not include generic or category-specific CarPlay entitlements, and generated Info.plist settings must not declare `UIApplicationSupportsCarPlay`.
+CarPlay support is intentionally not enabled. `ios/Lumen/Lumen.entitlements` must not include generic or category-specific CarPlay entitlements, generated Info.plist settings must not declare `UIApplicationSupportsCarPlay`, and the project must not include a CarPlay scene role or Swift CarPlay integration code.

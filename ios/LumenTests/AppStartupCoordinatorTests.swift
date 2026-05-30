@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SwiftData
 @testable import Lumen
@@ -117,6 +118,23 @@ struct AppStartupCoordinatorTests {
         coordinator.continueInLimitedMode(appState: appState)
 
         #expect({ if case .ready = coordinator.state { true } else { false } }())
+    }
+
+    @Test func applicationSupportDirectoryIsCreatedBeforePersistentContainer() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumenStartupTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let applicationSupport = temporaryRoot
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+
+        try AppStartupCoordinator.ensureDirectoryExists(applicationSupport)
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: applicationSupport.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+
+        try? FileManager.default.removeItem(at: temporaryRoot)
     }
 
 }

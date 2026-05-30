@@ -12,18 +12,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Lumen no longer ships CarPlay features. Reject both the generic CarPlay
-# entitlement and the prior category-specific entitlement so archive signing does
-# not require CarPlay-enabled provisioning profiles.
-DISALLOWED_ENTITLEMENTS = {
-    "com.apple.developer.carplay": (
-        "CarPlay support has been removed. Remove this entitlement and archive "
-        "with a provisioning profile that does not require CarPlay capabilities."
-    ),
-    "com.apple.developer.carplay-voice-based-conversation": (
-        "CarPlay support has been removed. Remove this entitlement and archive "
-        "with a provisioning profile that does not require CarPlay capabilities."
-    ),
+CARPLAY_REMOVED_MESSAGE = (
+    "CarPlay support has been removed. Remove this entitlement and archive "
+    "with a provisioning profile that does not require CarPlay capabilities."
+)
+
+# Lumen no longer ships CarPlay features. Reject the generic CarPlay entitlement
+# and any category-specific CarPlay entitlement so archive signing does not
+# require CarPlay-enabled provisioning profiles.
+DISALLOWED_ENTITLEMENT_PREFIXES = {
+    "com.apple.developer.carplay": CARPLAY_REMOVED_MESSAGE,
 }
 
 DISALLOWED_PROJECT_SETTINGS = {
@@ -55,8 +53,8 @@ def sanitized_entitlements(entitlements: dict[str, Any]) -> tuple[dict[str, Any]
     """Return entitlements with App-Store-profile-incompatible keys removed."""
     sanitized = dict(entitlements)
     removed: list[str] = []
-    for key in DISALLOWED_ENTITLEMENTS:
-        if key in sanitized:
+    for key in list(sanitized):
+        if disallowed_entitlement_message(key):
             sanitized.pop(key)
             removed.append(key)
     return sanitized, removed
@@ -75,11 +73,18 @@ def sanitize_entitlements_file(source: Path, destination: Path) -> list[str]:
     return removed
 
 
+def disallowed_entitlement_message(key: str) -> str | None:
+    for prefix, message in DISALLOWED_ENTITLEMENT_PREFIXES.items():
+        if key.startswith(prefix):
+            return message
+    return None
+
+
 def validate_entitlements(path: Path) -> list[str]:
     entitlements = read_plist(path)
     failures: list[str] = []
-    for key, message in DISALLOWED_ENTITLEMENTS.items():
-        if key in entitlements:
+    for key in entitlements:
+        if message := disallowed_entitlement_message(key):
             failures.append(f"{path}: disallowed entitlement '{key}'. {message}")
     return failures
 
